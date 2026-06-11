@@ -10,14 +10,14 @@ import Observation
 public final class TerminalListStore {
     public private(set) var terminals: [TerminalMeta] = []
     public var activeTerminalID: TerminalID?
-    /// Faz 2'de ToastStore'a devredilecek geçici görünür-hata alanı (karar 5).
-    public private(set) var lastErrorMessage: String?
 
     @ObservationIgnored private let service: any TerminalServicing
+    @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private var consumeTask: Task<Void, Never>?
 
-    public init(service: any TerminalServicing) {
+    public init(service: any TerminalServicing, toasts: ToastStore) {
         self.service = service
+        self.toasts = toasts
     }
 
     public func start() {
@@ -38,13 +38,13 @@ public final class TerminalListStore {
     // MARK: - Intent'ler
 
     public func spawn(in repoPath: String, command: String? = nil, task: String? = nil) {
-        reporting {
+        toasts.reporting {
             _ = try self.service.spawn(repoPath: repoPath, task: task, command: command)
         }
     }
 
     public func close(_ id: TerminalID) {
-        reporting {
+        toasts.reporting {
             try self.service.kill(id: id)
         }
     }
@@ -52,10 +52,6 @@ public final class TerminalListStore {
     public func focus(_ id: TerminalID?) {
         activeTerminalID = id
         service.setFocused(id)
-    }
-
-    public func clearError() {
-        lastErrorMessage = nil
     }
 
     // MARK: - Event uygulama
@@ -71,8 +67,9 @@ public final class TerminalListStore {
             update(id) { $0.status = status }
         case .titleChanged(let id, let title):
             update(id) { $0.oscTitle = title }
-        case .bell:
-            break
+        case .bell(let id):
+            let name = terminals.first(where: { $0.id == id })?.name ?? "Terminal"
+            toasts.show(.bell, title: name, message: "Bell")
         }
     }
 
@@ -92,16 +89,5 @@ public final class TerminalListStore {
             focus(neighbor.map { terminals[$0].id })
         }
         terminals.remove(at: index)
-    }
-
-    private func reporting(_ operation: () throws -> Void) {
-        do {
-            try operation()
-            lastErrorMessage = nil
-        } catch let error as LumiError {
-            lastErrorMessage = error.localizedDescription
-        } catch {
-            lastErrorMessage = error.localizedDescription
-        }
     }
 }

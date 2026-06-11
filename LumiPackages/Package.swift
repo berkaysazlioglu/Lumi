@@ -33,5 +33,7 @@ let package = Package(
         ),
         .testTarget(name: "LumiKitTests", dependencies: ["LumiKit"]),
         .testTarget(name: "LumiTerminalTests", dependencies: ["LumiTerminal"]),
+        .testTarget(name: "LumiServicesTests", dependencies: ["LumiServices"]),
+        .testTarget(name: "LumiStateTests", dependencies: ["LumiState"]),
     ]
 )

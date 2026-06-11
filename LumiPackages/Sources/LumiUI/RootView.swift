@@ -7,12 +7,19 @@ import SwiftUI
 /// (design/04 faz 1 kanıtları). Gerçek Layout/Header/Sidebar yapısı Faz 3+.
 public struct RootView: View {
     private let store: TerminalListStore
+    private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
     private let repoPath: String
     @State private var showAll = false
 
-    public init(store: TerminalListStore, viewProvider: any TerminalViewProviding, repoPath: String) {
+    public init(
+        store: TerminalListStore,
+        toasts: ToastStore,
+        viewProvider: any TerminalViewProviding,
+        repoPath: String
+    ) {
         self.store = store
+        self.toasts = toasts
         self.viewProvider = viewProvider
         self.repoPath = repoPath
     }
@@ -32,6 +39,9 @@ public struct RootView: View {
                 .padding(12)
         }
         .background(Theme.bgDeep)
+        .overlay(alignment: .bottomTrailing) {
+            ToastOverlay(store: toasts)
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -50,13 +60,6 @@ public struct RootView: View {
             tabChips
 
             Spacer()
-
-            if let message = store.lastErrorMessage {
-                Text(message)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.error)
-                    .lineLimit(1)
-            }
 
             Text("\(store.terminals.count)")
                 .font(.system(size: 12, design: .monospaced))
