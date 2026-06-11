@@ -26,6 +26,11 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         entries.removeValue(forKey: id)
     }
 
+    /// Click-to-focus için ters arama: first responder olan view → terminal id.
+    func terminalID(for view: NSView) -> TerminalID? {
+        entries.first { $0.value.view === view }?.key
+    }
+
     public func attachView(for id: TerminalID, into container: NSView) {
         guard let entry = entries[id] else { return }
         if entry.view.superview === container {

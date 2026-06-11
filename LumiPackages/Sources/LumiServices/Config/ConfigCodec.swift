@@ -126,6 +126,14 @@ enum ConfigCodec {
         if let value = boolValue(dict["windowMaximized"]) {
             state.windowMaximized = value
         }
+        // Legacy global gridColumns: "auto" | number → migration girdisi (spec/21 §13)
+        if let legacy = dict["gridColumns"] {
+            if let text = legacy as? String, text == "auto" {
+                state.legacyGridColumns = GridLayout(mode: .auto, count: 2)
+            } else if let count = intValue(legacy) {
+                state.legacyGridColumns = GridLayout(mode: .columns, count: min(max(count, 2), 5))
+            }
+        }
         return state
     }
 

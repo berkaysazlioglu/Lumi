@@ -1,0 +1,154 @@
+import Foundation
+import LumiKit
+import Observation
+
+/// Tab/layout/dialog state'i (design/03 §4, spec/21 §9-13).
+/// Tab kimliği repo PATH'idir (ad-çakışması bug fix'i, karar 11); eski
+/// ad-tabanlı ui-state okunurken tek seferlik ad→path migration yapılır.
+@Observable
+@MainActor
+public final class WorkspaceStore {
+    public static let defaultGridLayout = GridLayout(mode: .auto, count: 2)
+
+    public private(set) var openTabs: [String] = []
+    public private(set) var activeTab: String?
+    public private(set) var projectGridLayouts: [String: GridLayout] = [:]
+    public var isRepoSelectorOpen = false
+    public private(set) var closeTabDialog: CloseTabDialogState?
+
+    public struct CloseTabDialogState: Equatable {
+        public let repoPath: String
+        public let repoName: String
+        public let minimizedCount: Int
+    }
+
+    @ObservationIgnored private let config: any ConfigServicing
+    @ObservationIgnored private let terminals: TerminalListStore
+
+    public init(config: any ConfigServicing, terminals: TerminalListStore) {
+        self.config = config
+        self.terminals = terminals
+    }
+
+    /// Bootstrap sözleşmesi (spec/21 §13): repos yüklendikten SONRA çağrılır —
+    /// ad→path tab migration'ı ve legacy gridColumns migration'ı repo listesini okur.
+    public func load(repos: [Repo]) async {
+        let state = await config.uiState()
+
+        var seenTabs = Set<String>()
+        openTabs = state.openTabs.compactMap { entry -> String? in
+            if repos.contains(where: { $0.path == entry }) {
+                return entry
+            }
+            // Legacy: tab repo ADI olarak yazılmış olabilir
+            return repos.first(where: { $0.name == entry })?.path
+        }.filter { seenTabs.insert($0).inserted }
+
+        if let storedActive = state.activeTab {
+            if openTabs.contains(storedActive) {
+                activeTab = storedActive
+            } else if let migrated = repos.first(where: { $0.name == storedActive })?.path,
+                      openTabs.contains(migrated) {
+                activeTab = migrated
+            } else {
+                activeTab = openTabs.first
+            }
+        } else {
+            activeTab = nil
+        }
+
+        projectGridLayouts = state.projectGridLayouts
+        if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
+            // Legacy global gridColumns → her açık tab'ın path'ine kopyalanır (spec/21 §13)
+            for tab in openTabs {
+                projectGridLayouts[tab] = legacy
+            }
+        }
+
+        if let tab = activeTab {
+            terminals.activateRepo(tab)
+        }
+    }
+
+    // MARK: - Tab yönetimi (spec/21 §9)
+
+    public func openTab(_ repoPath: String) {
+        if !openTabs.contains(repoPath) {
+            openTabs.append(repoPath)
+        }
+        setActiveTab(repoPath)
+    }
+
+    public func setActiveTab(_ repoPath: String) {
+        activeTab = repoPath
+        terminals.activateRepo(repoPath) // cross-store yan etki
+        persist()
+    }
+
+    /// Guard (spec/21 §9): minimize edilmiş terminali olan tab dialog'suz kapanmaz.
+    public func requestCloseTab(_ repoPath: String, repoName: String) {
+        let minimizedCount = terminals.minimizedTerminals(in: repoPath).count
+        if minimizedCount > 0 {
+            closeTabDialog = CloseTabDialogState(
+                repoPath: repoPath,
+                repoName: repoName,
+                minimizedCount: minimizedCount
+            )
+            return
+        }
+        performCloseTab(repoPath)
+    }
+
+    public func confirmCloseTab() {
+        guard let dialog = closeTabDialog else { return }
+        closeTabDialog = nil
+        performCloseTab(dialog.repoPath)
+    }
+
+    public func cancelCloseTab() {
+        closeTabDialog = nil
+    }
+
+    private func performCloseTab(_ repoPath: String) {
+        openTabs.removeAll { $0 == repoPath }
+        if activeTab == repoPath {
+            // Kapanan aktifse listenin SON tab'ı aktif olur (spec/21 §9)
+            activeTab = openTabs.last
+            if let tab = activeTab {
+                terminals.activateRepo(tab)
+            } else {
+                terminals.focus(nil)
+            }
+        }
+        terminals.closeAll(in: repoPath)
+        persist()
+    }
+
+    // MARK: - Grid layout (spec/21 §10)
+
+    public func gridLayout(for repoPath: String?) -> GridLayout {
+        guard let repoPath else { return Self.defaultGridLayout }
+        return projectGridLayouts[repoPath] ?? Self.defaultGridLayout
+    }
+
+    public func setGridLayout(_ layout: GridLayout, for repoPath: String) {
+        guard !repoPath.isEmpty else { return }
+        projectGridLayouts[repoPath] = layout
+        persist() // disk yazımı servis tarafında 500ms debounce'lu
+    }
+
+    // MARK: - Persistence (spec/21 §13: yalnız bu alt küme)
+
+    private func persist() {
+        let tabs = openTabs
+        let active = activeTab
+        let layouts = projectGridLayouts
+        Task { [config] in
+            await config.updateUIState { state in
+                state.openTabs = tabs
+                state.activeTab = active
+                state.projectGridLayouts = layouts
+            }
+        }
+    }
+}

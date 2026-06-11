@@ -20,6 +20,8 @@ public final class ToastStore {
         public let kind: Kind
         public let title: String
         public let message: String
+        /// Bell toast'ları tıklanınca terminali (minimize ise restore edip) odaklar.
+        public let terminalID: TerminalID?
     }
 
     public static let maxToasts = 5
@@ -34,13 +36,23 @@ public final class ToastStore {
         self.autoDismissAfter = autoDismissAfter
     }
 
-    public func show(_ kind: Toast.Kind, title: String, message: String = "") {
-        let isDuplicate = toasts.contains {
-            $0.kind == kind && $0.title == title && $0.message == message
+    public func show(
+        _ kind: Toast.Kind,
+        title: String,
+        message: String = "",
+        terminalID: TerminalID? = nil
+    ) {
+        // Dedupe: aynı içerik aktifken eklenmez; bell için terminal başına bir aktif
+        // toast kuralı (spec/21 §17)
+        let isDuplicate = toasts.contains { existing in
+            if kind == .bell, existing.kind == .bell, let terminalID {
+                return existing.terminalID == terminalID
+            }
+            return existing.kind == kind && existing.title == title && existing.message == message
         }
         guard !isDuplicate else { return }
 
-        let toast = Toast(id: UUID(), kind: kind, title: title, message: message)
+        let toast = Toast(id: UUID(), kind: kind, title: title, message: message, terminalID: terminalID)
         toasts.append(toast)
         if toasts.count > Self.maxToasts {
             let dropped = toasts.removeFirst()

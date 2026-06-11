@@ -4,9 +4,8 @@ import LumiTerminal
 import LumiUI
 import SwiftUI
 
-/// Faz 2 walking skeleton kabuğu: AppContainer composition root'u kullanır.
-/// Pencere davranışlarının tamamı (bounds persistence, quit onayı, tam menü)
-/// Faz 3/6'da — design/00 §2-3.
+/// Faz 3 walking skeleton kabuğu: AppContainer composition root'u kullanır.
+/// Bounds persistence, quit onayı, focus mode Faz 6'da — design/00 §2-3.
 @MainActor
 final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
@@ -14,17 +13,22 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
     private var harness: P1Harness?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        SkeletonMainMenu.install(
-            closeTerminalTarget: self,
-            closeTerminalAction: #selector(closeActiveTerminal(_:))
-        )
+        SkeletonMainMenu.install(actions: SkeletonMainMenu.Actions(
+            target: self,
+            newTerminal: #selector(newTerminal(_:)),
+            closeTerminal: #selector(closeActiveTerminal(_:)),
+            openRepoSelector: #selector(openRepoSelector(_:)),
+            focusNext: #selector(focusNextTerminal(_:)),
+            focusPrevious: #selector(focusPreviousTerminal(_:)),
+            focusIndex: #selector(focusTerminalAtIndex(_:))
+        ))
 
         Task { @MainActor in
             await container.start()
-            let repoPath = await container.defaultRepoPath()
-            buildWindow(repoPath: repoPath)
+            buildWindow()
 
             if CommandLine.arguments.contains("--p1") {
+                let repoPath = await container.defaultRepoPath()
                 let harness = P1Harness(manager: container.terminal, store: container.terminals)
                 harness.run(repoPath: repoPath)
                 self.harness = harness
@@ -32,7 +36,7 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func buildWindow(repoPath: String) {
+    private func buildWindow() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -46,10 +50,11 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         window.center()
 
         let root = RootView(
-            store: container.terminals,
+            workspace: container.workspace,
+            repoStore: container.repoStore,
+            terminals: container.terminals,
             toasts: container.toasts,
-            viewProvider: container.terminal.viewRegistry,
-            repoPath: repoPath
+            viewProvider: container.terminal.viewRegistry
         )
         window.contentView = NSHostingView(rootView: root)
         window.makeKeyAndOrderFront(nil)
@@ -58,20 +63,33 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         observeWindowFocus(window)
     }
 
-    /// Pencere odağı status makinelerine AYNI semantikle akmalı — bildirim
-    /// sistemi buna bağlı (spec/00 §5, spec/10 §12).
+    /// Pencere odağı status makinelerine VE bildirim focus-guard'ına aynı
+    /// semantikle akmalı (spec/00 §5, spec/10 §12, spec/13 §4).
     private func observeWindowFocus(_ window: NSWindow) {
         let center = NotificationCenter.default
         center.addObserver(
             forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.container.terminal.setWindowFocused(true) }
+            MainActor.assumeIsolated {
+                self?.container.terminal.setWindowFocused(true)
+                self?.container.notifications.setWindowFocused(true)
+            }
         }
         center.addObserver(
             forName: NSWindow.didResignKeyNotification, object: window, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.container.terminal.setWindowFocused(false) }
+            MainActor.assumeIsolated {
+                self?.container.terminal.setWindowFocused(false)
+                self?.container.notifications.setWindowFocused(false)
+            }
         }
+    }
+
+    // MARK: - Menü aksiyonları (MenuActionDispatcher'ın Faz-3 hali)
+
+    @objc private func newTerminal(_ sender: Any?) {
+        guard let active = container.workspace.activeTab else { return }
+        container.terminals.spawn(in: active)
     }
 
     @objc private func closeActiveTerminal(_ sender: Any?) {
@@ -79,8 +97,28 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         container.terminals.close(activeID)
     }
 
+    @objc private func openRepoSelector(_ sender: Any?) {
+        container.workspace.isRepoSelectorOpen = true
+    }
+
+    @objc private func focusNextTerminal(_ sender: Any?) {
+        guard let active = container.workspace.activeTab else { return }
+        container.terminals.focusNext(in: active)
+    }
+
+    @objc private func focusPreviousTerminal(_ sender: Any?) {
+        guard let active = container.workspace.activeTab else { return }
+        container.terminals.focusPrevious(in: active)
+    }
+
+    @objc private func focusTerminalAtIndex(_ sender: Any?) {
+        guard let item = sender as? NSMenuItem,
+              let active = container.workspace.activeTab else { return }
+        container.terminals.focusIndex(item.tag - 1, in: active)
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Faz 2: onay diyaloğu yok (Faz 6'da .terminateLater akışı);
+        // Faz 3: onay diyaloğu yok (Faz 6'da .terminateLater onay akışı);
         // PTY temizliği + bekleyen config yazımları garanti edilir
         Task { @MainActor in
             await container.shutdown()

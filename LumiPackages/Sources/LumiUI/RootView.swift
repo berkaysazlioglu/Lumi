@@ -2,102 +2,121 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Faz 1 walking skeleton kök görünümü: terminal sekmeleri + tek/grid görünüm.
-/// Sekme değişimi attach/detach yolunu, "tümü" modu çoklu-attach'i egzersiz eder
-/// (design/04 faz 1 kanıtları). Gerçek Layout/Header/Sidebar yapısı Faz 3+.
+/// Faz 3 kök görünümü: repo tab'ları + grid layout'lu terminal alanı +
+/// minimize şeridi + toast overlay. Sidebar'lar Faz 4, focus mode Faz 6.
 public struct RootView: View {
-    private let store: TerminalListStore
+    private let workspace: WorkspaceStore
+    private let repoStore: RepoStore
+    private let terminals: TerminalListStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
-    private let repoPath: String
-    @State private var showAll = false
 
     public init(
-        store: TerminalListStore,
+        workspace: WorkspaceStore,
+        repoStore: RepoStore,
+        terminals: TerminalListStore,
         toasts: ToastStore,
-        viewProvider: any TerminalViewProviding,
-        repoPath: String
+        viewProvider: any TerminalViewProviding
     ) {
-        self.store = store
+        self.workspace = workspace
+        self.repoStore = repoStore
+        self.terminals = terminals
         self.toasts = toasts
         self.viewProvider = viewProvider
-        self.repoPath = repoPath
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            toolbar
-                .padding(.horizontal, 16)
-                .padding(.top, 38)
-                .padding(.bottom, 10)
-                .background(Theme.bgSurface)
+            headerBar
             Rectangle()
                 .fill(Theme.border)
                 .frame(height: 1)
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(12)
         }
         .background(Theme.bgDeep)
         .overlay(alignment: .bottomTrailing) {
-            ToastOverlay(store: toasts)
+            ToastOverlay(store: toasts) { terminalID in
+                terminals.restoreAndFocus(terminalID)
+            }
+        }
+        .confirmationDialog(
+            "Close \(workspace.closeTabDialog?.repoName ?? "")?",
+            isPresented: closeTabDialogBinding
+        ) {
+            Button("Close Tab", role: .destructive) {
+                workspace.confirmCloseTab()
+            }
+            Button("Cancel", role: .cancel) {
+                workspace.cancelCloseTab()
+            }
+        } message: {
+            Text("\(workspace.closeTabDialog?.minimizedCount ?? 0) minimized terminal will be killed.")
         }
         .preferredColorScheme(.dark)
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 12) {
-            Button("New Terminal") {
-                store.spawn(in: repoPath)
+    private var closeTabDialogBinding: Binding<Bool> {
+        Binding(
+            get: { workspace.closeTabDialog != nil },
+            set: { isPresented in
+                if !isPresented { workspace.cancelCloseTab() }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accentVivid)
+        )
+    }
 
-            Toggle("Show All", isOn: $showAll)
-                .toggleStyle(.checkbox)
-                .foregroundStyle(Theme.textSecondary)
+    // MARK: - Header
 
-            tabChips
-
+    private var headerBar: some View {
+        HStack(spacing: 10) {
+            tabStrip
+            addRepoButton
             Spacer()
-
-            Text("\(store.terminals.count)")
+            if let active = workspace.activeTab {
+                gridLayoutMenu(for: active)
+                Button("New Terminal") {
+                    terminals.spawn(in: active)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accentVivid)
+            }
+            Text("\(terminals.totalCount)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textSecondary)
         }
+        // Sol 80px: traffic light alanı (spec/30 custom titlebar paritesi)
+        .padding(.leading, 80)
+        .padding(.trailing, 16)
+        .padding(.vertical, 9)
+        .background(Theme.bgSurface)
     }
 
-    private var tabChips: some View {
+    private var tabStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(store.terminals) { meta in
-                    chip(for: meta)
+                ForEach(workspace.openTabs, id: \.self) { repoPath in
+                    tabChip(for: repoPath)
                 }
             }
         }
+        .frame(maxWidth: 600, alignment: .leading)
     }
 
-    private func chip(for meta: TerminalMeta) -> some View {
-        let isActive = store.activeTerminalID == meta.id
-        // Odak ve kapatma AYRI butonlar: iç içe Button'da iç buton tıklamayı
-        // dış butona kaptırır (kapatma yerine odaklama bug'ı)
+    private func tabChip(for repoPath: String) -> some View {
+        let isActive = workspace.activeTab == repoPath
+        let name = repoStore.repo(at: repoPath)?.name ?? (repoPath as NSString).lastPathComponent
         return HStack(spacing: 6) {
             Button {
-                store.focus(meta.id)
+                workspace.setActiveTab(repoPath)
             } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Theme.statusColor(for: meta.status))
-                        .frame(width: 8, height: 8)
-                    Text(meta.oscTitle ?? meta.task ?? meta.name)
-                        .font(.system(size: 12, design: .monospaced))
-                        .lineLimit(1)
-                }
+                Text(name)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(1)
             }
             .buttonStyle(.plain)
 
             Button {
-                store.close(meta.id)
+                workspace.requestCloseTab(repoPath, repoName: name)
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
@@ -118,50 +137,166 @@ public struct RootView: View {
         .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if store.terminals.isEmpty {
-            VStack(spacing: 8) {
-                Text("Lumi")
-                    .font(.system(size: 20, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.accentPrimary)
-                Text("New Terminal ile başla")
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(Theme.textMuted)
+    private var addRepoButton: some View {
+        Button {
+            workspace.isRepoSelectorOpen.toggle()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.accentPrimary)
+                .frame(width: 24, height: 24)
+                .background(Theme.bgElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: Binding(
+            get: { workspace.isRepoSelectorOpen },
+            set: { workspace.isRepoSelectorOpen = $0 }
+        )) {
+            RepoSelectorView(groups: repoStore.groupedRepos) { repo in
+                workspace.isRepoSelectorOpen = false
+                workspace.openTab(repo.path)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if showAll {
-            allTerminalsGrid
-        } else if let activeID = store.activeTerminalID {
-            terminalCard(for: activeID)
         }
     }
 
-    private var allTerminalsGrid: some View {
-        // Spec/20 grid matematiği Faz 3'te; skeleton 400px-min adaptive ile yetinir
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 400), spacing: 12)],
-                spacing: 12
-            ) {
-                ForEach(store.terminals) { meta in
-                    terminalCard(for: meta.id)
-                        .frame(height: 320)
+    private func gridLayoutMenu(for repoPath: String) -> some View {
+        let current = workspace.gridLayout(for: repoPath)
+        return Menu {
+            Button("Auto") {
+                workspace.setGridLayout(LumiKit.GridLayout(mode: .auto, count: 2), for: repoPath)
+            }
+            Menu("Columns") {
+                ForEach(2...5, id: \.self) { count in
+                    Button("\(count) Columns") {
+                        workspace.setGridLayout(LumiKit.GridLayout(mode: .columns, count: count), for: repoPath)
+                    }
+                }
+            }
+            Menu("Rows") {
+                ForEach(2...5, id: \.self) { count in
+                    Button("\(count) Rows") {
+                        workspace.setGridLayout(LumiKit.GridLayout(mode: .rows, count: count), for: repoPath)
+                    }
+                }
+            }
+        } label: {
+            Text(gridLayoutLabel(current))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private func gridLayoutLabel(_ layout: LumiKit.GridLayout) -> String {
+        switch layout.mode {
+        case .auto: return "Auto"
+        case .columns: return "\(layout.count) Col"
+        case .rows: return "\(layout.count) Row"
+        }
+    }
+
+    // MARK: - İçerik
+
+    @ViewBuilder
+    private var content: some View {
+        if let active = workspace.activeTab {
+            repoContent(active)
+        } else {
+            welcomeState
+        }
+    }
+
+    private var welcomeState: some View {
+        VStack(spacing: 12) {
+            Text("Lumi")
+                .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Theme.accentPrimary)
+            Text("Bir repo aç ve terminal başlat")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(Theme.textMuted)
+            Button("Open Repo") {
+                workspace.isRepoSelectorOpen = true
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accentVivid)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func repoContent(_ repoPath: String) -> some View {
+        let visible = terminals.visibleTerminals(in: repoPath)
+        let minimized = terminals.minimizedTerminals(in: repoPath)
+        return VStack(spacing: 8) {
+            if !minimized.isEmpty {
+                minimizedStrip(minimized)
+            }
+            if visible.isEmpty {
+                emptyRepoState(repoPath)
+            } else {
+                TerminalGridView(
+                    terminals: visible,
+                    layout: workspace.gridLayout(for: repoPath),
+                    activeTerminalID: terminals.activeTerminalID,
+                    viewProvider: viewProvider,
+                    onFocus: { terminals.focus($0) },
+                    onMinimize: { terminals.minimize($0) },
+                    onClose: { terminals.close($0) }
+                )
+            }
+        }
+        .padding(12)
+    }
+
+    /// Minimize edilen terminaller şeridi — SessionList sidebar'ı Faz 4'e dek
+    /// restore yüzeyi. Tıklama yalnız restore eder; odak vermez (spec/21 §6).
+    private func minimizedStrip(_ minimized: [TerminalMeta]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                Text("Minimized:")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted)
+                ForEach(minimized) { meta in
+                    Button {
+                        terminals.restore(meta.id)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Theme.statusColor(for: meta.status))
+                                .frame(width: 6, height: 6)
+                            Text(meta.oscTitle ?? meta.task ?? meta.name)
+                                .font(.system(size: 11, design: .monospaced))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Theme.bgSurface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(Theme.border, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.textSecondary)
                 }
             }
         }
+        .frame(height: 24)
     }
 
-    private func terminalCard(for id: TerminalID) -> some View {
-        TerminalHostView(terminalID: id, provider: viewProvider)
-            .id(id)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(
-                        store.activeTerminalID == id ? Theme.accentPrimary : Theme.border,
-                        lineWidth: 1
-                    )
-            )
+    private func emptyRepoState(_ repoPath: String) -> some View {
+        VStack(spacing: 10) {
+            Text("Bu repoda terminal yok")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(Theme.textMuted)
+            Button("New Terminal") {
+                terminals.spawn(in: repoPath)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accentVivid)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -17,10 +17,29 @@ public final class TerminalSessionManager: TerminalServicing {
     private let broadcaster = EventBroadcaster<TerminalEvent>()
     private let font: NSFont
     private var keyMonitor: Any?
+    private var mouseMonitor: Any?
+
+    /// Terminal NSView'ına tıklayınca store odağının senkronlanması için köprü
+    /// (Electron'daki karta-tıkla → setActiveTerminal paritesi, spec/20 §9).
+    public var onTerminalViewFocused: ((TerminalID) -> Void)?
 
     public init(font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)) {
         self.font = font
         installNaturalEditingMonitor()
+        installFocusClickMonitor()
+    }
+
+    private func installFocusClickMonitor() {
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            // First responder tıklama dispatch'i SONRASI oluşur — bir tur ertele
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      let view = event.window?.firstResponder as? DropAwareTerminalView,
+                      let id = self.viewRegistry.terminalID(for: view) else { return }
+                self.onTerminalViewFocused?(id)
+            }
+            return event
+        }
     }
 
     /// SwiftTerm keyDown'ı sealed olduğundan doğal-düzenleme eşlemeleri

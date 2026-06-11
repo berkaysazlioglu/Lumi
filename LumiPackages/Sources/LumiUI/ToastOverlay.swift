@@ -1,13 +1,17 @@
+import LumiKit
 import LumiState
 import SwiftUI
 
 /// Sağ-alt toast yığını (spec/23: tip rengiyle sol stripe, max 5, 5sn).
+/// Bell toast'una tıklama terminali (minimize ise restore edip) odaklar.
 /// Tam görsel parite (blur, progress bar, animasyon parametreleri) Faz 6'da.
 public struct ToastOverlay: View {
     private let store: ToastStore
+    private let onTerminalTap: (TerminalID) -> Void
 
-    public init(store: ToastStore) {
+    public init(store: ToastStore, onTerminalTap: @escaping (TerminalID) -> Void = { _ in }) {
         self.store = store
+        self.onTerminalTap = onTerminalTap
     }
 
     public var body: some View {
@@ -56,6 +60,13 @@ public struct ToastOverlay: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(Theme.border, lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let terminalID = toast.terminalID {
+                onTerminalTap(terminalID)
+                store.dismiss(toast.id)
+            }
+        }
         .transition(.move(edge: .trailing).combined(with: .opacity))
     }
 

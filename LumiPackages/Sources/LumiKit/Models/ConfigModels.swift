@@ -97,6 +97,10 @@ public struct UIState: Codable, Sendable, Equatable {
     public var projectGridLayouts: [String: GridLayout]
     public var windowBounds: WindowBounds?
     public var windowMaximized: Bool?
+    /// Legacy `gridColumns` alanının (number | "auto") çevirisi — yalnız OKUNUR
+    /// (spec/21 §13 migration'ı için); yazımda overlay'e girmez, ham anahtar
+    /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
+    public var legacyGridColumns: GridLayout?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -115,7 +119,8 @@ public struct UIState: Codable, Sendable, Equatable {
         rightSidebarOpen: Bool,
         projectGridLayouts: [String: GridLayout],
         windowBounds: WindowBounds?,
-        windowMaximized: Bool?
+        windowMaximized: Bool?,
+        legacyGridColumns: GridLayout? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -124,6 +129,7 @@ public struct UIState: Codable, Sendable, Equatable {
         self.projectGridLayouts = projectGridLayouts
         self.windowBounds = windowBounds
         self.windowMaximized = windowMaximized
+        self.legacyGridColumns = legacyGridColumns
     }
 }
 
