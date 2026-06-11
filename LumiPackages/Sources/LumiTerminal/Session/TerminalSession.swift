@@ -65,12 +65,17 @@ final class TerminalSession {
             queue: queue
         )
 
-        self.terminalView = TerminalView(
+        let view = DropAwareTerminalView(
             frame: NSRect(x: 0, y: 0, width: 800, height: 480),
             font: font
         )
+        self.terminalView = view
         terminalView.getTerminal().options.scrollback = Self.scrollbackLines
         terminalView.terminalDelegate = self
+        view.onFileDrop = { [weak self] paths in
+            // Quote'lanmış path, newline'sız yazılır (Electron paritesi + karar 11)
+            self?.write(ShellQuoting.joinedPaths(paths))
+        }
 
         wirePipeline()
 

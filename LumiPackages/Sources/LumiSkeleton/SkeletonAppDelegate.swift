@@ -19,6 +19,11 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         self.store = store
 
+        SkeletonMainMenu.install(
+            closeTerminalTarget: self,
+            closeTerminalAction: #selector(closeActiveTerminal(_:))
+        )
+
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -60,6 +65,11 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.manager.setWindowFocused(false) }
         }
+    }
+
+    @objc private func closeActiveTerminal(_ sender: Any?) {
+        guard let store, let activeID = store.activeTerminalID else { return }
+        store.close(activeID)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

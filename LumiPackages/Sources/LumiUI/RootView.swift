@@ -76,35 +76,42 @@ public struct RootView: View {
 
     private func chip(for meta: TerminalMeta) -> some View {
         let isActive = store.activeTerminalID == meta.id
-        return Button {
-            store.focus(meta.id)
-        } label: {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Theme.statusColor(for: meta.status))
-                    .frame(width: 8, height: 8)
-                Text(meta.oscTitle ?? meta.task ?? meta.name)
-                    .font(.system(size: 12, design: .monospaced))
-                    .lineLimit(1)
-                Button {
-                    store.close(meta.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+        // Odak ve kapatma AYRI butonlar: iç içe Button'da iç buton tıklamayı
+        // dış butona kaptırır (kapatma yerine odaklama bug'ı)
+        return HStack(spacing: 6) {
+            Button {
+                store.focus(meta.id)
+            } label: {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Theme.statusColor(for: meta.status))
+                        .frame(width: 8, height: 8)
+                    Text(meta.oscTitle ?? meta.task ?? meta.name)
+                        .font(.system(size: 12, design: .monospaced))
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.textMuted)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(isActive ? Theme.bgElevated : Theme.bgSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isActive ? Theme.accentPrimary : Theme.border, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .buttonStyle(.plain)
+
+            Button {
+                store.close(meta.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Theme.textMuted)
+                    .frame(width: 14, height: 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(isActive ? Theme.bgElevated : Theme.bgSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isActive ? Theme.accentPrimary : Theme.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
     }
 
