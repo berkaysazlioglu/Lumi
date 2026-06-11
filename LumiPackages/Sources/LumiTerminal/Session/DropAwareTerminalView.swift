@@ -24,6 +24,7 @@ final class DropAwareTerminalView: TerminalView {
         // tuşlar birleşik karakter üretir (TR klavyede [ ] { } vb. Option ister).
         // SwiftTerm default'u true'dur ve bu karakterleri ESC+harf'e çevirirdi.
         optionAsMetaKey = false
+        TerminalTheme.apply(to: self)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

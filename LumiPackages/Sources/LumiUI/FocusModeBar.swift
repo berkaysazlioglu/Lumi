@@ -11,6 +11,7 @@ struct FocusModeBar: View {
     let workspace: WorkspaceStore
     let terminals: TerminalListStore
     let repoPath: String
+    let provider: AgentProvider
 
     @State private var isRevealed = false
     @State private var revealTask: Task<Void, Never>?
@@ -55,8 +56,8 @@ struct FocusModeBar: View {
 
             gridLayoutMenu
 
-            Button("New Terminal") {
-                terminals.spawn(in: repoPath)
+            Button("New \(provider.displayName)") {
+                terminals.spawn(in: repoPath, command: provider.launchCommand)
             }
             .buttonStyle(.bordered)
             .tint(Theme.accentVivid)
@@ -83,29 +84,9 @@ struct FocusModeBar: View {
     }
 
     private var gridLayoutMenu: some View {
-        Menu {
-            Button("Auto") {
-                workspace.setGridLayout(LumiKit.GridLayout(mode: .auto, count: 2), for: repoPath)
-            }
-            ForEach(2...5, id: \.self) { count in
-                Button("\(count) Columns") {
-                    workspace.setGridLayout(
-                        LumiKit.GridLayout(mode: .columns, count: count), for: repoPath
-                    )
-                }
-            }
-            ForEach(2...5, id: \.self) { count in
-                Button("\(count) Rows") {
-                    workspace.setGridLayout(
-                        LumiKit.GridLayout(mode: .rows, count: count), for: repoPath
-                    )
-                }
-            }
-        } label: {
-            Text("Layout")
-                .font(.system(size: 11, design: .monospaced))
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
+        GridLayoutMenu(
+            current: workspace.gridLayout(for: repoPath),
+            onSelect: { workspace.setGridLayout($0, for: repoPath) }
+        )
     }
 }

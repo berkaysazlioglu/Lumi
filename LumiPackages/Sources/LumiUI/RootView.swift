@@ -110,7 +110,12 @@ public struct RootView: View {
         .background(Theme.bgDeep)
         .overlay(alignment: .top) {
             if workspace.isFocusMode, let active = workspace.activeTab {
-                FocusModeBar(workspace: workspace, terminals: terminals, repoPath: active)
+                FocusModeBar(
+                    workspace: workspace,
+                    terminals: terminals,
+                    repoPath: active,
+                    provider: settings.current.aiProvider
+                )
             }
         }
         .overlay {
@@ -183,159 +188,13 @@ public struct RootView: View {
     // MARK: - Header
 
     private var headerBar: some View {
-        HStack(spacing: 10) {
-            tabStrip
-            addRepoButton
-            Spacer()
-            if let active = workspace.activeTab {
-                gridLayoutMenu(for: active)
-                Button("New Terminal") {
-                    terminals.spawn(in: active)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accentVivid)
-            }
-            sidebarToggle(
-                icon: "sidebar.left",
-                isOn: workspace.leftSidebarOpen,
-                action: { workspace.toggleLeftSidebar() }
-            )
-            sidebarToggle(
-                icon: "sidebar.right",
-                isOn: workspace.rightSidebarOpen,
-                action: { workspace.toggleRightSidebar() }
-            )
-            Text("\(terminals.totalCount)")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Theme.textSecondary)
-        }
-        // Sol 80px: traffic light alanı (spec/30 custom titlebar paritesi)
-        .padding(.leading, 80)
-        .padding(.trailing, 16)
-        .padding(.vertical, 9)
-        .background(Theme.bgSurface)
-    }
-
-    private var tabStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(workspace.openTabs, id: \.self) { repoPath in
-                    tabChip(for: repoPath)
-                }
-            }
-        }
-        .frame(maxWidth: 600, alignment: .leading)
-    }
-
-    private func tabChip(for repoPath: String) -> some View {
-        let isActive = workspace.activeTab == repoPath
-        let name = repoStore.repo(at: repoPath)?.name ?? (repoPath as NSString).lastPathComponent
-        return HStack(spacing: 6) {
-            Button {
-                workspace.setActiveTab(repoPath)
-            } label: {
-                Text(name)
-                    .font(.system(size: 12, design: .monospaced))
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                workspace.requestCloseTab(repoPath, repoName: name)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(Theme.textMuted)
-                    .frame(width: 14, height: 14)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(isActive ? Theme.bgElevated : Theme.bgSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isActive ? Theme.accentPrimary : Theme.border, lineWidth: 1)
+        HeaderBarView(
+            workspace: workspace,
+            repoStore: repoStore,
+            terminals: terminals,
+            personasStore: personasStore,
+            settings: settings
         )
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
-    }
-
-    private var addRepoButton: some View {
-        Button {
-            workspace.isRepoSelectorOpen.toggle()
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Theme.accentPrimary)
-                .frame(width: 24, height: 24)
-                .background(Theme.bgElevated)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: Binding(
-            get: { workspace.isRepoSelectorOpen },
-            set: { workspace.isRepoSelectorOpen = $0 }
-        )) {
-            RepoSelectorView(groups: repoStore.groupedRepos) { repo in
-                workspace.isRepoSelectorOpen = false
-                workspace.openTab(repo.path)
-            }
-        }
-    }
-
-    private func gridLayoutMenu(for repoPath: String) -> some View {
-        let current = workspace.gridLayout(for: repoPath)
-        return Menu {
-            Button("Auto") {
-                workspace.setGridLayout(LumiKit.GridLayout(mode: .auto, count: 2), for: repoPath)
-            }
-            Menu("Columns") {
-                ForEach(2...5, id: \.self) { count in
-                    Button("\(count) Columns") {
-                        workspace.setGridLayout(LumiKit.GridLayout(mode: .columns, count: count), for: repoPath)
-                    }
-                }
-            }
-            Menu("Rows") {
-                ForEach(2...5, id: \.self) { count in
-                    Button("\(count) Rows") {
-                        workspace.setGridLayout(LumiKit.GridLayout(mode: .rows, count: count), for: repoPath)
-                    }
-                }
-            }
-        } label: {
-            Text(gridLayoutLabel(current))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Theme.textSecondary)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private func gridLayoutLabel(_ layout: LumiKit.GridLayout) -> String {
-        switch layout.mode {
-        case .auto: return "Auto"
-        case .columns: return "\(layout.count) Col"
-        case .rows: return "\(layout.count) Row"
-        }
-    }
-
-    private func sidebarToggle(
-        icon: String,
-        isOn: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundStyle(isOn ? Theme.accentPrimary : Theme.textMuted)
-                .frame(width: 24, height: 24)
-                .background(isOn ? Theme.bgElevated : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - İçerik
@@ -466,8 +325,11 @@ public struct RootView: View {
             Text("Bu repoda terminal yok")
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
-            Button("New Terminal") {
-                terminals.spawn(in: repoPath)
+            Button("New \(settings.current.aiProvider.displayName)") {
+                terminals.spawn(
+                    in: repoPath,
+                    command: settings.current.aiProvider.launchCommand
+                )
             }
             .buttonStyle(.borderedProminent)
             .tint(Theme.accentVivid)

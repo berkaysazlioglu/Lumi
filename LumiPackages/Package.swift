@@ -51,7 +51,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "LumiApp",
-            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"]
+            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"],
+            resources: [.copy("Resources/icon.png")]
         ),
         .testTarget(name: "LumiKitTests", dependencies: ["LumiKit"]),
         .testTarget(name: "LumiTerminalTests", dependencies: ["LumiTerminal"]),

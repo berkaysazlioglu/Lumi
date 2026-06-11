@@ -27,9 +27,21 @@ public enum TerminalStatus: String, Sendable, Codable, CaseIterable, Equatable {
 }
 
 /// AI sağlayıcısı (config seviyesi; spec/13).
-public enum AgentProvider: String, Sendable, Codable, Equatable {
+public enum AgentProvider: String, Sendable, Codable, Equatable, CaseIterable {
     case claude
     case codex
+
+    /// UI etiketi (spec/20 §6: buton "New Claude"/"New Codex").
+    public var displayName: String {
+        switch self {
+        case .claude: return "Claude"
+        case .codex: return "Codex"
+        }
+    }
+
+    /// Yeni provider terminalinde spawn sonrası enjekte edilen CLI komutu
+    /// (spec/20 §6: önce shell açılır, sonra komut yazılır).
+    public var launchCommand: String { rawValue }
 }
 
 /// Terminal metadata'sı — UI/state katmanının gördüğü tek model.

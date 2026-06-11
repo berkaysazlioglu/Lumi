@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LumiFonts.registerBundledFonts()
+        installDockIcon()
 
         // Bundle'lıyken gerçek OS bildirimleri; swift run'da log presenter
         let unPresenter = UNNotificationPresenter.isAvailable ? UNNotificationPresenter() : nil
@@ -263,11 +264,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Dock ikonu: bundle'lıyken Info.plist'teki .icns geçerlidir; `swift run`
+    /// (bundle'sız dev akışı) için ikon resource'tan runtime'da atanır.
+    private func installDockIcon() {
+        guard let url = Bundle.module.url(forResource: "icon", withExtension: "png"),
+              let image = NSImage(contentsOf: url) else {
+            fputs("[lumi] dock ikonu yüklenemedi (resource eksik)\n", stderr)
+            return
+        }
+        NSApp.applicationIconImage = image
+    }
+
     // MARK: - Menü aksiyonları
 
     @objc private func newTerminal(_ sender: Any?) {
         guard let active = container.workspace.activeTab else { return }
-        container.terminals.spawn(in: active)
+        // Spec/20 §6 paritesi: provider terminali = shell + launch komutu
+        container.terminals.spawn(
+            in: active,
+            command: container.settings.current.aiProvider.launchCommand
+        )
     }
 
     @objc private func closeActiveTerminal(_ sender: Any?) {
