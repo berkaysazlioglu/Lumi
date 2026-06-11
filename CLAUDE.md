@@ -4,11 +4,18 @@ Birden çok Claude Code CLI instance'ını yöneten desktop dashboard'un macOS-n
 
 ## Durum
 
-Keşif fazı tamamlandı, tasarım fazı bekleniyor. Henüz kod yok; teknoloji kararları (SwiftTerm, SwiftUI/AppKit dengesi, DI yapısı) tasarım fazında verilecek.
+Keşif ve tasarım fazları tamamlandı. Henüz kod yok; implementasyon `docs/design/04-prototype-plan.md`'deki faz sıralamasıyla (walking skeleton + P1–P5 prototipleri önce) başlar.
+
+Teknoloji kararları (2026-06-11, bağlayıcı — detay ve gerekçeler `docs/design/00-architecture.md`):
+- **SwiftTerm** (SPM) + oturum başına kalıcı view-attached emülatör; PTY katmanı kendi `PTYProcess` wrapper'ımız (LocalProcess değil)
+- **AppKit kabuk + SwiftUI içerik**; terminal NSView'ları SwiftUI dışında `TerminalViewRegistry`'de
+- **Manuel DI + `AppContainer` composition root**; lokal SPM paketleri `LumiKit ← LumiTerminal / LumiServices / LumiState ← LumiUI`
+- **macOS 14+**, Swift 6 strict concurrency; servis→store `AsyncStream`, store→UI `@Observable`, Combine yok
 
 ## Kurallar
 
 - **Spec bağlayıcıdır:** Her implementasyon `docs/spec/` altındaki davranış spec'lerinden yazılır; eski Electron koduna bakmak gerekmez (gerekirse `../ai-orchestrator` yerinde duruyor).
+- **`docs/design/` bağlayıcı tasarım kaydıdır:** Spec davranışın, design implementasyon şeklinin kaynağıdır. Tasarımla çelişen implementasyon yapma; tasarım değişikliği gerekiyorsa önce kullanıcıya sor ve ilgili design dosyasını güncelle.
 - **`docs/spec/01-decisions.md` bağlayıcı karar kaydıdır:** Kapsam, atılan özellikler ve bilinçli davranış değişiklikleri burada. Bu kararlarla çelişen bir implementasyon yapma; karar değişikliği gerekiyorsa önce kullanıcıya sor ve dosyayı güncelle.
 - **Zorunlu mimari gereksinimler** (`docs/spec/00-overview.md` §4): PTY→UI ack-tabanlı backpressure, render-crash izolasyonu, replay güvenliği (sequence-güvenli kesim, terminal otomatik yanıt filtresi). Bunlar sonradan eklenemez — çekirdek tasarımın parçası.
 - **SOLID + dependency injection:** Rewrite'ın ana hedeflerinden biri; view katmanı iş mantığından ayrı tutulur.
