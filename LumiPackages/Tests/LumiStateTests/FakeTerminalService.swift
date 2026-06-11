@@ -50,7 +50,26 @@ final class FakeTerminalService: TerminalServicing {
         broadcaster.stream()
     }
 
+    func outputStream(id: TerminalID) -> AsyncStream<String>? {
+        outputBroadcaster(for: id).stream()
+    }
+
     func emit(_ event: TerminalEvent) {
         broadcaster.send(event)
+    }
+
+    private var outputBroadcasters: [TerminalID: EventBroadcaster<String>] = [:]
+
+    func emitOutput(_ id: TerminalID, _ text: String) {
+        outputBroadcaster(for: id).send(text)
+    }
+
+    private func outputBroadcaster(for id: TerminalID) -> EventBroadcaster<String> {
+        if let existing = outputBroadcasters[id] {
+            return existing
+        }
+        let fresh = EventBroadcaster<String>()
+        outputBroadcasters[id] = fresh
+        return fresh
     }
 }

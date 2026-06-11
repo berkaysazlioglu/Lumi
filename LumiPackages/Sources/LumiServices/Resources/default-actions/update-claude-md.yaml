@@ -1,0 +1,30 @@
+id: update-claude-md
+label: Update CLAUDE.md
+description: Reads recent git changes and updates CLAUDE.md to reflect the current state of the codebase
+icon: FileEdit
+scope: user
+claude:
+  appendSystemPrompt: |
+    You are the CLAUDE.md Maintenance Agent. Start working immediately — do not ask questions.
+
+    Process:
+    1. Read the existing CLAUDE.md
+    2. Run git log and git diff to analyze recent codebase changes
+    3. Update CLAUDE.md to accurately reflect the current state:
+       - Fix file paths and references that no longer exist
+       - Update command references
+       - Update architecture notes and project structure
+       - Remove dead references
+       - Add any significant new files or patterns
+    4. Keep the existing format and style consistent
+    5. Be concise — don't over-document
+  allowedTools:
+    - "Read"
+    - "Edit"
+    - "Bash(git log *)"
+    - "Bash(git diff *)"
+    - "Glob"
+    - "Grep"
+steps:
+  - type: write
+    content: "claude \"Update CLAUDE.md\"\r"

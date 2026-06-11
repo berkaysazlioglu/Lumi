@@ -14,6 +14,8 @@ final class AppContainer {
     let system: any SystemServicing
     let repoService: any RepoServicing
     let gitService: any GitServicing
+    let personaService: any PersonaServicing
+    let actionService: any ActionServicing
     let notifications: any NotificationServicing
     let terminal: TerminalSessionManager
     let toasts: ToastStore
@@ -21,6 +23,8 @@ final class AppContainer {
     let repoStore: RepoStore
     let gitStore: GitStore
     let fileViewer: FileViewerStore
+    let personasStore: PersonasStore
+    let actionsStore: ActionsStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
 
@@ -39,11 +43,25 @@ final class AppContainer {
         gitService = GitService()
         notifications = NotificationService(presenter: LogNotificationPresenter())
         terminal = TerminalSessionManager()
+        personaService = PersonaService(
+            paths: paths,
+            seedDirectory: LumiServicesResources.defaultPersonasDirectory,
+            terminal: terminal,
+            config: config
+        )
+        actionService = ActionService(
+            paths: paths,
+            seedDirectory: LumiServicesResources.defaultActionsDirectory,
+            terminal: terminal,
+            config: config
+        )
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
         repoStore = RepoStore(service: repoService)
         gitStore = GitStore(git: gitService, toasts: toasts)
         fileViewer = FileViewerStore(git: gitService, toasts: toasts)
+        personasStore = PersonasStore(service: personaService, toasts: toasts)
+        actionsStore = ActionsStore(service: actionService, toasts: toasts)
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -69,6 +87,10 @@ final class AppContainer {
 
         await system.fixProcessPath()
 
+        // Seed asimetrisi (design/00 §3): persona ezilir, action modified_at'liyse korunur
+        await personaService.seedDefaults()
+        await actionService.seedDefaults()
+
         let appConfig = await config.config()
         terminal.setMaxTerminals(appConfig.maxTerminals)
         notifications.updateSettings(appConfig.notifications)
@@ -80,6 +102,8 @@ final class AppContainer {
 
         terminals.start()
         repoStore.start()
+        personasStore.start()
+        actionsStore.start()
         await repoStore.reload()
         await workspace.load(repos: repoStore.repos)
 
@@ -97,6 +121,9 @@ final class AppContainer {
                 if let previous, previous != current {
                     await self.repoService.unwatchFileTree(repoPath: previous)
                 }
+                // Persona/action project scope'u aktif tab'ı izler
+                await self.personasStore.setProject(current)
+                await self.actionsStore.setProject(current)
                 guard let current else { return }
                 await self.repoService.watchFileTree(repoPath: current)
                 await self.repoStore.loadFileTree(current)
@@ -175,5 +202,7 @@ final class AppContainer {
         bridgeTasks.forEach { $0.cancel() }
         terminal.killAll()
         await config.flushPendingWrites()
+        // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)
+        try? FileManager.default.removeItem(at: paths.tempDir)
     }
 }

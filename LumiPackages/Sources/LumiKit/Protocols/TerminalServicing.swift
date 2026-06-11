@@ -5,7 +5,7 @@ import Foundation
 /// Tek process'te UI-yüzlü servis @MainActor'da yaşar; PTY I/O implementasyonun
 /// içindeki background queue'lardadır — bu protokol o detayı sızdırmaz.
 @MainActor
-public protocol TerminalServicing: AnyObject {
+public protocol TerminalServicing: AnyObject, Sendable {
     /// Yeni login-shell PTY oturumu açar; `command` verilirse shell'e yazılır (PTY argv'si değil).
     /// Limit aşımında `LumiError.terminalLimitReached` fırlatır (karar 5 — sessiz null yok).
     @discardableResult
@@ -26,6 +26,11 @@ public protocol TerminalServicing: AnyObject {
 
     func setMaxTerminals(_ n: Int)
     func events() -> AsyncStream<TerminalEvent>
+
+    /// Decode edilmiş çıktı chunk'ları — ActionEngine `wait_for` tüketicisi
+    /// (design/01 §3 fan-out). Tüketici yavaşlığı terminali durduramaz;
+    /// 4KB rolling ring drop'a toleranslıdır. Terminal yoksa nil.
+    func outputStream(id: TerminalID) -> AsyncStream<String>?
 }
 
 /// Canlı terminal NSView'larını UI'a köprüleyen sınır (design/00 §2).

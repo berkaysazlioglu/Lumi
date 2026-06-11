@@ -22,6 +22,7 @@ final class TerminalPipeline: @unchecked Sendable {
     var onStatusChange: (@Sendable (TerminalStatus) -> Void)?
     var onDisplayTitle: (@Sendable (String) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
+    var onOutputText: (@Sendable (String) -> Void)?
 
     init(queue: DispatchQueue, flow: FlowController = FlowController()) {
         self.flow = flow
@@ -56,6 +57,7 @@ final class TerminalPipeline: @unchecked Sendable {
                 statusMachine.onOutputActivity()
                 silenceTimer.touch()
             }
+            onOutputText?(text)
         }
         coalescer.ingest(data)
         return directive == .suspend ? .suspend : .proceed

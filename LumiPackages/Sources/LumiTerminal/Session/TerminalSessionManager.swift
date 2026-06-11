@@ -124,6 +124,10 @@ public final class TerminalSessionManager: TerminalServicing {
         broadcaster.stream()
     }
 
+    public func outputStream(id: TerminalID) -> AsyncStream<String>? {
+        session(for: id)?.outputStream()
+    }
+
     private func session(for id: TerminalID) -> TerminalSession? {
         sessions.first { $0.id == id }
     }

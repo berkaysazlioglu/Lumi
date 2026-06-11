@@ -26,6 +26,8 @@ public struct RootView: View {
     private let terminals: TerminalListStore
     private let gitStore: GitStore
     private let fileViewer: FileViewerStore
+    private let personasStore: PersonasStore
+    private let actionsStore: ActionsStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
     private let highlighter: any SyntaxHighlighting
@@ -37,6 +39,8 @@ public struct RootView: View {
         terminals: TerminalListStore,
         gitStore: GitStore,
         fileViewer: FileViewerStore,
+        personasStore: PersonasStore,
+        actionsStore: ActionsStore,
         toasts: ToastStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
@@ -47,6 +51,8 @@ public struct RootView: View {
         self.terminals = terminals
         self.gitStore = gitStore
         self.fileViewer = fileViewer
+        self.personasStore = personasStore
+        self.actionsStore = actionsStore
         self.toasts = toasts
         self.viewProvider = viewProvider
         self.highlighter = highlighter
@@ -263,9 +269,11 @@ public struct RootView: View {
         if let active = workspace.activeTab {
             HStack(spacing: 0) {
                 if workspace.leftSidebarOpen {
-                    FileTreeSidebar(
+                    LeftSidebarView(
                         repoPath: active,
                         repoStore: repoStore,
+                        personasStore: personasStore,
+                        actionsStore: actionsStore,
                         onOpenFile: { path in
                             Task { await fileViewer.presentView(repoPath: active, filePath: path) }
                         },

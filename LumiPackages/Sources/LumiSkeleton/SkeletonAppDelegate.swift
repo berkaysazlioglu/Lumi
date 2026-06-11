@@ -57,6 +57,8 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
             terminals: container.terminals,
             gitStore: container.gitStore,
             fileViewer: container.fileViewer,
+            personasStore: container.personasStore,
+            actionsStore: container.actionsStore,
             toasts: container.toasts,
             viewProvider: container.terminal.viewRegistry,
             highlighter: HighlightrEngine(),

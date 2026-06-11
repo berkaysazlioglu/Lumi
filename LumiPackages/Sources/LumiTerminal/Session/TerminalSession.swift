@@ -31,6 +31,7 @@ final class TerminalSession {
     private let pty: PTYProcess
     private let ioQueue: DispatchQueue
     private let pipeline: TerminalPipeline
+    private let outputBroadcaster = EventBroadcaster<String>()
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
 
@@ -102,6 +103,15 @@ final class TerminalSession {
         pipeline.onDisplayTitle = { [weak self] title in
             hopToMain { self?.applyTitle(title) }
         }
+        // wait_for fan-out (design/01 §3): io queue'dan doğrudan yayın —
+        // tüketici yavaşlığı terminali durduramaz
+        pipeline.onOutputText = { [outputBroadcaster] text in
+            outputBroadcaster.send(text)
+        }
+    }
+
+    func outputStream() -> AsyncStream<String> {
+        outputBroadcaster.stream()
     }
 
     /// Ack noktası: SwiftTerm feed'i senkron parse eder; dönüş = tüketildi
