@@ -91,6 +91,73 @@ final class TerminalKeyPathTests: XCTestCase {
         )
     }
 
+    // MARK: - Doğal metin düzenleme eşlemeleri (NaturalEditingKeyMap)
+
+    private func modifiedKeyEvent(
+        _ characters: String,
+        keyCode: UInt16,
+        flags: NSEvent.ModifierFlags
+    ) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: 0,
+            context: nil,
+            characters: characters,
+            charactersIgnoringModifiers: characters,
+            isARepeat: false,
+            keyCode: keyCode
+        )!
+    }
+
+    /// Kök neden regresyonu: Option+Backspace ESC+DEL DEĞİL ^W göndermeli —
+    /// ESC, zsh vi modunda (viins) mod değişimine dönüşüp kullanıcıyı
+    /// normal modda bırakıyordu (kelime silinmez, tekli backspace de işlemez).
+    func testOptionBackspaceMapsToCtrlW() {
+        let event = modifiedKeyEvent("\u{7f}", keyCode: 51, flags: [.option])
+        XCTAssertEqual(NaturalEditingKeyMap.bytes(for: event), [0x17])
+    }
+
+    func testCommandBackspaceMapsToCtrlU() {
+        let event = modifiedKeyEvent("\u{7f}", keyCode: 51, flags: [.command])
+        XCTAssertEqual(NaturalEditingKeyMap.bytes(for: event), [0x15])
+    }
+
+    func testOptionArrowsMapToAltArrowCSI() {
+        let left = modifiedKeyEvent(
+            String(UnicodeScalar(NSLeftArrowFunctionKey)!), keyCode: 123, flags: [.option]
+        )
+        let right = modifiedKeyEvent(
+            String(UnicodeScalar(NSRightArrowFunctionKey)!), keyCode: 124, flags: [.option]
+        )
+        XCTAssertEqual(NaturalEditingKeyMap.bytes(for: left), Array("\u{1B}[1;3D".utf8))
+        XCTAssertEqual(NaturalEditingKeyMap.bytes(for: right), Array("\u{1B}[1;3C".utf8))
+    }
+
+    func testPlainAndUnrelatedKeysNotMapped() {
+        XCTAssertNil(NaturalEditingKeyMap.bytes(
+            for: modifiedKeyEvent("\u{7f}", keyCode: 51, flags: [])
+        ))
+        XCTAssertNil(NaturalEditingKeyMap.bytes(
+            for: modifiedKeyEvent("\u{7f}", keyCode: 51, flags: [.option, .command])
+        ))
+        XCTAssertNil(NaturalEditingKeyMap.bytes(
+            for: modifiedKeyEvent("a", keyCode: 0, flags: [.option])
+        ))
+    }
+
+    /// optionAsMetaKey kapalı olmalı: TR klavyede Option'lı karakterler
+    /// ([ ] { } vb.) ESC+harf'e değil birleşik karaktere gitmeli.
+    func testDropAwareViewDisablesOptionAsMeta() {
+        let view = DropAwareTerminalView(
+            frame: NSRect(x: 0, y: 0, width: 400, height: 300),
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular)
+        )
+        XCTAssertFalse(view.optionAsMetaKey)
+    }
+
     /// Kitty keyboard protokolü yolu (claude CLI bunu açar): backspace'in
     /// kitty-encoded biçimi de delegate'e ulaşmalı (boş olmamalı).
     func testKittyModeBackspaceStillSendsSomething() {

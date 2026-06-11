@@ -16,9 +16,25 @@ public final class TerminalSessionManager: TerminalServicing {
     private var spawnCounter = 0
     private let broadcaster = EventBroadcaster<TerminalEvent>()
     private let font: NSFont
+    private var keyMonitor: Any?
 
     public init(font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)) {
         self.font = font
+        installNaturalEditingMonitor()
+    }
+
+    /// SwiftTerm keyDown'ı sealed olduğundan doğal-düzenleme eşlemeleri
+    /// (Option+Backspace → ^W vb.) dispatch'ten önce local monitor'la uygulanır.
+    /// Yalnız first responder bir Lumi terminal view'ıyken devreye girer.
+    private func installNaturalEditingMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let view = event.window?.firstResponder as? DropAwareTerminalView,
+                  let bytes = NaturalEditingKeyMap.bytes(for: event) else {
+                return event
+            }
+            view.send(bytes)
+            return nil
+        }
     }
 
     public var terminals: [TerminalMeta] {

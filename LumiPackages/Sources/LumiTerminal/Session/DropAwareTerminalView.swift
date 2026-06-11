@@ -10,12 +10,20 @@ final class DropAwareTerminalView: TerminalView {
 
     override init(frame: CGRect, font: NSFont?) {
         super.init(frame: frame, font: font)
-        registerForDraggedTypes([.fileURL])
+        configureLumiDefaults()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        configureLumiDefaults()
+    }
+
+    private func configureLumiDefaults() {
         registerForDraggedTypes([.fileURL])
+        // macOS konvansiyonu (Terminal.app): Option meta DEĞİLDİR — Option'lı
+        // tuşlar birleşik karakter üretir (TR klavyede [ ] { } vb. Option ister).
+        // SwiftTerm default'u true'dur ve bu karakterleri ESC+harf'e çevirirdi.
+        optionAsMetaKey = false
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
