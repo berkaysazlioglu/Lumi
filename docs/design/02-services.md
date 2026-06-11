@@ -3,7 +3,8 @@
 > `LumiKit` protokolleri + `LumiServices`/`LumiTerminal` implementasyon sözleşmeleri. Davranış kaynağı: [spec/11](../spec/11-ipc-surface.md), [spec/12](../spec/12-git-vcs.md), [spec/13](../spec/13-main-services.md). IPC kanal haritası iç API sözleşmesi olarak kullanılır ([spec/00 §5](../spec/00-overview.md)).
 
 Genel kurallar:
-- Tüm protokoller `LumiKit`'te; tüm metodlar `async throws` (yalnız `LumiError` fırlatır); tüm event payload'ları `Sendable`.
+- Tüm protokoller `LumiKit`'te; metodlar yalnız `LumiError` fırlatır; tüm event payload'ları `Sendable`.
+- **İzolasyon:** UI-yüzlü ve store'larla senkron konuşan `TerminalServicing` (+ `TerminalViewProviding`) `@MainActor` protokoldür — PTY I/O implementasyonun içindeki io queue'lardadır, protokol bu detayı sızdırmaz (Faz 1'de netleşti). Dosya/process-I/O ağırlıklı diğer servisler `Actor` + `async throws` kalır.
 - **Servis→store event'leri `AsyncStream<Event>`** — `EventBroadcaster<Event>` yardımıyla (continuation registry; her `events()` çağrısı taze stream döner). Her domain'in tek tüketicisi kendi store'udur; UI servislere asla doğrudan abone olmaz.
 - Push'ların çoğu **pull-after-push** kalır: payload'sız "changed" sinyali → store tüm listeyi yeniden çeker (Electron paritesi, basitlik).
 
