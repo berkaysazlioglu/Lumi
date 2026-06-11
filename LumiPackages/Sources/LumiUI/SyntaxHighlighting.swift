@@ -44,9 +44,7 @@ public final class HighlightrEngine: SyntaxHighlighting {
                     highlightr?.setTheme(to: "atom-one-dark")
                     self?.cachedHighlightr = highlightr
                 }
-                highlightr?.theme.codeFont = NSFont.monospacedSystemFont(
-                    ofSize: fontSize, weight: .regular
-                )
+                highlightr?.theme.codeFont = LumiFonts.mono(size: fontSize)
                 continuation.resume(returning: AttributedBox(
                     value: highlightr?.highlight(code, as: language)
                 ))
@@ -57,7 +55,7 @@ public final class HighlightrEngine: SyntaxHighlighting {
 
     static func plainText(_ code: String, fontSize: CGFloat) -> NSAttributedString {
         NSAttributedString(string: code, attributes: [
-            .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
+            .font: LumiFonts.mono(size: fontSize),
             .foregroundColor: Theme.NS.textPrimary,
         ])
     }

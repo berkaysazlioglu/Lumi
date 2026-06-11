@@ -15,7 +15,9 @@ public final class TerminalSessionManager: TerminalServicing {
     private var maxTerminals = TerminalSessionManager.defaultMaxTerminals
     private var spawnCounter = 0
     private let broadcaster = EventBroadcaster<TerminalEvent>()
-    private let font: NSFont
+    /// Yeni spawn'lara uygulanır; mevcut terminaller yeniden açılınca alır
+    /// (Electron'da da font değişimi re-init gerektiriyordu — spec/20 §1).
+    public var font: NSFont
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
 

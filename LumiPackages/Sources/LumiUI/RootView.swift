@@ -21,6 +21,23 @@ public struct RootView: View {
         }
     }
 
+    /// Settings/onboarding'in sistem etkileşimleri (NSOpenPanel, system checks).
+    public struct ShellActions {
+        public let chooseFolder: () async -> String?
+        public let runChecks: () async -> [SystemCheckResult]
+        public let fixCheck: (String) -> Void
+
+        public init(
+            chooseFolder: @escaping () async -> String?,
+            runChecks: @escaping () async -> [SystemCheckResult],
+            fixCheck: @escaping (String) -> Void
+        ) {
+            self.chooseFolder = chooseFolder
+            self.runChecks = runChecks
+            self.fixCheck = fixCheck
+        }
+    }
+
     private let workspace: WorkspaceStore
     private let repoStore: RepoStore
     private let terminals: TerminalListStore
@@ -28,10 +45,12 @@ public struct RootView: View {
     private let fileViewer: FileViewerStore
     private let personasStore: PersonasStore
     private let actionsStore: ActionsStore
+    private let settings: SettingsStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
     private let highlighter: any SyntaxHighlighting
     private let fileActions: FileActions
+    private let shellActions: ShellActions
 
     public init(
         workspace: WorkspaceStore,
@@ -41,10 +60,12 @@ public struct RootView: View {
         fileViewer: FileViewerStore,
         personasStore: PersonasStore,
         actionsStore: ActionsStore,
+        settings: SettingsStore,
         toasts: ToastStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
-        fileActions: FileActions
+        fileActions: FileActions,
+        shellActions: ShellActions
     ) {
         self.workspace = workspace
         self.repoStore = repoStore
@@ -53,25 +74,57 @@ public struct RootView: View {
         self.fileViewer = fileViewer
         self.personasStore = personasStore
         self.actionsStore = actionsStore
+        self.settings = settings
         self.toasts = toasts
         self.viewProvider = viewProvider
         self.highlighter = highlighter
         self.fileActions = fileActions
+        self.shellActions = shellActions
     }
 
     public var body: some View {
+        Group {
+            if workspace.isOnboardingActive {
+                OnboardingView(settings: settings, shell: shellActions) {
+                    workspace.isOnboardingActive = false
+                }
+            } else {
+                dashboard
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var dashboard: some View {
         VStack(spacing: 0) {
-            headerBar
-            Rectangle()
-                .fill(Theme.border)
-                .frame(height: 1)
+            // Focus mode: header gizlenir, hover-reveal bar devralır (spec/22)
+            if !workspace.isFocusMode {
+                headerBar
+                Rectangle()
+                    .fill(Theme.border)
+                    .frame(height: 1)
+            }
             mainArea
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.bgDeep)
+        .overlay(alignment: .top) {
+            if workspace.isFocusMode, let active = workspace.activeTab {
+                FocusModeBar(workspace: workspace, terminals: terminals, repoPath: active)
+            }
+        }
         .overlay {
             if fileViewer.isPresented {
                 FileViewerView(store: fileViewer, highlighter: highlighter)
+            }
+        }
+        .overlay {
+            if workspace.isSettingsOpen {
+                SettingsView(
+                    settings: settings,
+                    chooseFolder: shellActions.chooseFolder,
+                    onClose: { workspace.isSettingsOpen = false }
+                )
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -92,7 +145,30 @@ public struct RootView: View {
         } message: {
             Text("\(workspace.closeTabDialog?.minimizedCount ?? 0) minimized terminal will be killed.")
         }
-        .preferredColorScheme(.dark)
+        .confirmationDialog(
+            "Quit Lumi?",
+            isPresented: quitDialogBinding
+        ) {
+            Button("Quit", role: .destructive) {
+                workspace.resolveQuit(true)
+            }
+            Button("Cancel", role: .cancel) {
+                workspace.resolveQuit(false)
+            }
+        } message: {
+            Text("\(workspace.quitDialogTerminalCount ?? 0) açık terminal kapatılacak.")
+        }
+    }
+
+    private var quitDialogBinding: Binding<Bool> {
+        Binding(
+            get: { workspace.quitDialogTerminalCount != nil },
+            set: { isPresented in
+                if !isPresented, workspace.quitDialogTerminalCount != nil {
+                    workspace.resolveQuit(false)
+                }
+            }
+        )
     }
 
     private var closeTabDialogBinding: Binding<Bool> {
@@ -268,7 +344,7 @@ public struct RootView: View {
     private var mainArea: some View {
         if let active = workspace.activeTab {
             HStack(spacing: 0) {
-                if workspace.leftSidebarOpen {
+                if workspace.leftSidebarOpen && !workspace.isFocusMode {
                     LeftSidebarView(
                         repoPath: active,
                         repoStore: repoStore,
@@ -287,7 +363,7 @@ public struct RootView: View {
                 repoContent(active)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if workspace.rightSidebarOpen {
+                if workspace.rightSidebarOpen && !workspace.isFocusMode {
                     Rectangle().fill(Theme.border).frame(width: 1)
                     GitSidebar(
                         repoPath: active,

@@ -1,10 +1,10 @@
 import AppKit
 
-/// Faz 3 ana menüsü — kısayolların TEK kaynağı (design/03 §2): Cmd+T/W/O/1-9/
-/// Shift+oklar. SwiftUI .keyboardShortcut hiçbir yerde kullanılmaz.
+/// Ana menü — kısayolların TEK kaynağı (design/03 §2): Cmd+T/W/O/,/1-9/
+/// Shift+oklar/Shift+F. SwiftUI .keyboardShortcut hiçbir yerde kullanılmaz.
 /// Edit menüsü terminal copy-paste için zorunludur (spec/30).
 @MainActor
-enum SkeletonMainMenu {
+enum MainMenuBuilder {
     struct Actions {
         let target: AnyObject
         let newTerminal: Selector
@@ -15,6 +15,8 @@ enum SkeletonMainMenu {
         let focusIndex: Selector // sender.tag = 1-9
         let toggleLeftSidebar: Selector
         let toggleRightSidebar: Selector
+        let openSettings: Selector
+        let toggleFocusMode: Selector
     }
 
     static func install(actions: Actions) {
@@ -22,8 +24,13 @@ enum SkeletonMainMenu {
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        appMenu.addItem(targeted(
+            title: "Settings…", action: actions.openSettings,
+            key: ",", target: actions.target
+        ))
+        appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit Lumi Skeleton",
+            withTitle: "Quit Lumi",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -100,6 +107,13 @@ enum SkeletonMainMenu {
         )
         rightSidebarItem.keyEquivalentModifierMask = [.command, .shift]
         viewMenu.addItem(rightSidebarItem)
+        viewMenu.addItem(.separator())
+        let focusModeItem = targeted(
+            title: "Toggle Focus Mode", action: actions.toggleFocusMode,
+            key: "F", target: actions.target
+        )
+        focusModeItem.keyEquivalentModifierMask = [.command, .shift]
+        viewMenu.addItem(focusModeItem)
         viewItem.submenu = viewMenu
         mainMenu.addItem(viewItem)
 

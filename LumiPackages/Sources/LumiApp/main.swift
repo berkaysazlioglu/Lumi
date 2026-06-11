@@ -5,7 +5,7 @@ import Darwin
 setvbuf(stdout, nil, _IOLBF, 0)
 
 let app = NSApplication.shared
-let delegate = SkeletonAppDelegate()
+let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.regular)
 app.activate(ignoringOtherApps: true)

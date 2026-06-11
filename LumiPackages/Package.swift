@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "LumiServices", targets: ["LumiServices"]),
         .library(name: "LumiState", targets: ["LumiState"]),
         .library(name: "LumiUI", targets: ["LumiUI"]),
-        .executable(name: "lumi-skeleton", targets: ["LumiSkeleton"]),
+        .executable(name: "Lumi", targets: ["LumiApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
@@ -44,10 +44,13 @@ let package = Package(
                 "LumiKit",
                 "LumiState",
                 .product(name: "Highlightr", package: "Highlightr"),
+            ],
+            resources: [
+                .copy("Resources/Fonts"),
             ]
         ),
         .executableTarget(
-            name: "LumiSkeleton",
+            name: "LumiApp",
             dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"]
         ),
         .testTarget(name: "LumiKitTests", dependencies: ["LumiKit"]),

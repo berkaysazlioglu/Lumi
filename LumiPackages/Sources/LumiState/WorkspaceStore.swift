@@ -17,6 +17,16 @@ public final class WorkspaceStore {
     public private(set) var rightSidebarOpen = false
     public var isRepoSelectorOpen = false
     public private(set) var closeTabDialog: CloseTabDialogState?
+    /// Oturumluk — persist edilmez (spec/21 §12).
+    public private(set) var isFocusMode = false
+    public private(set) var quitDialogTerminalCount: Int?
+    public var isOnboardingActive = false
+    public var isSettingsOpen = false
+
+    /// Quit-onay çözümü app delegate'e köprülenir (.terminateLater akışı).
+    @ObservationIgnored public var onQuitResolved: ((Bool) -> Void)?
+    /// Traffic-light gizleme AppKit tarafında bu callback ile senkronlanır.
+    @ObservationIgnored public var onFocusModeChanged: ((Bool) -> Void)?
 
     /// Aktif repo değişiminde watch/unwatch + git veri yüklemesi için container
     /// köprüsü (eski değer, yeni değer).
@@ -77,6 +87,28 @@ public final class WorkspaceStore {
             terminals.activateRepo(tab)
         }
         onActiveRepoChanged?(nil, activeTab)
+    }
+
+    // MARK: - Focus mode / quit dialog (Faz 6)
+
+    public func toggleFocusMode() {
+        isFocusMode.toggle()
+        onFocusModeChanged?(isFocusMode)
+    }
+
+    public func exitFocusMode() {
+        guard isFocusMode else { return }
+        isFocusMode = false
+        onFocusModeChanged?(false)
+    }
+
+    public func presentQuitDialog(terminalCount: Int) {
+        quitDialogTerminalCount = terminalCount
+    }
+
+    public func resolveQuit(_ shouldQuit: Bool) {
+        quitDialogTerminalCount = nil
+        onQuitResolved?(shouldQuit)
     }
 
     // MARK: - Sidebar'lar (spec/21 §12: her toggle persist)

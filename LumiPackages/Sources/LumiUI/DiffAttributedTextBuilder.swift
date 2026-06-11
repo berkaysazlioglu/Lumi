@@ -6,7 +6,7 @@ import LumiKit
 /// unified diff; gutter satır numaraları + ekleme/silme satır arka planları).
 enum DiffAttributedTextBuilder {
     static func build(_ diff: UnifiedDiff, fontSize: CGFloat) -> NSAttributedString {
-        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let font = LumiFonts.mono(size: fontSize)
 
         if diff.isBinary {
             return NSAttributedString(string: "(binary file)", attributes: [

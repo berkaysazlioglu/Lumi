@@ -3,10 +3,10 @@ import LumiKit
 import LumiServices
 import LumiState
 import LumiTerminal
+import LumiUI
 
 /// Composition root (design/00 §3). Tüm servisler ve store'lar burada, protokol
 /// tipleriyle BİR KEZ inşa edilir; somut tipleri yalnız bu hedef tanır.
-/// Gerçek app target'a taşınana dek skeleton'da yaşar.
 @MainActor
 final class AppContainer {
     let paths: LumiPaths
@@ -25,12 +25,13 @@ final class AppContainer {
     let fileViewer: FileViewerStore
     let personasStore: PersonasStore
     let actionsStore: ActionsStore
+    let settings: SettingsStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
 
     private var bridgeTasks: [Task<Void, Never>] = []
 
-    init() {
+    init(notificationPresenter: any NotificationPresenting = LogNotificationPresenter()) {
         #if DEBUG
         let mode = LumiPaths.Mode.development
         #else
@@ -41,7 +42,7 @@ final class AppContainer {
         system = SystemService(smokeTester: PTYSmokeTester())
         repoService = RepoService()
         gitService = GitService()
-        notifications = NotificationService(presenter: LogNotificationPresenter())
+        notifications = NotificationService(presenter: notificationPresenter)
         terminal = TerminalSessionManager()
         personaService = PersonaService(
             paths: paths,
@@ -62,6 +63,7 @@ final class AppContainer {
         fileViewer = FileViewerStore(git: gitService, toasts: toasts)
         personasStore = PersonasStore(service: personaService, toasts: toasts)
         actionsStore = ActionsStore(service: actionService, toasts: toasts)
+        settings = SettingsStore(config: config, toasts: toasts)
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -93,6 +95,7 @@ final class AppContainer {
 
         let appConfig = await config.config()
         terminal.setMaxTerminals(appConfig.maxTerminals)
+        terminal.font = LumiFonts.mono(size: CGFloat(appConfig.terminalFontSize))
         notifications.updateSettings(appConfig.notifications)
         repoStore.additionalPaths = appConfig.additionalPaths
         await repoService.setRoots(
@@ -104,9 +107,17 @@ final class AppContainer {
         repoStore.start()
         personasStore.start()
         actionsStore.start()
+        settings.start()
         await repoStore.reload()
         await workspace.load(repos: repoStore.repos)
 
+        // First-run → onboarding sihirbazı (spec/13 §1.2, spec/22)
+        workspace.isOnboardingActive = await config.isFirstRun()
+        await notifications.requestPermissionIfNeeded()
+
+        configCoordinator.onTerminalFontSizeChanged = { [weak self] size in
+            self?.terminal.font = LumiFonts.mono(size: CGFloat(size))
+        }
         configCoordinator.start()
         startBridges()
 

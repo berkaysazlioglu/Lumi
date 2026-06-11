@@ -14,6 +14,9 @@ final class ConfigSideEffectCoordinator {
     private let notifications: any NotificationServicing
     private var consumeTask: Task<Void, Never>?
 
+    /// Font değişimi protokole sızdırılmaz — composition root somut manager'a bağlar.
+    var onTerminalFontSizeChanged: ((Int) -> Void)?
+
     init(
         config: any ConfigServicing,
         terminal: any TerminalServicing,
@@ -48,6 +51,9 @@ final class ConfigSideEffectCoordinator {
                 }
                 if old.notifications != new.notifications {
                     self.notifications.updateSettings(new.notifications)
+                }
+                if old.terminalFontSize != new.terminalFontSize {
+                    self.onTerminalFontSizeChanged?(new.terminalFontSize)
                 }
             }
         }
