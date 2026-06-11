@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
+        .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
     ],
     targets: [
         .target(name: "LumiKit"),
@@ -26,7 +27,14 @@ let package = Package(
         ),
         .target(name: "LumiServices", dependencies: ["LumiKit"]),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
-        .target(name: "LumiUI", dependencies: ["LumiKit", "LumiState"]),
+        .target(
+            name: "LumiUI",
+            dependencies: [
+                "LumiKit",
+                "LumiState",
+                .product(name: "Highlightr", package: "Highlightr"),
+            ]
+        ),
         .executableTarget(
             name: "LumiSkeleton",
             dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"]

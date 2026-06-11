@@ -10,6 +10,7 @@ import LumiKit
 /// "olay → tam reload" stratejisi korunur (pull-after-push).
 public actor RepoService: RepoServicing {
     public static let rootWatchDebounce: TimeInterval = 0.3
+    public static let fileTreeWatchLatency: TimeInterval = 0.5
 
     private let broadcaster = EventBroadcaster<RepoEvent>()
     private let watchQueue = DispatchQueue(label: "lumi.repo.watch", qos: .utility)
@@ -18,6 +19,7 @@ public actor RepoService: RepoServicing {
     private var projectsRoot = ""
     private var additionalPaths: [AdditionalPath] = []
     private var rootWatchers: [String: DirectoryWatcher] = [:]
+    private var fileTreeWatchers: [String: RecursiveDirectoryWatcher] = [:]
 
     public init(watchDebounce: TimeInterval = RepoService.rootWatchDebounce) {
         self.watchDebounce = watchDebounce
@@ -67,6 +69,44 @@ public actor RepoService: RepoServicing {
 
     public func events() -> AsyncStream<RepoEvent> {
         broadcaster.stream()
+    }
+
+    // MARK: - File tree (spec/12 §9, karar 7)
+
+    public func fileTree(repoPath: String) async -> [FileTreeNode] {
+        let ignored = await gitIgnoredPaths(repoPath)
+        return FileTreeBuilder.build(root: repoPath, ignoredPaths: ignored)
+    }
+
+    /// Tek git çağrısıyla ignored set'i: nested .gitignore + global excludes +
+    /// .git/info/exclude dahil (karar 7'nin bilinçli sapması). Tamamen-ignored
+    /// dizinler `--directory` ile trailing-slash'li tek girdiye çöker — file
+    /// tree o dizine inmez. Git olmayan dizinde sessizce boş döner.
+    private func gitIgnoredPaths(_ repoPath: String) async -> Set<String> {
+        guard let output = await ProcessRunner.run(
+            "/usr/bin/git",
+            arguments: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
+            currentDirectory: repoPath,
+            timeout: 15
+        ), output.exitCode == 0 else {
+            return []
+        }
+        return Set(output.stdout.split(separator: "\0").map(String.init))
+    }
+
+    public func watchFileTree(repoPath: String) {
+        guard fileTreeWatchers[repoPath] == nil else { return }
+        fileTreeWatchers[repoPath] = RecursiveDirectoryWatcher(
+            path: repoPath,
+            latency: Self.fileTreeWatchLatency,
+            queue: watchQueue
+        ) { [broadcaster] in
+            broadcaster.send(.fileTreeChanged(repoPath: repoPath))
+        }
+    }
+
+    public func unwatchFileTree(repoPath: String) {
+        fileTreeWatchers.removeValue(forKey: repoPath)?.cancel()
     }
 
     // MARK: - Keşif

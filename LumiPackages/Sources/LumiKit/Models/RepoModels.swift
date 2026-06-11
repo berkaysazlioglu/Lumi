@@ -33,9 +33,17 @@ public enum RepoEvent: Sendable, Equatable {
 }
 
 /// Repo keşfi + dosya sistemi izleme sınırı (design/02 §3).
-/// File-tree API'leri Faz 4'te eklenir (git check-ignore ile birlikte).
 public protocol RepoServicing: Actor {
     func repos() async -> [Repo]
     func setRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) async
+
+    /// Ignored bayrakları git'in kendi semantiğiyle (nested .gitignore + global +
+    /// info/exclude — karar 7); git olmayan dizinde yalnız hardcoded excludes.
+    func fileTree(repoPath: String) async -> [FileTreeNode]
+    /// Aktif repo recursive izlenir (FSEvents, 500ms coalescing — spec/12 §12);
+    /// git panellerinin canlılığı da bu event'e bağlıdır (.git değişimleri dahil).
+    func watchFileTree(repoPath: String) async
+    func unwatchFileTree(repoPath: String) async
+
     func events() -> AsyncStream<RepoEvent>
 }

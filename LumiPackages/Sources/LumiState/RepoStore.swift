@@ -11,6 +11,12 @@ public final class RepoStore {
     /// Gruplamanın "boş root grupları da göster" kuralı için config sırasıyla tutulur.
     public var additionalPaths: [AdditionalPath] = []
 
+    // File tree (spec/12 §9 UI davranışları): repo başına cache (stale-while-
+    /// revalidate), expand state (oturum içi), ilk-yüklemede kök klasör expand'i.
+    public private(set) var fileTrees: [String: [FileTreeNode]] = [:]
+    public private(set) var expandedNodes: [String: Set<String>] = [:]
+    @ObservationIgnored private var autoExpandedRepos: Set<String> = []
+
     @ObservationIgnored private let service: any RepoServicing
     @ObservationIgnored private var consumeTask: Task<Void, Never>?
 
@@ -40,6 +46,34 @@ public final class RepoStore {
 
     public func repo(at path: String) -> Repo? {
         repos.first { $0.path == path }
+    }
+
+    // MARK: - File tree
+
+    /// Stale-while-revalidate: eski ağaç ekranda kalır, yenisi gelince değişir.
+    public func loadFileTree(_ repoPath: String) async {
+        let tree = await service.fileTree(repoPath: repoPath)
+        fileTrees[repoPath] = tree
+        if !autoExpandedRepos.contains(repoPath) {
+            autoExpandedRepos.insert(repoPath)
+            // İlk yüklemede kök seviyesindeki klasörler otomatik expand (spec/12 §9)
+            let rootFolders = tree.filter { $0.type == .folder && !$0.isIgnored }.map(\.path)
+            expandedNodes[repoPath, default: []].formUnion(rootFolders)
+        }
+    }
+
+    public func toggleNode(_ repoPath: String, path: String) {
+        var expanded = expandedNodes[repoPath] ?? []
+        if expanded.contains(path) {
+            expanded.remove(path)
+        } else {
+            expanded.insert(path)
+        }
+        expandedNodes[repoPath] = expanded
+    }
+
+    public func isNodeExpanded(_ repoPath: String, path: String) -> Bool {
+        expandedNodes[repoPath]?.contains(path) ?? false
     }
 
     // MARK: - Gruplama (spec/21 §15 — groupReposBySource paritesi)

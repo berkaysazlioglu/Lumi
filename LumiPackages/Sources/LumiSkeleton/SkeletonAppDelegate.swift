@@ -20,7 +20,9 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
             openRepoSelector: #selector(openRepoSelector(_:)),
             focusNext: #selector(focusNextTerminal(_:)),
             focusPrevious: #selector(focusPreviousTerminal(_:)),
-            focusIndex: #selector(focusTerminalAtIndex(_:))
+            focusIndex: #selector(focusTerminalAtIndex(_:)),
+            toggleLeftSidebar: #selector(toggleLeftSidebar(_:)),
+            toggleRightSidebar: #selector(toggleRightSidebar(_:))
         ))
 
         Task { @MainActor in
@@ -53,8 +55,24 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
             workspace: container.workspace,
             repoStore: container.repoStore,
             terminals: container.terminals,
+            gitStore: container.gitStore,
+            fileViewer: container.fileViewer,
             toasts: container.toasts,
-            viewProvider: container.terminal.viewRegistry
+            viewProvider: container.terminal.viewRegistry,
+            highlighter: HighlightrEngine(),
+            fileActions: RootView.FileActions(
+                reveal: { [container] repoPath, relativePath in
+                    container.system.revealInFinder(path: repoPath + "/" + relativePath)
+                },
+                trash: { [container] repoPath, relativePath in
+                    Task { @MainActor in
+                        await container.toasts.reporting {
+                            try await container.system.trash(path: repoPath + "/" + relativePath)
+                        }
+                        await container.repoStore.loadFileTree(repoPath)
+                    }
+                }
+            )
         )
         window.contentView = NSHostingView(rootView: root)
         window.makeKeyAndOrderFront(nil)
@@ -115,6 +133,14 @@ final class SkeletonAppDelegate: NSObject, NSApplicationDelegate {
         guard let item = sender as? NSMenuItem,
               let active = container.workspace.activeTab else { return }
         container.terminals.focusIndex(item.tag - 1, in: active)
+    }
+
+    @objc private func toggleLeftSidebar(_ sender: Any?) {
+        container.workspace.toggleLeftSidebar()
+    }
+
+    @objc private func toggleRightSidebar(_ sender: Any?) {
+        container.workspace.toggleRightSidebar()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

@@ -2,27 +2,55 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Faz 3 kök görünümü: repo tab'ları + grid layout'lu terminal alanı +
-/// minimize şeridi + toast overlay. Sidebar'lar Faz 4, focus mode Faz 6.
+/// Kök görünüm: repo tab'ları + sol file-tree / sağ git sidebar'ları +
+/// grid layout'lu terminal alanı + FileViewer modal + toast overlay.
+/// Focus mode Faz 6.
 public struct RootView: View {
+    /// File tree context-menü aksiyonları — composition root bağlar
+    /// (view'lar servis görmez, design/00 §3).
+    public struct FileActions {
+        public let reveal: (String, String) -> Void // (repoPath, relativePath)
+        public let trash: (String, String) -> Void
+
+        public init(
+            reveal: @escaping (String, String) -> Void,
+            trash: @escaping (String, String) -> Void
+        ) {
+            self.reveal = reveal
+            self.trash = trash
+        }
+    }
+
     private let workspace: WorkspaceStore
     private let repoStore: RepoStore
     private let terminals: TerminalListStore
+    private let gitStore: GitStore
+    private let fileViewer: FileViewerStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
+    private let highlighter: any SyntaxHighlighting
+    private let fileActions: FileActions
 
     public init(
         workspace: WorkspaceStore,
         repoStore: RepoStore,
         terminals: TerminalListStore,
+        gitStore: GitStore,
+        fileViewer: FileViewerStore,
         toasts: ToastStore,
-        viewProvider: any TerminalViewProviding
+        viewProvider: any TerminalViewProviding,
+        highlighter: any SyntaxHighlighting,
+        fileActions: FileActions
     ) {
         self.workspace = workspace
         self.repoStore = repoStore
         self.terminals = terminals
+        self.gitStore = gitStore
+        self.fileViewer = fileViewer
         self.toasts = toasts
         self.viewProvider = viewProvider
+        self.highlighter = highlighter
+        self.fileActions = fileActions
     }
 
     public var body: some View {
@@ -31,10 +59,15 @@ public struct RootView: View {
             Rectangle()
                 .fill(Theme.border)
                 .frame(height: 1)
-            content
+            mainArea
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.bgDeep)
+        .overlay {
+            if fileViewer.isPresented {
+                FileViewerView(store: fileViewer, highlighter: highlighter)
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             ToastOverlay(store: toasts) { terminalID in
                 terminals.restoreAndFocus(terminalID)
@@ -80,6 +113,16 @@ public struct RootView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accentVivid)
             }
+            sidebarToggle(
+                icon: "sidebar.left",
+                isOn: workspace.leftSidebarOpen,
+                action: { workspace.toggleLeftSidebar() }
+            )
+            sidebarToggle(
+                icon: "sidebar.right",
+                isOn: workspace.rightSidebarOpen,
+                action: { workspace.toggleRightSidebar() }
+            )
             Text("\(terminals.totalCount)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textSecondary)
@@ -197,12 +240,60 @@ public struct RootView: View {
         }
     }
 
+    private func sidebarToggle(
+        icon: String,
+        isOn: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundStyle(isOn ? Theme.accentPrimary : Theme.textMuted)
+                .frame(width: 24, height: 24)
+                .background(isOn ? Theme.bgElevated : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - İçerik
 
     @ViewBuilder
-    private var content: some View {
+    private var mainArea: some View {
         if let active = workspace.activeTab {
-            repoContent(active)
+            HStack(spacing: 0) {
+                if workspace.leftSidebarOpen {
+                    FileTreeSidebar(
+                        repoPath: active,
+                        repoStore: repoStore,
+                        onOpenFile: { path in
+                            Task { await fileViewer.presentView(repoPath: active, filePath: path) }
+                        },
+                        onReveal: { path in fileActions.reveal(active, path) },
+                        onTrash: { path in fileActions.trash(active, path) }
+                    )
+                    .frame(width: 280)
+                    Rectangle().fill(Theme.border).frame(width: 1)
+                }
+
+                repoContent(active)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if workspace.rightSidebarOpen {
+                    Rectangle().fill(Theme.border).frame(width: 1)
+                    GitSidebar(
+                        repoPath: active,
+                        gitStore: gitStore,
+                        onSelectCommit: { commit in
+                            Task { await fileViewer.presentCommit(repoPath: active, commit: commit) }
+                        },
+                        onShowFileDiff: { path in
+                            Task { await fileViewer.presentDiff(repoPath: active, filePath: path) }
+                        }
+                    )
+                    .frame(width: 280)
+                }
+            }
         } else {
             welcomeState
         }

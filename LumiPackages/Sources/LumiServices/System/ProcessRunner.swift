@@ -6,6 +6,7 @@ enum ProcessRunner {
     struct Output: Sendable {
         let exitCode: Int32
         let stdout: String
+        let stderr: String
     }
 
     private final class OnceFlag: @unchecked Sendable {
@@ -26,23 +27,37 @@ enum ProcessRunner {
     static func run(
         _ executable: String,
         arguments: [String],
+        currentDirectory: String? = nil,
+        standardInput: Data? = nil,
         timeout: TimeInterval
     ) async -> Output? {
         await withCheckedContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
+            if let currentDirectory {
+                process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory)
+            }
             let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
             process.standardOutput = stdoutPipe
-            process.standardError = Pipe()
+            process.standardError = stderrPipe
+            if let standardInput {
+                let stdinPipe = Pipe()
+                process.standardInput = stdinPipe
+                stdinPipe.fileHandleForWriting.write(standardInput)
+                stdinPipe.fileHandleForWriting.closeFile()
+            }
 
             let once = OnceFlag()
             process.terminationHandler = { finished in
                 guard once.tryFire() else { return }
                 let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
                 continuation.resume(returning: Output(
                     exitCode: finished.terminationStatus,
-                    stdout: String(decoding: data, as: UTF8.self)
+                    stdout: String(decoding: data, as: UTF8.self),
+                    stderr: String(decoding: errorData, as: UTF8.self)
                 ))
             }
 

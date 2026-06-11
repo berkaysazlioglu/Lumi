@@ -13,11 +13,14 @@ final class AppContainer {
     let config: any ConfigServicing
     let system: any SystemServicing
     let repoService: any RepoServicing
+    let gitService: any GitServicing
     let notifications: any NotificationServicing
     let terminal: TerminalSessionManager
     let toasts: ToastStore
     let terminals: TerminalListStore
     let repoStore: RepoStore
+    let gitStore: GitStore
+    let fileViewer: FileViewerStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
 
@@ -33,11 +36,14 @@ final class AppContainer {
         config = ConfigService(paths: paths)
         system = SystemService(smokeTester: PTYSmokeTester())
         repoService = RepoService()
+        gitService = GitService()
         notifications = NotificationService(presenter: LogNotificationPresenter())
         terminal = TerminalSessionManager()
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
         repoStore = RepoStore(service: repoService)
+        gitStore = GitStore(git: gitService, toasts: toasts)
+        fileViewer = FileViewerStore(git: gitService, toasts: toasts)
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -83,9 +89,43 @@ final class AppContainer {
         terminal.onTerminalViewFocused = { [weak self] id in
             self?.terminals.focus(id)
         }
+
+        // Aktif repo değişimi: tek repo izlenir (spec/12 §12) + git/tree yüklenir
+        workspace.onActiveRepoChanged = { [weak self] previous, current in
+            guard let self else { return }
+            Task { @MainActor in
+                if let previous, previous != current {
+                    await self.repoService.unwatchFileTree(repoPath: previous)
+                }
+                guard let current else { return }
+                await self.repoService.watchFileTree(repoPath: current)
+                await self.repoStore.loadFileTree(current)
+                await self.gitStore.loadAll(current)
+            }
+        }
+        // Bootstrap'te aktif tab varsa ilk yükleme (load() callback'ten önce kuruldu)
+        if let active = workspace.activeTab {
+            workspace.onActiveRepoChanged?(nil, active)
+        }
     }
 
     private func startBridges() {
+        // fileTreeChanged → file tree tazeleme + git panelleri canlılığı (spec/12 §12)
+        let repoEventBridge = Task { @MainActor [weak self] in
+            guard let service = self?.repoService else { return }
+            let stream = await service.events()
+            for await event in stream {
+                guard let self else { return }
+                if case .fileTreeChanged(let repoPath) = event {
+                    await self.repoStore.loadFileTree(repoPath)
+                    if self.workspace.activeTab == repoPath {
+                        await self.gitStore.refresh(repoPath)
+                    }
+                }
+            }
+        }
+        bridgeTasks.append(repoEventBridge)
+
         // Terminal status event'leri → NotificationService (spec/10 §5 onChange köprüsü)
         let terminalStream = terminal.events()
         bridgeTasks.append(Task { @MainActor [weak self] in

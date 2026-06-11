@@ -13,8 +13,14 @@ public final class WorkspaceStore {
     public private(set) var openTabs: [String] = []
     public private(set) var activeTab: String?
     public private(set) var projectGridLayouts: [String: GridLayout] = [:]
+    public private(set) var leftSidebarOpen = true
+    public private(set) var rightSidebarOpen = false
     public var isRepoSelectorOpen = false
     public private(set) var closeTabDialog: CloseTabDialogState?
+
+    /// Aktif repo değişiminde watch/unwatch + git veri yüklemesi için container
+    /// köprüsü (eski değer, yeni değer).
+    @ObservationIgnored public var onActiveRepoChanged: ((String?, String?) -> Void)?
 
     public struct CloseTabDialogState: Equatable {
         public let repoPath: String
@@ -64,10 +70,25 @@ public final class WorkspaceStore {
                 projectGridLayouts[tab] = legacy
             }
         }
+        leftSidebarOpen = state.leftSidebarOpen
+        rightSidebarOpen = state.rightSidebarOpen
 
         if let tab = activeTab {
             terminals.activateRepo(tab)
         }
+        onActiveRepoChanged?(nil, activeTab)
+    }
+
+    // MARK: - Sidebar'lar (spec/21 §12: her toggle persist)
+
+    public func toggleLeftSidebar() {
+        leftSidebarOpen.toggle()
+        persist()
+    }
+
+    public func toggleRightSidebar() {
+        rightSidebarOpen.toggle()
+        persist()
     }
 
     // MARK: - Tab yönetimi (spec/21 §9)
@@ -80,9 +101,13 @@ public final class WorkspaceStore {
     }
 
     public func setActiveTab(_ repoPath: String) {
+        let previous = activeTab
         activeTab = repoPath
         terminals.activateRepo(repoPath) // cross-store yan etki
         persist()
+        if previous != repoPath {
+            onActiveRepoChanged?(previous, repoPath)
+        }
     }
 
     /// Guard (spec/21 §9): minimize edilmiş terminali olan tab dialog'suz kapanmaz.
@@ -110,8 +135,9 @@ public final class WorkspaceStore {
     }
 
     private func performCloseTab(_ repoPath: String) {
+        let wasActive = activeTab == repoPath
         openTabs.removeAll { $0 == repoPath }
-        if activeTab == repoPath {
+        if wasActive {
             // Kapanan aktifse listenin SON tab'ı aktif olur (spec/21 §9)
             activeTab = openTabs.last
             if let tab = activeTab {
@@ -122,6 +148,11 @@ public final class WorkspaceStore {
         }
         terminals.closeAll(in: repoPath)
         persist()
+        if wasActive {
+            onActiveRepoChanged?(repoPath, activeTab)
+        } else {
+            onActiveRepoChanged?(repoPath, nil) // unwatch için kapanan repo bildirilir
+        }
     }
 
     // MARK: - Grid layout (spec/21 §10)
@@ -143,11 +174,15 @@ public final class WorkspaceStore {
         let tabs = openTabs
         let active = activeTab
         let layouts = projectGridLayouts
+        let left = leftSidebarOpen
+        let right = rightSidebarOpen
         Task { [config] in
             await config.updateUIState { state in
                 state.openTabs = tabs
                 state.activeTab = active
                 state.projectGridLayouts = layouts
+                state.leftSidebarOpen = left
+                state.rightSidebarOpen = right
             }
         }
     }

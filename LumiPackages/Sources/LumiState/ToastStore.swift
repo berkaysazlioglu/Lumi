@@ -82,23 +82,30 @@ public final class ToastStore {
 
     // MARK: - Hata koridoru (karar 5)
 
-    public func reporting(_ operation: () throws -> Void) {
+    /// Dönüş: işlem hatasız tamamlandıysa true (başarıya bağlı akışlar için).
+    @discardableResult
+    public func reporting(_ operation: () throws -> Void) -> Bool {
         do {
             try operation()
+            return true
         } catch let error as LumiError {
             show(error: error)
         } catch {
             show(error: .underlying(domain: "unknown", message: "\(error)"))
         }
+        return false
     }
 
-    public func reporting(_ operation: @MainActor () async throws -> Void) async {
+    @discardableResult
+    public func reporting(_ operation: @MainActor () async throws -> Void) async -> Bool {
         do {
             try await operation()
+            return true
         } catch let error as LumiError {
             show(error: error)
         } catch {
             show(error: .underlying(domain: "unknown", message: "\(error)"))
         }
+        return false
     }
 }
