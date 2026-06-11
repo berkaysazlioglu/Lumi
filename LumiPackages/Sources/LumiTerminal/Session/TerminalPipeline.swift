@@ -96,7 +96,9 @@ final class TerminalPipeline: @unchecked Sendable {
     /// Filtre → inference → \r etkisi. Dönen veri PTY'ye yazılacak veridir;
     /// boşsa yazım atlanır (filtre her şeyi söktüyse).
     func processInput(_ data: Data) -> Data {
+        InputTracer.trace("write/pre-filter", data)
         let filtered = inputFilter.filter(data)
+        InputTracer.trace("write/post-filter", filtered)
         guard !filtered.isEmpty else { return filtered }
         let text = String(decoding: filtered, as: UTF8.self)
         inferencer.observeInput(text)

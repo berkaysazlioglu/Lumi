@@ -28,6 +28,14 @@ final class PTYInputFilterTests: XCTestCase {
         XCTAssertEqual(filter.filter(partial), partial)
     }
 
+    func testBackspaceBytePasses() {
+        // 0x7f (DEL) tuş baytı filtreden aynen geçmeli — backspace regresyon guard'ı
+        XCTAssertEqual(filter.filter(Data([0x7F])), Data([0x7F]))
+        var suppressing = PTYInputFilter()
+        suppressing.suppressResponses = true
+        XCTAssertEqual(suppressing.filter(Data([0x7F])), Data([0x7F]))
+    }
+
     func testUTF8TextUntouched() {
         let text = Data("héllo ✳ dünya".utf8)
         XCTAssertEqual(filter.filter(text), text)
