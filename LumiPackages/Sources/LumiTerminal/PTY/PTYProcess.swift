@@ -249,8 +249,22 @@ public final class PTYProcess: @unchecked Sendable {
     public func resize(cols: UInt16, rows: UInt16) {
         dispatchPrecondition(condition: .onQueue(queue))
         guard !cleanedUp else { return }
+        var current = winsize()
+        let isUnchanged = ioctl(masterFD, TIOCGWINSZ, &current) == 0
+            && current.ws_col == cols && current.ws_row == rows
+
         var windowSize = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
         _ = ioctl(masterFD, TIOCSWINSZ, &windowSize)
+
+        // Boyut değişmediyse kernel SIGWINCH üretmez; emülatör bu arada reflow
+        // yapmış olabilir (grid round-trip) ve TUI repaint'i ancak sinyalle gelir.
+        // Kernel davranışı taklit edilir: sinyal foreground process group'a gider.
+        if isUnchanged {
+            let foregroundGroup = tcgetpgrp(masterFD)
+            if foregroundGroup > 0 {
+                kill(-foregroundGroup, SIGWINCH)
+            }
+        }
     }
 
     /// Process group'a SIGHUP; 3 sn içinde ölmezse SIGKILL (design/01 §2).

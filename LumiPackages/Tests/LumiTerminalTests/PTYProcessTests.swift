@@ -139,6 +139,39 @@ final class PTYProcessTests: XCTestCase {
         pty.terminate()
     }
 
+    func testSameSizeResizeStillSignalsForegroundProcess() throws {
+        let queue = makeQueue()
+        // Emülatör reflow round-trip senaryosu (grid 2→3→2): PTY boyutu zaten
+        // 80x24 iken aynı boyut istenir. Kernel TIOCSWINSZ'de fark görmeyince
+        // SIGWINCH üretmez — TUI repaint için sinyal yine de iletilmeli.
+        let script = "trap 'echo GOTWINCH' WINCH; echo READY; while :; do sleep 0.1; done"
+        let pty = try spawn("/bin/sh", args: ["-c", script], queue: queue)
+
+        let ready = expectation(description: "shell ready")
+        ready.assertForOverFulfill = false
+        let winch = expectation(description: "SIGWINCH trap fired")
+        winch.assertForOverFulfill = false
+
+        let collected = OutputCollector()
+        pty.startReading { data in
+            if collected.appendAndCheck(data, contains: "READY") {
+                ready.fulfill()
+            }
+            if collected.appendAndCheck(Data(), contains: "GOTWINCH") {
+                winch.fulfill()
+            }
+            return .proceed
+        }
+        wait(for: [ready], timeout: 5)
+
+        queue.async {
+            pty.resize(cols: 80, rows: 24)
+        }
+
+        wait(for: [winch], timeout: 5)
+        pty.terminate()
+    }
+
     func testWriteAfterExitIsSafe() throws {
         let queue = makeQueue()
         let pty = try spawn("/bin/sh", args: ["-c", "true"], queue: queue)
