@@ -150,8 +150,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let center = NotificationCenter.default
         for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
             center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.centerTrafficLights() }
+                MainActor.assumeIsolated {
+                    self?.centerTrafficLights()
+                    self?.refreshTerminalsAfterTransition()
+                }
             }
+        }
+    }
+
+    /// Fullscreen giriş/çıkışı terminal NSView'larını bayat/boş bırakabilir
+    /// (AppKit içerik view'ını space-window'a taşır). Layout bir tur sonra
+    /// oturduğundan hem hemen hem de sonraki runloop'ta onarılır.
+    private func refreshTerminalsAfterTransition() {
+        container.terminal.viewRegistry.refreshAttachedViews()
+        DispatchQueue.main.async { [weak self] in
+            self?.container.terminal.viewRegistry.refreshAttachedViews()
         }
     }
 

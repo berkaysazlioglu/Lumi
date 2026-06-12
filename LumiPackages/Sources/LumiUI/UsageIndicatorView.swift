@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Topbar'da grid kontrolünün solunda duran kompakt kullanım göstergesi
 /// (design/05): yalnız 5 saatlik oturum yüzdesini gösterir (örn. "15%").
-/// Hover'da (veya tıklamada) tüm limitleri progress bar + reset süreleriyle
-/// gösteren popover açılır; popover'da manuel refresh butonu vardır.
+/// Tıklamada tüm limitleri progress bar + reset süreleriyle gösteren popover
+/// açılır; popover'da manuel refresh butonu vardır.
 public struct UsageIndicatorView: View {
     private let store: UsageStore
     @State private var isPresented = false
@@ -17,7 +17,6 @@ public struct UsageIndicatorView: View {
     public var body: some View {
         compact
             .contentShape(Rectangle())
-            .onHover { hovering in if hovering { isPresented = true } }
             .onTapGesture { isPresented.toggle() }
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
                 UsagePopover(store: store)

@@ -242,9 +242,13 @@ struct HeaderIconButton: View {
 }
 
 /// Modern "New <Provider>" split-button (v1 paritesi): solid mor; sol kısım
-/// aktif provider'ı spawn eder, sağ chevron özel koyu dropdown'u açar
-/// (New Bash + persona'lar). Native NSMenu DEĞİL — temalı popover.
+/// aktif provider'ı spawn eder, sağ chevron özel koyu dropdown'u **hover'da**
+/// açar (New Bash + persona'lar). Buton VEYA popover üstünde hover olduğu sürece
+/// açık kalır; ikisinden de ayrılınca kısa grace period sonra kapanır. Native
+/// NSMenu DEĞİL — temalı popover.
 struct NewTerminalButton: View {
+    static let hoverCloseDelay: Duration = .milliseconds(200)
+
     let provider: AgentProvider
     let personas: [Persona]
     let onNewProvider: () -> Void
@@ -252,6 +256,7 @@ struct NewTerminalButton: View {
     let onPersona: (String) -> Void
 
     @State private var isOpen = false
+    @State private var closeTask: Task<Void, Never>?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -272,19 +277,37 @@ struct NewTerminalButton: View {
 
             Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1, height: 18)
 
-            Button { isOpen.toggle() } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 7)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $isOpen, arrowEdge: .bottom) { dropdown }
+            // Chevron yalnız görsel ipucu — açma/kapama hover'la sürülür.
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .contentShape(Rectangle())
         }
         .background(Theme.accentVivid)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .onHover { updateHover($0) }
+        .popover(isPresented: $isOpen, arrowEdge: .bottom) {
+            dropdown.onHover { updateHover($0) }
+        }
+    }
+
+    /// Buton ya da popover hover'ı: girişte aç + bekleyen kapanışı iptal et;
+    /// çıkışta grace period zamanlayıcısı kur (arada geçişte flicker olmaz).
+    private func updateHover(_ hovering: Bool) {
+        if hovering {
+            closeTask?.cancel()
+            closeTask = nil
+            isOpen = true
+        } else {
+            closeTask?.cancel()
+            closeTask = Task { @MainActor in
+                try? await Task.sleep(for: Self.hoverCloseDelay)
+                guard !Task.isCancelled else { return }
+                isOpen = false
+            }
+        }
     }
 
     private var dropdown: some View {

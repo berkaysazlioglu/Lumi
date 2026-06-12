@@ -49,6 +49,21 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         entry.onVisibilityChange(true)
     }
 
+    /// Fullscreen geçişi / pencere-space değişimi sonrası onarım. AppKit, native
+    /// fullscreen'e girip çıkarken içerik view'ını ayrı bir space-window'a taşır;
+    /// dönüşte SwiftTerm otomatik repaint etmez ve attach/detach yarışında frame
+    /// bayat (hatta sıfır) kalabilir → kart bozuk/boş görünür. Bağlı her view
+    /// superview bounds'una yeniden hizalanır (delta varsa SwiftTerm sizeChanged →
+    /// PTY resize zinciri kendiliğinden tetiklenir) ve redraw işaretlenir. Grid
+    /// round-trip onarımının (attachView'daki needsDisplay) fullscreen analogudur.
+    public func refreshAttachedViews() {
+        for entry in entries.values {
+            guard let superview = entry.view.superview else { continue }
+            entry.view.frame = superview.bounds
+            entry.view.needsDisplay = true
+        }
+    }
+
     public func detachView(for id: TerminalID, from container: NSView) {
         guard let entry = entries[id] else { return }
         // Bayat-detach koruması (SwiftUI reparenting yarışı): yeni host view'ı

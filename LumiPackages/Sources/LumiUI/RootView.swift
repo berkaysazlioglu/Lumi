@@ -343,14 +343,19 @@ public struct RootView: View {
             Text("Bu repoda terminal yok")
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
-            Button("New \(settings.current.aiProvider.displayName)") {
-                terminals.spawn(
-                    in: repoPath,
-                    command: settings.current.aiProvider.launchCommand
-                )
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accentVivid)
+            // Topbar ile aynı modern split-button (DRY): hover'da dropdown açılır.
+            NewTerminalButton(
+                provider: settings.current.aiProvider,
+                personas: personasStore.personas,
+                onNewProvider: {
+                    terminals.spawn(
+                        in: repoPath,
+                        command: settings.current.aiProvider.launchCommand
+                    )
+                },
+                onNewBash: { terminals.spawn(in: repoPath, task: "Bash") },
+                onPersona: { personasStore.spawn($0, repoPath: repoPath) }
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

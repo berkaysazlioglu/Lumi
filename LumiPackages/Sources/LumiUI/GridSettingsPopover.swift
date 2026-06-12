@@ -113,8 +113,16 @@ private enum GridColumnOption: Hashable {
 
     func apply(to layout: LumiKit.GridLayout) -> LumiKit.GridLayout {
         switch self {
-        case .auto: return LumiKit.GridLayout(mode: .auto, count: layout.count, heightMode: layout.heightMode)
-        case .fixed(let n): return LumiKit.GridLayout(mode: .columns, count: n, heightMode: layout.heightMode)
+        case .auto:
+            return LumiKit.GridLayout(
+                mode: .auto, count: layout.count,
+                heightMode: layout.heightMode, heightRatio: layout.heightRatio
+            )
+        case .fixed(let n):
+            return LumiKit.GridLayout(
+                mode: .columns, count: n,
+                heightMode: layout.heightMode, heightRatio: layout.heightRatio
+            )
         }
     }
 }

@@ -52,7 +52,11 @@ struct MarqueeText: View {
 
     private func animate(_ scroll: Bool) {
         guard scroll else {
-            withAnimation(.easeOut(duration: 0.15)) { offset = 0 }
+            // Hover bitti: repeatForever'ı iptal et ve anında başa dön (ease YOK —
+            // disablesAnimations transaction kalıcı animasyonu kesin durdurur).
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { offset = 0 }
             return
         }
         offset = 0

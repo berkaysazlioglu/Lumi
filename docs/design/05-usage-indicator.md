@@ -126,7 +126,7 @@ Bileşenler (SOLID/DI):
 - `LumiKit`: `UsageWindow`/`UsageSnapshot` (immutable), saf `UsageOutputParser.parse(_:now:)`, `UsageServicing` protokolü, `LumiError.cliNotFound`/`.usageUnavailable`.
 - `LumiServices`: `UsageService` (`actor`) — `BinaryLocator` (SystemService ile ortak, DRY) → `ProcessRunner` (15sn timeout) → parse; `claude -p "/usage"`.
 - `LumiState`: `UsageStore` (`@Observable @MainActor`), test için `now` enjekte edilebilir.
-- `LumiUI`: `UsageIndicatorView` — topbar'da grid kontrolünün **solunda** kompakt 5sa yüzdesi; hover/tıklama ile tüm pencereleri progress bar + reset süreleri + refresh ile gösteren popover.
+- `LumiUI`: `UsageIndicatorView` — topbar'da grid kontrolünün **solunda** kompakt 5sa yüzdesi; **tıklamayla** (hover değil — 2026-06-12 kullanıcı kararı) tüm pencereleri progress bar + reset süreleri + refresh ile gösteren popover açılır.
 - DI: `AppContainer` `usageService`/`usageStore`'u inşa eder ve bootstrap'te ilk yüklemeyi tetikler.
 
 Testler: `UsageOutputParserTests` (tam çıktı, eksik Sonnet, API-key, Opus, reset'siz satır, bozuk satır, %0/%100, çöp girdi, reset→Date+tz+yıl), `UsageStoreTests` (load-once, min-interval, hata son snapshot'ı korur). Gerçek `claude -p "/usage"` çıktısı §3 kontratıyla birebir doğrulandı.
