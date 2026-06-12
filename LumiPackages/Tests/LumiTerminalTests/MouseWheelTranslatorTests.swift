@@ -56,24 +56,14 @@ final class WheelStepAccumulatorTests: XCTestCase {
     }
 }
 
-final class MouseWheelEncoderTests: XCTestCase {
-    func testSGRWheelRaporuYukari() {
-        let bytes = MouseWheelEncoder.sgrWheelReport(up: true, col: 12, row: 5)
-        XCTAssertEqual(String(decoding: bytes, as: UTF8.self), "\u{1b}[<64;12;5M")
-    }
-
-    func testSGRWheelRaporuAsagi() {
-        let bytes = MouseWheelEncoder.sgrWheelReport(up: false, col: 1, row: 1)
-        XCTAssertEqual(String(decoding: bytes, as: UTF8.self), "\u{1b}[<65;1;1M")
-    }
-
+final class MouseWheelGeometryTests: XCTestCase {
     func testGridCellFlippedOlmayanKoordinat() {
         // Arrange: 800x480 view, 80x24 grid → hücre 10x20.
         // AppKit non-flipped: y=470 görsel olarak ÜSTTEN 10px → satır 1.
         let bounds = CGRect(x: 0, y: 0, width: 800, height: 480)
 
         // Act
-        let cell = MouseWheelEncoder.gridCell(
+        let cell = MouseWheelGeometry.gridCell(
             forViewPoint: CGPoint(x: 15, y: 470),
             bounds: bounds, cols: 80, rows: 24, isFlipped: false
         )
@@ -85,7 +75,7 @@ final class MouseWheelEncoderTests: XCTestCase {
 
     func testGridCellSinirlarinDisiKiskaclanir() {
         let bounds = CGRect(x: 0, y: 0, width: 800, height: 480)
-        let cell = MouseWheelEncoder.gridCell(
+        let cell = MouseWheelGeometry.gridCell(
             forViewPoint: CGPoint(x: 9_999, y: -50),
             bounds: bounds, cols: 80, rows: 24, isFlipped: false
         )
@@ -94,7 +84,7 @@ final class MouseWheelEncoderTests: XCTestCase {
     }
 
     func testGridCellBosBoundsGuvenli() {
-        let cell = MouseWheelEncoder.gridCell(
+        let cell = MouseWheelGeometry.gridCell(
             forViewPoint: .zero, bounds: .zero, cols: 80, rows: 24, isFlipped: false
         )
         XCTAssertEqual(cell.col, 1)

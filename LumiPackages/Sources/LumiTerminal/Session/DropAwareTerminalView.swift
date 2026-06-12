@@ -56,10 +56,18 @@ final class DropAwareTerminalView: TerminalView {
 
     // MARK: - Mouse: hover-caret bastırma + wheel scroll (v1 / xterm.js paritesi)
 
-    /// SwiftTerm'in `scrollWheel`'i (alt-buffer'da no-op kalır) ve `mouseMoved`'ı
-    /// (anyEvent modunda hover'ı uygulamaya motion olarak yollar — üstelik
-    /// allowMouseReporting'i atlar) `public` (open değil); modül dışından override
-    /// edilemez. Bu yüzden event'leri SwiftTerm'e ulaşmadan local monitor ile yakalıyoruz.
+    /// SwiftTerm'in `scrollWheel`'i ve `mouseMoved`'ı `public` (open değil); modül
+    /// dışından override edilemez. Event'ler SwiftTerm'e ulaşmadan local monitor ile
+    /// yakalanır. Pin'li revision'da (24a68bc) scrollWheel alt-buffer'ı kendisi de
+    /// ele alıyor (mouse-mode'da wheel forwarding, mouse-off'ta yön tuşu); yine de
+    /// araya girmemizin gerekçeleri:
+    /// 1. mouseMoved upstream bug'ı: hover'ı "sol buton release" (`ESC[<32;x;ym`)
+    ///    olarak kodlar (encodeButton release=3 +32) ve allowMouseReporting'i atlar
+    ///    — Claude tıklama sanıp caret'i taşır. anyEvent modunda hover'ı yutarız.
+    /// 2. Trackpad: SwiftTerm event.deltaY ile event başına sabit adım üretir
+    ///    (precise piksel delta'sını ve momentum'u tanımaz) — WheelStepAccumulator
+    ///    hücre-yüksekliği birimli birikimli çeviri yapar.
+    /// Event'i yuttuğumuz için upstream yoluyla çifte gönderim oluşmaz.
     private var eventMonitor: Any?
 
     /// Trackpad piksel-delta'larını adıma çeviren birikimli durum (terminal başına).
@@ -70,6 +78,9 @@ final class DropAwareTerminalView: TerminalView {
         // NSEvent Sendable değil; monitor closure'u non-isolated. Yalnız Sendable
         // skalerleri çıkarıp MainActor işine taşıyoruz (event/window referansı geçirmeden).
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .mouseMoved]) { [weak self] event in
+            // AppKit local monitor'ları main'de çağırır; synthetic event enjeksiyonu
+            // edge case'ine karşı sigorta — assumeIsolated trap'lemesin, event geçsin.
+            guard Thread.isMainThread else { return event }
             let isScroll = event.type == .scrollWheel
             let deltaY = isScroll ? event.scrollingDeltaY : 0
             let isPrecise = isScroll && event.hasPreciseScrollingDeltas
@@ -105,7 +116,9 @@ final class DropAwareTerminalView: TerminalView {
             // Hover (mouseMoved): anyEvent (1003) modunda SwiftTerm hover'ı SGR
             // "sol buton release" olarak KODLAYIP yollar (upstream bug: encodeButton
             // release=3 → `ESC[<32;x;ym`) — Claude bunu tıklama sayıp caret'i taşır.
-            // Bu modda yut; diğer modlarda SwiftTerm'e bırak (cmd-hover link korunur).
+            // Bu modda yut; diğer modlarda SwiftTerm'e bırak.
+            // Bilinçli trade-off: anyEvent aktifken (Claude hep açar) Cmd+hover link
+            // önizlemesi de çalışmaz — geçirsek hover her seferinde caret'i taşırdı.
             return terminal.mouseMode == .anyEvent
         }
         return handleScroll(deltaY: deltaY, isPrecise: isPrecise, viewPoint: viewPoint, terminal: terminal)
@@ -121,20 +134,26 @@ final class DropAwareTerminalView: TerminalView {
         let cellHeight = bounds.height / CGFloat(max(1, terminal.rows))
         let unit = isPrecise ? max(1, cellHeight) : 1
         let steps = wheelAccumulator.consume(delta: deltaY, unit: unit)
-        // Adım üretilmese de event yutulur: alt-buffer'da SwiftTerm scroll'u zaten
-        // no-op; birikim sürer, momentum akışı doğal hızda adım üretir.
+        // Adım üretilmese de event yutulur: birikim sürer, momentum akışı doğal
+        // hızda adım üretir; SwiftTerm'e bırakmak çifte gönderim yaratırdı.
         guard steps != 0 else { return true }
         let isUp = steps > 0
         if terminal.mouseMode != .off {
-            // Claude mouse mode'da (1000/1002/1003 + 1006 SGR — PTY probe ile
-            // doğrulandı): wheel'i SGR wheel raporu olarak gönder (xterm.js
-            // consumeWheelEvent paritesi). Uygulama kendi geçmişini kaydırır.
-            let cell = MouseWheelEncoder.gridCell(
+            // Mouse mode'daki TUI'ye (Claude: 1000/1002/1003+1006, PTY probe ile
+            // doğrulandı) wheel event'i gönder; uygulama kendi geçmişini kaydırır.
+            // encodeButton+sendEvent terminalin pazarlık ettiği protokole göre
+            // kodlar (SGR/X10/urxvt/UTF8) — elle SGR kurmak 1006'sız TUI'leri kırardı.
+            let cell = MouseWheelGeometry.gridCell(
                 forViewPoint: viewPoint, bounds: bounds,
                 cols: terminal.cols, rows: terminal.rows, isFlipped: isFlipped
             )
-            let report = MouseWheelEncoder.sgrWheelReport(up: isUp, col: cell.col, row: cell.row)
-            for _ in 0 ..< abs(steps) { send(report) }
+            // Wheel butonları (xterm): 4 = yukarı, 5 = aşağı; sendEvent 0-tabanlı alır.
+            let flags = terminal.encodeButton(
+                button: isUp ? 4 : 5, release: false, shift: false, meta: false, control: false
+            )
+            for _ in 0 ..< abs(steps) {
+                terminal.sendEvent(buttonFlags: flags, x: cell.col - 1, y: cell.row - 1)
+            }
         } else {
             // Mouse'suz pager (less/vim): yön tuşu.
             let sequence = isUp
@@ -148,13 +167,15 @@ final class DropAwareTerminalView: TerminalView {
 
     // MARK: - Scroll sonrası tam yeniden çizim (SwiftTerm kısmi-çizim artıkları)
 
-    /// Hızlı scroll burst'lerinde TUI tam-ekran kareler basar; SwiftTerm'in dirty-rect
-    /// yolu bazı satırları bayat bırakabiliyor (requestRepaint ile aynı bilinen sorun:
-    /// "needsDisplay tek başına yetmiyor"). Kanıtlanmış çare burada da uygulanır:
+    /// Defense-in-depth: bayat satırların KÖK nedenleri pin'li SwiftTerm revision'ında
+    /// düzeltildi (94b6356 CSI T, 9446f60/468d0a8 2026 render) — bu katman, scroll
+    /// burst'lerindeki kalan/gelecek dirty-rect aksamalarına karşı ucuz güvenlik ağıdır
+    /// (requestRepaint ile aynı bilinen desen: "needsDisplay tek başına yetmiyor").
     /// updateFullScreen (tüm hücreler dirty) + setNeedsDisplay(bounds).
     /// İki aşamalı tetik: son adımdan 150ms sonra (burst bitişi) + 450ms'te bir kez
-    /// daha — Claude'un PTY round-trip'iyle geciken son karesini de yakalar. Sürekli
+    /// daha — TUI'nin PTY round-trip'iyle geciken son karesini de yakalar. Sürekli
     /// scroll'da en geç 250ms'te bir ara tam çizim yapılır (bayatlık birikmesin).
+    /// Üretimde artıksız doğrulanırsa kaldırılabilir; debounce'lu olduğundan maliyeti düşük.
     private static let scrollRedrawTrailing: Duration = .milliseconds(150)
     private static let scrollRedrawLate: Duration = .milliseconds(300)
     private static let scrollRedrawMaxLatencyNanos: UInt64 = 250_000_000

@@ -27,13 +27,10 @@ struct WheelStepAccumulator {
     }
 }
 
-/// SGR (DECSET 1006) mouse raporu üretimi + view noktası → terminal hücresi eşlemesi.
-enum MouseWheelEncoder {
-    /// Wheel butonları (xterm): 64 = yukarı, 65 = aşağı; koordinatlar 1-tabanlı.
-    static func sgrWheelReport(up: Bool, col: Int, row: Int) -> [UInt8] {
-        Array("\u{1b}[<\(up ? 64 : 65);\(col);\(row)M".utf8)
-    }
-
+/// View noktası → terminal hücresi eşlemesi (wheel raporunun koordinatı için).
+/// Raporun byte'a kodlanması SwiftTerm'e bırakılır: Terminal.encodeButton +
+/// sendEvent pazarlıklı mouse protokolüne (SGR/X10/urxvt/UTF8) göre kodlar.
+enum MouseWheelGeometry {
     /// View noktasını 1-tabanlı hücreye çevirir; sınırlar içine kıskaçlar.
     /// `isFlipped=false` (AppKit default, SwiftTerm böyle): y aşağıdan yukarı büyür.
     static func gridCell(
