@@ -129,6 +129,19 @@ public final class WorkspaceStore {
         persist()
     }
 
+    /// Settings → Appearance toggle'ları için doğrudan set (idempotent; persist).
+    public func setLeftSidebarOpen(_ open: Bool) {
+        guard leftSidebarOpen != open else { return }
+        leftSidebarOpen = open
+        persist()
+    }
+
+    public func setRightSidebarOpen(_ open: Bool) {
+        guard rightSidebarOpen != open else { return }
+        rightSidebarOpen = open
+        persist()
+    }
+
     // MARK: - Tab yönetimi (spec/21 §9)
 
     public func openTab(_ repoPath: String) {

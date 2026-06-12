@@ -130,6 +130,7 @@ public struct RootView: View {
             if workspace.isSettingsOpen {
                 SettingsView(
                     settings: settings,
+                    workspace: workspace,
                     chooseFolder: shellActions.chooseFolder,
                     onClose: { workspace.isSettingsOpen = false }
                 )

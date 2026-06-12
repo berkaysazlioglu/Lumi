@@ -170,7 +170,8 @@ Bu alt sistem, Lumi dashboard'unun terminal grid'i dışındaki tüm görsel kab
 - Font Size: number input, 10–24 px sınırı.
 
 **5.4 AppearanceSection:**
-- İki toggle switch: "Left Sidebar" ve "Right Sidebar" — **başlangıçta** sidebar'ların default açık/kapalı durumu (UIState'e yazılır, anlık layout'u değiştirmez).
+- İki toggle switch: "Left Sidebar" ve "Right Sidebar" — sidebar'ların açık/kapalı durumu (UIState'e yazılır).
+- **Native sapma (karar 3 — anlık uygulama):** Electron'da bu toggle yalnız default'u yazıp anlık layout'u değiştirmezdi; native'de `leftSidebarOpen`/`rightSidebarOpen` tek canlı değer olduğundan (header hamburger ile aynı), toggle anında uygulanır ve persist edilir.
 
 **5.5 NotificationsSection:**
 - Bilgi kartı: bildirimlerin "assistant bitirip input beklerken, pencere odakta değilken native OS bildirimi olarak" gönderildiğini açıklar.
