@@ -109,32 +109,28 @@ final class GridLayoutMathTests: XCTestCase {
                                  "fit modda çok terminalde bile scroll yok")
     }
 
-    func testScrollFillsViewportWhenFewTerminals() {
-        // scroll half, columns 2, görünür 2 → 1 satır; columnWidth=494,
-        // min=floor(494*0.5)=247, fitRowHeight=800 ≥ min → 800 (viewport dolar, scroll yok)
-        let frames = GridLayoutMath.frames(
-            layout: layout(.columns, 2, .scroll),
-            container: CGSize(width: 1000, height: 800),
-            visibleCount: 2
-        )
-        XCTAssertEqual(frames[0].height, 800)
-        XCTAssertEqual(GridLayoutMath.contentHeight(frames: frames), 800)
-    }
-
-    func testScrollMinHeightFollowsWidthRatio() {
-        // scroll, columns 1 (width 1000), görünür 4 → 4 satır.
-        // fitRowHeight=floor((800-3*12)/4)=191; min = 1000 × oran.
+    func testScrollHeightIsColumnWidthTimesRatioRegardlessOfCount() {
+        // scroll'da yükseklik DOĞRUDAN kolon genişliği × oran — terminal sayısından
+        // ve viewport yüksekliğinden bağımsız (fit ile max'lanmaz).
+        // columns 1, width 1000 → columnWidth 1000.
         for (ratio, expected) in [(GridLayout.HeightRatio.full, 1000.0),
                                   (.half, 500.0),
                                   (.third, floor(1000.0 / 3.0))] {
-            let frames = GridLayoutMath.frames(
+            // Az terminal (viewport'tan kısa olabilir) — oran yine birebir uygulanır
+            let few = GridLayoutMath.frames(
                 layout: layout(.columns, 1, .scroll, ratio),
                 container: CGSize(width: 1000, height: 800),
-                visibleCount: 4
+                visibleCount: 1
             )
-            XCTAssertEqual(frames[0].height, CGFloat(expected), "oran \(ratio.label)")
-            XCTAssertGreaterThan(GridLayoutMath.contentHeight(frames: frames), 800,
-                                 "min genişlik×oran fit'i aşınca içerik viewport'u geçer (scroll)")
+            XCTAssertEqual(few[0].height, CGFloat(expected), "az terminal, oran \(ratio.label)")
+            // Çok terminal — aynı yükseklik, içerik viewport'u aşar (scroll)
+            let many = GridLayoutMath.frames(
+                layout: layout(.columns, 1, .scroll, ratio),
+                container: CGSize(width: 1000, height: 800),
+                visibleCount: 5
+            )
+            XCTAssertEqual(many[0].height, CGFloat(expected), "çok terminal, oran \(ratio.label)")
+            XCTAssertGreaterThan(GridLayoutMath.contentHeight(frames: many), 800)
         }
     }
 
