@@ -20,9 +20,11 @@ struct HeaderBarView: View {
     let personasStore: PersonasStore
     let settings: SettingsStore
 
+    @State private var isAddRepoHovering = false
+
     var body: some View {
         HStack(spacing: 0) {
-            // Sol grup (v1 header-left, gap 12): hamburger → logo → tab'ler → +
+            // Sol grup (v1 header-left, gap 12): hamburger → logo → tab'ler + (+)
             HStack(spacing: 12) {
                 HeaderIconButton(
                     icon: "line.3.horizontal",
@@ -31,14 +33,21 @@ struct HeaderBarView: View {
                 )
                 logoView
                 tabStrip
-                addRepoButton
             }
             Spacer(minLength: 12)
             // Orta küme: grid ayarı + New <Provider>
             if let active = workspace.activeTab {
                 HStack(spacing: 8) {
                     gridLayoutMenu(for: active)
-                    newTerminalMenu(for: active)
+                    NewTerminalButton(
+                        provider: settings.current.aiProvider,
+                        personas: personasStore.personas,
+                        onNewProvider: {
+                            terminals.spawn(in: active, command: settings.current.aiProvider.launchCommand)
+                        },
+                        onNewBash: { terminals.spawn(in: active, task: "Bash") },
+                        onPersona: { personasStore.spawn($0, repoPath: active) }
+                    )
                 }
                 .padding(.trailing, 8)
             }
@@ -89,6 +98,8 @@ struct HeaderBarView: View {
 
     // MARK: - Tab'ler
 
+    /// Tab'ler + (+) butonu tek scroll HStack'inde — (+) her zaman son tab'ın
+    /// HEMEN ardında durur (ortada kalmaz); çok tab'da birlikte scroll'lanır.
     private var tabStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
@@ -103,6 +114,7 @@ struct HeaderBarView: View {
                         }
                     )
                 }
+                addRepoButton
             }
         }
         .frame(maxWidth: 600, alignment: .leading)
@@ -113,13 +125,15 @@ struct HeaderBarView: View {
             workspace.isRepoSelectorOpen.toggle()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Theme.accentPrimary)
-                .frame(width: 24, height: 24)
-                .background(Theme.bgElevated)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isAddRepoHovering ? Theme.textPrimary : Theme.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(isAddRepoHovering ? Theme.bgElevated : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { isAddRepoHovering = $0 }
         .popover(isPresented: Binding(
             get: { workspace.isRepoSelectorOpen },
             set: { workspace.isRepoSelectorOpen = $0 }
@@ -129,34 +143,6 @@ struct HeaderBarView: View {
                 workspace.openTab(repo.path)
             }
         }
-    }
-
-    // MARK: - New <Provider> split-dropdown (spec/20 §6: üç spawn yolu)
-
-    private func newTerminalMenu(for repoPath: String) -> some View {
-        let provider = settings.current.aiProvider
-        return Menu {
-            Button("New Bash") {
-                // Düz shell; task etiketi kart başlığı olur (spec/20 §6.2)
-                terminals.spawn(in: repoPath, task: "Bash")
-            }
-            if !personasStore.personas.isEmpty {
-                Divider()
-                ForEach(personasStore.personas, id: \.id) { persona in
-                    Button("New \(persona.label)") {
-                        personasStore.spawn(persona.id, repoPath: repoPath)
-                    }
-                }
-            }
-        } label: {
-            Label("New \(provider.displayName)", systemImage: "plus")
-                .font(.system(size: 12, weight: .medium))
-        } primaryAction: {
-            terminals.spawn(in: repoPath, command: provider.launchCommand)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(Theme.accentVivid)
-        .fixedSize()
     }
 
     private func gridLayoutMenu(for repoPath: String) -> some View {
@@ -250,5 +236,106 @@ struct HeaderIconButton: View {
     private var foreground: Color {
         if isActive { return Theme.accentPrimary }
         return isHovering ? Theme.textPrimary : Theme.textSecondary
+    }
+}
+
+/// Modern "New <Provider>" split-button (v1 paritesi): solid mor; sol kısım
+/// aktif provider'ı spawn eder, sağ chevron özel koyu dropdown'u açar
+/// (New Bash + persona'lar). Native NSMenu DEĞİL — temalı popover.
+struct NewTerminalButton: View {
+    let provider: AgentProvider
+    let personas: [Persona]
+    let onNewProvider: () -> Void
+    let onNewBash: () -> Void
+    let onPersona: (String) -> Void
+
+    @State private var isOpen = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: onNewProvider) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("New \(provider.displayName)")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                }
+                .foregroundStyle(.white)
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .padding(.vertical, 7)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1, height: 18)
+
+            Button { isOpen.toggle() } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 7)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $isOpen, arrowEdge: .bottom) { dropdown }
+        }
+        .background(Theme.accentVivid)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var dropdown: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            NewTerminalDropdownItem(icon: "terminal", label: "New Bash") {
+                isOpen = false
+                onNewBash()
+            }
+            if !personas.isEmpty {
+                Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 4)
+                ForEach(personas, id: \.id) { persona in
+                    NewTerminalDropdownItem(icon: nil, label: "New \(persona.label)") {
+                        isOpen = false
+                        onPersona(persona.id)
+                    }
+                }
+            }
+        }
+        .padding(6)
+        .frame(width: 220)
+        .background(Theme.bgElevated)
+    }
+}
+
+/// Dropdown satırı — hover'da highlight (v1 dark dropdown paritesi).
+private struct NewTerminalDropdownItem: View {
+    let icon: String?
+    let label: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(width: 16)
+                }
+                Text(label)
+                    .font(.system(size: 12, design: .monospaced))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isHovering ? Theme.textPrimary : Theme.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(isHovering ? Theme.bgSurface : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
