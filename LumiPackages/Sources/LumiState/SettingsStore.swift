@@ -96,6 +96,10 @@ public final class SettingsStore {
         apply { $0.notifications = settings }
     }
 
+    public func setSessionTrigger(_ trigger: SessionTrigger) {
+        apply { $0.sessionTrigger = trigger }
+    }
+
     public func addAdditionalPath(_ path: String, type: AdditionalPath.PathType) {
         let entry = AdditionalPath(id: UUID().uuidString, path: path, type: type)
         apply { $0.additionalPaths.append(entry) }

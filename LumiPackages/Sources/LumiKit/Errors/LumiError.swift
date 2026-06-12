@@ -18,6 +18,7 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case notificationPermissionDenied
     case cliNotFound(binary: String)
     case usageUnavailable(detail: String)
+    case sessionStartFailed(detail: String)
     case underlying(domain: String, message: String)
 
     public var errorDescription: String? {
@@ -50,6 +51,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "\(binary) CLI not found in PATH."
         case .usageUnavailable(let detail):
             return "Could not read usage: \(detail)"
+        case .sessionStartFailed(let detail):
+            return "Could not start session: \(detail)"
         case .underlying(let domain, let message):
             return "\(domain): \(message)"
         }

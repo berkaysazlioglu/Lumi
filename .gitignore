@@ -12,6 +12,7 @@ playground.xcworkspace
 
 # Swift Package Manager
 .build/
+.build-dev/
 .swiftpm/
 
 # Build artifacts

@@ -103,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             personasStore: container.personasStore,
             actionsStore: container.actionsStore,
             settings: container.settings,
+            sessionSchedule: container.sessionSchedule,
             usage: container.usageStore,
             toasts: container.toasts,
             viewProvider: container.terminal.viewRegistry,

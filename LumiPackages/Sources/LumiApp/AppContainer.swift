@@ -18,10 +18,12 @@ final class AppContainer {
     let actionService: any ActionServicing
     let notifications: any NotificationServicing
     let usageService: any UsageServicing
+    let sessionStarter: any SessionStarterServicing
     let terminal: TerminalSessionManager
     let toasts: ToastStore
     let terminals: TerminalListStore
     let promptQueue: PromptQueueStore
+    let sessionSchedule: SessionScheduleStore
     let repoStore: RepoStore
     let gitStore: GitStore
     let fileViewer: FileViewerStore
@@ -47,6 +49,7 @@ final class AppContainer {
         gitService = GitService()
         notifications = NotificationService(presenter: notificationPresenter)
         usageService = UsageService()
+        sessionStarter = SessionStarterService()
         terminal = TerminalSessionManager()
         personaService = PersonaService(
             paths: paths,
@@ -63,6 +66,7 @@ final class AppContainer {
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
         promptQueue = PromptQueueStore(service: terminal)
+        sessionSchedule = SessionScheduleStore(starter: sessionStarter)
         repoStore = RepoStore(service: repoService)
         gitStore = GitStore(git: gitService, toasts: toasts)
         fileViewer = FileViewerStore(git: gitService, toasts: toasts)
@@ -112,6 +116,7 @@ final class AppContainer {
             blink: appConfig.terminalCursorBlink
         )
         notifications.updateSettings(appConfig.notifications)
+        sessionSchedule.update(appConfig.sessionTrigger)
         repoStore.additionalPaths = appConfig.additionalPaths
         await repoService.setRoots(
             projectsRoot: appConfig.projectsRoot,
@@ -155,6 +160,9 @@ final class AppContainer {
             self?.terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
                 shape: shape, blink: blink
             )
+        }
+        configCoordinator.onSessionTriggerChanged = { [weak self] trigger in
+            self?.sessionSchedule.update(trigger)
         }
         configCoordinator.start()
         startBridges()
@@ -255,6 +263,7 @@ final class AppContainer {
 
     func shutdown() async {
         bridgeTasks.forEach { $0.cancel() }
+        sessionSchedule.stop()
         terminal.killAll()
         await config.flushPendingWrites()
         // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)

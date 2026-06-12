@@ -164,6 +164,39 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertFalse(reloaded.terminalCursorBlink)
     }
 
+    func testSessionTriggerDefaultsWhenAbsent() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let config = await makeService().config()
+        XCTAssertEqual(config.sessionTrigger, .defaults)
+        XCTAssertFalse(config.sessionTrigger.enabled)
+        XCTAssertEqual(config.sessionTrigger.hour, 9)
+        XCTAssertEqual(config.sessionTrigger.prompt, "hello")
+    }
+
+    func testSessionTriggerRoundTrips() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let service = makeService()
+
+        try await service.updateConfig {
+            $0.sessionTrigger = SessionTrigger(enabled: true, hour: 7, minute: 30, prompt: "go")
+        }
+
+        let written = try readJSONDict(paths.configFile)
+        let nested = try XCTUnwrap(written["sessionTrigger"] as? [String: Any])
+        XCTAssertEqual(nested["enabled"] as? Bool, true)
+        XCTAssertEqual(nested["hour"] as? Int, 7)
+        XCTAssertEqual(nested["minute"] as? Int, 30)
+        XCTAssertEqual(nested["prompt"] as? String, "go")
+        // Mevcut alanlar korunur (additive, karar 9)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
+
+        let reloaded = await ConfigService(paths: paths).config()
+        XCTAssertEqual(
+            reloaded.sessionTrigger,
+            SessionTrigger(enabled: true, hour: 7, minute: 30, prompt: "go")
+        )
+    }
+
     func testTerminalFontSmoothingRoundTrip() async throws {
         try writeFixture(realConfigFixture, to: paths.configFile)
         let service = makeService()
