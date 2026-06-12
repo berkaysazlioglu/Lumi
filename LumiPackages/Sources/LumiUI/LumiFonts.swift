@@ -26,3 +26,15 @@ public enum LumiFonts {
             ?? .monospacedSystemFont(ofSize: size, weight: weight)
     }
 }
+
+/// Bundle'lı görseller (header logosu vb.). UI'dan (MainActor) erişilir.
+@MainActor
+public enum LumiAssets {
+    /// Header app logosu (v1 mascot app-icon paritesi). Kayıt başarısızsa nil.
+    public static let logo: NSImage? = {
+        guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }()
+}

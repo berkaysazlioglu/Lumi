@@ -2,9 +2,10 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Üst header çubuğu (spec/22 Header; görsel değerler v1 globals.css'ten):
-/// 52px, repo tab'leri + repo ekleme solda; grid menüsü, New <Provider>
-/// split-dropdown'u ve 32px ikon butonları (sidebar/git/focus/settings) sağda.
+/// Üst header çubuğu (v1 paritesi, globals.css; spec/22). 52px, traffic
+/// light hizasında. Sol grup: hamburger (sol panel) → logo + "Lumi" → repo
+/// tab'leri → +. Orta: grid ayarı + New <Provider>. Sağ grup (32px ikon):
+/// fullscreen (focus mode) · git · settings.
 struct HeaderBarView: View {
     static let height: CGFloat = 52
 
@@ -15,45 +16,69 @@ struct HeaderBarView: View {
     let settings: SettingsStore
 
     var body: some View {
-        HStack(spacing: 10) {
-            tabStrip
-            addRepoButton
-            Spacer()
-            if let active = workspace.activeTab {
-                gridLayoutMenu(for: active)
-                newTerminalMenu(for: active)
+        HStack(spacing: 0) {
+            // Sol grup (v1 header-left, gap 12): hamburger → logo → tab'ler → +
+            HStack(spacing: 12) {
+                HeaderIconButton(
+                    icon: "line.3.horizontal",
+                    isActive: workspace.leftSidebarOpen,
+                    action: { workspace.toggleLeftSidebar() }
+                )
+                logoView
+                tabStrip
+                addRepoButton
             }
-            HeaderIconButton(
-                icon: "sidebar.left",
-                isActive: workspace.leftSidebarOpen,
-                action: { workspace.toggleLeftSidebar() }
-            )
-            HeaderIconButton(
-                icon: "arrow.triangle.branch",
-                isActive: workspace.rightSidebarOpen,
-                action: { workspace.toggleRightSidebar() }
-            )
-            HeaderIconButton(
-                icon: "arrow.up.left.and.arrow.down.right",
-                isActive: workspace.isFocusMode,
-                action: { workspace.toggleFocusMode() }
-            )
-            HeaderIconButton(
-                icon: "gearshape",
-                isActive: workspace.isSettingsOpen,
-                action: { workspace.isSettingsOpen = true }
-            )
-            Text("\(terminals.totalCount)")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 12)
+            // Orta küme: grid ayarı + New <Provider>
+            if let active = workspace.activeTab {
+                HStack(spacing: 8) {
+                    gridLayoutMenu(for: active)
+                    newTerminalMenu(for: active)
+                }
+                .padding(.trailing, 8)
+            }
+            // Sağ grup (v1 header-right, gap 8; sağdan sola: settings, git, fullscreen)
+            HStack(spacing: 8) {
+                HeaderIconButton(
+                    icon: "arrow.up.left.and.arrow.down.right",
+                    isActive: workspace.isFocusMode,
+                    action: { workspace.toggleFocusMode() }
+                )
+                HeaderIconButton(
+                    icon: "arrow.triangle.branch",
+                    isActive: workspace.rightSidebarOpen,
+                    action: { workspace.toggleRightSidebar() }
+                )
+                HeaderIconButton(
+                    icon: "gearshape",
+                    isActive: workspace.isSettingsOpen,
+                    action: { workspace.isSettingsOpen = true }
+                )
+            }
         }
-        // Sol 80px: traffic light alanı (spec/30 custom titlebar paritesi)
+        // Sol 80px: traffic light alanı — içerik trafiğin hizasında (v1 paritesi)
         .padding(.leading, 80)
         .padding(.trailing, 16)
         .frame(height: Self.height)
         .background(Theme.bgSurface)
         .overlay(alignment: .bottom) {
             Theme.border.frame(height: 1)
+        }
+    }
+
+    // MARK: - Logo + ad (v1: 26×26 mascot + "Lumi" 14/600)
+
+    private var logoView: some View {
+        HStack(spacing: 8) {
+            if let logo = LumiAssets.logo {
+                Image(nsImage: logo)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 26, height: 26)
+            }
+            Text("Lumi")
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Theme.textPrimary)
         }
     }
 
@@ -153,8 +178,10 @@ struct RepoTabChip: View {
             Image(systemName: "folder")
                 .font(.system(size: 11))
             Text(name)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 13, design: .monospaced))
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 120, alignment: .leading)
             closeButton
                 .opacity(isHovering || isActive ? 1 : 0)
         }

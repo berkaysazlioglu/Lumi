@@ -15,6 +15,8 @@ public enum Theme {
 
     public static let accentPrimary = Color(red: 0xA7 / 255, green: 0x8B / 255, blue: 0xFA / 255)
     public static let accentVivid = Color(red: 0x8B / 255, green: 0x5C / 255, blue: 0xF6 / 255)
+    /// Commit butonu hover'ı (v1 --accent-primary-deep #7C3AED).
+    public static let accentDeep = Color(red: 0x7C / 255, green: 0x3A / 255, blue: 0xED / 255)
     public static let accentCyan = Color(red: 0x22 / 255, green: 0xD3 / 255, blue: 0xEE / 255)
     public static let success = Color(red: 0x4A / 255, green: 0xDE / 255, blue: 0x80 / 255)
     public static let warning = Color(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255)

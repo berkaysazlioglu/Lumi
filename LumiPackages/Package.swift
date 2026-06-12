@@ -47,6 +47,7 @@ let package = Package(
             ],
             resources: [
                 .copy("Resources/Fonts"),
+                .copy("Resources/logo.png"),
             ]
         ),
         .executableTarget(
