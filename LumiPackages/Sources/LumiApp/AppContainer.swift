@@ -21,6 +21,7 @@ final class AppContainer {
     let terminal: TerminalSessionManager
     let toasts: ToastStore
     let terminals: TerminalListStore
+    let promptQueue: PromptQueueStore
     let repoStore: RepoStore
     let gitStore: GitStore
     let fileViewer: FileViewerStore
@@ -61,6 +62,7 @@ final class AppContainer {
         )
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
+        promptQueue = PromptQueueStore(service: terminal)
         repoStore = RepoStore(service: repoService)
         gitStore = GitStore(git: gitService, toasts: toasts)
         fileViewer = FileViewerStore(git: gitService, toasts: toasts)
@@ -109,6 +111,7 @@ final class AppContainer {
         )
 
         terminals.start()
+        promptQueue.start()
         repoStore.start()
         personasStore.start()
         actionsStore.start()
@@ -191,7 +194,7 @@ final class AppContainer {
                 case .exited(let id, _):
                     // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
                     self.notifications.terminalRemoved(id)
-                case .spawned, .titleChanged, .bell:
+                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell:
                     break
                 }
             }

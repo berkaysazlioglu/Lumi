@@ -6,6 +6,7 @@ import SwiftTerm
 @MainActor
 protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus)
+    func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool)
     func session(_ session: TerminalSession, didChangeTitle title: String)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func sessionDidBell(_ session: TerminalSession)
@@ -100,6 +101,9 @@ final class TerminalSession {
         pipeline.onStatusChange = { [weak self] status in
             hopToMain { self?.applyStatus(status) }
         }
+        pipeline.onAwaitingDecisionChange = { [weak self] awaiting in
+            hopToMain { self?.applyAwaitingDecision(awaiting) }
+        }
         pipeline.onDisplayTitle = { [weak self] title in
             hopToMain { self?.applyTitle(title) }
         }
@@ -129,6 +133,11 @@ final class TerminalSession {
         guard !isTerminated else { return }
         meta.status = status
         delegate?.session(self, didChangeStatus: status)
+    }
+
+    private func applyAwaitingDecision(_ awaiting: Bool) {
+        guard !isTerminated else { return }
+        delegate?.session(self, didChangeAwaitingDecision: awaiting)
     }
 
     private func applyTitle(_ title: String) {

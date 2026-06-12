@@ -95,6 +95,36 @@ final class OSCStreamParserTests: XCTestCase {
         XCTAssertEqual(OSCStreamParser.interpretNotification("build failed"), .generic)
     }
 
+    func testPermissionRequestVariants() {
+        let payloads = [
+            "Claude needs your permission",
+            "needs your permission to use Bash",
+            "Permission required",
+        ]
+        for payload in payloads {
+            XCTAssertEqual(
+                OSCStreamParser.interpretNotification(payload),
+                .permissionRequest,
+                payload
+            )
+        }
+    }
+
+    /// İzin sinyali turn-complete'e karışmamalı (kuyruk araya prompt sokmasın).
+    func testPermissionIsNotTurnComplete() {
+        XCTAssertNotEqual(
+            OSCStreamParser.interpretNotification("Claude needs your permission"),
+            .codexTurnComplete
+        )
+    }
+
+    func testPermissionEventEmitted() {
+        let events = parser.feed(osc("9;Claude needs your permission"))
+        guard case .notification(.permissionRequest)? = events.first else {
+            return XCTFail("permission bekleniyordu: \(events)")
+        }
+    }
+
     func testOSC9EventEmitted() {
         let events = parser.feed(osc("9;Codex turn complete"))
         guard case .notification(.codexTurnComplete)? = events.first else {

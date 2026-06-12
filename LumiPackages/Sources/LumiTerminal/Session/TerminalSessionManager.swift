@@ -164,6 +164,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.statusChanged(session.id, status))
     }
 
+    func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.awaitingDecisionChanged(session.id, awaiting))
+    }
+
     func session(_ session: TerminalSession, didChangeTitle title: String) {
         guard isRegistered(session) else { return }
         broadcaster.send(.titleChanged(session.id, title))

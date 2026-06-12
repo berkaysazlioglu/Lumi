@@ -14,6 +14,9 @@ public final class TerminalListStore {
     public private(set) var terminals: [TerminalMeta] = []
     public private(set) var activeTerminalID: TerminalID?
     public private(set) var minimizedIDs: Set<TerminalID> = []
+    /// "Karar bekliyor" (izin promptu) sinyali — ephemeral, persist edilmez.
+    /// Prompt kuyruğu bunu görünce duraklar (spec/10: status'ten ayrı sinyal).
+    public private(set) var awaitingDecisionIDs: Set<TerminalID> = []
 
     @ObservationIgnored private var lastActiveByRepo: [String: TerminalID] = [:]
     @ObservationIgnored private let service: any TerminalServicing
@@ -181,6 +184,12 @@ public final class TerminalListStore {
             update(id) { $0.status = status }
         case .titleChanged(let id, let title):
             update(id) { $0.oscTitle = title }
+        case .awaitingDecisionChanged(let id, let awaiting):
+            if awaiting {
+                awaitingDecisionIDs.insert(id)
+            } else {
+                awaitingDecisionIDs.remove(id)
+            }
         case .bell(let id):
             // Emülatör BEL karakteri — status-güdümlü bell'ler ayrıca
             // NotificationService'ten gelir
@@ -229,6 +238,7 @@ public final class TerminalListStore {
         }
 
         minimizedIDs.remove(id)
+        awaitingDecisionIDs.remove(id)
         terminals.remove(at: index)
     }
 

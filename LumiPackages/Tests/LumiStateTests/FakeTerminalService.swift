@@ -10,6 +10,7 @@ final class FakeTerminalService: TerminalServicing {
     private(set) var killedIDs: [TerminalID] = []
     private(set) var focusCalls: [TerminalID?] = []
     private(set) var maxTerminalsValue = 12
+    private(set) var writtenTexts: [(id: TerminalID, text: String)] = []
 
     var terminals: [TerminalMeta] { spawnedMetas }
 
@@ -27,7 +28,9 @@ final class FakeTerminalService: TerminalServicing {
         return meta
     }
 
-    func write(id: TerminalID, text: String) throws {}
+    func write(id: TerminalID, text: String) throws {
+        writtenTexts.append((id, text))
+    }
 
     func kill(id: TerminalID) throws {
         killedIDs.append(id)

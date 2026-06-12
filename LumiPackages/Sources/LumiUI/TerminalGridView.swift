@@ -9,6 +9,7 @@ struct TerminalGridView: View {
     let layout: LumiKit.GridLayout
     let activeTerminalID: TerminalID?
     let viewProvider: any TerminalViewProviding
+    let promptQueue: PromptQueueStore
     let onFocus: (TerminalID) -> Void
     let onMinimize: (TerminalID) -> Void
     let onMaximize: (TerminalID) -> Void
@@ -45,6 +46,7 @@ struct TerminalGridView: View {
                         meta: meta,
                         isActive: activeTerminalID == meta.id,
                         viewProvider: viewProvider,
+                        promptQueue: promptQueue,
                         onFocus: { onFocus(meta.id) },
                         onMinimize: { onMinimize(meta.id) },
                         onMaximize: { onMaximize(meta.id) },
@@ -64,10 +66,13 @@ struct TerminalCardView: View {
     let meta: TerminalMeta
     let isActive: Bool
     let viewProvider: any TerminalViewProviding
+    @Bindable var promptQueue: PromptQueueStore
     let onFocus: () -> Void
     let onMinimize: () -> Void
     let onMaximize: () -> Void
     let onClose: () -> Void
+
+    @State private var isQueueOpen = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,6 +92,7 @@ struct TerminalCardView: View {
             color: isActive ? Theme.accentVivid.opacity(0.2) : .clear,
             radius: isActive ? 15 : 0
         )
+        .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: meta.id, store: promptQueue)
     }
 
     private var header: some View {
@@ -97,6 +103,11 @@ struct TerminalCardView: View {
                 .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
                 .lineLimit(1)
             Spacer()
+            PromptQueueToggleButton(
+                count: promptQueue.count(for: meta.id),
+                isPaused: promptQueue.isPaused(meta.id),
+                isOpen: $isQueueOpen
+            )
             CardHeaderButton(systemName: "arrow.up.left.and.arrow.down.right", action: onMaximize)
             CardHeaderButton(systemName: "minus", action: onMinimize)
             CardHeaderButton(systemName: "xmark", isDestructive: true, action: onClose)

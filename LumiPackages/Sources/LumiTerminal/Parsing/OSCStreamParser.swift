@@ -11,6 +11,9 @@ struct OSCTitleEvent: Equatable {
 
 enum OSCNotificationKind: Equatable {
     case codexTurnComplete
+    /// Claude bir araç/komut için izin bekliyor (OSC 9 "needs your permission").
+    /// "Bekliyor" değil "karar bekliyor" sinyalidir — kuyruk buna duraklar.
+    case permissionRequest
     case generic
 }
 
@@ -88,9 +91,13 @@ final class OSCStreamParser {
         let payload = parts.count > 1 ? String(parts[1]) : ""
         switch command {
         case 0, 2:
-            events.append(.title(Self.interpretTitle(payload)))
+            let event = Self.interpretTitle(payload)
+            OSCTracer.traceTitle(command: command, raw: payload, isWorking: event.isWorking)
+            events.append(.title(event))
         case 9:
-            events.append(.notification(Self.interpretNotification(payload)))
+            let kind = Self.interpretNotification(payload)
+            OSCTracer.traceNotification(raw: payload, kind: kind)
+            events.append(.notification(kind))
         default:
             break
         }
@@ -142,6 +149,11 @@ final class OSCStreamParser {
 
     static func interpretNotification(_ payload: String) -> OSCNotificationKind {
         let lower = payload.lowercased()
+        // İzin kalıbı önce sınanır: turn-complete'ten ayrılmalı (kuyruk duraklar).
+        if lower.contains("needs your permission")
+            || lower.range(of: "\\bpermission\\b", options: .regularExpression) != nil {
+            return .permissionRequest
+        }
         let patterns = [
             "\\b(turn|task)\\s+(complete|completed|done|finished)\\b",
             "waiting for input",

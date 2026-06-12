@@ -9,10 +9,13 @@ struct MaximizedTerminalView: View {
     let maximized: TerminalMeta
     let others: [TerminalMeta]
     let viewProvider: any TerminalViewProviding
+    @Bindable var promptQueue: PromptQueueStore
     let onSwitch: (TerminalID) -> Void
     let onMinimize: (TerminalID) -> Void
     let onClose: (TerminalID) -> Void
     let onRestore: () -> Void
+
+    @State private var isQueueOpen = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -39,6 +42,7 @@ struct MaximizedTerminalView: View {
                 .stroke(Theme.accentPrimary, lineWidth: 1)
         )
         .shadow(color: Theme.accentVivid.opacity(0.2), radius: 15)
+        .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: maximized.id, store: promptQueue)
     }
 
     private var header: some View {
@@ -49,6 +53,11 @@ struct MaximizedTerminalView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer()
+            PromptQueueToggleButton(
+                count: promptQueue.count(for: maximized.id),
+                isPaused: promptQueue.isPaused(maximized.id),
+                isOpen: $isQueueOpen
+            )
             // Geri-küçült (maximize'ı kapatır)
             CardHeaderButton(systemName: "arrow.down.right.and.arrow.up.left", action: onRestore)
             CardHeaderButton(systemName: "minus", action: { onMinimize(maximized.id) })

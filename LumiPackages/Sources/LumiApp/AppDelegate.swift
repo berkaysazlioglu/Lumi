@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             workspace: container.workspace,
             repoStore: container.repoStore,
             terminals: container.terminals,
+            promptQueue: container.promptQueue,
             gitStore: container.gitStore,
             fileViewer: container.fileViewer,
             personasStore: container.personasStore,

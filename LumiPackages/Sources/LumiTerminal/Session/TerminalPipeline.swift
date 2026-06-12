@@ -9,6 +9,7 @@ import LumiKit
 final class TerminalPipeline: @unchecked Sendable {
     let flow: FlowController
     let statusMachine = StatusStateMachine()
+    let decisionTracker = DecisionTracker()
 
     private var decoder = UTF8StreamDecoder()
     private let oscParser = OSCStreamParser()
@@ -20,6 +21,8 @@ final class TerminalPipeline: @unchecked Sendable {
     // @Sendable: bu callback'ler io queue'da çağrılır; MainActor bağlamında atanan
     // closure'ların izolasyon miras almasını engeller (tüketici main'e kendisi sıçrar)
     var onStatusChange: (@Sendable (TerminalStatus) -> Void)?
+    /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı; kuyruk tüketir.
+    var onAwaitingDecisionChange: (@Sendable (Bool) -> Void)?
     var onDisplayTitle: (@Sendable (String) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
     var onOutputText: (@Sendable (String) -> Void)?
@@ -37,6 +40,9 @@ final class TerminalPipeline: @unchecked Sendable {
         }
         statusMachine.onChange = { [weak self] status in
             self?.onStatusChange?(status)
+        }
+        decisionTracker.onChange = { [weak self] awaiting in
+            self?.onAwaitingDecisionChange?(awaiting)
         }
     }
 
@@ -74,13 +80,22 @@ final class TerminalPipeline: @unchecked Sendable {
             }
             if let isWorking = title.isWorking {
                 statusMachine.onTitleChange(isWorking: isWorking)
+                // Çalışmaya dönüş izin promptunun kapandığını gösterir.
+                if isWorking { decisionTracker.onWorking() }
             }
         case .notification(let kind):
-            guard kind == .codexTurnComplete else { return }
-            sawTurnComplete = true
-            applyHint(.codex)
-            silenceTimer.cancel()
-            statusMachine.onTitleChange(isWorking: false)
+            switch kind {
+            case .codexTurnComplete:
+                sawTurnComplete = true
+                applyHint(.codex)
+                silenceTimer.cancel()
+                statusMachine.onTitleChange(isWorking: false)
+            case .permissionRequest:
+                // "Karar bekliyor" — status'e dokunma; yalnız ayrı sinyali kaldır.
+                decisionTracker.onPermissionRequest()
+            case .generic:
+                break
+            }
         }
     }
 
@@ -129,6 +144,7 @@ final class TerminalPipeline: @unchecked Sendable {
     /// kayıttan düşmüş terminale stale status push edilmez.
     func prepareForExit() {
         silenceTimer.cancel()
+        decisionTracker.reset()
         coalescer.flushNow()
     }
 

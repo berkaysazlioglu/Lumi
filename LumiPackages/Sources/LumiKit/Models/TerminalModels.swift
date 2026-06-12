@@ -24,6 +24,15 @@ public enum TerminalStatus: String, Sendable, Codable, CaseIterable, Equatable {
     case waitingFocused = "waiting-focused"
     case waitingSeen = "waiting-seen"
     case error
+
+    /// Agent bir turn'ü bitirip girdi bekliyor (üç görünürlük varyantı).
+    /// Prompt kuyruğu sıradaki prompt'u yalnız bu durumda gönderir.
+    public var isWaiting: Bool {
+        switch self {
+        case .waitingUnseen, .waitingFocused, .waitingSeen: return true
+        case .idle, .working, .error: return false
+        }
+    }
 }
 
 /// AI sağlayıcısı (config seviyesi; spec/13).
@@ -81,5 +90,8 @@ public enum TerminalEvent: Sendable, Equatable {
     case exited(TerminalID, code: Int32)
     case statusChanged(TerminalID, TerminalStatus)
     case titleChanged(TerminalID, String)
+    /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı (spec/10).
+    /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
+    case awaitingDecisionChanged(TerminalID, Bool)
     case bell(TerminalID)
 }

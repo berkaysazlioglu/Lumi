@@ -41,6 +41,7 @@ public struct RootView: View {
     private let workspace: WorkspaceStore
     private let repoStore: RepoStore
     private let terminals: TerminalListStore
+    private let promptQueue: PromptQueueStore
     private let gitStore: GitStore
     private let fileViewer: FileViewerStore
     private let personasStore: PersonasStore
@@ -57,6 +58,7 @@ public struct RootView: View {
         workspace: WorkspaceStore,
         repoStore: RepoStore,
         terminals: TerminalListStore,
+        promptQueue: PromptQueueStore,
         gitStore: GitStore,
         fileViewer: FileViewerStore,
         personasStore: PersonasStore,
@@ -72,6 +74,7 @@ public struct RootView: View {
         self.workspace = workspace
         self.repoStore = repoStore
         self.terminals = terminals
+        self.promptQueue = promptQueue
         self.gitStore = gitStore
         self.fileViewer = fileViewer
         self.personasStore = personasStore
@@ -282,6 +285,7 @@ public struct RootView: View {
                     maximized: maxMeta,
                     others: visible.filter { $0.id != maximizedID },
                     viewProvider: viewProvider,
+                    promptQueue: promptQueue,
                     onSwitch: { workspace.maximize($0, in: repoPath) },
                     onMinimize: { terminals.minimize($0) },
                     onClose: { terminals.close($0) },
@@ -293,6 +297,7 @@ public struct RootView: View {
                     layout: workspace.gridLayout(for: repoPath),
                     activeTerminalID: terminals.activeTerminalID,
                     viewProvider: viewProvider,
+                    promptQueue: promptQueue,
                     onFocus: { terminals.focus($0) },
                     onMinimize: { terminals.minimize($0) },
                     onMaximize: { workspace.maximize($0, in: repoPath) },
