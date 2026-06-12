@@ -76,12 +76,21 @@ public final class TerminalSessionManager: TerminalServicing {
         )
         session.delegate = self
         sessions.append(session)
-        viewRegistry.register(view: session.terminalView, for: session.id) { [weak session] visible in
-            session?.setHidden(!visible)
-            // Görünür olunca TUI'yi yeniden çizmeye zorla (boyut değişmese bile) —
-            // grid↔maximize round-trip'inde boş kalan kartın onarımı.
-            if visible { session?.requestRepaint() }
-        }
+        viewRegistry.register(
+            view: session.terminalView,
+            for: session.id,
+            onVisibilityChange: { [weak session] visible in
+                session?.setHidden(!visible)
+                // Görünür olunca TUI'yi yeniden çizmeye zorla (boyut değişmese bile) —
+                // grid↔maximize round-trip'inde boş kalan kartın onarımı.
+                if visible { session?.requestRepaint() }
+            },
+            onRedraw: { [weak session] in
+                // Frame gerçek boyuta oturunca (tab değişimi sonrası reassert)
+                // buffer'dan poke'suz tam çizim — boş kart onarımının ikinci yarısı.
+                session?.redrawFromBuffer()
+            }
+        )
         broadcaster.send(.spawned(session.meta))
         if let command {
             session.write(command + "\r")

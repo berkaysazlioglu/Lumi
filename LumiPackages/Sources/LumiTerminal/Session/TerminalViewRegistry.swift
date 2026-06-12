@@ -11,12 +11,21 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     private struct Entry {
         let view: NSView
         let onVisibilityChange: (Bool) -> Void
+        /// Emülatör buffer'ından tam yeniden çizim (updateFullScreen) — SIGWINCH
+        /// poke'u İÇERMEZ; frame-oturma yolunda PTY resize zinciri SIGWINCH'i
+        /// zaten üretir, ek poke pencere resize'ında TUI'yi spam'lerdi.
+        let onRedraw: () -> Void
     }
 
     private var entries: [TerminalID: Entry] = [:]
 
-    func register(view: NSView, for id: TerminalID, onVisibilityChange: @escaping (Bool) -> Void) {
-        entries[id] = Entry(view: view, onVisibilityChange: onVisibilityChange)
+    func register(
+        view: NSView,
+        for id: TerminalID,
+        onVisibilityChange: @escaping (Bool) -> Void,
+        onRedraw: @escaping () -> Void = {}
+    ) {
+        entries[id] = Entry(view: view, onVisibilityChange: onVisibilityChange, onRedraw: onRedraw)
         // Spawn anında henüz hiçbir container'a bağlı değil — gizli politikayla başlar
         onVisibilityChange(false)
     }
@@ -33,12 +42,28 @@ public final class TerminalViewRegistry: TerminalViewProviding {
 
     public func attachView(for id: TerminalID, into container: NSView) {
         guard let entry = entries[id] else { return }
+        let bounds = container.bounds
         if entry.view.superview === container {
-            entry.view.frame = container.bounds
+            // Reassert yolu (host her layout'ta çağırır): frame GERÇEK boyuta
+            // oturduğunda buffer'dan tam çizim istenir. Tab değişiminde host
+            // yeniden yaratılır ve ilk attach 0×0 bounds'la gelir — o anda
+            // yapılan repaint'in setNeedsDisplay'i no-op kalır; içerik ancak
+            // burada, boyut oturunca görünür olur (boş kart bug'ının onarımı).
+            if !bounds.isEmpty, !entry.view.frame.equalTo(bounds) {
+                entry.view.frame = bounds
+                entry.view.needsDisplay = true
+                entry.onRedraw()
+            }
             return
         }
         entry.view.removeFromSuperview()
-        entry.view.frame = container.bounds
+        // 0×0 container'a (SwiftUI layout vermeden önceki makeNSView anı) frame
+        // ATANMAZ: SwiftTerm'i sıfıra küçültmek emülatörü gereksiz resize eder ve
+        // ardından gelen repaint'in setNeedsDisplay(bounds)'unu no-op yapardı.
+        // Eski frame korunur; layout gelince yukarıdaki reassert dalı oturtur.
+        if !bounds.isEmpty {
+            entry.view.frame = bounds
+        }
         entry.view.autoresizingMask = [.width, .height]
         container.addSubview(entry.view)
         // "Görünür olunca fit" garantisi: frame ataması SwiftTerm'in cols/rows
@@ -58,7 +83,7 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     /// round-trip onarımının (attachView'daki needsDisplay) fullscreen analogudur.
     public func refreshAttachedViews() {
         for entry in entries.values {
-            guard let superview = entry.view.superview else { continue }
+            guard let superview = entry.view.superview, !superview.bounds.isEmpty else { continue }
             entry.view.frame = superview.bounds
             entry.view.needsDisplay = true
             // setHidden(false) + requestRepaint → SIGWINCH; needsDisplay tek başına

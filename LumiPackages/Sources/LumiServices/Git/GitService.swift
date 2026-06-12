@@ -26,6 +26,9 @@ public struct GitService: GitServicing {
     }
 
     private func logQuietFailure(_ operation: String, _ output: ProcessRunner.Output?) {
+        // Git olmayan dizin BEKLENEN durum (spec/12: paneller boş ve sessiz) —
+        // her tab değişiminde log gürültüsü üretmez.
+        if let output, output.stderr.contains("not a git repository") { return }
         // "Boş ve sessiz" parite (spec/12): UI'ya hata sızdırılmaz ama iz bırakılır
         let detail = output.map { "exit \($0.exitCode): \($0.stderr.prefix(200))" } ?? "timeout/launch failure"
         fputs("[lumi-git] \(operation) başarısız (sessiz): \(detail)\n", stderr)
@@ -34,9 +37,9 @@ public struct GitService: GitServicing {
     // MARK: - Branch / commit log
 
     public func branches(repoPath: String) async -> [GitBranch] {
-        guard let output = await runGit(["branch", "--list", "--no-color"], in: repoPath),
-              output.exitCode == 0 else {
-            logQuietFailure("branches", nil)
+        let output = await runGit(["branch", "--list", "--no-color"], in: repoPath)
+        guard let output, output.exitCode == 0 else {
+            logQuietFailure("branches", output)
             return []
         }
         return output.stdout.split(separator: "\n").compactMap { line in
@@ -65,8 +68,9 @@ public struct GitService: GitServicing {
             }
         }
 
-        guard let output = await runGit(arguments, in: repoPath), output.exitCode == 0 else {
-            logQuietFailure("commits", nil)
+        let output = await runGit(arguments, in: repoPath)
+        guard let output, output.exitCode == 0 else {
+            logQuietFailure("commits", output)
             return []
         }
         let dateParser = ISO8601DateFormatter()
@@ -92,9 +96,9 @@ public struct GitService: GitServicing {
     // MARK: - Status / commit
 
     public func status(repoPath: String) async -> [GitFileChange] {
-        guard let output = await runGit(["status", "--porcelain"], in: repoPath),
-              output.exitCode == 0 else {
-            logQuietFailure("status", nil)
+        let output = await runGit(["status", "--porcelain"], in: repoPath)
+        guard let output, output.exitCode == 0 else {
+            logQuietFailure("status", output)
             return []
         }
         return output.stdout.split(separator: "\n").compactMap { line in
@@ -198,11 +202,12 @@ public struct GitService: GitServicing {
     }
 
     public func commitFiles(repoPath: String, sha: String) async -> [CommitFile] {
-        guard let output = await runGit(
+        let output = await runGit(
             ["diff-tree", "--no-commit-id", "-r", "--name-status", "--root", sha],
             in: repoPath
-        ), output.exitCode == 0 else {
-            logQuietFailure("commitFiles", nil)
+        )
+        guard let output, output.exitCode == 0 else {
+            logQuietFailure("commitFiles", output)
             return []
         }
         return output.stdout.split(separator: "\n").compactMap { line in

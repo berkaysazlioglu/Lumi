@@ -40,6 +40,7 @@ final class TerminalHostContainer: NSView {
     /// Tek subview (terminal emülatörü) bounds'a oturtulur; gerçek delta varsa
     /// redraw da işaretlenir (geçiş sonrası bayat/boş kart onarımı).
     private func pinTerminalView() {
+        guard !bounds.isEmpty else { return } // layout öncesi 0×0'a pinleme
         guard let terminalView = subviews.first else { return }
         guard !terminalView.frame.equalTo(bounds) else { return }
         terminalView.frame = bounds

@@ -89,6 +89,61 @@ final class TerminalViewRegistryTests: XCTestCase {
         XCTAssertTrue(spy.redrawRequested)
     }
 
+    func testAttachIntoZeroSizedContainerPreservesViewFrame() {
+        // Tab değişimi: yeni host makeNSView anında 0×0 — SwiftTerm sıfıra
+        // küçültülmemeli (emülatörü gereksiz resize eder, repaint no-op'laşır).
+        let id = TerminalID()
+        let (registry, view, _) = makeRegistry(id: id)
+        view.frame = NSRect(x: 0, y: 0, width: 800, height: 480)
+        let container = NSView() // bounds .zero
+
+        registry.attachView(for: id, into: container)
+
+        XCTAssertTrue(view.superview === container)
+        XCTAssertEqual(view.frame.size, NSSize(width: 800, height: 480))
+    }
+
+    func testReassertWithRealBoundsFitsFrameAndRequestsRedraw() {
+        // Boş kart onarımı: 0×0 attach sonrası layout gerçek boyutu verince
+        // reassert (aynı container'a attachView) frame'i oturtup buffer'dan
+        // tam çizim (onRedraw) istemeli.
+        let id = TerminalID()
+        let registry = TerminalViewRegistry()
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
+        var redrawCount = 0
+        registry.register(view: view, for: id, onVisibilityChange: { _ in }) {
+            redrawCount += 1
+        }
+        let container = NSView()
+
+        registry.attachView(for: id, into: container) // 0×0 — frame korunur
+        XCTAssertEqual(redrawCount, 0)
+
+        container.setFrameSize(NSSize(width: 400, height: 300))
+        registry.attachView(for: id, into: container) // reassert: gerçek boyut
+
+        XCTAssertEqual(view.frame.size, NSSize(width: 400, height: 300))
+        XCTAssertEqual(redrawCount, 1)
+    }
+
+    func testReassertWithoutFrameDeltaDoesNotRedraw() {
+        // Her layout'ta reassert çağrılır — delta yoksa redraw spam'i olmamalı.
+        let id = TerminalID()
+        let registry = TerminalViewRegistry()
+        let view = NSView()
+        var redrawCount = 0
+        registry.register(view: view, for: id, onVisibilityChange: { _ in }) {
+            redrawCount += 1
+        }
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+
+        registry.attachView(for: id, into: container)
+        registry.attachView(for: id, into: container)
+        registry.attachView(for: id, into: container)
+
+        XCTAssertEqual(redrawCount, 0)
+    }
+
     func testVisibilityTogglesAcrossDetachReattach() {
         let id = TerminalID()
         let (registry, _, log) = makeRegistry(id: id)

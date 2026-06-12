@@ -2,6 +2,11 @@ import Foundation
 
 /// Timeout'lu async Process koşturucu. Electron'daki execSync kullanımlarının
 /// async karşılığı (karar 11: SystemChecker senkron koşmaz).
+///
+/// Çıktı `readabilityHandler` ile AKIŞTA toplanır: pipe buffer'ı (64KB) dolunca
+/// child write'ta bloklanıp asla terminate olamazdı (klasik NSTask deadlock'u) —
+/// bu, büyük çıktı veren git komutlarında sahte "timeout" üretiyordu. Stdin de
+/// aynı sebepten `run()` SONRASI background'da yazılır.
 enum ProcessRunner {
     struct Output: Sendable {
         let exitCode: Int32
@@ -19,6 +24,24 @@ enum ProcessRunner {
             if fired { return false }
             fired = true
             return true
+        }
+    }
+
+    /// readabilityHandler'lar arbitrer thread'lerden yazar — lock'lu biriktirici.
+    private final class StreamCollector: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data = Data()
+
+        func append(_ chunk: Data) {
+            lock.lock()
+            defer { lock.unlock() }
+            data.append(chunk)
+        }
+
+        var text: String {
+            lock.lock()
+            defer { lock.unlock() }
+            return String(decoding: data, as: UTF8.self)
         }
     }
 
@@ -42,37 +65,76 @@ enum ProcessRunner {
             let stderrPipe = Pipe()
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
-            if let standardInput {
-                let stdinPipe = Pipe()
+            let stdinPipe: Pipe? = standardInput.map { _ in Pipe() }
+            if let stdinPipe {
                 process.standardInput = stdinPipe
-                stdinPipe.fileHandleForWriting.write(standardInput)
-                stdinPipe.fileHandleForWriting.closeFile()
             }
 
             let once = OnceFlag()
-            process.terminationHandler = { finished in
+            let stdout = StreamCollector()
+            let stderr = StreamCollector()
+            // Tamamlanma = stdout EOF + stderr EOF + termination (üçü birden):
+            // yalnız termination'ı beklemek son chunk'ları yarıştırırdı.
+            let group = DispatchGroup()
+
+            group.enter()
+            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    group.leave()
+                } else {
+                    stdout.append(chunk)
+                }
+            }
+            group.enter()
+            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    group.leave()
+                } else {
+                    stderr.append(chunk)
+                }
+            }
+            group.enter()
+            process.terminationHandler = { _ in
+                group.leave()
+            }
+            group.notify(queue: .global(qos: .utility)) {
                 guard once.tryFire() else { return }
-                let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
                 continuation.resume(returning: Output(
-                    exitCode: finished.terminationStatus,
-                    stdout: String(decoding: data, as: UTF8.self),
-                    stderr: String(decoding: errorData, as: UTF8.self)
+                    exitCode: process.terminationStatus,
+                    stdout: stdout.text,
+                    stderr: stderr.text
                 ))
             }
 
             do {
                 try process.run()
             } catch {
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
                 if once.tryFire() {
                     continuation.resume(returning: nil)
                 }
                 return
             }
 
+            if let stdinPipe, let standardInput {
+                // run() sonrası, background'da: 64KB üstü input'ta senkron write
+                // çağıran thread'i süresiz bloklardı (child henüz okumuyorken).
+                DispatchQueue.global(qos: .utility).async {
+                    stdinPipe.fileHandleForWriting.write(standardInput)
+                    stdinPipe.fileHandleForWriting.closeFile()
+                }
+            }
+
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
                 guard process.isRunning, once.tryFire() else { return }
                 process.terminate()
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
                 continuation.resume(returning: nil)
             }
         }

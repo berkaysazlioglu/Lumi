@@ -203,9 +203,18 @@ final class TerminalSession {
     /// tazeler. requestRepaint MainActor'da çağrılır.
     func requestRepaint() {
         guard !isTerminated else { return }
+        redrawFromBuffer()
+        pty.pokeRepaint()
+    }
+
+    /// Buffer'dan tam yeniden çizim, SIGWINCH poke'u OLMADAN. Frame-oturma
+    /// yolunda (tab değişimi sonrası reassert, pencere resize) kullanılır —
+    /// boyut değiştiyse SwiftTerm sizeChanged → PTY resize zinciri SIGWINCH'i
+    /// zaten üretir; her layout frame'inde ek poke TUI'yi spam'lerdi.
+    func redrawFromBuffer() {
+        guard !isTerminated else { return }
         terminalView.getTerminal().updateFullScreen()
         terminalView.setNeedsDisplay(terminalView.bounds)
-        pty.pokeRepaint()
     }
 
     func terminate() {
