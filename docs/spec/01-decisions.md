@@ -88,6 +88,15 @@ v1'de terminal yalnız tek sabit tema + font boyutu sunuyordu. Native'de Setting
 
 Persistence karar 9 uyumlu: `config.json`'a 4 **additive** key eklenir (`terminalTheme`, `terminalFontFamily`, `terminalCursorStyle`, `terminalCursorBlink`); eski sürümler bu key'leri görmezse default'a düşer (lumi / boş / block / true) ve native bilinmeyen-key korumasıyla diskteki diğer alanlar bozulmaz.
 
+### 19. Zamanlanmış oturum tetikleyici (v1 spec'ine ek)
+v1'de yoktu. Kullanıcının 5 saatlik Claude kullanım penceresini her gün belirli bir saatte (örn. iş başı) **öngörülebilir biçimde başlatması** için Settings → **Session** sekmesine eklenir: aktivasyon toggle'ı + saat seçici (yerel HH:MM) + prompt alanı (default `"hello"`) + "Start session now" test butonu. Uygulama açıkken, aktifse, seçilen saatte tetiklenir.
+
+**Mekanizma — UsageService deseninin aynası (kullanıcı kararı):** Tetikleme, çalışan terminallere **dokunmaz**. Usage göstergesinin `claude -p "/usage"` yaklaşımının ([05-usage-indicator.md](../design/05-usage-indicator.md) §1) birebir aynası olarak, arka planda headless bir `claude -p "<prompt>"` süreci spawn edilir (`BinaryLocator` + `ProcessRunner`). Bu istek pencereyi başlatır; **subagent/token maliyeti yoktur, yalnız abonelik kotasından düşer**. Hedef oturum seçimi, "bekleyen oturum" gating'i veya PTY enjeksiyonu **yoktur** — bağımsız tek seferlik bir istektir; açık oturum gerekmez, açık oturuma müdahale edilmez. (Önceki tasarım taslağındaki "bekleyen Claude oturumuna `PromptQueueStore` ile enjekte et" yaklaşımı, "hiçbir şeye dokunma" kullanıcı kararıyla terk edildi.)
+
+Mimari: `SessionStarterServicing` (LumiKit sınırı) → `SessionStarterService` (LumiServices, `UsageService` ile aynı iskelet) → `SessionScheduleStore` (LumiState; config'i izler, `Calendar.nextDate` ile HH:MM'e uyur, `claude -p` çağırır; `isStarting`/`lastRun` durumunu UI'a açar). Config değişimi `ConfigSideEffectCoordinator` köprüsünden akar (karar 3). Başarısızlık `LumiError.sessionStartFailed` ile görünür (karar 5). Önkoşul: CLI'ın authenticated olması (usage ile aynı).
+
+Persistence karar 9 uyumlu: `config.json`'a **additive** `sessionTrigger` nested key'i eklenir (`enabled`/`hour`/`minute`/`prompt`); yoksa kapalı default'a düşer (disabled / 09:00 / "hello") ve bilinmeyen-key korumasıyla diğer alanlar bozulmaz.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).
