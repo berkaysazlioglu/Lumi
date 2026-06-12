@@ -54,6 +54,9 @@ public struct ToastOverlay: View {
             .padding(.trailing, 10)
         }
         .frame(minWidth: 280, maxWidth: 360, alignment: .leading)
+        // Dikeyde içerik yüksekliğine sabitle: stripe Rectangle açgözlüdür,
+        // bu olmadan kart overlay'in önerdiği TÜM pencere yüksekliğine uzuyordu.
+        .fixedSize(horizontal: false, vertical: true)
         .background(Theme.bgElevated.opacity(0.92))
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(

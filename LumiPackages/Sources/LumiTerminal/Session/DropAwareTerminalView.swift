@@ -24,6 +24,10 @@ final class DropAwareTerminalView: TerminalView {
         // tuşlar birleşik karakter üretir (TR klavyede [ ] { } vb. Option ister).
         // SwiftTerm default'u true'dur ve bu karakterleri ESC+harf'e çevirirdi.
         optionAsMetaKey = false
+        // SwiftTerm'in desteklemediği modlar (örn. DECSET 2031 renk-şeması
+        // bildirimi — Claude Code probe'lar, desteklenmemesi zararsız) konsola
+        // "Info: Unhandled..." satırları basıyordu; debug log'u sustur.
+        getTerminal().silentLog = true
         // Mouse raporlama AÇIK kalır (SwiftTerm default'u, v1/xterm.js paritesi):
         // tıklama SGR press/release olarak TUI'ye gider — Claude input box'ında
         // caret tıklanan yere konur. Hover'ın buglu "release" raporu ise monitor'da

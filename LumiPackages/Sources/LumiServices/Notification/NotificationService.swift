@@ -11,8 +11,9 @@ import LumiKit
 /// | diğerleri        | yok                       | interval temizlenir     |
 ///
 /// Her geçiş önce mevcut interval'i temizler (terminal başına en fazla bir).
-/// Focus guard: native OS bildirimi yalnız pencere odaklı DEĞİLKEN; bell
-/// toast sinyali her durumda gönderilir.
+/// Focus guard: native OS bildirimi yalnız pencere odaklı DEĞİLKEN.
+/// Bell toast sinyali ayara tabidir (spec/01 karar 17): unseenEnabled kapalıyken
+/// waiting bell'i de gönderilmez; error bell'i ayardan bağımsız her zaman gider.
 public final class NotificationService: NotificationServicing {
     public static let waitingBody = "Assistant waiting for input"
     public static let errorBody = "Assistant exited with error"
@@ -63,8 +64,10 @@ public final class NotificationService: NotificationServicing {
 
         switch status {
         case .waitingUnseen:
-            broadcaster.send(.bell(id, repoName: repoName))
+            // Toggle kapalıyken in-app toast da susar (karar 17) — eskiden bell
+            // koşulsuz gidiyordu ve "notifications off" hissini bozuyordu.
             guard settings.unseenEnabled else { return }
+            broadcaster.send(.bell(id, repoName: repoName))
             deliver(id: id, title: repoName, body: Self.waitingBody)
             scheduleRepeat(id: id, repoName: repoName, minutes: settings.unseenIntervalMinutes, body: Self.waitingBody)
 

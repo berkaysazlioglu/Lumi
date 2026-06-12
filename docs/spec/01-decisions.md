@@ -76,6 +76,9 @@ Alt-screen TUI'lerde (Claude Code, less, vim) scrollback olmadığından SwiftTe
 - **Hover bastırma:** SwiftTerm `mouseMoved` upstream bug'ı hover'ı "sol buton release" raporu olarak yollar (TUI caret'i taşır); `anyEvent` (1003) modunda hover event'leri local monitor'da yutulur. Bilinçli trade-off: bu modda Cmd+hover link önizlemesi çalışmaz. Tıklama/sürükleme raporlaması açık kalır (input box'ta caret konumlandırma); TUI çalışırken yerel text seçimi **Shift+sürükle** ile yapılır (SwiftTerm Shift-baypası).
 - **Bağımlılık:** SwiftTerm release olmayan revision'a pin'lidir (`24a68bc` — CSI T alt-screen scroll, DEC 2026 render, Shift+mouse düzeltmeleri; gerekçe `LumiPackages/Package.swift` yorumunda). Bu düzeltmeleri kapsayan bir release çıktığında pin sürüm aralığına geri döndürülür; `SwiftTermScrollDiagnosticTests` regresyon bekçisidir.
 
+### 17. Bildirim toggle'ı in-app bell toast'unu da kapsar
+v1/spec-13 §4.3'te bell toast sinyali ayardan bağımsız her durumda gönderilirdi; bu "notifications off" beklentisini bozuyordu. Native'de `unseenEnabled` kapalıyken **waiting bell toast'u da gönderilmez**; `error` bell'i ve OS bildirimi (tek seferlik hata sinyali) ayardan bağımsız kalır.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).

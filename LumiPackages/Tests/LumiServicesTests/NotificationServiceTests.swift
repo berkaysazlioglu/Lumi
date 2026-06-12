@@ -118,7 +118,7 @@ final class NotificationServiceTests: XCTestCase {
         service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
         XCTAssertTrue(presenter.presented.isEmpty, "pencere odaklıyken OS bildirimi yok")
 
-        // Bell sinyali odaktan bağımsız her zaman gider
+        // Bell sinyali (ayar açıkken) odaktan bağımsız gider
         var iterator = stream.makeAsyncIterator()
         let event = await iterator.next()
         XCTAssertEqual(event, .bell(terminalID, repoName: "lumi"))
@@ -142,7 +142,7 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(scheduler.scheduled[terminalID.description]?.interval, 300)
     }
 
-    func testDisabledSettingsSkipNotificationButKeepBell() async {
+    func testDisabledSettingsSkipNotificationAndBell() async {
         service.updateSettings(NotificationSettings(
             unseenEnabled: false,
             unseenIntervalMinutes: 1,
@@ -155,9 +155,14 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertTrue(presenter.presented.isEmpty)
         XCTAssertTrue(scheduler.activeIDs.isEmpty)
 
+        // Karar 17: kapalıyken waiting bell'i de gönderilmez. Stream'de "event yok"
+        // doğrudan assert edilemez; ayardan bağımsız giden error bell'ini sentinel
+        // olarak itip İLK event'in o olduğunu doğruluyoruz.
+        let sentinelID = TerminalID()
+        service.handleStatusChange(id: sentinelID, repoName: "sentinel", status: .error)
         var iterator = stream.makeAsyncIterator()
         let event = await iterator.next()
-        XCTAssertEqual(event, .bell(terminalID, repoName: "lumi"))
+        XCTAssertEqual(event, .bell(sentinelID, repoName: "sentinel"))
     }
 
     func testCustomIntervalsRespected() {
