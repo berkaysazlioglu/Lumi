@@ -6,8 +6,13 @@ import SwiftUI
 /// light hizasında. Sol grup: hamburger (sol panel) → logo + "Lumi" → repo
 /// tab'leri → +. Orta: grid ayarı + New <Provider>. Sağ grup (32px ikon):
 /// fullscreen (focus mode) · git · settings.
+/// Topbar ölçüleri — LumiApp (titlebar büyütme) ile paylaşılır.
+public enum TopBarMetrics {
+    public static let height: CGFloat = 52
+}
+
 struct HeaderBarView: View {
-    static let height: CGFloat = 52
+    static let height: CGFloat = TopBarMetrics.height
 
     let workspace: WorkspaceStore
     let repoStore: RepoStore

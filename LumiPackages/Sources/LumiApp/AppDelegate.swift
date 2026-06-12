@@ -108,7 +108,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fileActions: makeFileActions(),
             shellActions: makeShellActions()
         )
-        window.contentView = NSHostingView(rootView: root)
+        let hosting = NSHostingView(rootView: root)
+        // İçerik titlebar safe-area'sı kadar AŞAĞI itilmesin — y0'dan başlasın
+        // (v1 paritesi: header trafiğin hizasında, boşa giden üst bant yok).
+        hosting.safeAreaRegions = []
+        window.contentView = hosting
 
         // Maximize flag'i show'dan ÖNCE uygulanır (flash önleme — spec/30)
         if uiState.windowMaximized == true, !window.isZoomed {
@@ -119,7 +123,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         observeWindowFocus(window)
         observeWindowBounds(window)
+        observeFullScreen(window)
+        centerTrafficLights()
+        // İlk layout butonları sıfırlayabilir — bir sonraki runloop'ta tekrar uygula
+        DispatchQueue.main.async { [weak self] in self?.centerTrafficLights() }
         isRestoringWindow = false
+    }
+
+    /// Traffic light'ları 52px header'ın dikey ORTASINA taşır (v1
+    /// trafficLightPosition paritesi). Titlebar 28px olduğundan butonlar
+    /// container'ın altına (negatif y) konumlanır; AppKit resize/fullscreen'de
+    /// sıfırladığı için bu noktalardan yeniden uygulanır.
+    func centerTrafficLights() {
+        guard let window else { return }
+        let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        let buttons = types.compactMap { window.standardWindowButton($0) }
+        guard let containerHeight = buttons.first?.superview?.bounds.height else { return }
+        for button in buttons {
+            let y = containerHeight - TopBarMetrics.height / 2 - button.frame.height / 2
+            button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: y))
+        }
+    }
+
+    private func observeFullScreen(_ window: NSWindow) {
+        let center = NotificationCenter.default
+        for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
+            center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.centerTrafficLights() }
+            }
+        }
     }
 
     private func makeFileActions() -> RootView.FileActions {
@@ -177,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     self?.scheduleBoundsPersist()
+                    self?.centerTrafficLights() // resize titlebar layout'unu sıfırlar
                 }
             }
         }
@@ -263,6 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for buttonType: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(buttonType)?.isHidden = hidden
         }
+        if !hidden { centerTrafficLights() } // tekrar gösterirken hizayı koru
     }
 
     /// Dock ikonu: bundle'lıyken Info.plist'teki .icns geçerlidir; `swift run`
