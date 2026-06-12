@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Üst header çubuğu (v1 paritesi, globals.css; spec/22). 52px, traffic
 /// light hizasında. Sol grup: hamburger (sol panel) → logo + "Lumi" → repo
-/// tab'leri → +. Orta: grid ayarı + New <Provider>. Sağ grup (32px ikon):
-/// fullscreen (focus mode) · git · settings.
+/// tab'leri → +. Üretim bölgesi: grid ayarı + New <Provider> (birincil CTA),
+/// ardından ayraç. Sağ grup: usage göstergesi + fullscreen · git · settings.
 /// Topbar ölçüleri — LumiApp (titlebar büyütme) ile paylaşılır.
 public enum TopBarMetrics {
     public static let height: CGFloat = 52
@@ -36,10 +36,10 @@ struct HeaderBarView: View {
                 tabStrip
             }
             Spacer(minLength: 12)
-            // Orta küme: kullanım göstergesi + grid ayarı + New <Provider>
+            // Üretim bölgesi: grid ayarı + birincil CTA (New <Provider>).
+            // Birincil eylem en sağda — göz yapılacak eylemde durur.
             if let active = workspace.activeTab {
                 HStack(spacing: 8) {
-                    UsageIndicatorView(store: usage)
                     gridLayoutMenu(for: active)
                     NewTerminalButton(
                         provider: settings.current.aiProvider,
@@ -51,10 +51,17 @@ struct HeaderBarView: View {
                         onPersona: { personasStore.spawn($0, repoPath: active) }
                     )
                 }
-                .padding(.trailing, 8)
+                .padding(.trailing, 12)
+                // Üretim ↔ durum/global ayracı (Gestalt ayrımı)
+                Rectangle()
+                    .fill(Theme.border)
+                    .frame(width: 1, height: 22)
+                    .padding(.trailing, 12)
             }
-            // Sağ grup (v1 header-right, gap 8; sağdan sola: settings, git, fullscreen)
+            // Durum + global grup: ambient kullanım göstergesi + kalıcı panel/global
+            // toggle'lar (sağdan sola: settings, git, fullscreen).
             HStack(spacing: 8) {
+                UsageIndicatorView(store: usage)
                 HeaderIconButton(
                     icon: "arrow.up.left.and.arrow.down.right",
                     isActive: workspace.isFocusMode,
@@ -254,6 +261,7 @@ struct HeaderIconButton: View {
 /// açık kalır; ikisinden de ayrılınca kısa grace period sonra kapanır. Native
 /// NSMenu DEĞİL — temalı popover.
 struct NewTerminalButton: View {
+    static let hoverOpenDelay: Duration = .milliseconds(350)
     static let hoverCloseDelay: Duration = .milliseconds(200)
 
     let provider: AgentProvider
@@ -263,6 +271,7 @@ struct NewTerminalButton: View {
     let onPersona: (String) -> Void
 
     @State private var isOpen = false
+    @State private var openTask: Task<Void, Never>?
     @State private var closeTask: Task<Void, Never>?
 
     var body: some View {
@@ -300,14 +309,23 @@ struct NewTerminalButton: View {
         }
     }
 
-    /// Buton ya da popover hover'ı: girişte aç + bekleyen kapanışı iptal et;
-    /// çıkışta grace period zamanlayıcısı kur (arada geçişte flicker olmaz).
+    /// Buton ya da popover hover'ı: girişte kısa açılış gecikmesi (yanlışlıkla
+    /// üstünden geçince açılmaz) + bekleyen kapanışı iptal et; çıkışta grace
+    /// period zamanlayıcısı kur (arada geçişte flicker olmaz).
     private func updateHover(_ hovering: Bool) {
         if hovering {
             closeTask?.cancel()
             closeTask = nil
-            isOpen = true
+            guard !isOpen, openTask == nil else { return }
+            openTask = Task { @MainActor in
+                try? await Task.sleep(for: Self.hoverOpenDelay)
+                guard !Task.isCancelled else { return }
+                isOpen = true
+                openTask = nil
+            }
         } else {
+            openTask?.cancel()
+            openTask = nil
             closeTask?.cancel()
             closeTask = Task { @MainActor in
                 try? await Task.sleep(for: Self.hoverCloseDelay)

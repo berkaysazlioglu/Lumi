@@ -14,28 +14,49 @@ struct GridSettingsControl: View {
         Button {
             isOpen.toggle()
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "square.grid.2x2")
+            HStack(spacing: 6) {
+                // Kolon ekseni: ikon (kolon olduğunu anlatır) + değer ("auto" / "3")
+                Image(systemName: "rectangle.split.3x1")
                     .font(.system(size: 11))
-                Text(summary)
-                    .font(.system(size: 11, design: .monospaced))
+                Text(columnLabel)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                // Yükseklik ekseni: yalnız ikon (Sığdır/Kaydır metni yerine)
+                Image(systemName: heightIcon)
+                    .font(.system(size: 11))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Theme.textMuted)
             }
             .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 8)
-            .frame(height: 24)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
             .background(Theme.bgElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .help(helpText)
         .popover(isPresented: $isOpen, arrowEdge: .bottom) {
             popoverBody
         }
     }
 
-    private var summary: String {
-        let columns = layout.mode == .auto ? "Auto" : "\(layout.count) Kolon"
+    /// Tetik etiketinde kolon değeri: Auto modunda "auto", aksi halde sayı.
+    private var columnLabel: String {
+        layout.mode == .auto ? "auto" : "\(layout.count)"
+    }
+
+    /// Yükseklik politikasını anlatan ikon: Sığdır = sıkıştır, Kaydır = genişlet.
+    private var heightIcon: String {
+        layout.heightMode == .fit ? "rectangle.compress.vertical" : "rectangle.expand.vertical"
+    }
+
+    /// İkonlar belirsiz kalmasın diye hover ipucu tam yerleşimi yazar.
+    private var helpText: String {
+        let columns = layout.mode == .auto ? "Auto kolon" : "\(layout.count) kolon"
         let height = layout.heightMode == .fit ? "Sığdır" : "Kaydır"
         return "\(columns) · \(height)"
     }
