@@ -259,8 +259,7 @@ struct SettingsView: View {
             }
             SettingsField(
                 title: "Font Size",
-                hint: "10–24px; applied to newly opened terminals",
-                isLast: true
+                hint: "10–24px; applied to newly opened terminals"
             ) {
                 Stepper(
                     "\(settings.current.terminalFontSize) px",
@@ -273,6 +272,21 @@ struct SettingsView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
                 .frame(width: 140, alignment: .leading)
+            }
+            SettingsField(
+                title: "Font Smoothing",
+                hint: "macOS stem darkening — bolder strokes when on. "
+                    + "Off matches the thinner v1 look. Applies instantly.",
+                isLast: true
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.current.terminalFontSmoothing },
+                    set: { settings.setTerminalFontSmoothing($0) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                .tint(Theme.accentPrimary)
             }
         }
     }

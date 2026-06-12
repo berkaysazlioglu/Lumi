@@ -35,6 +35,9 @@ enum ConfigCodec {
         if let value = intValue(dict["terminalFontSize"]) {
             config.terminalFontSize = value
         }
+        if let value = boolValue(dict["terminalFontSmoothing"]) {
+            config.terminalFontSmoothing = value
+        }
         if let nested = dict["notifications"] as? [String: Any] {
             var settings = NotificationSettings.defaults
             if let value = boolValue(nested["unseenEnabled"]) { settings.unseenEnabled = value }
@@ -64,6 +67,7 @@ enum ConfigCodec {
             "maxTerminals": config.maxTerminals,
             "theme": config.theme,
             "terminalFontSize": config.terminalFontSize,
+            "terminalFontSmoothing": config.terminalFontSmoothing,
             "notifications": [
                 "unseenEnabled": config.notifications.unseenEnabled,
                 "unseenIntervalMinutes": config.notifications.unseenIntervalMinutes,

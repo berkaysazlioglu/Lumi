@@ -100,6 +100,7 @@ final class AppContainer {
         let appConfig = await config.config()
         terminal.setMaxTerminals(appConfig.maxTerminals)
         terminal.font = LumiFonts.mono(size: CGFloat(appConfig.terminalFontSize))
+        terminal.fontSmoothing = appConfig.terminalFontSmoothing
         notifications.updateSettings(appConfig.notifications)
         repoStore.additionalPaths = appConfig.additionalPaths
         await repoService.setRoots(
@@ -121,6 +122,9 @@ final class AppContainer {
 
         configCoordinator.onTerminalFontSizeChanged = { [weak self] size in
             self?.terminal.font = LumiFonts.mono(size: CGFloat(size))
+        }
+        configCoordinator.onTerminalFontSmoothingChanged = { [weak self] enabled in
+            self?.terminal.fontSmoothing = enabled
         }
         configCoordinator.start()
         startBridges()

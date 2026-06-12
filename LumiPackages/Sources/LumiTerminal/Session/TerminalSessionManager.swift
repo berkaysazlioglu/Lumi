@@ -18,6 +18,14 @@ public final class TerminalSessionManager: TerminalServicing {
     /// Yeni spawn'lara uygulanır; mevcut terminaller yeniden açılınca alır
     /// (Electron'da da font değişimi re-init gerektiriyordu — spec/20 §1).
     public var font: NSFont
+    /// macOS stem-darkening. Font boyutunun aksine canlı uygulanır: CG draw
+    /// path'i her çizimde okur, redraw yeterli (Metal backend kullanılmıyor).
+    public var fontSmoothing = false {
+        didSet {
+            guard fontSmoothing != oldValue else { return }
+            sessions.forEach { $0.setFontSmoothing(fontSmoothing) }
+        }
+    }
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
 
@@ -75,6 +83,7 @@ public final class TerminalSessionManager: TerminalServicing {
             font: font
         )
         session.delegate = self
+        session.setFontSmoothing(fontSmoothing)
         sessions.append(session)
         viewRegistry.register(
             view: session.terminalView,

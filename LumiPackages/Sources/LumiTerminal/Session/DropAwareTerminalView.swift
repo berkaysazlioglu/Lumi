@@ -28,6 +28,13 @@ final class DropAwareTerminalView: TerminalView {
         // bildirimi — Claude Code probe'lar, desteklenmemesi zararsız) konsola
         // "Info: Unhandled..." satırları basıyordu; debug log'u sustur.
         getTerminal().silentLog = true
+        // v1 tipografi paritesi: Electron tarafı `-webkit-font-smoothing:
+        // antialiased` ile macOS stem-darkening'i kapatıyordu; SwiftTerm
+        // default'u (true) aynı glyph'leri daha kalın/parlak ("bold/glow")
+        // gösteriyordu. iTerm2 "thin strokes" karşılığı. Config default'u
+        // (AppConfig.terminalFontSmoothing=false) ile aynı; kullanıcı
+        // Settings'ten değiştirirse TerminalSession.setFontSmoothing ezer.
+        fontSmoothing = false
         // Mouse raporlama AÇIK kalır (SwiftTerm default'u, v1/xterm.js paritesi):
         // tıklama SGR press/release olarak TUI'ye gider — Claude input box'ında
         // caret tıklanan yere konur. Hover'ın buglu "release" raporu ise monitor'da

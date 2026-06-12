@@ -16,6 +16,7 @@ final class ConfigSideEffectCoordinator {
 
     /// Font değişimi protokole sızdırılmaz — composition root somut manager'a bağlar.
     var onTerminalFontSizeChanged: ((Int) -> Void)?
+    var onTerminalFontSmoothingChanged: ((Bool) -> Void)?
 
     init(
         config: any ConfigServicing,
@@ -54,6 +55,9 @@ final class ConfigSideEffectCoordinator {
                 }
                 if old.terminalFontSize != new.terminalFontSize {
                     self.onTerminalFontSizeChanged?(new.terminalFontSize)
+                }
+                if old.terminalFontSmoothing != new.terminalFontSmoothing {
+                    self.onTerminalFontSmoothingChanged?(new.terminalFontSmoothing)
                 }
             }
         }

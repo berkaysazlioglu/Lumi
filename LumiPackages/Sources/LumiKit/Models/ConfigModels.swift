@@ -9,6 +9,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
     public var maxTerminals: Int
     public var theme: String
     public var terminalFontSize: Int
+    /// macOS stem-darkening (CG font smoothing). false = ince çizgiler
+    /// (v1/xterm.js `-webkit-font-smoothing: antialiased` paritesi).
+    /// Additive alan (karar 9): eski config'lerde yoksa false kabul edilir.
+    public var terminalFontSmoothing: Bool
     public var notifications: NotificationSettings
 
     public static let defaults = AppConfig(
@@ -18,6 +22,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         maxTerminals: 12,
         theme: "dark",
         terminalFontSize: 13,
+        terminalFontSmoothing: false,
         notifications: .defaults
     )
 
@@ -28,6 +33,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         maxTerminals: Int,
         theme: String,
         terminalFontSize: Int,
+        terminalFontSmoothing: Bool,
         notifications: NotificationSettings
     ) {
         self.projectsRoot = projectsRoot
@@ -36,6 +42,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.maxTerminals = maxTerminals
         self.theme = theme
         self.terminalFontSize = terminalFontSize
+        self.terminalFontSmoothing = terminalFontSmoothing
         self.notifications = notifications
     }
 }

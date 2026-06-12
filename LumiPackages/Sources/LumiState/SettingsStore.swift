@@ -72,6 +72,10 @@ public final class SettingsStore {
         apply { $0.terminalFontSize = clamped }
     }
 
+    public func setTerminalFontSmoothing(_ enabled: Bool) {
+        apply { $0.terminalFontSmoothing = enabled }
+    }
+
     public func setNotifications(_ settings: NotificationSettings) {
         apply { $0.notifications = settings }
     }

@@ -217,6 +217,14 @@ final class TerminalSession {
         terminalView.setNeedsDisplay(terminalView.bounds)
     }
 
+    /// Stem-darkening toggle'ı (Settings → Font Smoothing). CG draw path'i
+    /// değeri her çizimde okur; tam dirty + redraw anında etki ettirir.
+    func setFontSmoothing(_ enabled: Bool) {
+        guard terminalView.fontSmoothing != enabled else { return }
+        terminalView.fontSmoothing = enabled
+        redrawFromBuffer()
+    }
+
     func terminate() {
         pty.terminate()
     }

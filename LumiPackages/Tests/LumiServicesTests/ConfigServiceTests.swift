@@ -111,6 +111,22 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(config.terminalFontSize, 13)
         // Diskte olmayan alan default'tan tamamlanır (spec/13 §1.1)
         XCTAssertEqual(config.notifications, .defaults)
+        XCTAssertFalse(config.terminalFontSmoothing, "alan yokken default false (ince çizgi)")
+    }
+
+    func testTerminalFontSmoothingRoundTrip() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let service = makeService()
+
+        try await service.updateConfig { $0.terminalFontSmoothing = true }
+
+        let written = try readJSONDict(paths.configFile)
+        XCTAssertEqual(written["terminalFontSmoothing"] as? Bool, true)
+        // mevcut alanlar korunur (karar 9 — additive)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
+
+        let reloaded = await ConfigService(paths: paths).config()
+        XCTAssertTrue(reloaded.terminalFontSmoothing)
     }
 
     func testMigrationRules() async throws {
