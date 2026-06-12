@@ -16,6 +16,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case externalURLBlocked(URL)
     case systemCheckFailed(check: String, detail: String)
     case notificationPermissionDenied
+    case cliNotFound(binary: String)
+    case usageUnavailable(detail: String)
     case underlying(domain: String, message: String)
 
     public var errorDescription: String? {
@@ -44,6 +46,10 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "System check \(check) failed: \(detail)"
         case .notificationPermissionDenied:
             return "Notification permission was denied. Enable it in System Settings."
+        case .cliNotFound(let binary):
+            return "\(binary) CLI not found in PATH."
+        case .usageUnavailable(let detail):
+            return "Could not read usage: \(detail)"
         case .underlying(let domain, let message):
             return "\(domain): \(message)"
         }

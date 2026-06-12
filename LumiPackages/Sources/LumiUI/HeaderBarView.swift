@@ -19,6 +19,7 @@ struct HeaderBarView: View {
     let terminals: TerminalListStore
     let personasStore: PersonasStore
     let settings: SettingsStore
+    let usage: UsageStore
 
     @State private var isAddRepoHovering = false
 
@@ -35,9 +36,10 @@ struct HeaderBarView: View {
                 tabStrip
             }
             Spacer(minLength: 12)
-            // Orta küme: grid ayarı + New <Provider>
+            // Orta küme: kullanım göstergesi + grid ayarı + New <Provider>
             if let active = workspace.activeTab {
                 HStack(spacing: 8) {
+                    UsageIndicatorView(store: usage)
                     gridLayoutMenu(for: active)
                     NewTerminalButton(
                         provider: settings.current.aiProvider,

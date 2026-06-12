@@ -17,6 +17,7 @@ final class AppContainer {
     let personaService: any PersonaServicing
     let actionService: any ActionServicing
     let notifications: any NotificationServicing
+    let usageService: any UsageServicing
     let terminal: TerminalSessionManager
     let toasts: ToastStore
     let terminals: TerminalListStore
@@ -26,6 +27,7 @@ final class AppContainer {
     let personasStore: PersonasStore
     let actionsStore: ActionsStore
     let settings: SettingsStore
+    let usageStore: UsageStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
 
@@ -43,6 +45,7 @@ final class AppContainer {
         repoService = RepoService()
         gitService = GitService()
         notifications = NotificationService(presenter: notificationPresenter)
+        usageService = UsageService()
         terminal = TerminalSessionManager()
         personaService = PersonaService(
             paths: paths,
@@ -64,6 +67,7 @@ final class AppContainer {
         personasStore = PersonasStore(service: personaService, toasts: toasts)
         actionsStore = ActionsStore(service: actionService, toasts: toasts)
         settings = SettingsStore(config: config, toasts: toasts)
+        usageStore = UsageStore(service: usageService)
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -120,6 +124,12 @@ final class AppContainer {
         }
         configCoordinator.start()
         startBridges()
+
+        // Kullanım göstergesi ilk yükleme — arka planda, bootstrap'i bloklamaz
+        // (auto-refresh YOK; sonrası manuel, design/05 + kullanıcı kararı).
+        bridgeTasks.append(Task { @MainActor [weak self] in
+            await self?.usageStore.loadInitialIfNeeded()
+        })
 
         terminal.onTerminalViewFocused = { [weak self] id in
             self?.terminals.focus(id)

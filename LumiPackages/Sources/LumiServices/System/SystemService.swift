@@ -108,21 +108,7 @@ public final class SystemService: SystemServicing {
     }
 
     private func locateBinary(_ name: String) async -> String? {
-        if let result = await ProcessRunner.run(
-            "/usr/bin/which", arguments: [name], timeout: Self.commandTimeout
-        ), result.exitCode == 0 {
-            let path = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !path.isEmpty { return path }
-        }
-        let home = NSHomeDirectory()
-        let fallbackDirectories = ["\(home)/.local/bin", "/usr/local/bin", "/opt/homebrew/bin"]
-        for directory in fallbackDirectories {
-            let candidate = "\(directory)/\(name)"
-            if fileManager.isExecutableFile(atPath: candidate) {
-                return candidate
-            }
-        }
-        return nil
+        await BinaryLocator.locate(name, timeout: Self.commandTimeout)
     }
 
     // MARK: - Shell/dosya yardımcıları

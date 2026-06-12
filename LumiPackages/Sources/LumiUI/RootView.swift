@@ -46,6 +46,7 @@ public struct RootView: View {
     private let personasStore: PersonasStore
     private let actionsStore: ActionsStore
     private let settings: SettingsStore
+    private let usage: UsageStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
     private let highlighter: any SyntaxHighlighting
@@ -61,6 +62,7 @@ public struct RootView: View {
         personasStore: PersonasStore,
         actionsStore: ActionsStore,
         settings: SettingsStore,
+        usage: UsageStore,
         toasts: ToastStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
@@ -75,6 +77,7 @@ public struct RootView: View {
         self.personasStore = personasStore
         self.actionsStore = actionsStore
         self.settings = settings
+        self.usage = usage
         self.toasts = toasts
         self.viewProvider = viewProvider
         self.highlighter = highlighter
@@ -193,7 +196,8 @@ public struct RootView: View {
             repoStore: repoStore,
             terminals: terminals,
             personasStore: personasStore,
-            settings: settings
+            settings: settings,
+            usage: usage
         )
     }
 
