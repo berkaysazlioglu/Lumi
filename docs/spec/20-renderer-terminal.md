@@ -180,7 +180,7 @@ Handler: debounce dolunca `fitAddon.fit()` çalışır, ardından yeni `cols`/`r
 
 ### 13. Grid layout (auto / columns / rows)
 
-> **NATIVE DEĞİŞİKLİĞİ ([01-decisions.md](./01-decisions.md) Karar 15):** Bu bölüm v1 davranışını belgeler. Native'de tek-eksenli `auto/columns/rows` yerine **iki eksen** vardır: kolon (`auto`/`columns N`) × yükseklik (`fit`/`scroll`). `rows` emekli (eski dosyalar `auto`+`fit`'e migrate). `fit` = hepsi viewport'a sığar; `scroll` = min satır yüksekliği (`360px`) korunur, taşınca dikey scroll. Aşağıdaki kolon-sayısı ve son-satır-stretch matematiği aynen geçerlidir.
+> **NATIVE DEĞİŞİKLİĞİ ([01-decisions.md](./01-decisions.md) Karar 15):** Bu bölüm v1 davranışını belgeler. Native'de tek-eksenli `auto/columns/rows` yerine **iki eksen** vardır: kolon (`auto`/`columns N`) × yükseklik (`fit`/`scroll`). `rows` emekli (eski dosyalar `auto`+`fit`'e migrate). `fit` = hepsi viewport'a sığar; `scroll` = satır min yüksekliği `kolon genişliği × heightRatio` (%100/%50/%33, default %50) korunur, taşınca dikey scroll. Aşağıdaki kolon-sayısı ve son-satır-stretch matematiği aynen geçerlidir.
 
 **Davranış:** Görünür kartlar bir CSS grid'de dizilir. Üç mod, **repo (proje) başına ayrı** saklanır:
 - **auto** (default): kolon sayısı = `floor((containerWidth + 12) / (400 + 12))`, min 1. (Kart min genişliği 400px, grid gap 12px.) Satır yükseklikleri içerik/CSS default'u.

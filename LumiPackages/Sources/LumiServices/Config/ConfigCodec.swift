@@ -120,7 +120,9 @@ enum ConfigCodec {
                 // heightMode yoksa eski algılanan davranış: auto/columns scroll'du.
                 let heightMode = (dict["heightMode"] as? String)
                     .flatMap(GridLayout.HeightMode.init(rawValue:)) ?? .scroll
-                return GridLayout(mode: mode, count: count, heightMode: heightMode)
+                let heightRatio = (dict["heightRatio"] as? String)
+                    .flatMap(GridLayout.HeightRatio.init(rawValue:)) ?? .half
+                return GridLayout(mode: mode, count: count, heightMode: heightMode, heightRatio: heightRatio)
             }
         }
         if let bounds = dict["windowBounds"] as? [String: Any],
@@ -152,9 +154,10 @@ enum ConfigCodec {
             "leftSidebarOpen": state.leftSidebarOpen,
             "rightSidebarOpen": state.rightSidebarOpen,
             "projectGridLayouts": state.projectGridLayouts.mapValues { layout -> [String: Any] in
-                // mode/count korunur (karar 9), heightMode eklenir (additive).
+                // mode/count korunur (karar 9), heightMode/heightRatio eklenir (additive).
                 ["mode": layout.mode.rawValue, "count": layout.count,
-                 "heightMode": layout.heightMode.rawValue]
+                 "heightMode": layout.heightMode.rawValue,
+                 "heightRatio": layout.heightRatio.rawValue]
             },
         ]
         if let bounds = state.windowBounds {

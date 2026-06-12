@@ -8,9 +8,10 @@ final class GridLayoutMathTests: XCTestCase {
     private func layout(
         _ mode: GridLayout.Mode,
         _ count: Int = 2,
-        _ height: GridLayout.HeightMode = .scroll
+        _ height: GridLayout.HeightMode = .scroll,
+        _ ratio: GridLayout.HeightRatio = .half
     ) -> GridLayout {
-        GridLayout(mode: mode, count: count, heightMode: height)
+        GridLayout(mode: mode, count: count, heightMode: height, heightRatio: ratio)
     }
 
     // MARK: - Kolon sayısı
@@ -109,8 +110,8 @@ final class GridLayoutMathTests: XCTestCase {
     }
 
     func testScrollFillsViewportWhenFewTerminals() {
-        // scroll, columns 2, görünür 2 → 1 satır; fitRowHeight=800 ≥ min(360)
-        // → 800 kullanılır, viewport dolar, scroll yok
+        // scroll half, columns 2, görünür 2 → 1 satır; columnWidth=494,
+        // min=floor(494*0.5)=247, fitRowHeight=800 ≥ min → 800 (viewport dolar, scroll yok)
         let frames = GridLayoutMath.frames(
             layout: layout(.columns, 2, .scroll),
             container: CGSize(width: 1000, height: 800),
@@ -120,17 +121,34 @@ final class GridLayoutMathTests: XCTestCase {
         XCTAssertEqual(GridLayoutMath.contentHeight(frames: frames), 800)
     }
 
-    func testScrollClampsToMinAndOverflowsWhenManyTerminals() {
-        // scroll, columns 1, görünür 6 → 6 satır; fitRowHeight=floor((800-5*12)/6)=123
-        // < min(360) → 360 kullanılır, içerik viewport'u aşar (scroll)
-        let frames = GridLayoutMath.frames(
-            layout: layout(.columns, 1, .scroll),
-            container: CGSize(width: 1000, height: 800),
-            visibleCount: 6
-        )
-        XCTAssertEqual(frames[0].height, 360)
-        XCTAssertGreaterThan(GridLayoutMath.contentHeight(frames: frames), 800,
-                             "scroll modda min tabana oturunca içerik viewport'u aşar")
+    func testScrollMinHeightFollowsWidthRatio() {
+        // scroll, columns 1 (width 1000), görünür 4 → 4 satır.
+        // fitRowHeight=floor((800-3*12)/4)=191; min = 1000 × oran.
+        for (ratio, expected) in [(GridLayout.HeightRatio.full, 1000.0),
+                                  (.half, 500.0),
+                                  (.third, floor(1000.0 / 3.0))] {
+            let frames = GridLayoutMath.frames(
+                layout: layout(.columns, 1, .scroll, ratio),
+                container: CGSize(width: 1000, height: 800),
+                visibleCount: 4
+            )
+            XCTAssertEqual(frames[0].height, CGFloat(expected), "oran \(ratio.label)")
+            XCTAssertGreaterThan(GridLayoutMath.contentHeight(frames: frames), 800,
+                                 "min genişlik×oran fit'i aşınca içerik viewport'u geçer (scroll)")
+        }
+    }
+
+    func testHigherRatioMeansTallerTerminals() {
+        // Aynı düzende büyük oran → daha uzun terminal → daha çok scroll
+        func height(_ ratio: GridLayout.HeightRatio) -> CGFloat {
+            GridLayoutMath.frames(
+                layout: layout(.columns, 2, .scroll, ratio),
+                container: CGSize(width: 1000, height: 400),
+                visibleCount: 6
+            )[0].height
+        }
+        XCTAssertGreaterThan(height(.full), height(.half))
+        XCTAssertGreaterThan(height(.half), height(.third))
     }
 
     // MARK: - Stretch frame

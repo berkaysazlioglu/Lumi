@@ -66,7 +66,7 @@ Mevcut mor/violet dark tema, JetBrains Mono tipografi ve component görünümler
 ### 15. Grid: iki eksenli model (rows emekli) + maximize/solo
 v1'in `auto/columns/rows` tek-eksenli grid'i, dizilim ve yükseklik politikasını iç içe geçirip ("rows" = viewport'a sığar/scroll yok; auto/columns = sabit satır + scroll) zayıf bir UX üretiyordu. Native'de iki eksen ayrılır:
 - **Kolon ekseni:** `auto` (genişliğe göre) veya sabit `columns N`.
-- **Yükseklik ekseni:** `fit` (hepsi pencereye sığar, scroll yok) veya `scroll` (min okunur satır yüksekliği korunur; az terminalde pencere dolar, çoğalınca tabana oturup dikey scroll).
+- **Yükseklik ekseni:** `fit` (hepsi pencereye sığar, scroll yok) veya `scroll` (satır min yüksekliği = **kolon genişliği × `heightRatio`** {%100/%50/%33, default %50}; az terminalde pencere dolar, çoğalınca min'e oturup dikey scroll — oran büyüdükçe terminaller uzar, daha çok kaydırma).
 
 `rows` modu **emekli**: yeni yazımda üretilmez, eski/v1 dosyalarında karşılaşılırsa `auto`+`fit`'e migrate edilir. Persistence karar 9 uyumlu kalır — `mode`/`count` alanları korunur, `heightMode` **eklenir** (additive; format değişmez). Ayarlar header'daki butondan açılan sade bir popover'da (Kolon + Yükseklik segmented). Ek olarak tek terminalle rahat çalışmak için **maximize/solo**: bir terminal tam içerik alanını kaplar, diğer görünürler alt şeride iner (oturumluk, persist edilmez). Bu değişiklik [20-renderer-terminal.md](./20-renderer-terminal.md) §13'ün yerine geçer.
 

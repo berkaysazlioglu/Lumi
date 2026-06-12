@@ -6,10 +6,6 @@ import LumiKit
 public enum GridLayoutMath {
     public static let gap: CGFloat = 12
     public static let minCardWidth: CGFloat = 400
-    /// Kaydır (scroll) modunda satır yüksekliğinin altına inmediği okunur taban.
-    /// Az terminalde viewport'u doldurur (fitRowHeight ≥ taban); çoğalınca bu
-    /// tabana oturup içerik viewport'u aşar → dikey scroll.
-    public static let minScrollRowHeight: CGFloat = 360
 
     /// Kolon sayısı: auto → floor((w+gap)/(400+gap)) min 1; columns → N.
     public static func columnCount(
@@ -52,9 +48,10 @@ public enum GridLayoutMath {
     }
 
     /// Görünür kart frame'leri (yerleşim sırası soldan sağa, satır satır).
-    /// `fit`: tüm satırlar viewport'a sığar (scroll yok). `scroll`: satır
-    /// yüksekliği min tabanın altına inmez; az terminalde viewport'u doldurur,
-    /// çoğalınca tabana oturup içerik viewport'u aşar (dikey scroll).
+    /// `fit`: tüm satırlar viewport'a sığar (scroll yok). `scroll`: satır min
+    /// yüksekliği = kolon genişliği × `heightRatio`; az terminalde viewport'u
+    /// doldurur (fitRowHeight ≥ min), çoğalınca min'e oturup içerik viewport'u
+    /// aşar (dikey scroll). Oran büyüdükçe terminaller uzar → daha çok kaydırma.
     public static func frames(
         layout: GridLayout,
         container: CGSize,
@@ -71,7 +68,8 @@ public enum GridLayoutMath {
         case .fit:
             rowHeight = fitRowHeight
         case .scroll:
-            rowHeight = max(minScrollRowHeight, fitRowHeight)
+            let minRowHeight = floor(columnWidth * CGFloat(layout.heightRatio.multiplier))
+            rowHeight = max(minRowHeight, fitRowHeight)
         }
 
         let spanList = spans(

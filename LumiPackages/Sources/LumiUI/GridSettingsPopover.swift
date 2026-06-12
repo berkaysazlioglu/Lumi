@@ -58,9 +58,19 @@ struct GridSettingsControl: View {
                     onSelect: { var copy = layout; copy.heightMode = $0; onChange(copy) }
                 )
             }
+            if layout.heightMode == .scroll {
+                section(title: "Satır oranı (genişliğe göre)") {
+                    SegmentedRow(
+                        options: LumiKit.GridLayout.HeightRatio.allCases,
+                        isSelected: { $0 == layout.heightRatio },
+                        label: { $0.label },
+                        onSelect: { var copy = layout; copy.heightRatio = $0; onChange(copy) }
+                    )
+                }
+            }
             Text(layout.heightMode == .fit
                  ? "Tüm terminaller pencereye sığar (scroll yok)."
-                 : "Min boyut korunur; taşınca dikey scroll.")
+                 : "Terminal min yüksekliği = genişlik × oran; taşınca dikey scroll.")
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)

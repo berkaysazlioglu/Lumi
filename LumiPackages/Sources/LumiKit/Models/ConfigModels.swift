@@ -140,6 +140,9 @@ public struct GridLayout: Codable, Sendable, Equatable {
     public var mode: Mode
     public var count: Int
     public var heightMode: HeightMode
+    /// Yalnız `scroll` modunda anlamlı: satır min yüksekliği = kolon genişliği ×
+    /// bu oran. Büyük oran → uzun terminaller → daha çok dikey kaydırma.
+    public var heightRatio: HeightRatio
 
     /// Kolon ekseni. `rows` EMEKLİ — yeni yazımda üretilmez, eski dosyada
     /// karşılaşılırsa ConfigCodec fit'e migrate eder.
@@ -155,10 +158,39 @@ public struct GridLayout: Codable, Sendable, Equatable {
         case scroll
     }
 
-    public init(mode: Mode, count: Int, heightMode: HeightMode = .scroll) {
+    /// Scroll modunda satır min yüksekliğinin kolon genişliğine oranı.
+    public enum HeightRatio: String, Codable, Sendable, CaseIterable {
+        case full   // %100 — yükseklik = genişlik
+        case half   // %50
+        case third  // %33
+
+        public var multiplier: Double {
+            switch self {
+            case .full: return 1.0
+            case .half: return 0.5
+            case .third: return 1.0 / 3.0
+            }
+        }
+
+        public var label: String {
+            switch self {
+            case .full: return "100%"
+            case .half: return "50%"
+            case .third: return "33%"
+            }
+        }
+    }
+
+    public init(
+        mode: Mode,
+        count: Int,
+        heightMode: HeightMode = .scroll,
+        heightRatio: HeightRatio = .half
+    ) {
         self.mode = mode
         self.count = count
         self.heightMode = heightMode
+        self.heightRatio = heightRatio
     }
 }
 
