@@ -1,3 +1,4 @@
+import Foundation
 import LumiKit
 import LumiState
 import SwiftUI
@@ -14,6 +15,7 @@ struct SettingsView: View {
         case terminal = "Terminal"
         case appearance = "Appearance"
         case notifications = "Notifications"
+        case session = "Session"
         case shortcuts = "Shortcuts"
 
         var id: String { rawValue }
@@ -25,6 +27,7 @@ struct SettingsView: View {
             case .terminal: return "terminal"
             case .appearance: return "paintpalette"
             case .notifications: return "bell"
+            case .session: return "clock.arrow.circlepath"
             case .shortcuts: return "keyboard"
             }
         }
@@ -32,6 +35,7 @@ struct SettingsView: View {
 
     let settings: SettingsStore
     let workspace: WorkspaceStore
+    let sessionSchedule: SessionScheduleStore
     let chooseFolder: () async -> String?
     let onClose: () -> Void
 
@@ -109,6 +113,7 @@ struct SettingsView: View {
         case .terminal: terminalTab
         case .appearance: appearanceTab
         case .notifications: notificationsTab
+        case .session: sessionTab
         case .shortcuts: shortcutsTab
         }
     }
@@ -510,6 +515,152 @@ struct SettingsView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
         }
+    }
+
+    // MARK: - Session
+
+    private var sessionTab: some View {
+        let trigger = settings.current.sessionTrigger
+        return VStack(alignment: .leading, spacing: 24) {
+            SettingsSectionTitle(
+                title: "Session Trigger",
+                description: "Start your Claude usage window automatically at a set time each day."
+            )
+            infoCard("When enabled and Lumi is running, a headless \"claude -p\" request with the "
+                + "prompt below is sent at the chosen time to kick off the 5-hour window. It runs "
+                + "in the background and never touches your open terminals.")
+            SettingsToggleRow(
+                title: "Daily Trigger",
+                hint: "Send the prompt automatically every day",
+                isOn: Binding(
+                    get: { settings.current.sessionTrigger.enabled },
+                    set: { value in updateTrigger { $0.enabled = value } }
+                )
+            )
+            SettingsField(
+                title: "Time",
+                hint: "Local time; fires at the next matching time each day"
+            ) {
+                DatePicker("", selection: triggerTimeBinding, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(width: 140, alignment: .leading)
+            }
+            SettingsField(
+                title: "Prompt",
+                hint: "Sent to start the session — \"hello\" is enough",
+                isLast: true
+            ) {
+                TextField("hello", text: Binding(
+                    get: { settings.current.sessionTrigger.prompt },
+                    set: { value in updateTrigger { $0.prompt = value } }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12, design: .monospaced))
+                .frame(width: 260, alignment: .leading)
+            }
+            sessionStatusRow(trigger)
+        }
+    }
+
+    private func sessionStatusRow(_ trigger: SessionTrigger) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if trigger.enabled, let next = sessionSchedule.nextFireDate {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.accentPrimary)
+                    Text("Next trigger")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                    Text(next, format: .dateTime.weekday(.abbreviated).hour().minute())
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+            }
+            HStack(spacing: 10) {
+                Button {
+                    Task { await sessionSchedule.fireNow() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if sessionSchedule.isStarting {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(sessionSchedule.isStarting ? "Starting…" : "Start session now")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(Theme.textPrimary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Theme.bgElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Theme.border, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(sessionSchedule.isStarting)
+                lastRunLabel
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var lastRunLabel: some View {
+        switch sessionSchedule.lastRun {
+        case .success(let date):
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.accentCyan)
+                Text(date, format: .dateTime.hour().minute())
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted)
+            }
+        case .failure(let detail, _):
+            HStack(spacing: 5) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.accentPrimary)
+                Text(detail)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        case .none:
+            EmptyView()
+        }
+    }
+
+    private func updateTrigger(_ mutate: (inout SessionTrigger) -> Void) {
+        var trigger = settings.current.sessionTrigger
+        mutate(&trigger)
+        settings.setSessionTrigger(trigger)
+    }
+
+    private var triggerTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                let trigger = settings.current.sessionTrigger
+                return Calendar.current.date(
+                    bySettingHour: trigger.hour,
+                    minute: trigger.minute,
+                    second: 0,
+                    of: Date()
+                ) ?? Date()
+            },
+            set: { date in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                updateTrigger {
+                    $0.hour = components.hour ?? $0.hour
+                    $0.minute = components.minute ?? $0.minute
+                }
+            }
+        )
     }
 
     // MARK: - Shortcuts (salt-okunur referans, spec/22 §5.6)

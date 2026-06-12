@@ -58,6 +58,15 @@ enum ConfigCodec {
             if let value = intValue(nested["seenIntervalMinutes"]) { settings.seenIntervalMinutes = value }
             config.notifications = settings
         }
+        if let nested = dict["sessionTrigger"] as? [String: Any] {
+            let defaults = SessionTrigger.defaults
+            config.sessionTrigger = SessionTrigger(
+                enabled: boolValue(nested["enabled"]) ?? defaults.enabled,
+                hour: intValue(nested["hour"]) ?? defaults.hour,
+                minute: intValue(nested["minute"]) ?? defaults.minute,
+                prompt: (nested["prompt"] as? String) ?? defaults.prompt
+            )
+        }
         return config
     }
 
@@ -89,6 +98,12 @@ enum ConfigCodec {
                 "unseenIntervalMinutes": config.notifications.unseenIntervalMinutes,
                 "seenEnabled": config.notifications.seenEnabled,
                 "seenIntervalMinutes": config.notifications.seenIntervalMinutes,
+            ] as [String: Any],
+            "sessionTrigger": [
+                "enabled": config.sessionTrigger.enabled,
+                "hour": config.sessionTrigger.hour,
+                "minute": config.sessionTrigger.minute,
+                "prompt": config.sessionTrigger.prompt,
             ] as [String: Any],
         ]
     }

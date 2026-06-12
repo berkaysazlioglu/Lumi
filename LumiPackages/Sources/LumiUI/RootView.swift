@@ -47,6 +47,7 @@ public struct RootView: View {
     private let personasStore: PersonasStore
     private let actionsStore: ActionsStore
     private let settings: SettingsStore
+    private let sessionSchedule: SessionScheduleStore
     private let usage: UsageStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
@@ -64,6 +65,7 @@ public struct RootView: View {
         personasStore: PersonasStore,
         actionsStore: ActionsStore,
         settings: SettingsStore,
+        sessionSchedule: SessionScheduleStore,
         usage: UsageStore,
         toasts: ToastStore,
         viewProvider: any TerminalViewProviding,
@@ -80,6 +82,7 @@ public struct RootView: View {
         self.personasStore = personasStore
         self.actionsStore = actionsStore
         self.settings = settings
+        self.sessionSchedule = sessionSchedule
         self.usage = usage
         self.toasts = toasts
         self.viewProvider = viewProvider
@@ -134,6 +137,7 @@ public struct RootView: View {
                 SettingsView(
                     settings: settings,
                     workspace: workspace,
+                    sessionSchedule: sessionSchedule,
                     chooseFolder: shellActions.chooseFolder,
                     onClose: { workspace.isSettingsOpen = false }
                 )

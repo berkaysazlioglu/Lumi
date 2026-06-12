@@ -23,6 +23,8 @@ final class ConfigSideEffectCoordinator {
     var onTerminalThemeChanged: ((String) -> Void)?
     /// Cursor stil VE blink tek köprüden akar (ikisi birlikte bir CursorStyle olur).
     var onTerminalCursorChanged: ((TerminalCursorShape, Bool) -> Void)?
+    /// Zamanlanmış oturum tetikleyici ayarı değişti — scheduler yeniden kurulur.
+    var onSessionTriggerChanged: ((SessionTrigger) -> Void)?
 
     init(
         config: any ConfigServicing,
@@ -77,6 +79,9 @@ final class ConfigSideEffectCoordinator {
                         TerminalCursorShape.parse(new.terminalCursorStyle),
                         new.terminalCursorBlink
                     )
+                }
+                if old.sessionTrigger != new.sessionTrigger {
+                    self.onSessionTriggerChanged?(new.sessionTrigger)
                 }
             }
         }
