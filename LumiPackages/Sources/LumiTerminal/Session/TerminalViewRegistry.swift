@@ -42,12 +42,19 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         entry.view.autoresizingMask = [.width, .height]
         container.addSubview(entry.view)
         // "Görünür olunca fit" garantisi: frame ataması SwiftTerm'in cols/rows
-        // hesabını tetikler; sizeChanged delegate'i resize'ı PTY'ye iletir (spec/20)
+        // hesabını tetikler; sizeChanged delegate'i resize'ı PTY'ye iletir (spec/20).
+        // Buffer'dan tam yeniden çizim: re-attach sonrası (grid round-trip) emülatör
+        // içeriği zaten elde; görünmesi için tüm bounds dirty işaretlenir.
+        entry.view.needsDisplay = true
         entry.onVisibilityChange(true)
     }
 
-    public func detachView(for id: TerminalID) {
+    public func detachView(for id: TerminalID, from container: NSView) {
         guard let entry = entries[id] else { return }
+        // Bayat-detach koruması (SwiftUI reparenting yarışı): yeni host view'ı
+        // başka container'a taşıdıysa bu dismantle bayattır — dokunma, yoksa canlı
+        // view yeni container'dan sökülüp kart boş kalır (grid ile oynayınca görülen bug).
+        guard entry.view.superview === container else { return }
         entry.view.removeFromSuperview()
         entry.onVisibilityChange(false)
     }

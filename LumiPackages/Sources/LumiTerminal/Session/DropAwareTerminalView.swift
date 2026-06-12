@@ -25,6 +25,22 @@ final class DropAwareTerminalView: TerminalView {
         // SwiftTerm default'u true'dur ve bu karakterleri ESC+harf'e çevirirdi.
         optionAsMetaKey = false
         TerminalTheme.apply(to: self)
+        hideScroller()
+    }
+
+    /// SwiftTerm her zaman bir NSScroller subview'i ekler ve gizleme API'si sunmaz.
+    /// v1 paritesi: kaydırma çubuğu görünmez (fare tekeriyle scroll çalışmaya devam
+    /// eder — scroller yalnız görsel göstergedir). isHidden kalıcıdır; SwiftTerm
+    /// hiçbir yerde tekrar göstermez. viewDidMoveToWindow'da da garanti edilir.
+    private func hideScroller() {
+        for case let scroller as NSScroller in subviews {
+            scroller.isHidden = true
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        hideScroller()
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

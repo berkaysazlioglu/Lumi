@@ -29,7 +29,7 @@ public struct TerminalHostView: NSViewRepresentable {
     }
 
     public static func dismantleNSView(_ container: NSView, coordinator: Coordinator) {
-        coordinator.detach()
+        coordinator.detach(from: container)
     }
 
     @MainActor
@@ -46,8 +46,8 @@ public struct TerminalHostView: NSViewRepresentable {
             provider.attachView(for: terminalID, into: container)
         }
 
-        func detach() {
-            provider.detachView(for: terminalID)
+        func detach(from container: NSView) {
+            provider.detachView(for: terminalID, from: container)
         }
     }
 }

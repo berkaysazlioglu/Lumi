@@ -41,6 +41,8 @@ public protocol TerminalServicing: AnyObject, Sendable {
 public protocol TerminalViewProviding: AnyObject {
     /// Canlı terminal view'ını container'a reparent eder ve görünür/fit akışını tetikler.
     func attachView(for id: TerminalID, into container: NSView)
-    /// View'ı hierarchy'den ayırır ama YOK ETMEZ; gizli-terminal politikası devreye girer.
-    func detachView(for id: TerminalID)
+    /// View'ı verilen container'dan ayırır ama YOK ETMEZ; gizli-terminal politikası
+    /// devreye girer. `container` parametresi bayat-detach koruması içindir: view
+    /// başka bir host'a taşınmışsa (SwiftUI reparenting yarışı) bu çağrı no-op olur.
+    func detachView(for id: TerminalID, from container: NSView)
 }
