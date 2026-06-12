@@ -61,16 +61,27 @@ public final class TerminalViewRegistry: TerminalViewProviding {
             guard let superview = entry.view.superview else { continue }
             entry.view.frame = superview.bounds
             entry.view.needsDisplay = true
+            // setHidden(false) + requestRepaint → SIGWINCH; needsDisplay tek başına
+            // TUI'yi yeniden çizdirmediğinden (boş kart) repaint sinyali şart.
+            entry.onVisibilityChange(true)
         }
     }
 
     public func detachView(for id: TerminalID, from container: NSView) {
-        guard let entry = entries[id] else { return }
-        // Bayat-detach koruması (SwiftUI reparenting yarışı): yeni host view'ı
-        // başka container'a taşıdıysa bu dismantle bayattır — dokunma, yoksa canlı
-        // view yeni container'dan sökülüp kart boş kalır (grid ile oynayınca görülen bug).
-        guard entry.view.superview === container else { return }
-        entry.view.removeFromSuperview()
-        entry.onVisibilityChange(false)
+        // Reparenting yarışı (grid↔maximize round-trip): SwiftUI, paylaşılan tek
+        // NSView'ı yeni host'a taşırken eski host'u dismantle ediyor; sıralama
+        // tersine dönerse ölmekte olan host canlı view'ı öksüz bırakıp kartı boş
+        // (ve resize'a sağır) kalmaya itiyordu. Kaldırmayı bir sonraki runloop'a
+        // ertele; o ana dek view başka bir container'a taşınmışsa (yeni host claim
+        // etti ya da container kendini reassert etti) DOKUNMA — yalnız hâlâ bu
+        // container'daysa gerçekten sök ve gizle.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, let entry = self.entries[id] else { return }
+                guard entry.view.superview === container else { return }
+                entry.view.removeFromSuperview()
+                entry.onVisibilityChange(false)
+            }
+        }
     }
 }

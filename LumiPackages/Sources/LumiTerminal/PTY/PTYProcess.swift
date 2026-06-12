@@ -267,6 +267,21 @@ public final class PTYProcess: @unchecked Sendable {
         }
     }
 
+    /// Boyutu değiştirmeden foreground process group'a SIGWINCH gönderir — TUI'yi
+    /// (Claude Code) tüm ekranı yeniden çizmeye zorlar. Gizli→görünür geçişinde
+    /// (maximize↔grid round-trip, fullscreen) boyut aynı kaldığında hiçbir resize
+    /// tetiklenmediğinden kart boş kalıyordu; bu, kernel'in TIOCGWINSZ'ini bozmadan
+    /// yalnız repaint sinyali verir. PTY queue'da, asenkron çalışır.
+    public func pokeRepaint() {
+        queue.async { [weak self] in
+            guard let self, !self.cleanedUp else { return }
+            let foregroundGroup = tcgetpgrp(self.masterFD)
+            if foregroundGroup > 0 {
+                kill(-foregroundGroup, SIGWINCH)
+            }
+        }
+    }
+
     /// Process group'a SIGHUP; 3 sn içinde ölmezse SIGKILL (design/01 §2).
     /// forkpty çocuğu session leader olduğundan pgid == pid — login shell altındaki
     /// tüm claude ağacı hedeflenir.

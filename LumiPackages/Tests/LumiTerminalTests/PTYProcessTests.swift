@@ -172,6 +172,36 @@ final class PTYProcessTests: XCTestCase {
         pty.terminate()
     }
 
+    func testPokeRepaintSignalsForegroundProcessWithoutResize() throws {
+        let queue = makeQueue()
+        // Gizli→görünür geçişi (grid↔maximize round-trip): boyut değişmez, yalnız
+        // TUI'nin tüm ekranı yeniden çizmesi için SIGWINCH gönderilmeli.
+        let script = "trap 'echo GOTWINCH' WINCH; echo READY; while :; do sleep 0.1; done"
+        let pty = try spawn("/bin/sh", args: ["-c", script], queue: queue)
+
+        let ready = expectation(description: "shell ready")
+        ready.assertForOverFulfill = false
+        let winch = expectation(description: "SIGWINCH trap fired")
+        winch.assertForOverFulfill = false
+
+        let collected = OutputCollector()
+        pty.startReading { data in
+            if collected.appendAndCheck(data, contains: "READY") {
+                ready.fulfill()
+            }
+            if collected.appendAndCheck(Data(), contains: "GOTWINCH") {
+                winch.fulfill()
+            }
+            return .proceed
+        }
+        wait(for: [ready], timeout: 5)
+
+        pty.pokeRepaint() // hiçbir resize çağrısı olmadan
+
+        wait(for: [winch], timeout: 5)
+        pty.terminate()
+    }
+
     func testWriteAfterExitIsSafe() throws {
         let queue = makeQueue()
         let pty = try spawn("/bin/sh", args: ["-c", "true"], queue: queue)

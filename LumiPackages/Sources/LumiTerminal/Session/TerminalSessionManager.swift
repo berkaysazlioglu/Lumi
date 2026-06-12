@@ -78,6 +78,9 @@ public final class TerminalSessionManager: TerminalServicing {
         sessions.append(session)
         viewRegistry.register(view: session.terminalView, for: session.id) { [weak session] visible in
             session?.setHidden(!visible)
+            // Görünür olunca TUI'yi yeniden çizmeye zorla (boyut değişmese bile) —
+            // grid↔maximize round-trip'inde boş kalan kartın onarımı.
+            if visible { session?.requestRepaint() }
         }
         broadcaster.send(.spawned(session.meta))
         if let command {

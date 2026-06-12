@@ -16,6 +16,14 @@ final class TerminalViewRegistryTests: XCTestCase {
         return (registry, view, { visibilityLog })
     }
 
+    /// detachView kaldırmayı bir sonraki runloop'a erteler (reparenting yarış
+    /// koruması); ertelenen bloğun çalışmasını beklemek için main queue'yu pompala.
+    private func pumpMainRunLoop() {
+        let done = expectation(description: "main runloop drained")
+        DispatchQueue.main.async { done.fulfill() }
+        wait(for: [done], timeout: 1)
+    }
+
     func testReattachThenStaleDetachKeepsViewInNewContainer() {
         // SwiftUI reparenting yarışı: yeni host attach eder, ARDINDAN eski host'un
         // dismantle'ı (bayat) gelir. Bayat detach canlı view'ı sökmemeli.
@@ -46,7 +54,25 @@ final class TerminalViewRegistryTests: XCTestCase {
         XCTAssertTrue(view.superview === container)
 
         registry.detachView(for: id, from: container)
+        pumpMainRunLoop() // detach ertelenmiş
         XCTAssertNil(view.superview)
+    }
+
+    func testDeferredDetachSkipsRemovalWhenReattachedBeforeRunLoop() {
+        // Maximize↔grid round-trip yarışı: detach (artık ertelenmiş) çağrıldıktan
+        // SONRA, runloop dönmeden view yeni container'a taşınır. Ertelenen detach
+        // canlı view'ı öksüz BIRAKMAMALI (öksüz kalırsa kart boş + resize'a sağır).
+        let id = TerminalID()
+        let (registry, view, _) = makeRegistry(id: id)
+        let oldContainer = NSView()
+        let newContainer = NSView()
+
+        registry.attachView(for: id, into: oldContainer)
+        registry.detachView(for: id, from: oldContainer) // ertelenir
+        registry.attachView(for: id, into: newContainer) // runloop dönmeden taşı
+        pumpMainRunLoop()
+
+        XCTAssertTrue(view.superview === newContainer, "ertelenmiş detach canlı view'ı öksüz bıraktı")
     }
 
     func testReattachMarksViewForRedraw() {
@@ -75,6 +101,7 @@ final class TerminalViewRegistryTests: XCTestCase {
         XCTAssertEqual(log(), [false, true])
 
         registry.detachView(for: id, from: container)
+        pumpMainRunLoop() // detach + visibility(false) ertelenmiş
         XCTAssertEqual(log(), [false, true, false])
     }
 }

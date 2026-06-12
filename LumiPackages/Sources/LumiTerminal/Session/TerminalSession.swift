@@ -192,6 +192,22 @@ final class TerminalSession {
         }
     }
 
+    /// Gizli→görünür geçişi (grid↔maximize round-trip, fullscreen) sonrası TUI'yi
+    /// tüm ekranı yeniden çizmeye zorlar. Boyut değişmediğinde hiçbir resize
+    /// tetiklenmediğinden emülatör reflow'u ekranda görünmüyor, kart boş kalıyordu
+    /// (needsDisplay tek başına yetmiyor — TUI ancak SIGWINCH ile repaint eder).
+    /// Asıl onarım: `updateFullScreen` tüm hücreleri dirty işaretler, böylece
+    /// reattach sonrası (dirty hücre kalmadığından `needsDisplay` tek başına boş
+    /// çizerdi) emülatör buffer'ındaki son kare hem TUI hem düz bash için anında
+    /// görünür. Ek olarak SIGWINCH poke'u TUI'nin (Claude Code) iç durumunu da
+    /// tazeler. requestRepaint MainActor'da çağrılır.
+    func requestRepaint() {
+        guard !isTerminated else { return }
+        terminalView.getTerminal().updateFullScreen()
+        terminalView.setNeedsDisplay(terminalView.bounds)
+        pty.pokeRepaint()
+    }
+
     func terminate() {
         pty.terminate()
     }
