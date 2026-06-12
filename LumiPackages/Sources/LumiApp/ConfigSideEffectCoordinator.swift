@@ -17,6 +17,12 @@ final class ConfigSideEffectCoordinator {
     /// Font değişimi protokole sızdırılmaz — composition root somut manager'a bağlar.
     var onTerminalFontSizeChanged: ((Int) -> Void)?
     var onTerminalFontSmoothingChanged: ((Bool) -> Void)?
+    /// Font ailesi de aynı NSFont'a font size ile birlikte çözülür — boyutla
+    /// AYNI callback'i tetikler (composition root taze AppConfig'den font kurar).
+    var onTerminalFontFamilyChanged: (() -> Void)?
+    var onTerminalThemeChanged: ((String) -> Void)?
+    /// Cursor stil VE blink tek köprüden akar (ikisi birlikte bir CursorStyle olur).
+    var onTerminalCursorChanged: ((TerminalCursorShape, Bool) -> Void)?
 
     init(
         config: any ConfigServicing,
@@ -58,6 +64,19 @@ final class ConfigSideEffectCoordinator {
                 }
                 if old.terminalFontSmoothing != new.terminalFontSmoothing {
                     self.onTerminalFontSmoothingChanged?(new.terminalFontSmoothing)
+                }
+                if old.terminalFontFamily != new.terminalFontFamily {
+                    self.onTerminalFontFamilyChanged?()
+                }
+                if old.terminalTheme != new.terminalTheme {
+                    self.onTerminalThemeChanged?(new.terminalTheme)
+                }
+                if old.terminalCursorStyle != new.terminalCursorStyle
+                    || old.terminalCursorBlink != new.terminalCursorBlink {
+                    self.onTerminalCursorChanged?(
+                        TerminalCursorShape.parse(new.terminalCursorStyle),
+                        new.terminalCursorBlink
+                    )
                 }
             }
         }

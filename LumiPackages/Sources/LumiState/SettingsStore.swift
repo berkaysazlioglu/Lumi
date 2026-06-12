@@ -76,6 +76,22 @@ public final class SettingsStore {
         apply { $0.terminalFontSmoothing = enabled }
     }
 
+    public func setTerminalTheme(_ id: String) {
+        apply { $0.terminalTheme = id }
+    }
+
+    public func setTerminalFontFamily(_ family: String) {
+        apply { $0.terminalFontFamily = family }
+    }
+
+    public func setTerminalCursorStyle(_ shape: TerminalCursorShape) {
+        apply { $0.terminalCursorStyle = shape.rawValue }
+    }
+
+    public func setTerminalCursorBlink(_ blink: Bool) {
+        apply { $0.terminalCursorBlink = blink }
+    }
+
     public func setNotifications(_ settings: NotificationSettings) {
         apply { $0.notifications = settings }
     }

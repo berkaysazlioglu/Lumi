@@ -38,6 +38,18 @@ enum ConfigCodec {
         if let value = boolValue(dict["terminalFontSmoothing"]) {
             config.terminalFontSmoothing = value
         }
+        if let value = dict["terminalTheme"] as? String {
+            config.terminalTheme = value
+        }
+        if let value = dict["terminalFontFamily"] as? String {
+            config.terminalFontFamily = value
+        }
+        if let value = dict["terminalCursorStyle"] as? String {
+            config.terminalCursorStyle = value
+        }
+        if let value = boolValue(dict["terminalCursorBlink"]) {
+            config.terminalCursorBlink = value
+        }
         if let nested = dict["notifications"] as? [String: Any] {
             var settings = NotificationSettings.defaults
             if let value = boolValue(nested["unseenEnabled"]) { settings.unseenEnabled = value }
@@ -68,6 +80,10 @@ enum ConfigCodec {
             "theme": config.theme,
             "terminalFontSize": config.terminalFontSize,
             "terminalFontSmoothing": config.terminalFontSmoothing,
+            "terminalTheme": config.terminalTheme,
+            "terminalFontFamily": config.terminalFontFamily,
+            "terminalCursorStyle": config.terminalCursorStyle,
+            "terminalCursorBlink": config.terminalCursorBlink,
             "notifications": [
                 "unseenEnabled": config.notifications.unseenEnabled,
                 "unseenIntervalMinutes": config.notifications.unseenIntervalMinutes,

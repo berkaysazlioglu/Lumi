@@ -234,6 +234,30 @@ final class TerminalSession {
         redrawFromBuffer()
     }
 
+    /// Renk teması canlı uygular (Settings → Theme). `installColors` 256-paleti
+    /// kendisi redraw'lar; ama native bg/fg/selection setter'ları redraw
+    /// tetiklemediğinden ardından buffer'dan tam çizim gerekir.
+    func applyTheme(_ theme: TerminalTheme) {
+        guard !isTerminated else { return }
+        theme.apply(to: terminalView)
+        redrawFromBuffer()
+    }
+
+    /// Caret şekli + blink canlı uygular (Settings → Cursor). SwiftTerm caret'i
+    /// otomatik günceller; ek redraw gerekmez.
+    func setCursorStyle(_ style: CursorStyle) {
+        guard !isTerminated else { return }
+        terminalView.getTerminal().setCursorStyle(style)
+    }
+
+    /// Font (aile + boyut) canlı uygular. SwiftTerm setter zinciri hücre
+    /// boyutlarını yeniden hesaplar, resize'lar (PTY'ye SIGWINCH) ve needsDisplay
+    /// işaretler — ek iş gerekmez.
+    func setFont(_ font: NSFont) {
+        guard !isTerminated else { return }
+        terminalView.font = font
+    }
+
     func terminate() {
         pty.terminate()
     }

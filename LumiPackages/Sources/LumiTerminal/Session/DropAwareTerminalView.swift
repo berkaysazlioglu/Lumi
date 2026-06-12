@@ -39,7 +39,7 @@ final class DropAwareTerminalView: TerminalView {
         // tıklama SGR press/release olarak TUI'ye gider — Claude input box'ında
         // caret tıklanan yere konur. Hover'ın buglu "release" raporu ise monitor'da
         // ayrıca bastırılır (aşağıda — SwiftTerm encodeButton release=3 bug'ı).
-        TerminalTheme.apply(to: self)
+        TerminalTheme.lumi.apply(to: self)
         hideScroller()
     }
 

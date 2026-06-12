@@ -13,6 +13,17 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// (v1/xterm.js `-webkit-font-smoothing: antialiased` paritesi).
     /// Additive alan (karar 9): eski config'lerde yoksa false kabul edilir.
     public var terminalFontSmoothing: Bool
+    /// Renk teması preset id'si (`TerminalTheme.preset(id:)` ile çözülür).
+    /// Additive (karar 9): yoksa "lumi"; bilinmeyen id → lumi.
+    public var terminalTheme: String
+    /// Terminal font ailesi. Boş = bundle'daki JetBrains Mono (default).
+    /// Additive (karar 9): yoksa "".
+    public var terminalFontFamily: String
+    /// Caret şekli (`TerminalCursorShape.rawValue`). Additive (karar 9):
+    /// yoksa/geçersizse "block".
+    public var terminalCursorStyle: String
+    /// Caret yanıp-sönmesi. Additive (karar 9): yoksa true.
+    public var terminalCursorBlink: Bool
     public var notifications: NotificationSettings
 
     public static let defaults = AppConfig(
@@ -23,6 +34,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
         theme: "dark",
         terminalFontSize: 13,
         terminalFontSmoothing: false,
+        terminalTheme: "lumi",
+        terminalFontFamily: "",
+        terminalCursorStyle: TerminalCursorShape.block.rawValue,
+        terminalCursorBlink: true,
         notifications: .defaults
     )
 
@@ -34,6 +49,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
         theme: String,
         terminalFontSize: Int,
         terminalFontSmoothing: Bool,
+        terminalTheme: String,
+        terminalFontFamily: String,
+        terminalCursorStyle: String,
+        terminalCursorBlink: Bool,
         notifications: NotificationSettings
     ) {
         self.projectsRoot = projectsRoot
@@ -43,6 +62,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.theme = theme
         self.terminalFontSize = terminalFontSize
         self.terminalFontSmoothing = terminalFontSmoothing
+        self.terminalTheme = terminalTheme
+        self.terminalFontFamily = terminalFontFamily
+        self.terminalCursorStyle = terminalCursorStyle
+        self.terminalCursorBlink = terminalCursorBlink
         self.notifications = notifications
     }
 }

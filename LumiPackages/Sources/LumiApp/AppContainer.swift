@@ -101,8 +101,16 @@ final class AppContainer {
 
         let appConfig = await config.config()
         terminal.setMaxTerminals(appConfig.maxTerminals)
-        terminal.font = LumiFonts.mono(size: CGFloat(appConfig.terminalFontSize))
+        terminal.font = LumiFonts.mono(
+            family: appConfig.terminalFontFamily,
+            size: CGFloat(appConfig.terminalFontSize)
+        )
         terminal.fontSmoothing = appConfig.terminalFontSmoothing
+        terminal.theme = TerminalTheme.preset(id: appConfig.terminalTheme)
+        terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
+            shape: TerminalCursorShape.parse(appConfig.terminalCursorStyle),
+            blink: appConfig.terminalCursorBlink
+        )
         notifications.updateSettings(appConfig.notifications)
         repoStore.additionalPaths = appConfig.additionalPaths
         await repoService.setRoots(
@@ -123,11 +131,30 @@ final class AppContainer {
         workspace.isOnboardingActive = await config.isFirstRun()
         await notifications.requestPermissionIfNeeded()
 
-        configCoordinator.onTerminalFontSizeChanged = { [weak self] size in
-            self?.terminal.font = LumiFonts.mono(size: CGFloat(size))
+        // Font ailesi + boyut tek NSFont'a birlikte çözülür; ikisinden hangisi
+        // değişirse değişsin taze config'den fontu yeniden kurar.
+        let rebuildFont: @MainActor () -> Void = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                let cfg = await self.config.config()
+                self.terminal.font = LumiFonts.mono(
+                    family: cfg.terminalFontFamily,
+                    size: CGFloat(cfg.terminalFontSize)
+                )
+            }
         }
+        configCoordinator.onTerminalFontSizeChanged = { _ in rebuildFont() }
+        configCoordinator.onTerminalFontFamilyChanged = { rebuildFont() }
         configCoordinator.onTerminalFontSmoothingChanged = { [weak self] enabled in
             self?.terminal.fontSmoothing = enabled
+        }
+        configCoordinator.onTerminalThemeChanged = { [weak self] id in
+            self?.terminal.theme = TerminalTheme.preset(id: id)
+        }
+        configCoordinator.onTerminalCursorChanged = { [weak self] shape, blink in
+            self?.terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
+                shape: shape, blink: blink
+            )
         }
         configCoordinator.start()
         startBridges()

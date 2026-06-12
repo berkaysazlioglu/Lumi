@@ -79,6 +79,15 @@ Alt-screen TUI'lerde (Claude Code, less, vim) scrollback olmadığından SwiftTe
 ### 17. Bildirim toggle'ı in-app bell toast'unu da kapsar
 v1/spec-13 §4.3'te bell toast sinyali ayardan bağımsız her durumda gönderilirdi; bu "notifications off" beklentisini bozuyordu. Native'de `unseenEnabled` kapalıyken **waiting bell toast'u da gönderilmez**; `error` bell'i ve OS bildirimi (tek seferlik hata sinyali) ayardan bağımsız kalır.
 
+### 18. Terminal customization (v1 spec'ine ek)
+v1'de terminal yalnız tek sabit tema + font boyutu sunuyordu. Native'de Settings → Terminal sekmesine dört yeni ayar eklenir; **dördü de hem yeni spawn'lara hem TÜM açık terminallere anında uygulanır** (font smoothing canlı-uygulama deseniyle):
+- **Renk teması preset'i:** 7 built-in tema (Lumi default + Dracula, One Dark, Nord, Solarized Dark/Light, GitHub Light). SwiftTerm `installColors` + native bg/fg/cursor/selection.
+- **Font ailesi:** sistemdeki monospace aileler; boş = bundle'daki JetBrains Mono. Aile + boyut tek `NSFont`'a birlikte çözülür, çözülemezse JetBrains Mono fallback.
+- **Canlı font size:** v1'de yalnız yeni terminaller alıyordu; native'de açık terminallere de anında uygulanır (`terminalView.font` setter zinciri resize + SIGWINCH üretir).
+- **Cursor stili + blink:** Block/Underline/Bar × blink → SwiftTerm `CursorStyle` (TUI DECSCUSR ile ezebilir — son-kazanır).
+
+Persistence karar 9 uyumlu: `config.json`'a 4 **additive** key eklenir (`terminalTheme`, `terminalFontFamily`, `terminalCursorStyle`, `terminalCursorBlink`); eski sürümler bu key'leri görmezse default'a düşer (lumi / boş / block / true) ve native bilinmeyen-key korumasıyla diskteki diğer alanlar bozulmaz.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).

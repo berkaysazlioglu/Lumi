@@ -112,6 +112,56 @@ final class ConfigServiceTests: XCTestCase {
         // Diskte olmayan alan default'tan tamamlanır (spec/13 §1.1)
         XCTAssertEqual(config.notifications, .defaults)
         XCTAssertFalse(config.terminalFontSmoothing, "alan yokken default false (ince çizgi)")
+        // Terminal customization alanları yokken default'a düşer (additive, karar 9)
+        XCTAssertEqual(config.terminalTheme, "lumi")
+        XCTAssertEqual(config.terminalFontFamily, "")
+        XCTAssertEqual(config.terminalCursorStyle, "block")
+        XCTAssertTrue(config.terminalCursorBlink)
+    }
+
+    func testTerminalCustomizationFieldsDecode() async throws {
+        let json = realConfigFixture.replacingOccurrences(
+            of: "\"terminalFontSize\": 13",
+            with: """
+            "terminalFontSize": 13,
+              "terminalTheme": "dracula",
+              "terminalFontFamily": "Menlo",
+              "terminalCursorStyle": "bar",
+              "terminalCursorBlink": false
+            """
+        )
+        try writeFixture(json, to: paths.configFile)
+        let config = await makeService().config()
+        XCTAssertEqual(config.terminalTheme, "dracula")
+        XCTAssertEqual(config.terminalFontFamily, "Menlo")
+        XCTAssertEqual(config.terminalCursorStyle, "bar")
+        XCTAssertFalse(config.terminalCursorBlink)
+    }
+
+    func testTerminalCustomizationRoundTrip() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let service = makeService()
+
+        try await service.updateConfig {
+            $0.terminalTheme = "nord"
+            $0.terminalFontFamily = "SF Mono"
+            $0.terminalCursorStyle = "underline"
+            $0.terminalCursorBlink = false
+        }
+
+        let written = try readJSONDict(paths.configFile)
+        XCTAssertEqual(written["terminalTheme"] as? String, "nord")
+        XCTAssertEqual(written["terminalFontFamily"] as? String, "SF Mono")
+        XCTAssertEqual(written["terminalCursorStyle"] as? String, "underline")
+        XCTAssertEqual(written["terminalCursorBlink"] as? Bool, false)
+        // Mevcut alanlar korunur (additive, karar 9)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
+
+        let reloaded = await ConfigService(paths: paths).config()
+        XCTAssertEqual(reloaded.terminalTheme, "nord")
+        XCTAssertEqual(reloaded.terminalFontFamily, "SF Mono")
+        XCTAssertEqual(reloaded.terminalCursorStyle, "underline")
+        XCTAssertFalse(reloaded.terminalCursorBlink)
     }
 
     func testTerminalFontSmoothingRoundTrip() async throws {

@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import LumiKit
+import SwiftTerm
 
 /// Terminal alt sisteminin servis yüzü: `TerminalServicing` implementasyonu
 /// (design/01 §7). Sıralı koleksiyon tutar (karar 11), limit yalnız burada
@@ -15,15 +16,34 @@ public final class TerminalSessionManager: TerminalServicing {
     private var maxTerminals = TerminalSessionManager.defaultMaxTerminals
     private var spawnCounter = 0
     private let broadcaster = EventBroadcaster<TerminalEvent>()
-    /// Yeni spawn'lara uygulanır; mevcut terminaller yeniden açılınca alır
-    /// (Electron'da da font değişimi re-init gerektiriyordu — spec/20 §1).
-    public var font: NSFont
+    /// Font (aile + boyut). Yeni spawn'lara uygulanır VE canlı olarak tüm açık
+    /// terminallere yansır (SwiftTerm `terminalView.font` setter zinciri resize +
+    /// SIGWINCH + redraw üretir — fontSmoothing ile aynı canlı-uygulama deseni).
+    public var font: NSFont {
+        didSet {
+            guard font != oldValue else { return }
+            sessions.forEach { $0.setFont(font) }
+        }
+    }
     /// macOS stem-darkening. Font boyutunun aksine canlı uygulanır: CG draw
     /// path'i her çizimde okur, redraw yeterli (Metal backend kullanılmıyor).
     public var fontSmoothing = false {
         didSet {
             guard fontSmoothing != oldValue else { return }
             sessions.forEach { $0.setFontSmoothing(fontSmoothing) }
+        }
+    }
+    /// Renk teması. Canlı uygulanır: yeni spawn'lar + tüm açık terminaller.
+    public var theme: TerminalTheme = .lumi {
+        didSet {
+            guard theme != oldValue else { return }
+            sessions.forEach { $0.applyTheme(theme) }
+        }
+    }
+    /// Caret şekli + blink (SwiftTerm CursorStyle'a çözülmüş). Canlı uygulanır.
+    public var cursorStyle: CursorStyle = .blinkBlock {
+        didSet {
+            sessions.forEach { $0.setCursorStyle(cursorStyle) }
         }
     }
     private var keyMonitor: Any?
@@ -84,6 +104,10 @@ public final class TerminalSessionManager: TerminalServicing {
         )
         session.delegate = self
         session.setFontSmoothing(fontSmoothing)
+        // Spawn-time: manager'ın güncel tema + cursor değerlerini uygula
+        // (DropAwareTerminalView'daki hardcoded lumi default'unu ezer).
+        session.applyTheme(theme)
+        session.setCursorStyle(cursorStyle)
         sessions.append(session)
         viewRegistry.register(
             view: session.terminalView,

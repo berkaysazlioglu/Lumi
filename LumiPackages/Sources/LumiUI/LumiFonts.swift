@@ -25,6 +25,52 @@ public enum LumiFonts {
         return NSFont(name: name, size: size)
             ?? .monospacedSystemFont(ofSize: size, weight: weight)
     }
+
+    /// Aileye göre terminal fontu çözer. Boş aile → bundle'daki JetBrains Mono
+    /// (`mono(size:weight:)`). Dolu aile NSFontManager üzerinden çözülmeye çalışılır;
+    /// çözülemezse JetBrains Mono fallback'ine düşer (asla sistem default'una değil —
+    /// monospace garantisi için).
+    public static func mono(
+        family: String,
+        size: CGFloat,
+        weight: NSFont.Weight = .regular
+    ) -> NSFont {
+        let trimmed = family.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return mono(size: size, weight: weight)
+        }
+        let traits: NSFontTraitMask = weight == .bold ? .boldFontMask : []
+        if let resolved = NSFontManager.shared.font(
+            withFamily: trimmed,
+            traits: traits,
+            weight: Self.fontManagerNormalWeight,
+            size: size
+        ) {
+            return resolved
+        }
+        // Bilinmeyen aile → JetBrains Mono (monospace garantisini korur)
+        return mono(size: size, weight: weight)
+    }
+
+    /// NSFontManager'ın 0–15 ağırlık ölçeğinde "normal" (regular) değeri.
+    private static let fontManagerNormalWeight = 5
+
+    /// Settings font ailesi picker'ı için sistemdeki sabit-genişlikli (monospace)
+    /// aileler. Bir kere hesaplanır (availableFontFamilies + fixed-pitch süzgeci).
+    public static let availableMonospaceFamilies: [String] = {
+        NSFontManager.shared.availableFontFamilies.filter { family in
+            guard let descriptors = NSFontManager.shared
+                .availableMembers(ofFontFamily: family), !descriptors.isEmpty else {
+                return false
+            }
+            guard let font = NSFont(name: family, size: 12)
+                ?? (descriptors.first?.first as? String).flatMap({ NSFont(name: $0, size: 12) })
+            else {
+                return false
+            }
+            return font.isFixedPitch
+        }.sorted()
+    }()
 }
 
 /// Bundle'lı görseller (header logosu vb.). UI'dan (MainActor) erişilir.

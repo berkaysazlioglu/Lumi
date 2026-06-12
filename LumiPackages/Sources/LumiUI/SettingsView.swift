@@ -239,7 +239,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionTitle(
                 title: "Terminal",
-                description: "Terminal limit and font size."
+                description: "Limit, color theme, font, and cursor. Changes apply instantly."
             )
             SettingsField(
                 title: "Max Terminals",
@@ -258,8 +258,20 @@ struct SettingsView: View {
                 .frame(width: 140, alignment: .leading)
             }
             SettingsField(
+                title: "Color Theme",
+                hint: "Applies to all open terminals instantly"
+            ) {
+                themePicker
+            }
+            SettingsField(
+                title: "Font Family",
+                hint: "Monospace fonts installed on this Mac"
+            ) {
+                fontFamilyPicker
+            }
+            SettingsField(
                 title: "Font Size",
-                hint: "10–24px; applied to newly opened terminals"
+                hint: "10–24px; applies to all open terminals instantly"
             ) {
                 Stepper(
                     "\(settings.current.terminalFontSize) px",
@@ -272,6 +284,12 @@ struct SettingsView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
                 .frame(width: 140, alignment: .leading)
+            }
+            SettingsField(
+                title: "Cursor",
+                hint: "Caret shape and blinking"
+            ) {
+                cursorControls
             }
             SettingsField(
                 title: "Font Smoothing",
@@ -287,6 +305,92 @@ struct SettingsView: View {
                 .controlSize(.small)
                 .labelsHidden()
                 .tint(Theme.accentPrimary)
+            }
+        }
+    }
+
+    private var themePicker: some View {
+        VStack(spacing: 4) {
+            ForEach(TerminalThemeCatalog.all) { option in
+                themeRow(option)
+            }
+        }
+    }
+
+    private func themeRow(_ option: TerminalThemeOption) -> some View {
+        let isActive = settings.current.terminalTheme == option.id
+        return Button {
+            settings.setTerminalTheme(option.id)
+        } label: {
+            HStack(spacing: 10) {
+                HStack(spacing: 2) {
+                    ForEach(Array(option.previewHex.enumerated()), id: \.offset) { _, hex in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(hex: hex))
+                            .frame(width: 12, height: 16)
+                    }
+                }
+                Text(option.name)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textPrimary)
+                Spacer(minLength: 0)
+                if isActive {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.accentPrimary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isActive ? Theme.accentVivid.opacity(0.1) : Theme.bgDeep)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isActive ? Theme.accentVivid : Theme.border, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var fontFamilyPicker: some View {
+        Picker(
+            "",
+            selection: Binding(
+                get: { settings.current.terminalFontFamily },
+                set: { settings.setTerminalFontFamily($0) }
+            )
+        ) {
+            Text("JetBrains Mono (Default)").tag("")
+            Divider()
+            ForEach(LumiFonts.availableMonospaceFamilies, id: \.self) { family in
+                Text(family).tag(family)
+            }
+        }
+        .labelsHidden()
+        .font(.system(size: 12, design: .monospaced))
+        .frame(width: 260, alignment: .leading)
+    }
+
+    private var cursorControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SettingsSegmented(
+                options: TerminalCursorShape.allCases.map {
+                    .init(value: $0, label: $0.label)
+                },
+                selection: Binding(
+                    get: { TerminalCursorShape.parse(settings.current.terminalCursorStyle) },
+                    set: { settings.setTerminalCursorStyle($0) }
+                )
+            )
+            HStack(spacing: 10) {
+                Text("Blink")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
+                SettingsToggleSwitch(isOn: Binding(
+                    get: { settings.current.terminalCursorBlink },
+                    set: { settings.setTerminalCursorBlink($0) }
+                ))
             }
         }
     }
