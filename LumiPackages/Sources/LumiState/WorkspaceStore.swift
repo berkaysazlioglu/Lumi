@@ -16,6 +16,9 @@ public final class WorkspaceStore {
     public private(set) var leftSidebarOpen = true
     public private(set) var rightSidebarOpen = false
     public var isRepoSelectorOpen = false
+    /// RepoSelector grup collapse durumu — session-local, persist edilmez
+    /// (spec/22 §2.3 collapsedGroups paritesi).
+    public var collapsedRepoGroups: Set<String> = []
     public private(set) var closeTabDialog: CloseTabDialogState?
     /// Oturumluk — persist edilmez (spec/21 §12).
     public private(set) var isFocusMode = false

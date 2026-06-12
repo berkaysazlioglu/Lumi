@@ -140,7 +140,14 @@ struct HeaderBarView: View {
             get: { workspace.isRepoSelectorOpen },
             set: { workspace.isRepoSelectorOpen = $0 }
         )) {
-            RepoSelectorView(groups: repoStore.groupedRepos) { repo in
+            RepoSelectorView(
+                groups: repoStore.groupedRepos,
+                openTabPaths: Set(workspace.openTabs),
+                collapsedGroups: Binding(
+                    get: { workspace.collapsedRepoGroups },
+                    set: { workspace.collapsedRepoGroups = $0 }
+                )
+            ) { repo in
                 workspace.isRepoSelectorOpen = false
                 workspace.openTab(repo.path)
             }

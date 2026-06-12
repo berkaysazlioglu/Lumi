@@ -82,6 +82,12 @@ public final class RepoStore {
         public let id: String
         public let label: String
         public let repos: [Repo]
+
+        public init(id: String, label: String, repos: [Repo]) {
+            self.id = id
+            self.label = label
+            self.repos = repos
+        }
     }
 
     /// Sıra: (1) Projects Root (boşsa görünmez), (2) root-tipi additional path'ler

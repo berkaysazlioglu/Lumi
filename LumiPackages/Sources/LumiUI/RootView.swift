@@ -211,6 +211,7 @@ public struct RootView: View {
                     LeftSidebarView(
                         repoPath: active,
                         repoStore: repoStore,
+                        terminals: terminals,
                         personasStore: personasStore,
                         actionsStore: actionsStore,
                         onOpenFile: { path in
