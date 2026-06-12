@@ -30,8 +30,8 @@ ConfigManager'daki work-log persistence native servis katmanına taşınmaz. İl
 ### 3. Settings macOS konvansiyonuna geçiyor
 "Draft + Save, Escape=discard" modeli terk edilir; System Settings gibi her değişiklik anında uygulanır ve persist edilir. [22-renderer-ui.md](./22-renderer-ui.md)'deki Settings draft-state davranışları parite hedefi değildir. `config:set` yan etki propagasyonunun ([11-ipc-surface.md](./11-ipc-surface.md)) native karşılığı alan-bazına iner: her ayar değişikliği kendi yan etkisini anında tetikler.
 
-### 4. Diff görünümü unified diff ile başlıyor
-Monaco DiffEditor'a native karşılık ilk sürümde aranmaz; tek kolonlu unified diff (satır ekleme/silme renklendirmeli) yeterlidir. Side-by-side görünüm ileri sürüm adayıdır. Bu, en büyük UI riskini ([00-overview.md](./00-overview.md) §5) ortadan kaldırır.
+### 4. Diff görünümü side-by-side (revize 2026-06-12)
+~~İlk sürümde tek kolonlu unified diff.~~ **Revize:** Diff iki kolonlu **side-by-side** render edilir (sol = eski, sağ = yeni; ekleme yeşil, silme kırmızı, context nötr, karşılıksız satır filler). Monaco DiffEditor portu DEĞİL — kendi saf `SideBySideDiffBuilder` (UnifiedDiff → hizalı sol/sağ hücre satırları) + `SideBySideDiffView` (LazyVStack, satır sarmalı) ile. `UnifiedDiffParser` aynen korunur (parse değişmez; yalnız sunum side-by-side). Eski tek-kolon `DiffAttributedTextBuilder` kaldırıldı. Gerekçe: kullanıcı v1 paritesi istedi; karar 11 (görsel kimlik) ile tutarlı.
 
 ### 5. Tek tip hata sözleşmesi + görünür hatalar
 Tüm servisler tek hata modeli kullanır (Swift'te typed `Result`/`Error`). Mevcut tutarsızlıklar (çoğu throw, `git:commit` envelope, spawn-limit sessiz `null`, `openExternal` sessiz yutma) taşınmaz; spawn-limit aşımı dahil kullanıcıyı etkileyen her hata görünür bildirimle sunulur.
@@ -72,6 +72,6 @@ v1'in `auto/columns/rows` tek-eksenli grid'i, dizilim ve yükseklik politikasın
 
 ## Kapsam özeti
 
-Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 4 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, side-by-side diff).
+Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).
 
 Buna ek olarak [00-overview.md](./00-overview.md) §4'teki bug-türevli zorunlu gereksinimler (PTY→UI backpressure, render-crash izolasyonu, replay güvenliği) tasarımın başından bağlayıcıdır.

@@ -3,7 +3,7 @@ import LumiState
 import SwiftUI
 
 /// FileViewer modal'ı (spec/22): view / diff / commit-diff modları.
-/// Diff'ler tek kolonlu unified render (karar 4); commit-diff dosya seçiminde
+/// Diff'ler side-by-side render (karar 4 revize); commit-diff dosya seçiminde
 /// lazy yüklenir (karar 6).
 struct FileViewerView: View {
     let store: FileViewerStore
@@ -108,7 +108,7 @@ struct FileViewerView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let diff = store.diff {
-            AttributedTextView(text: DiffAttributedTextBuilder.build(diff, fontSize: 12))
+            SideBySideDiffView(diff: diff, fontSize: 12)
         } else {
             Text("(no diff)")
                 .font(.system(size: 12, design: .monospaced))

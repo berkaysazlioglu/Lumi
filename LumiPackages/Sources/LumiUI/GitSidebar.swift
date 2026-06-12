@@ -122,53 +122,15 @@ struct GitSidebar: View {
                 emptyText("(no branch-specific commits)").padding(.leading, 28)
             }
             ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
-                Button {
-                    onSelectCommit(commit)
-                } label: {
-                    HStack(alignment: .top, spacing: 0) {
-                        timelineGutter(isHead: branch.isCurrent && index == 0)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(commit.message)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(Theme.textPrimary)
-                                .lineLimit(1)
-                            HStack(spacing: 6) {
-                                Text(commit.shortHash)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(Theme.accentCyan)
-                                Text(commit.author)
-                                    .foregroundStyle(Theme.textMuted)
-                                Text(Self.relativeTime(commit.date))
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                            .font(.system(size: 10, design: .monospaced))
-                        }
-                        .padding(.trailing, 10)
-                        .padding(.vertical, 4)
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                CommitRow(
+                    commit: commit,
+                    isHead: branch.isCurrent && index == 0,
+                    relativeTime: Self.relativeTime(commit.date),
+                    onSelect: { onSelectCommit(commit) }
+                )
             }
         }
         .padding(.leading, 16)
-    }
-
-    private func timelineGutter(isHead: Bool) -> some View {
-        ZStack(alignment: .top) {
-            Rectangle()
-                .fill(Theme.border)
-                .frame(width: 1)
-                .padding(.leading, 9)
-            Circle()
-                .fill(isHead ? Theme.success : Theme.border)
-                .frame(width: 7, height: 7)
-                .shadow(color: isHead ? Theme.success.opacity(0.8) : .clear, radius: 4)
-                .padding(.leading, 6)
-                .padding(.top, 6)
-        }
-        .frame(width: 28, alignment: .topLeading)
     }
 
     // MARK: - Changes
@@ -271,6 +233,62 @@ struct GitSidebar: View {
         let hours = minutes / 60
         if hours < 24 { return "\(hours)h ago" }
         return "\(hours / 24)d ago"
+    }
+}
+
+/// Commit satırı (v1 timeline): sol çizgi + nokta (HEAD yeşil+glow); başlık
+/// hover'da sığmıyorsa sağdan sola kayar (MarqueeText); hover'da elevated zemin.
+private struct CommitRow: View {
+    let commit: GitCommit
+    let isHead: Bool
+    let relativeTime: String
+    let onSelect: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: 0) {
+                gutter
+                VStack(alignment: .leading, spacing: 2) {
+                    MarqueeText(
+                        text: commit.message,
+                        font: .system(size: 12, design: .monospaced),
+                        color: Theme.textPrimary,
+                        animating: isHovering
+                    )
+                    HStack(spacing: 6) {
+                        Text(commit.shortHash).foregroundStyle(Theme.accentCyan)
+                        Text(commit.author).foregroundStyle(Theme.textMuted)
+                        Text(relativeTime).foregroundStyle(Theme.textMuted)
+                    }
+                    .font(.system(size: 10, design: .monospaced))
+                }
+                .padding(.trailing, 10)
+                .padding(.vertical, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isHovering ? Theme.bgElevated : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+
+    private var gutter: some View {
+        ZStack(alignment: .top) {
+            Rectangle()
+                .fill(Theme.border)
+                .frame(width: 1)
+                .padding(.leading, 9)
+            Circle()
+                .fill(isHead ? Theme.success : Theme.border)
+                .frame(width: 7, height: 7)
+                .shadow(color: isHead ? Theme.success.opacity(0.8) : .clear, radius: 4)
+                .padding(.leading, 6)
+                .padding(.top, 6)
+        }
+        .frame(width: 28, alignment: .topLeading)
     }
 }
 
