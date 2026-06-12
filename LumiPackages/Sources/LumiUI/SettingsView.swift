@@ -119,15 +119,15 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionTitle(
                 title: "General",
-                description: "Repo keşfi ve varsayılan AI sağlayıcısı."
+                description: "Repo discovery and default AI provider."
             )
             SettingsField(
                 title: "Projects Root",
-                hint: "Birinci seviye alt dizinler repo olarak listelenir"
+                hint: "First-level subdirectories are listed as repos"
             ) {
                 HStack(spacing: 8) {
                     Text(settings.current.projectsRoot.isEmpty
-                        ? "(ayarlanmadı)" : settings.current.projectsRoot)
+                        ? "(not set)" : settings.current.projectsRoot)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
@@ -148,13 +148,13 @@ struct SettingsView: View {
             }
             SettingsField(
                 title: "Additional Paths",
-                hint: "root: alt dizinleri taranır · repo: tek başına eklenir"
+                hint: "root: subdirectories are scanned · repo: added on its own"
             ) {
                 additionalPathsField
             }
             SettingsField(
                 title: "AI Provider",
-                hint: "Yeni terminal ve action'larda kullanılacak CLI",
+                hint: "CLI used for new terminals and actions",
                 isLast: true
             ) {
                 SettingsSegmented(
@@ -239,11 +239,11 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionTitle(
                 title: "Terminal",
-                description: "Terminal limiti ve yazı tipi boyutu."
+                description: "Terminal limit and font size."
             )
             SettingsField(
                 title: "Max Terminals",
-                hint: "1–20; limit yalnız yeni spawn'ları etkiler"
+                hint: "1–20; the limit only affects new spawns"
             ) {
                 Stepper(
                     "\(settings.current.maxTerminals)",
@@ -259,7 +259,7 @@ struct SettingsView: View {
             }
             SettingsField(
                 title: "Font Size",
-                hint: "10–24px; yeni açılan terminallere uygulanır",
+                hint: "10–24px; applied to newly opened terminals",
                 isLast: true
             ) {
                 Stepper(
@@ -283,11 +283,11 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 24) {
             SettingsSectionTitle(
                 title: "Appearance",
-                description: "Panel görünürlüğü. Değişiklik anında uygulanır ve hatırlanır."
+                description: "Panel visibility. Changes apply instantly and are remembered."
             )
             SettingsToggleRow(
                 title: "Left Sidebar",
-                hint: "Sessions · Project Context · Quick Actions paneli",
+                hint: "Sessions · Project Context · Quick Actions panel",
                 isOn: Binding(
                     get: { workspace.leftSidebarOpen },
                     set: { workspace.setLeftSidebarOpen($0) }
@@ -295,7 +295,7 @@ struct SettingsView: View {
             )
             SettingsToggleRow(
                 title: "Right Sidebar",
-                hint: "Git paneli (Commits · Changes)",
+                hint: "Git panel (Commits · Changes)",
                 isOn: Binding(
                     get: { workspace.rightSidebarOpen },
                     set: { workspace.setRightSidebarOpen($0) }
@@ -311,13 +311,13 @@ struct SettingsView: View {
         return VStack(alignment: .leading, spacing: 24) {
             SettingsSectionTitle(
                 title: "Notifications",
-                description: "Asistan input beklerken tekrarlı bildirim aralıkları."
+                description: "Repeat notification intervals while the assistant waits for input."
             )
-            infoCard("Bildirimler yalnız sistem izni verildiğinde görünür. Aralık, "
-                + "terminal beklemede kaldığı sürece tekrar eder.")
+            infoCard("Notifications only appear when system permission is granted. The interval "
+                + "repeats as long as the terminal stays waiting.")
             SettingsToggleRow(
                 title: "Waiting (unseen)",
-                hint: "Görülmemiş bekleyen terminaller için anında bildirim + tekrar",
+                hint: "Instant notification + repeat for unseen waiting terminals",
                 isOn: Binding(
                     get: { settings.current.notifications.unseenEnabled },
                     set: { value in
@@ -338,7 +338,7 @@ struct SettingsView: View {
             }
             SettingsToggleRow(
                 title: "Waiting (seen)",
-                hint: "Görülmüş ama yanıtlanmamış terminaller için tekrar",
+                hint: "Repeat for seen but unanswered terminals",
                 isOn: Binding(
                     get: { settings.current.notifications.seenEnabled },
                     set: { value in
@@ -388,7 +388,7 @@ struct SettingsView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
                 .frame(width: 110, alignment: .leading)
-            Text("dk")
+            Text("min")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
         }
@@ -400,7 +400,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionTitle(
                 title: "Keyboard Shortcuts",
-                description: "Uygulamadaki kısayollar. Salt-okunur referans."
+                description: "Application shortcuts. Read-only reference."
             )
             VStack(spacing: 1) {
                 ForEach(ShortcutReference.all) { ref in

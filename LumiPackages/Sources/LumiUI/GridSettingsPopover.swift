@@ -56,14 +56,14 @@ struct GridSettingsControl: View {
 
     /// İkonlar belirsiz kalmasın diye hover ipucu tam yerleşimi yazar.
     private var helpText: String {
-        let columns = layout.mode == .auto ? "Auto kolon" : "\(layout.count) kolon"
-        let height = layout.heightMode == .fit ? "Sığdır" : "Kaydır"
+        let columns = layout.mode == .auto ? "Auto columns" : "\(layout.count) columns"
+        let height = layout.heightMode == .fit ? "Fit" : "Scroll"
         return "\(columns) · \(height)"
     }
 
     private var popoverBody: some View {
         VStack(alignment: .leading, spacing: 14) {
-            section(title: "Kolon") {
+            section(title: "Columns") {
                 SegmentedRow(
                     options: GridColumnOption.allOptions,
                     isSelected: { $0.matches(layout) },
@@ -71,16 +71,16 @@ struct GridSettingsControl: View {
                     onSelect: { onChange($0.apply(to: layout)) }
                 )
             }
-            section(title: "Yükseklik") {
+            section(title: "Height") {
                 SegmentedRow(
                     options: [LumiKit.GridLayout.HeightMode.fit, .scroll],
                     isSelected: { $0 == layout.heightMode },
-                    label: { $0 == .fit ? "Sığdır" : "Kaydır" },
+                    label: { $0 == .fit ? "Fit" : "Scroll" },
                     onSelect: { var copy = layout; copy.heightMode = $0; onChange(copy) }
                 )
             }
             if layout.heightMode == .scroll {
-                section(title: "Satır oranı (genişliğe göre)") {
+                section(title: "Row ratio (of width)") {
                     SegmentedRow(
                         options: LumiKit.GridLayout.HeightRatio.allCases,
                         isSelected: { $0 == layout.heightRatio },
@@ -90,8 +90,8 @@ struct GridSettingsControl: View {
                 }
             }
             Text(layout.heightMode == .fit
-                 ? "Tüm terminaller pencereye sığar (scroll yok)."
-                 : "Terminal min yüksekliği = genişlik × oran; taşınca dikey scroll.")
+                 ? "All terminals fit in the window (no scroll)."
+                 : "Min terminal height = width × ratio; scrolls vertically when it overflows.")
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)

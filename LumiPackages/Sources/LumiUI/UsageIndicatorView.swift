@@ -21,7 +21,7 @@ public struct UsageIndicatorView: View {
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
                 UsagePopover(store: store)
             }
-            .help("Claude kullanımı")
+            .help("Claude usage")
     }
 
     private var compact: some View {
@@ -82,7 +82,7 @@ private struct UsagePopover: View {
 
     private var header: some View {
         HStack {
-            Text("Claude Kullanımı")
+            Text("Claude Usage")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
@@ -112,19 +112,19 @@ private struct UsagePopover: View {
         }
         .buttonStyle(.plain)
         .disabled(!store.canRefresh)
-        .help(store.canRefresh ? "Yenile" : "Çok sık — biraz bekle")
+        .help(store.canRefresh ? "Refresh" : "Too frequent — wait a bit")
     }
 
     @ViewBuilder
     private var content: some View {
         if let snapshot = store.snapshot {
             VStack(alignment: .leading, spacing: 14) {
-                windowRow("5 saatlik oturum", snapshot.fiveHour)
-                windowRow("Haftalık (tüm modeller)", snapshot.weekAll)
-                windowRow("Haftalık (Sonnet)", snapshot.weekSonnet)
-                windowRow("Haftalık (Opus)", snapshot.weekOpus)
+                windowRow("5-hour session", snapshot.fiveHour)
+                windowRow("Weekly (all models)", snapshot.weekAll)
+                windowRow("Weekly (Sonnet)", snapshot.weekSonnet)
+                windowRow("Weekly (Opus)", snapshot.weekOpus)
                 if snapshot.mode == .apiKey {
-                    Text("API anahtarı modu — abonelik limiti yok.")
+                    Text("API key mode — no subscription limit.")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Theme.textMuted)
                 }
@@ -132,12 +132,12 @@ private struct UsagePopover: View {
         } else if store.isLoading {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Yükleniyor…")
+                Text("Loading…")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Theme.textSecondary)
             }
         } else {
-            Text(store.errorMessage ?? "Kullanım verisi yok.")
+            Text(store.errorMessage ?? "No usage data.")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.error)
                 .fixedSize(horizontal: false, vertical: true)
@@ -158,13 +158,13 @@ private struct UsagePopover: View {
                 Rectangle().fill(Theme.border).frame(height: 1)
                 VStack(alignment: .leading, spacing: 3) {
                     if let fetchedAt = store.snapshot?.fetchedAt {
-                        Text("Son güncelleme: \(Self.timeFormatter.string(from: fetchedAt))")
+                        Text("Last updated: \(Self.timeFormatter.string(from: fetchedAt))")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(Theme.textMuted)
                     }
                     // Snapshot korunurken hata (güncellenemedi) — görünür (karar 5).
                     if store.snapshot != nil, let error = store.errorMessage {
-                        Text("Güncellenemedi: \(error)")
+                        Text("Update failed: \(error)")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(Theme.warning)
                             .fixedSize(horizontal: false, vertical: true)
@@ -236,7 +236,7 @@ private struct UsageWindowRow: View {
 
     private var resetText: String {
         guard !window.resetsRaw.isEmpty else { return "" }
-        var text = "Sıfırlanma: \(window.resetsRaw)"
+        var text = "Resets: \(window.resetsRaw)"
         if let resetsAt = window.resetsAt {
             text += " · " + Self.relativeFormatter.localizedString(for: resetsAt, relativeTo: Date())
         }
@@ -245,7 +245,7 @@ private struct UsageWindowRow: View {
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "tr")
+        formatter.locale = Locale(identifier: "en")
         formatter.unitsStyle = .full
         return formatter
     }()

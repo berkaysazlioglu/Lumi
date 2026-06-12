@@ -165,7 +165,7 @@ public struct RootView: View {
                 workspace.resolveQuit(false)
             }
         } message: {
-            Text("\(workspace.quitDialogTerminalCount ?? 0) açık terminal kapatılacak.")
+            Text("\(workspace.quitDialogTerminalCount ?? 0) open terminal(s) will be closed.")
         }
     }
 
@@ -253,7 +253,7 @@ public struct RootView: View {
             Text("Lumi")
                 .font(.system(size: 22, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.accentPrimary)
-            Text("Bir repo aç ve terminal başlat")
+            Text("Open a repo and start a terminal")
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
             Button("Open Repo") {
@@ -342,7 +342,7 @@ public struct RootView: View {
 
     private func emptyRepoState(_ repoPath: String) -> some View {
         VStack(spacing: 10) {
-            Text("Bu repoda terminal yok")
+            Text("No terminals in this repo")
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
             // Topbar ile aynı modern split-button (DRY): hover'da dropdown açılır.
