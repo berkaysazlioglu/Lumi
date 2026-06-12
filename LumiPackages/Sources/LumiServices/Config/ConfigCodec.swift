@@ -109,11 +109,18 @@ enum ConfigCodec {
             state.projectGridLayouts = layouts.compactMapValues { entry in
                 guard let dict = entry as? [String: Any],
                       let modeRaw = dict["mode"] as? String,
-                      let mode = GridLayout.Mode(rawValue: modeRaw),
                       let count = intValue(dict["count"]) else {
                     return nil
                 }
-                return GridLayout(mode: mode, count: count)
+                // Emekli `rows` modu → auto + fit migrasyonu (eski/v1 dosyaları).
+                if modeRaw == "rows" {
+                    return GridLayout(mode: .auto, count: count, heightMode: .fit)
+                }
+                guard let mode = GridLayout.Mode(rawValue: modeRaw) else { return nil }
+                // heightMode yoksa eski algılanan davranış: auto/columns scroll'du.
+                let heightMode = (dict["heightMode"] as? String)
+                    .flatMap(GridLayout.HeightMode.init(rawValue:)) ?? .scroll
+                return GridLayout(mode: mode, count: count, heightMode: heightMode)
             }
         }
         if let bounds = dict["windowBounds"] as? [String: Any],
@@ -145,7 +152,9 @@ enum ConfigCodec {
             "leftSidebarOpen": state.leftSidebarOpen,
             "rightSidebarOpen": state.rightSidebarOpen,
             "projectGridLayouts": state.projectGridLayouts.mapValues { layout -> [String: Any] in
-                ["mode": layout.mode.rawValue, "count": layout.count]
+                // mode/count korunur (karar 9), heightMode eklenir (additive).
+                ["mode": layout.mode.rawValue, "count": layout.count,
+                 "heightMode": layout.heightMode.rawValue]
             },
         ]
         if let bounds = state.windowBounds {

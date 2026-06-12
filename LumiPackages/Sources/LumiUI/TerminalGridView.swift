@@ -3,7 +3,7 @@ import LumiState
 import SwiftUI
 
 /// Aktif repo'nun görünür terminal kartlarını GridLayoutMath frame'leriyle dizer.
-/// rows modu viewport'a sığar (scroll yok); auto/columns dikey scroll'lanır.
+/// `fit` viewport'a sığar (scroll yok); `scroll` min boyutu koruyup dikey scroll'lanır.
 struct TerminalGridView: View {
     let terminals: [TerminalMeta]
     let layout: LumiKit.GridLayout
@@ -11,6 +11,7 @@ struct TerminalGridView: View {
     let viewProvider: any TerminalViewProviding
     let onFocus: (TerminalID) -> Void
     let onMinimize: (TerminalID) -> Void
+    let onMaximize: (TerminalID) -> Void
     let onClose: (TerminalID) -> Void
 
     var body: some View {
@@ -20,7 +21,7 @@ struct TerminalGridView: View {
                 container: geometry.size,
                 visibleCount: terminals.count
             )
-            if layout.mode == .rows {
+            if layout.heightMode == .fit {
                 placedCards(frames: frames)
             } else {
                 ScrollView {
@@ -46,6 +47,7 @@ struct TerminalGridView: View {
                         viewProvider: viewProvider,
                         onFocus: { onFocus(meta.id) },
                         onMinimize: { onMinimize(meta.id) },
+                        onMaximize: { onMaximize(meta.id) },
                         onClose: { onClose(meta.id) }
                     )
                     .frame(width: frame.width, height: frame.height)
@@ -64,6 +66,7 @@ struct TerminalCardView: View {
     let viewProvider: any TerminalViewProviding
     let onFocus: () -> Void
     let onMinimize: () -> Void
+    let onMaximize: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -94,6 +97,7 @@ struct TerminalCardView: View {
                 .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
                 .lineLimit(1)
             Spacer()
+            CardHeaderButton(systemName: "arrow.up.left.and.arrow.down.right", action: onMaximize)
             CardHeaderButton(systemName: "minus", action: onMinimize)
             CardHeaderButton(systemName: "xmark", isDestructive: true, action: onClose)
         }
@@ -105,6 +109,8 @@ struct TerminalCardView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onFocus)
+        // Başlığa çift tık → maximize/solo (spec/20 — rahat çalışma)
+        .simultaneousGesture(TapGesture(count: 2).onEnded(onMaximize))
     }
 }
 

@@ -22,6 +22,9 @@ public final class WorkspaceStore {
     public private(set) var quitDialogTerminalCount: Int?
     public var isOnboardingActive = false
     public var isSettingsOpen = false
+    /// Oturumluk maximize/solo — repo başına en çok bir terminal tam alanı
+    /// kaplar; diğer görünürler alt şeride iner. Persist edilmez (spec/21 §12 ruhu).
+    public private(set) var maximizedByRepo: [String: TerminalID] = [:]
 
     /// Quit-onay çözümü app delegate'e köprülenir (.terminateLater akışı).
     @ObservationIgnored public var onQuitResolved: ((Bool) -> Void)?
@@ -198,6 +201,37 @@ public final class WorkspaceStore {
         guard !repoPath.isEmpty else { return }
         projectGridLayouts[repoPath] = layout
         persist() // disk yazımı servis tarafında 500ms debounce'lu
+    }
+
+    // MARK: - Maximize / solo (design/03 — tek terminalle çalışma)
+
+    /// Görünür olmayan (kapanmış/minimize) id maximize edilmez; maximize odak da verir.
+    public func maximize(_ id: TerminalID, in repoPath: String) {
+        guard terminals.visibleTerminals(in: repoPath).contains(where: { $0.id == id }) else { return }
+        maximizedByRepo[repoPath] = id
+        terminals.focus(id)
+    }
+
+    public func toggleMaximize(_ id: TerminalID, in repoPath: String) {
+        if maximizedByRepo[repoPath] == id {
+            restoreMaximize(in: repoPath)
+        } else {
+            maximize(id, in: repoPath)
+        }
+    }
+
+    public func restoreMaximize(in repoPath: String) {
+        maximizedByRepo[repoPath] = nil
+    }
+
+    /// Aktif maximize hedefi — kart kapanmış/minimize olmuşsa nil döner (görünür
+    /// değil); stale dict girdisi okuma sırasında zararsızca yok sayılır.
+    public func maximizedTerminal(in repoPath: String) -> TerminalID? {
+        guard let id = maximizedByRepo[repoPath],
+              terminals.visibleTerminals(in: repoPath).contains(where: { $0.id == id }) else {
+            return nil
+        }
+        return id
     }
 
     // MARK: - Persistence (spec/21 §13: yalnız bu alt küme)

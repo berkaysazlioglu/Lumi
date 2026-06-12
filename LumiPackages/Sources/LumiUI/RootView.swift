@@ -259,15 +259,28 @@ public struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    @ViewBuilder
     private func repoContent(_ repoPath: String) -> some View {
         let visible = terminals.visibleTerminals(in: repoPath)
         let minimized = terminals.minimizedTerminals(in: repoPath)
-        return VStack(spacing: 8) {
+        let maximizedID = workspace.maximizedTerminal(in: repoPath)
+        VStack(spacing: 8) {
             if !minimized.isEmpty {
                 minimizedStrip(minimized)
             }
             if visible.isEmpty {
                 emptyRepoState(repoPath)
+            } else if let maximizedID,
+                      let maxMeta = visible.first(where: { $0.id == maximizedID }) {
+                MaximizedTerminalView(
+                    maximized: maxMeta,
+                    others: visible.filter { $0.id != maximizedID },
+                    viewProvider: viewProvider,
+                    onSwitch: { workspace.maximize($0, in: repoPath) },
+                    onMinimize: { terminals.minimize($0) },
+                    onClose: { terminals.close($0) },
+                    onRestore: { workspace.restoreMaximize(in: repoPath) }
+                )
             } else {
                 TerminalGridView(
                     terminals: visible,
@@ -276,6 +289,7 @@ public struct RootView: View {
                     viewProvider: viewProvider,
                     onFocus: { terminals.focus($0) },
                     onMinimize: { terminals.minimize($0) },
+                    onMaximize: { workspace.maximize($0, in: repoPath) },
                     onClose: { terminals.close($0) }
                 )
             }

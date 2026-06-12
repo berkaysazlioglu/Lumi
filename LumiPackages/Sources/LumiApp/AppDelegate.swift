@@ -59,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             focusNext: #selector(focusNextTerminal(_:)),
             focusPrevious: #selector(focusPreviousTerminal(_:)),
             focusIndex: #selector(focusTerminalAtIndex(_:)),
+            toggleMaximize: #selector(toggleMaximizeTerminal(_:)),
             toggleLeftSidebar: #selector(toggleLeftSidebar(_:)),
             toggleRightSidebar: #selector(toggleRightSidebar(_:)),
             openSettings: #selector(openSettings(_:)),
@@ -309,6 +310,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let item = sender as? NSMenuItem,
               let active = container.workspace.activeTab else { return }
         container.terminals.focusIndex(item.tag - 1, in: active)
+    }
+
+    @objc private func toggleMaximizeTerminal(_ sender: Any?) {
+        guard let active = container.workspace.activeTab,
+              let id = container.terminals.activeTerminalID else { return }
+        container.workspace.toggleMaximize(id, in: active)
     }
 
     @objc private func toggleLeftSidebar(_ sender: Any?) {

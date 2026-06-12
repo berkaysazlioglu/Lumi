@@ -130,9 +130,9 @@ struct HeaderBarView: View {
     }
 
     private func gridLayoutMenu(for repoPath: String) -> some View {
-        GridLayoutMenu(
-            current: workspace.gridLayout(for: repoPath),
-            onSelect: { workspace.setGridLayout($0, for: repoPath) }
+        GridSettingsControl(
+            layout: workspace.gridLayout(for: repoPath),
+            onChange: { workspace.setGridLayout($0, for: repoPath) }
         )
     }
 }
@@ -218,49 +218,5 @@ struct HeaderIconButton: View {
     private var foreground: Color {
         if isActive { return Theme.accentPrimary }
         return isHovering ? Theme.textPrimary : Theme.textSecondary
-    }
-}
-
-/// Grid layout menüsü — header ve FocusModeBar'ın ortak bileşeni (DRY).
-struct GridLayoutMenu: View {
-    static let countRange = 2...5
-
-    let current: LumiKit.GridLayout
-    let onSelect: (LumiKit.GridLayout) -> Void
-
-    var body: some View {
-        Menu {
-            Button("Auto") {
-                onSelect(LumiKit.GridLayout(mode: .auto, count: 2))
-            }
-            Menu("Columns") {
-                ForEach(Self.countRange, id: \.self) { count in
-                    Button("\(count) Columns") {
-                        onSelect(LumiKit.GridLayout(mode: .columns, count: count))
-                    }
-                }
-            }
-            Menu("Rows") {
-                ForEach(Self.countRange, id: \.self) { count in
-                    Button("\(count) Rows") {
-                        onSelect(LumiKit.GridLayout(mode: .rows, count: count))
-                    }
-                }
-            }
-        } label: {
-            Text(label)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Theme.textSecondary)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private var label: String {
-        switch current.mode {
-        case .auto: return "Auto"
-        case .columns: return "\(current.count) Col"
-        case .rows: return "\(current.count) Row"
-        }
     }
 }

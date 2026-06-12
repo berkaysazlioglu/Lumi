@@ -3,10 +3,14 @@ import XCTest
 import LumiKit
 @testable import LumiUI
 
-/// spec/20 §13 grid matematiği birebir testleri.
+/// İki eksenli grid matematiği testleri (design/03).
 final class GridLayoutMathTests: XCTestCase {
-    private func layout(_ mode: GridLayout.Mode, _ count: Int = 2) -> GridLayout {
-        GridLayout(mode: mode, count: count)
+    private func layout(
+        _ mode: GridLayout.Mode,
+        _ count: Int = 2,
+        _ height: GridLayout.HeightMode = .scroll
+    ) -> GridLayout {
+        GridLayout(mode: mode, count: count, heightMode: height)
     }
 
     // MARK: - Kolon sayısı
@@ -35,19 +39,14 @@ final class GridLayoutMathTests: XCTestCase {
         )
     }
 
-    func testRowsModeColumnFormula() {
-        // cols = ceil(görünür / N)
-        XCTAssertEqual(
-            GridLayoutMath.columnCount(layout: layout(.rows, 2), containerWidth: 1000, visibleCount: 5),
-            3
-        )
-        XCTAssertEqual(
-            GridLayoutMath.columnCount(layout: layout(.rows, 3), containerWidth: 1000, visibleCount: 2),
-            1
-        )
+    func testRowCountIsCeilVisibleOverColumns() {
+        XCTAssertEqual(GridLayoutMath.rowCount(visibleCount: 5, columns: 3), 2)
+        XCTAssertEqual(GridLayoutMath.rowCount(visibleCount: 6, columns: 3), 2)
+        XCTAssertEqual(GridLayoutMath.rowCount(visibleCount: 7, columns: 3), 3)
+        XCTAssertEqual(GridLayoutMath.rowCount(visibleCount: 0, columns: 3), 0)
     }
 
-    // MARK: - Son satır stretch (spec/20 §13 örneği)
+    // MARK: - Son satır stretch
 
     func testStretchDistributionFiveColumnsTwoRemainder() {
         // 5 kolonda 2 artık kart → span 2 ve span 3 (fazla kolon SONDAKİNE)
@@ -66,7 +65,7 @@ final class GridLayoutMathTests: XCTestCase {
         XCTAssertEqual(spans, [1, 1, 1, 1])
     }
 
-    // MARK: - Frame hesapları
+    // MARK: - Frame: kolon genişlikleri
 
     func testColumnsModeWidths() {
         // floor((1000 - 2*12) / 3) = 325
@@ -82,18 +81,59 @@ final class GridLayoutMathTests: XCTestCase {
         XCTAssertEqual(frames.map(\.minY), [0, 0, 0])
     }
 
-    func testRowsModeFitsViewportWithoutScroll() {
-        // rows 2, görünür 4 → cols 2; rowHeight = floor((800-12)/2) = 394
+    // MARK: - Yükseklik politikası
+
+    func testFitDividesViewportNoScroll() {
+        // fit, columns 2, görünür 4 → 2 satır; rowHeight = floor((800-12)/2)=394
         let frames = GridLayoutMath.frames(
-            layout: layout(.rows, 2),
+            layout: layout(.columns, 2, .fit),
             container: CGSize(width: 1000, height: 800),
             visibleCount: 4
         )
-        XCTAssertEqual(frames.count, 4)
         XCTAssertEqual(frames[0].height, 394)
         XCTAssertEqual(frames[2].minY, 406) // 394 + 12
+        XCTAssertEqual(GridLayoutMath.contentHeight(frames: frames), 800, accuracy: 0.5,
+                       "fit içerik tam viewport'a sığmalı")
+    }
+
+    func testFitShrinksWhenManyTerminals() {
+        // fit, columns 2, görünür 8 → 4 satır; rowHeight = floor((800-3*12)/4)=191
+        let frames = GridLayoutMath.frames(
+            layout: layout(.columns, 2, .fit),
+            container: CGSize(width: 1000, height: 800),
+            visibleCount: 8
+        )
+        XCTAssertEqual(frames[0].height, 191)
+        XCTAssertLessThanOrEqual(GridLayoutMath.contentHeight(frames: frames), 800.5,
+                                 "fit modda çok terminalde bile scroll yok")
+    }
+
+    func testScrollFillsViewportWhenFewTerminals() {
+        // scroll, columns 2, görünür 2 → 1 satır; fitRowHeight=800 ≥ min(360)
+        // → 800 kullanılır, viewport dolar, scroll yok
+        let frames = GridLayoutMath.frames(
+            layout: layout(.columns, 2, .scroll),
+            container: CGSize(width: 1000, height: 800),
+            visibleCount: 2
+        )
+        XCTAssertEqual(frames[0].height, 800)
         XCTAssertEqual(GridLayoutMath.contentHeight(frames: frames), 800)
     }
+
+    func testScrollClampsToMinAndOverflowsWhenManyTerminals() {
+        // scroll, columns 1, görünür 6 → 6 satır; fitRowHeight=floor((800-5*12)/6)=123
+        // < min(360) → 360 kullanılır, içerik viewport'u aşar (scroll)
+        let frames = GridLayoutMath.frames(
+            layout: layout(.columns, 1, .scroll),
+            container: CGSize(width: 1000, height: 800),
+            visibleCount: 6
+        )
+        XCTAssertEqual(frames[0].height, 360)
+        XCTAssertGreaterThan(GridLayoutMath.contentHeight(frames: frames), 800,
+                             "scroll modda min tabana oturunca içerik viewport'u aşar")
+    }
+
+    // MARK: - Stretch frame
 
     func testStretchedLastRowFillsWidth() {
         // columns 5, görünür 7: son satırda span 2 + span 3 tüm genişliği doldurur

@@ -84,9 +84,9 @@ struct FocusModeBar: View {
     }
 
     private var gridLayoutMenu: some View {
-        GridLayoutMenu(
-            current: workspace.gridLayout(for: repoPath),
-            onSelect: { workspace.setGridLayout($0, for: repoPath) }
+        GridSettingsControl(
+            layout: workspace.gridLayout(for: repoPath),
+            onChange: { workspace.setGridLayout($0, for: repoPath) }
         )
     }
 }

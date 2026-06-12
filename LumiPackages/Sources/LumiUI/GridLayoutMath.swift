@@ -1,16 +1,17 @@
 import Foundation
 import LumiKit
 
-/// Terminal grid yerleşim matematiği (spec/20 §13 birebir).
+/// Terminal grid yerleşim matematiği (design/03 — iki eksenli model).
 /// Saf fonksiyonlar — SwiftUI'dan bağımsız test edilir.
 public enum GridLayoutMath {
     public static let gap: CGFloat = 12
     public static let minCardWidth: CGFloat = 400
-    /// auto/columns modları scroll'ludur; satır yüksekliği sabittir.
-    public static let scrollingRowHeight: CGFloat = 360
+    /// Kaydır (scroll) modunda satır yüksekliğinin altına inmediği okunur taban.
+    /// Az terminalde viewport'u doldurur (fitRowHeight ≥ taban); çoğalınca bu
+    /// tabana oturup içerik viewport'u aşar → dikey scroll.
+    public static let minScrollRowHeight: CGFloat = 360
 
-    /// Kolon sayısı: auto → floor((w+gap)/(400+gap)) min 1; columns → N;
-    /// rows → ceil(görünür / N) min 1.
+    /// Kolon sayısı: auto → floor((w+gap)/(400+gap)) min 1; columns → N.
     public static func columnCount(
         layout: GridLayout,
         containerWidth: CGFloat,
@@ -22,9 +23,14 @@ public enum GridLayoutMath {
             return max(1, Int((containerWidth + gap) / (minCardWidth + gap)))
         case .columns:
             return max(1, layout.count)
-        case .rows:
-            return max(1, Int(ceil(Double(visibleCount) / Double(max(1, layout.count)))))
         }
+    }
+
+    /// Satır sayısı = ceil(görünür / kolon). Stretch yalnız son satırın
+    /// genişliğini etkiler, satır sayısını değiştirmez.
+    static func rowCount(visibleCount: Int, columns: Int) -> Int {
+        guard visibleCount > 0, columns > 0 else { return 0 }
+        return Int(ceil(Double(visibleCount) / Double(columns)))
     }
 
     /// Son satır stretch dağıtımı (auto modda YOK): baseSpan = floor(cols/remainder);
@@ -46,8 +52,9 @@ public enum GridLayoutMath {
     }
 
     /// Görünür kart frame'leri (yerleşim sırası soldan sağa, satır satır).
-    /// rows modu viewport'a sığar (scroll yok); auto/columns sabit satır
-    /// yüksekliğiyle scroll'lanır.
+    /// `fit`: tüm satırlar viewport'a sığar (scroll yok). `scroll`: satır
+    /// yüksekliği min tabanın altına inmez; az terminalde viewport'u doldurur,
+    /// çoğalınca tabana oturup içerik viewport'u aşar (dikey scroll).
     public static func frames(
         layout: GridLayout,
         container: CGSize,
@@ -57,13 +64,14 @@ public enum GridLayoutMath {
         let columns = columnCount(layout: layout, containerWidth: container.width, visibleCount: visibleCount)
         let columnWidth = floor((container.width - CGFloat(columns - 1) * gap) / CGFloat(columns))
 
+        let rows = rowCount(visibleCount: visibleCount, columns: columns)
+        let fitRowHeight = floor((container.height - CGFloat(rows - 1) * gap) / CGFloat(rows))
         let rowHeight: CGFloat
-        switch layout.mode {
-        case .rows:
-            let rows = max(1, layout.count)
-            rowHeight = floor((container.height - CGFloat(rows - 1) * gap) / CGFloat(rows))
-        case .auto, .columns:
-            rowHeight = scrollingRowHeight
+        switch layout.heightMode {
+        case .fit:
+            rowHeight = fitRowHeight
+        case .scroll:
+            rowHeight = max(minScrollRowHeight, fitRowHeight)
         }
 
         let spanList = spans(

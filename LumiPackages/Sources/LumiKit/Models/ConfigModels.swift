@@ -133,19 +133,32 @@ public struct UIState: Codable, Sendable, Equatable {
     }
 }
 
+/// İki eksenli grid yerleşimi (design/03; eski tek-eksenli auto/columns/rows
+/// modeli emekli — `rows` yalnız okuma-migrasyonunda fit'e çevrilir):
+/// (1) kolon ekseni `mode`+`count`, (2) yükseklik ekseni `heightMode`.
 public struct GridLayout: Codable, Sendable, Equatable {
     public var mode: Mode
     public var count: Int
+    public var heightMode: HeightMode
 
+    /// Kolon ekseni. `rows` EMEKLİ — yeni yazımda üretilmez, eski dosyada
+    /// karşılaşılırsa ConfigCodec fit'e migrate eder.
     public enum Mode: String, Codable, Sendable {
         case auto
         case columns
-        case rows
     }
 
-    public init(mode: Mode, count: Int) {
+    /// Yükseklik politikası: `fit` hepsini pencereye sığdırır (scroll yok);
+    /// `scroll` min okunur boyutu korur, taşınca dikey scroll'lanır.
+    public enum HeightMode: String, Codable, Sendable {
+        case fit
+        case scroll
+    }
+
+    public init(mode: Mode, count: Int, heightMode: HeightMode = .scroll) {
         self.mode = mode
         self.count = count
+        self.heightMode = heightMode
     }
 }
 

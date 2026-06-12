@@ -119,13 +119,13 @@ final class WorkspaceStoreTests: XCTestCase {
             activeTab: nil,
             leftSidebarOpen: true,
             rightSidebarOpen: false,
-            projectGridLayouts: ["/r/alpha": GridLayout(mode: .rows, count: 2)],
+            projectGridLayouts: ["/r/alpha": GridLayout(mode: .columns, count: 2, heightMode: .fit)],
             windowBounds: nil,
             windowMaximized: nil,
             legacyGridColumns: GridLayout(mode: .columns, count: 3)
         ))
         await store.load(repos: repos)
-        XCTAssertEqual(store.gridLayout(for: "/r/alpha"), GridLayout(mode: .rows, count: 2))
+        XCTAssertEqual(store.gridLayout(for: "/r/alpha"), GridLayout(mode: .columns, count: 2, heightMode: .fit))
     }
 
     // MARK: - Tab yönetimi (spec/21 §9)
@@ -194,11 +194,45 @@ final class WorkspaceStoreTests: XCTestCase {
 
     func testGridLayoutDefaultsAndPersistence() async throws {
         XCTAssertEqual(store.gridLayout(for: "/r/alpha"), WorkspaceStore.defaultGridLayout)
-        store.setGridLayout(GridLayout(mode: .rows, count: 4), for: "/r/alpha")
-        XCTAssertEqual(store.gridLayout(for: "/r/alpha"), GridLayout(mode: .rows, count: 4))
+        store.setGridLayout(GridLayout(mode: .columns, count: 4, heightMode: .fit), for: "/r/alpha")
+        XCTAssertEqual(store.gridLayout(for: "/r/alpha"), GridLayout(mode: .columns, count: 4, heightMode: .fit))
         store.setGridLayout(GridLayout(mode: .auto, count: 2), for: "") // boş path guard'ı
         try await waitForPersist()
         let persisted = await config.uiState()
-        XCTAssertEqual(persisted.projectGridLayouts["/r/alpha"], GridLayout(mode: .rows, count: 4))
+        XCTAssertEqual(persisted.projectGridLayouts["/r/alpha"], GridLayout(mode: .columns, count: 4, heightMode: .fit))
+    }
+
+    // MARK: - Maximize / solo
+
+    func testMaximizeSetsAndTogglesPerRepo() {
+        store.openTab("/r/alpha")
+        let a = TerminalMeta(id: TerminalID(), name: "a", repoPath: "/r/alpha", createdAt: Date())
+        let b = TerminalMeta(id: TerminalID(), name: "b", repoPath: "/r/alpha", createdAt: Date())
+        terminals.apply(.spawned(a))
+        terminals.apply(.spawned(b))
+
+        store.maximize(a.id, in: "/r/alpha")
+        XCTAssertEqual(store.maximizedTerminal(in: "/r/alpha"), a.id)
+        // Aynı id tekrar toggle → restore
+        store.toggleMaximize(a.id, in: "/r/alpha")
+        XCTAssertNil(store.maximizedTerminal(in: "/r/alpha"))
+    }
+
+    func testMaximizeIsolatedPerRepo() {
+        let a = TerminalMeta(id: TerminalID(), name: "a", repoPath: "/r/alpha", createdAt: Date())
+        let b = TerminalMeta(id: TerminalID(), name: "b", repoPath: "/r/beta", createdAt: Date())
+        terminals.apply(.spawned(a))
+        terminals.apply(.spawned(b))
+        store.maximize(a.id, in: "/r/alpha")
+        XCTAssertEqual(store.maximizedTerminal(in: "/r/alpha"), a.id)
+        XCTAssertNil(store.maximizedTerminal(in: "/r/beta"), "diğer repo etkilenmez")
+    }
+
+    func testMaximizeIgnoresClosedTerminal() {
+        let a = TerminalMeta(id: TerminalID(), name: "a", repoPath: "/r/alpha", createdAt: Date())
+        terminals.apply(.spawned(a))
+        store.maximize(a.id, in: "/r/alpha")
+        terminals.apply(.exited(a.id, code: 0)) // kapandı → görünür değil
+        XCTAssertNil(store.maximizedTerminal(in: "/r/alpha"))
     }
 }

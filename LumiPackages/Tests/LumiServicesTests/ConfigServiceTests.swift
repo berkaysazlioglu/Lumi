@@ -262,18 +262,40 @@ final class ConfigServiceTests: XCTestCase {
     func testProjectGridLayoutsRoundTrip() async throws {
         let service = makeService()
         await service.updateUIState {
-            $0.projectGridLayouts["/repo/x"] = GridLayout(mode: .columns, count: 3)
+            $0.projectGridLayouts["/repo/x"] = GridLayout(mode: .columns, count: 3, heightMode: .fit)
         }
         await service.flushPendingWrites()
 
         let written = try readJSONDict(paths.uiStateFile)
         let layouts = try XCTUnwrap(written["projectGridLayouts"] as? [String: Any])
         let entry = try XCTUnwrap(layouts["/repo/x"] as? [String: Any])
+        // mode/count korunur (karar 9), heightMode eklenir (additive)
         XCTAssertEqual(entry["mode"] as? String, "columns")
         XCTAssertEqual(entry["count"] as? Int, 3)
+        XCTAssertEqual(entry["heightMode"] as? String, "fit")
 
         let fresh = ConfigService(paths: paths)
         let reloaded = await fresh.uiState()
-        XCTAssertEqual(reloaded.projectGridLayouts["/repo/x"], GridLayout(mode: .columns, count: 3))
+        XCTAssertEqual(reloaded.projectGridLayouts["/repo/x"], GridLayout(mode: .columns, count: 3, heightMode: .fit))
+    }
+
+    func testLegacyRowsModeMigratesToFit() async throws {
+        // v1/eski dosyada mode:"rows" → auto + fit'e migrate edilir
+        let json = """
+        {"projectGridLayouts":{"/repo/r":{"mode":"rows","count":2}}}
+        """
+        try json.write(to: paths.uiStateFile, atomically: true, encoding: .utf8)
+        let reloaded = await ConfigService(paths: paths).uiState()
+        XCTAssertEqual(reloaded.projectGridLayouts["/repo/r"], GridLayout(mode: .auto, count: 2, heightMode: .fit))
+    }
+
+    func testMissingHeightModeDefaultsToScroll() async throws {
+        // heightMode'suz eski auto/columns girdisi scroll'a düşer
+        let json = """
+        {"projectGridLayouts":{"/repo/c":{"mode":"columns","count":4}}}
+        """
+        try json.write(to: paths.uiStateFile, atomically: true, encoding: .utf8)
+        let reloaded = await ConfigService(paths: paths).uiState()
+        XCTAssertEqual(reloaded.projectGridLayouts["/repo/c"], GridLayout(mode: .columns, count: 4, heightMode: .scroll))
     }
 }

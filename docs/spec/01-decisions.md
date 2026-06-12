@@ -63,8 +63,15 @@ Mevcut mor/violet dark tema, JetBrains Mono tipografi ve component görünümler
 ### 14. Action auto-discovery iptal
 `docs/plans/2026-02-06-action-auto-discovery.md` (CommandCapture/SessionRecorder/DiscoveryEngine) tamamen iptal edildi; hiçbir sürümde hedeflenmez, doküman arşiv niteliğindedir.
 
+### 15. Grid: iki eksenli model (rows emekli) + maximize/solo
+v1'in `auto/columns/rows` tek-eksenli grid'i, dizilim ve yükseklik politikasını iç içe geçirip ("rows" = viewport'a sığar/scroll yok; auto/columns = sabit satır + scroll) zayıf bir UX üretiyordu. Native'de iki eksen ayrılır:
+- **Kolon ekseni:** `auto` (genişliğe göre) veya sabit `columns N`.
+- **Yükseklik ekseni:** `fit` (hepsi pencereye sığar, scroll yok) veya `scroll` (min okunur satır yüksekliği korunur; az terminalde pencere dolar, çoğalınca tabana oturup dikey scroll).
+
+`rows` modu **emekli**: yeni yazımda üretilmez, eski/v1 dosyalarında karşılaşılırsa `auto`+`fit`'e migrate edilir. Persistence karar 9 uyumlu kalır — `mode`/`count` alanları korunur, `heightMode` **eklenir** (additive; format değişmez). Ayarlar header'daki butondan açılan sade bir popover'da (Kolon + Yükseklik segmented). Ek olarak tek terminalle rahat çalışmak için **maximize/solo**: bir terminal tam içerik alanını kaplar, diğer görünürler alt şeride iner (oturumluk, persist edilmez). Bu değişiklik [20-renderer-terminal.md](./20-renderer-terminal.md) §13'ün yerine geçer.
+
 ## Kapsam özeti
 
-Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 3 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, side-by-side diff).
+Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 4 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, side-by-side diff).
 
 Buna ek olarak [00-overview.md](./00-overview.md) §4'teki bug-türevli zorunlu gereksinimler (PTY→UI backpressure, render-crash izolasyonu, replay güvenliği) tasarımın başından bağlayıcıdır.

@@ -13,6 +13,7 @@ enum MainMenuBuilder {
         let focusNext: Selector
         let focusPrevious: Selector
         let focusIndex: Selector // sender.tag = 1-9
+        let toggleMaximize: Selector
         let toggleLeftSidebar: Selector
         let toggleRightSidebar: Selector
         let openSettings: Selector
@@ -92,6 +93,13 @@ enum MainMenuBuilder {
             item.tag = index
             terminalMenu.addItem(item)
         }
+        terminalMenu.addItem(.separator())
+        let maximizeItem = targeted(
+            title: "Maximize Terminal", action: actions.toggleMaximize,
+            key: "m", target: actions.target
+        )
+        maximizeItem.keyEquivalentModifierMask = [.command, .control]
+        terminalMenu.addItem(maximizeItem)
         terminalItem.submenu = terminalMenu
         mainMenu.addItem(terminalItem)
 
