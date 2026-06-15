@@ -80,6 +80,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titleVisibility = .hidden
         window.minSize = NSSize(width: 1000, height: 600)
         window.backgroundColor = NSColor(srgbRed: 0x0A / 255, green: 0x0A / 255, blue: 0x12 / 255, alpha: 1)
+        // Pencerenin color space'i açıkça pinlenmezse AppKit launch bağlamına göre
+        // farklı seçiyor: paketlenmiş .app yönetilen sRGB→ekran (soluk), `swift run`
+        // çıplak executable ise ekranın native gamut'una yakın (canlı) backing store
+        // alıyor. `dev`deki canlı görünümü her iki build'de de elde etmek için ekranın
+        // native color space'ini kullanıyoruz (P3 ekranlarda sRGB değerler daha doygun).
+        window.colorSpace = NSScreen.main?.colorSpace ?? .sRGB
 
         let uiState = await container.config.uiState()
         let screens = NSScreen.screens.map(\.visibleFrame)
