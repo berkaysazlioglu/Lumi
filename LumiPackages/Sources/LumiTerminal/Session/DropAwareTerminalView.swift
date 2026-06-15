@@ -1,4 +1,5 @@
 import AppKit
+import LumiKit
 import SwiftTerm
 
 /// Dosya sürükle-bırak destekli terminal view'ı (spec/20 §drag-drop).
@@ -51,6 +52,17 @@ final class DropAwareTerminalView: TerminalView {
         for case let scroller as NSScroller in subviews {
             scroller.isHidden = true
         }
+    }
+
+    /// İnaktif pencerede ilk tık: normalde macOS bu tıkı YALNIZ pencere
+    /// aktivasyonu için yutar, view'a iletmez. Bu yüzden başka app focusluyken
+    /// ikinci bir terminale tıklamak önce Lumi'yi öne getirir ama odağı geçirmez —
+    /// kullanıcı iki kez tıklamak zorunda kalırdı (first responder değişmediği için
+    /// `TerminalSessionManager` focus monitor'u eski terminali okur). `true`
+    /// döndürünce aktivasyon tıkı aynı anda terminale de ulaşır: bu view first
+    /// responder olur ve odak tek tıkta doğru terminale geçer.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
     }
 
     override func viewDidMoveToWindow() {
@@ -119,6 +131,9 @@ final class DropAwareTerminalView: TerminalView {
         isScroll: Bool, deltaY: CGFloat, isPrecise: Bool,
         locationInWindow: NSPoint, windowID: ObjectIdentifier?
     ) -> Bool {
+        // Tam-ekran overlay (Settings/FileViewer) açıkken terminal monitörü devre
+        // dışı: event'i consume etmeden geçir ki overlay'in ScrollView'i alsın.
+        guard !TerminalInputGate.shared.isSuppressed else { return false }
         guard let window, ObjectIdentifier(window) == windowID else { return false }
         let viewPoint = convert(locationInWindow, from: nil)
         guard bounds.contains(viewPoint) else { return false }

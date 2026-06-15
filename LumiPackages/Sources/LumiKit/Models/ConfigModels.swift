@@ -28,6 +28,9 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// Zamanlanmış oturum tetikleyicisi (günlük belirli saatte Claude oturumunu
     /// başlatan otomatik prompt). Additive (karar 9): yoksa kapalı default.
     public var sessionTrigger: SessionTrigger
+    /// Kullanım göstergesinin otomatik tazelenmesi (opt-in, karar 20). Additive
+    /// (karar 9): yoksa kapalı default.
+    public var usageAutoRefresh: UsageAutoRefresh
 
     public static let defaults = AppConfig(
         projectsRoot: "",
@@ -42,7 +45,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         terminalCursorStyle: TerminalCursorShape.block.rawValue,
         terminalCursorBlink: true,
         notifications: .defaults,
-        sessionTrigger: .defaults
+        sessionTrigger: .defaults,
+        usageAutoRefresh: .defaults
     )
 
     public init(
@@ -58,7 +62,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         terminalCursorStyle: String,
         terminalCursorBlink: Bool,
         notifications: NotificationSettings,
-        sessionTrigger: SessionTrigger = .defaults
+        sessionTrigger: SessionTrigger = .defaults,
+        usageAutoRefresh: UsageAutoRefresh = .defaults
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
@@ -73,6 +78,31 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.terminalCursorBlink = terminalCursorBlink
         self.notifications = notifications
         self.sessionTrigger = sessionTrigger
+        self.usageAutoRefresh = usageAutoRefresh
+    }
+}
+
+/// Kullanım göstergesinin (`claude -p "/usage"`) otomatik tazelenmesi
+/// (`~/.lumi/config.json` → `usageAutoRefresh`). Opt-in (karar 20): kapalıyken
+/// hiçbir otomatik istek atılmaz. Açıkken `intervalMinutes`'te bir, YALNIZCA
+/// kullanıcı aktifse (son HID girdisinden bu yana aralıktan az süre geçmişse)
+/// tazelenir; Mac uykudayken process askıda olduğundan tetiklenmez.
+public struct UsageAutoRefresh: Codable, Sendable, Equatable {
+    public var enabled: Bool
+    /// Tazeleme aralığı (dakika). Yalnız `allowedIntervals` değerleri geçerli;
+    /// dışındaki değerler default'a düşer.
+    public var intervalMinutes: Int
+
+    /// UI'da sunulan ve kabul edilen aralık seçenekleri.
+    public static let allowedIntervals = [5, 15, 30]
+
+    public static let defaults = UsageAutoRefresh(enabled: false, intervalMinutes: 15)
+
+    public init(enabled: Bool, intervalMinutes: Int) {
+        self.enabled = enabled
+        self.intervalMinutes = Self.allowedIntervals.contains(intervalMinutes)
+            ? intervalMinutes
+            : Self.defaults.intervalMinutes
     }
 }
 

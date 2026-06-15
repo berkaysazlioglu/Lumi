@@ -119,13 +119,14 @@ UsageSnapshot = {
 
 Implementasyon bu doküman + kullanıcı kararıyla yazıldı; tek bilinçli sapma **yenileme politikası**:
 
-- **Auto-refresh YOK (kullanıcı kararı 2026-06-12).** §6'daki "≥5 dk TTL'li arka plan periyodik tazeleme" hedef değildir. Akış: uygulama bootstrap'inde **bir kez** ilk yükleme (`UsageStore.loadInitialIfNeeded`, arka planda, bloklamaz) + popover'daki **manuel refresh** butonu. Anti-spam için min aralık (`UsageStore.minRefreshInterval = 60sn`) korunur; aralık içindeyken buton pasif (`canRefresh`).
+- **Auto-refresh: default KAPALI, opt-in (kullanıcı kararı 2026-06-12 → revize 2026-06-15, karar 20).** Varsayılan akış değişmedi: bootstrap'te **bir kez** ilk yükleme (`UsageStore.loadInitialIfNeeded`) + popover'daki **manuel refresh**; anti-spam min aralık (`UsageStore.minRefreshInterval = 60sn`) korunur. **Ek olarak** Settings → **Usage** sekmesinden kullanıcı isterse opt-in periyodik tazeleme açılır (aralık seti {5, 15, 30} dk). Açıkken `UsageAutoRefreshStore` (LumiState) `intervalMinutes`'te bir, **yalnızca kullanıcı aktifse** (`ActivityMonitoring.secondsSinceUserInput() < interval`, idle-gate) `UsageStore.refresh()` çağırır. **Uyku:** Mac uykudayken process askıda olduğundan döngü ateşlenemez; `Task.sleep` `ContinuousClock` kullandığından uyanışta bir kez dönülür ama idle-gate orada da devrededir (ayrı sleep/wake bildirimi gerekmez). Bkz. [01-decisions.md](../spec/01-decisions.md) karar 20.
 - **Hata görünürlüğü:** Hata/timeout/rate-limit son başarılı snapshot'ı korur (ekran boşaltılmaz); hata mesajı **popover içinde** "Güncellenemedi: …" satırıyla görünür kılınır (toast yerine — karar 5 görünürlük şartı sağlanır, her başarısız tazelemede toast spam'i olmaz).
 
 Bileşenler (SOLID/DI):
 - `LumiKit`: `UsageWindow`/`UsageSnapshot` (immutable), saf `UsageOutputParser.parse(_:now:)`, `UsageServicing` protokolü, `LumiError.cliNotFound`/`.usageUnavailable`.
 - `LumiServices`: `UsageService` (`actor`) — `BinaryLocator` (SystemService ile ortak, DRY) → `ProcessRunner` (15sn timeout) → parse; `claude -p "/usage"`.
-- `LumiState`: `UsageStore` (`@Observable @MainActor`), test için `now` enjekte edilebilir.
+- `LumiState`: `UsageStore` (`@Observable @MainActor`), test için `now` enjekte edilebilir; `UsageAutoRefreshStore` (opt-in periyodik tazeleme, idle-gate'li döngü — `SessionScheduleStore` iskeleti).
+- `LumiKit`/`LumiServices`: `ActivityMonitoring` protokolü + `SystemActivityMonitor` (CGEventSource idle sayacı, izin gerektirmez).
 - `LumiUI`: `UsageIndicatorView` — topbar'da grid kontrolünün **solunda** kompakt 5sa yüzdesi; **tıklamayla** (hover değil — 2026-06-12 kullanıcı kararı) tüm pencereleri progress bar + reset süreleri + refresh ile gösteren popover açılır.
 - DI: `AppContainer` `usageService`/`usageStore`'u inşa eder ve bootstrap'te ilk yüklemeyi tetikler.
 

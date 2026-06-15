@@ -16,6 +16,7 @@ struct SettingsView: View {
         case appearance = "Appearance"
         case notifications = "Notifications"
         case session = "Session"
+        case usage = "Usage"
         case shortcuts = "Shortcuts"
 
         var id: String { rawValue }
@@ -28,6 +29,7 @@ struct SettingsView: View {
             case .appearance: return "paintpalette"
             case .notifications: return "bell"
             case .session: return "clock.arrow.circlepath"
+            case .usage: return "gauge.with.dots.needle.bottom.50percent"
             case .shortcuts: return "keyboard"
             }
         }
@@ -36,6 +38,7 @@ struct SettingsView: View {
     let settings: SettingsStore
     let workspace: WorkspaceStore
     let sessionSchedule: SessionScheduleStore
+    let usage: UsageStore
     let chooseFolder: () async -> String?
     let onClose: () -> Void
 
@@ -114,6 +117,7 @@ struct SettingsView: View {
         case .appearance: appearanceTab
         case .notifications: notificationsTab
         case .session: sessionTab
+        case .usage: usageTab
         case .shortcuts: shortcutsTab
         }
     }
@@ -661,6 +665,91 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+
+    // MARK: - Usage
+
+    private var usageTab: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsSectionTitle(
+                title: "Usage Auto-Refresh",
+                description: "Refresh the Claude usage indicator automatically on an interval."
+            )
+            infoCard("When enabled, Lumi re-checks your Claude limits every interval — but only "
+                + "while you're actively using your Mac (recent keyboard/mouse input). It never runs "
+                + "while the Mac is asleep, and each check counts against your subscription quota, "
+                + "just like the manual refresh.")
+            SettingsToggleRow(
+                title: "Auto-Refresh",
+                hint: "Re-check usage automatically while you're active",
+                isOn: Binding(
+                    get: { settings.current.usageAutoRefresh.enabled },
+                    set: { value in updateUsageAutoRefresh { $0.enabled = value } }
+                )
+            ) {
+                usageIntervalPicker
+            }
+            usageStatusRow
+        }
+    }
+
+    private var usageIntervalPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Check interval")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.textMuted)
+            SettingsSegmented(
+                options: UsageAutoRefresh.allowedIntervals.map {
+                    .init(value: $0, label: "\($0) min")
+                },
+                selection: Binding(
+                    get: { settings.current.usageAutoRefresh.intervalMinutes },
+                    set: { value in updateUsageAutoRefresh { $0.intervalMinutes = value } }
+                )
+            )
+        }
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var usageStatusRow: some View {
+        if usage.isLoading {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Checking…")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted)
+            }
+        } else if let message = usage.errorMessage {
+            HStack(spacing: 5) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.accentPrimary)
+                Text("Last check failed: \(message)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        } else if let fetched = usage.snapshot?.fetchedAt {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.accentCyan)
+                Text("Last checked")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
+                Text(fetched, format: .dateTime.hour().minute())
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted)
+            }
+        }
+    }
+
+    private func updateUsageAutoRefresh(_ mutate: (inout UsageAutoRefresh) -> Void) {
+        var copy = settings.current.usageAutoRefresh
+        mutate(&copy)
+        settings.setUsageAutoRefresh(copy)
     }
 
     // MARK: - Shortcuts (salt-okunur referans, spec/22 §5.6)

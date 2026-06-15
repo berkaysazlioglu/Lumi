@@ -97,6 +97,13 @@ Mimari: `SessionStarterServicing` (LumiKit sınırı) → `SessionStarterService
 
 Persistence karar 9 uyumlu: `config.json`'a **additive** `sessionTrigger` nested key'i eklenir (`enabled`/`hour`/`minute`/`prompt`); yoksa kapalı default'a düşer (disabled / 09:00 / "hello") ve bilinmeyen-key korumasıyla diğer alanlar bozulmaz.
 
+### 20. Kullanım göstergesi opt-in auto-refresh (2026-06-12 kararının revizyonu)
+[05-usage-indicator.md](../design/05-usage-indicator.md) §6.1'de "auto-refresh YOK" diye kayıtlıydı (2026-06-12). Kullanıcı talebiyle (2026-06-15) bu duruş **opt-in** ile revize edildi: default davranış değişmez (bootstrap'te bir kez yükleme + manuel refresh), ama kullanıcı isterse açabileceği periyodik tazeleme eklenir. Settings → **Usage** sekmesi: aktivasyon toggle'ı + aralık seçimi (yalnız {**5, 15, 30**} dk) + son kontrol durumu.
+
+**Aktiflik kapısı (kullanıcı kararı — "uyurken çalışmasın, sadece aktifken"):** Açıkken her `intervalMinutes`'te bir, **yalnızca kullanıcı aktifse** tazelenir. Aktiflik ölçütü idle-gate: sistem-geneli son HID girdisinden bu yana geçen süre (`CGEventSource.secondsSinceLastEventType`) aralıktan **az** ise tazele, değilse atla. **Uyku:** Mac uykudayken process askıya alındığından döngü ateşlenmez; `Task.sleep` `ContinuousClock` kullandığından uyanışta bir kez dönülür ama idle-gate orada da geçerlidir (kullanıcı uyandırmak için girdi verdiyse bir kez tazeler, arka plan uyanışında atlar). Bu sayede ayrı `NSWorkspace` sleep/wake bildirimine gerek yoktur → LumiState AppKit'ten bağımsız kalır. Her tazeleme abonelik kotasından düşer (manuel refresh ile aynı; subagent/token maliyeti yok).
+
+Mimari: `ActivityMonitoring` (LumiKit sınırı) → `SystemActivityMonitor` (LumiServices, CGEventSource; idle sorgusu Accessibility/Input-Monitoring izni GEREKTİRMEZ) → `UsageAutoRefreshStore` (LumiState; `SessionScheduleStore` iskeleti — config'i `update(_:)` ile izler, döngüde uyur/tetikler, `UsageStore.refresh()` çağırır). Config değişimi `ConfigSideEffectCoordinator` köprüsünden akar (karar 3). Persistence karar 9 uyumlu: `config.json`'a **additive** `usageAutoRefresh` nested key'i (`enabled`/`intervalMinutes`); yoksa kapalı default'a düşer (disabled / 15 dk) ve geçersiz aralık izinli set'e clamp'lenir.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).

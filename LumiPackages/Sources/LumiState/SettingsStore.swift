@@ -100,6 +100,10 @@ public final class SettingsStore {
         apply { $0.sessionTrigger = trigger }
     }
 
+    public func setUsageAutoRefresh(_ settings: UsageAutoRefresh) {
+        apply { $0.usageAutoRefresh = settings }
+    }
+
     public func addAdditionalPath(_ path: String, type: AdditionalPath.PathType) {
         let entry = AdditionalPath(id: UUID().uuidString, path: path, type: type)
         apply { $0.additionalPaths.append(entry) }

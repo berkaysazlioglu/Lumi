@@ -67,6 +67,13 @@ enum ConfigCodec {
                 prompt: (nested["prompt"] as? String) ?? defaults.prompt
             )
         }
+        if let nested = dict["usageAutoRefresh"] as? [String: Any] {
+            let defaults = UsageAutoRefresh.defaults
+            config.usageAutoRefresh = UsageAutoRefresh(
+                enabled: boolValue(nested["enabled"]) ?? defaults.enabled,
+                intervalMinutes: intValue(nested["intervalMinutes"]) ?? defaults.intervalMinutes
+            )
+        }
         return config
     }
 
@@ -104,6 +111,10 @@ enum ConfigCodec {
                 "hour": config.sessionTrigger.hour,
                 "minute": config.sessionTrigger.minute,
                 "prompt": config.sessionTrigger.prompt,
+            ] as [String: Any],
+            "usageAutoRefresh": [
+                "enabled": config.usageAutoRefresh.enabled,
+                "intervalMinutes": config.usageAutoRefresh.intervalMinutes,
             ] as [String: Any],
         ]
     }

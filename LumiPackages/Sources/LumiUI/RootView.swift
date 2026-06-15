@@ -117,6 +117,11 @@ public struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.bgDeep)
+        // Tam-ekran overlay açıkken terminal scroll/hover monitörünü bastır
+        // (yoksa overlay'in ScrollView'i yerine arkadaki terminal kayar).
+        .onChange(of: isInputBlockingOverlayOpen) { _, open in
+            TerminalInputGate.shared.isSuppressed = open
+        }
         .overlay(alignment: .top) {
             if workspace.isFocusMode, let active = workspace.activeTab {
                 FocusModeBar(
@@ -138,6 +143,7 @@ public struct RootView: View {
                     settings: settings,
                     workspace: workspace,
                     sessionSchedule: sessionSchedule,
+                    usage: usage,
                     chooseFolder: shellActions.chooseFolder,
                     onClose: { workspace.isSettingsOpen = false }
                 )
@@ -174,6 +180,12 @@ public struct RootView: View {
         } message: {
             Text("\(workspace.quitDialogTerminalCount ?? 0) open terminal(s) will be closed.")
         }
+    }
+
+    /// Terminallerin üstünü kaplayan, kendi ScrollView'i olan tam-ekran overlay'ler.
+    /// İleride benzeri eklenirse buraya tek satır eklenir.
+    private var isInputBlockingOverlayOpen: Bool {
+        workspace.isSettingsOpen || fileViewer.isPresented
     }
 
     private var quitDialogBinding: Binding<Bool> {

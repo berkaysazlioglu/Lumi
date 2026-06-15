@@ -197,6 +197,47 @@ final class ConfigServiceTests: XCTestCase {
         )
     }
 
+    func testUsageAutoRefreshDefaultsWhenAbsent() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let config = await makeService().config()
+        XCTAssertEqual(config.usageAutoRefresh, .defaults)
+        XCTAssertFalse(config.usageAutoRefresh.enabled)
+        XCTAssertEqual(config.usageAutoRefresh.intervalMinutes, 15)
+    }
+
+    func testUsageAutoRefreshRoundTrips() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let service = makeService()
+
+        try await service.updateConfig {
+            $0.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 30)
+        }
+
+        let written = try readJSONDict(paths.configFile)
+        let nested = try XCTUnwrap(written["usageAutoRefresh"] as? [String: Any])
+        XCTAssertEqual(nested["enabled"] as? Bool, true)
+        XCTAssertEqual(nested["intervalMinutes"] as? Int, 30)
+        // Mevcut alanlar korunur (additive, karar 9)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
+
+        let reloaded = await ConfigService(paths: paths).config()
+        XCTAssertEqual(
+            reloaded.usageAutoRefresh,
+            UsageAutoRefresh(enabled: true, intervalMinutes: 30)
+        )
+    }
+
+    func testUsageAutoRefreshClampsInvalidIntervalOnDecode() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let service = makeService()
+        // Disk'te geçersiz aralık (örn. elle düzenleme) → izinli default'a düşer.
+        try await service.updateConfig {
+            $0.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 7)
+        }
+        let reloaded = await ConfigService(paths: paths).config()
+        XCTAssertEqual(reloaded.usageAutoRefresh.intervalMinutes, UsageAutoRefresh.defaults.intervalMinutes)
+    }
+
     func testTerminalFontSmoothingRoundTrip() async throws {
         try writeFixture(realConfigFixture, to: paths.configFile)
         let service = makeService()

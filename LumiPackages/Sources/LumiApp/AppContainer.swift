@@ -18,6 +18,7 @@ final class AppContainer {
     let actionService: any ActionServicing
     let notifications: any NotificationServicing
     let usageService: any UsageServicing
+    let activityMonitor: any ActivityMonitoring
     let sessionStarter: any SessionStarterServicing
     let terminal: TerminalSessionManager
     let toasts: ToastStore
@@ -31,6 +32,7 @@ final class AppContainer {
     let actionsStore: ActionsStore
     let settings: SettingsStore
     let usageStore: UsageStore
+    let usageAutoRefresh: UsageAutoRefreshStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
 
@@ -49,6 +51,7 @@ final class AppContainer {
         gitService = GitService()
         notifications = NotificationService(presenter: notificationPresenter)
         usageService = UsageService()
+        activityMonitor = SystemActivityMonitor()
         sessionStarter = SessionStarterService()
         terminal = TerminalSessionManager()
         personaService = PersonaService(
@@ -74,6 +77,7 @@ final class AppContainer {
         actionsStore = ActionsStore(service: actionService, toasts: toasts)
         settings = SettingsStore(config: config, toasts: toasts)
         usageStore = UsageStore(service: usageService)
+        usageAutoRefresh = UsageAutoRefreshStore(usage: usageStore, activity: activityMonitor)
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -117,6 +121,7 @@ final class AppContainer {
         )
         notifications.updateSettings(appConfig.notifications)
         sessionSchedule.update(appConfig.sessionTrigger)
+        usageAutoRefresh.update(appConfig.usageAutoRefresh)
         repoStore.additionalPaths = appConfig.additionalPaths
         await repoService.setRoots(
             projectsRoot: appConfig.projectsRoot,
@@ -163,6 +168,9 @@ final class AppContainer {
         }
         configCoordinator.onSessionTriggerChanged = { [weak self] trigger in
             self?.sessionSchedule.update(trigger)
+        }
+        configCoordinator.onUsageAutoRefreshChanged = { [weak self] settings in
+            self?.usageAutoRefresh.update(settings)
         }
         configCoordinator.start()
         startBridges()
@@ -264,6 +272,7 @@ final class AppContainer {
     func shutdown() async {
         bridgeTasks.forEach { $0.cancel() }
         sessionSchedule.stop()
+        usageAutoRefresh.stop()
         terminal.killAll()
         await config.flushPendingWrites()
         // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)

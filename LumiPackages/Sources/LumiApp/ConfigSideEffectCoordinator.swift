@@ -25,6 +25,8 @@ final class ConfigSideEffectCoordinator {
     var onTerminalCursorChanged: ((TerminalCursorShape, Bool) -> Void)?
     /// Zamanlanmış oturum tetikleyici ayarı değişti — scheduler yeniden kurulur.
     var onSessionTriggerChanged: ((SessionTrigger) -> Void)?
+    /// Usage auto-refresh ayarı değişti — tazeleme döngüsü yeniden kurulur.
+    var onUsageAutoRefreshChanged: ((UsageAutoRefresh) -> Void)?
 
     init(
         config: any ConfigServicing,
@@ -82,6 +84,9 @@ final class ConfigSideEffectCoordinator {
                 }
                 if old.sessionTrigger != new.sessionTrigger {
                     self.onSessionTriggerChanged?(new.sessionTrigger)
+                }
+                if old.usageAutoRefresh != new.usageAutoRefresh {
+                    self.onUsageAutoRefreshChanged?(new.usageAutoRefresh)
                 }
             }
         }
