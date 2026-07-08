@@ -14,6 +14,15 @@ public enum TopBarMetrics {
 struct HeaderBarView: View {
     static let height: CGFloat = TopBarMetrics.height
 
+    /// Logo yanındaki ürün adı — dev (debug) build'de "dev", release'de "Lumi".
+    static let appName: String = {
+        #if DEBUG
+        return "dev"
+        #else
+        return "Lumi"
+        #endif
+    }()
+
     let workspace: WorkspaceStore
     let repoStore: RepoStore
     let terminals: TerminalListStore
@@ -83,7 +92,10 @@ struct HeaderBarView: View {
         .padding(.leading, 80)
         .padding(.trailing, 16)
         .frame(height: Self.height)
-        .background(Theme.bgSurface)
+        // Renk hit-test'i kapalı: boş alanlardaki tıklamalar arkadaki
+        // WindowDragArea'ya geçsin (pencere sürükleme + çift-tık zoom).
+        .background(Theme.bgSurface.allowsHitTesting(false))
+        .background(WindowDragArea())
         .overlay(alignment: .bottom) {
             Theme.border.frame(height: 1)
         }
@@ -99,7 +111,7 @@ struct HeaderBarView: View {
                     .interpolation(.high)
                     .frame(width: 26, height: 26)
             }
-            Text("Lumi")
+            Text(Self.appName)
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
         }

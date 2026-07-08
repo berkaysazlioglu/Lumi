@@ -35,7 +35,7 @@ struct PromptQueueToggleButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help("Prompt kuyruğu")
+        .help("Prompt queue")
     }
 
     private var iconColor: Color {
@@ -130,19 +130,19 @@ struct PromptQueuePanel: View {
             Image(systemName: "list.bullet.rectangle")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.accentPrimary)
-            Text("Prompt Kuyruğu")
+            Text("Prompt Queue")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
-            if !prompts.isEmpty {
-                Button(isPaused ? "Devam" : "Duraklat") {
-                    store.setPaused(!isPaused, for: terminalID)
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isPaused ? Theme.warning : Theme.textSecondary)
+            Button(isPaused ? "Resume" : "Pause") {
+                store.setPaused(!isPaused, for: terminalID)
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(isPaused ? Theme.warning : Theme.textSecondary)
 
-                Button("Temizle") { store.clear(for: terminalID) }
+            if !prompts.isEmpty {
+                Button("Clear") { store.clear(for: terminalID) }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.textMuted)
@@ -160,7 +160,7 @@ struct PromptQueuePanel: View {
     @ViewBuilder
     private var queueList: some View {
         if prompts.isEmpty {
-            Text("Sırada prompt yok. Aşağıya yazıp ekle; terminal her işini bitirip beklemeye geçtikçe sıradaki gönderilir.")
+            Text("No prompts queued. Type one below to add it; each is sent as the terminal finishes its work and goes idle.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -184,7 +184,7 @@ struct PromptQueuePanel: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            TextField("Prompt yaz…  (Enter: sıraya ekle · Shift+Enter: alt satır)", text: $draft, axis: .vertical)
+            TextField("Type a prompt…  (Enter: add to queue · Shift+Enter: new line)", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
@@ -217,13 +217,13 @@ struct PromptQueuePanel: View {
             }
             .buttonStyle(.plain)
             .disabled(!canAdd)
-            .help("Sıraya ekle (Enter)")
+            .help("Add to queue (Enter)")
         }
     }
 
     private var footerHint: some View {
         Label(
-            "İzin/onay sorusunda kuyruk otomatik duraklar; sen cevaplayınca devam eder.",
+            "The queue auto-pauses on a permission/confirmation prompt; it resumes once you answer.",
             systemImage: "info.circle"
         )
         .font(.system(size: 11))

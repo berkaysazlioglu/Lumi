@@ -94,9 +94,9 @@ public struct UsageAutoRefresh: Codable, Sendable, Equatable {
     public var intervalMinutes: Int
 
     /// UI'da sunulan ve kabul edilen aralık seçenekleri.
-    public static let allowedIntervals = [5, 15, 30]
+    public static let allowedIntervals = [1, 5]
 
-    public static let defaults = UsageAutoRefresh(enabled: false, intervalMinutes: 15)
+    public static let defaults = UsageAutoRefresh(enabled: false, intervalMinutes: 5)
 
     public init(enabled: Bool, intervalMinutes: Int) {
         self.enabled = enabled

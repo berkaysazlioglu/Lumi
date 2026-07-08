@@ -59,8 +59,8 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
             UsageAutoRefresh.defaults.intervalMinutes
         )
         XCTAssertEqual(
-            UsageAutoRefresh(enabled: true, intervalMinutes: 30).intervalMinutes,
-            30
+            UsageAutoRefresh(enabled: true, intervalMinutes: 1).intervalMinutes,
+            1
         )
     }
 }
