@@ -113,3 +113,9 @@ Full context: [docs/spec/00-overview.md](docs/spec/00-overview.md) and [docs/des
 ## Status
 
 Working macOS app, built and used locally; not yet distributed as a notarized release. Some verification is still manual (long-run performance profiling, microphone permission chain for voice mode, Gatekeeper check on a notarized build).
+
+## License
+
+[MIT](LICENSE).
+
+Third-party components keep their own licenses: [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm), [Highlightr](https://github.com/raspu/Highlightr), [Yams](https://github.com/jpsim/Yams) and [FlyingFox](https://github.com/swhitty/FlyingFox) are MIT; the bundled JetBrains Mono font is under the SIL Open Font License 1.1 ([OFL.txt](LumiPackages/Sources/LumiUI/Resources/Fonts/OFL.txt)).
