@@ -1,45 +1,115 @@
-# Lumi (macOS Native)
+# Lumi
 
-Birden çok Claude Code CLI instance'ını yöneten desktop dashboard **Lumi**'nin macOS-native (Swift) yeniden yazımı. Mevcut Electron sürümünün (`ai-orchestrator` reposu) yerini alacak.
+A native macOS dashboard for running and watching many **Claude Code** (or **Codex**) CLI sessions at once.
 
-## Neden rewrite?
+Open your repositories as tabs, spawn as many terminals as you need inside each one, and see at a glance which agent is working, which one is waiting for your input, and which one hit an error. Written in Swift (AppKit shell + SwiftUI content) with [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) as the terminal emulator — it replaces an earlier Electron version.
 
-Electron sürümünde yaşanan iki kritik sorun keşif fazında kök nedenine kadar analiz edildi ve native tasarımın zorunlu gereksinimlerine dönüştürüldü:
+## Features
 
-1. **Siyah ekran + terminallere kaçan random karakterler** — Yoğun PTY çıktısında renderer'ın GC fırtınasıyla donması/çökmesi, otomatik reload sonrası ham ANSI backlog replay'i sırasında terminal emülatörünün ürettiği otomatik yanıtların (CPR/DA) canlı PTY'ye girdi olarak yazılması ([analiz](docs/spec/40-bug-black-screen.md)).
-2. **Büyük stream'de V8 OOM** — Renderer tarafında sınırsız string birikimi × chunk başına O(n) iş = O(n²); uçtan uca hiçbir backpressure yok ([analiz](docs/spec/41-bug-stream-oom.md)).
+- **Repo tabs** — discover projects under a root folder, or add individual paths; non-git folders work too
+- **Multiple terminals per repo** — each one a real login-shell PTY, with a live status indicator (`idle / working / waiting / error`) driven by terminal title and notification escape sequences
+- **Native notifications** when an agent finishes a turn or needs input
+- **Personas** — YAML presets (system prompt, model, tool permissions) that open a ready-to-use agent session
+- **Quick Actions** — YAML automations that spawn a terminal and run scripted steps (`write` / `wait_for` / `delay`)
+- **Git panel** — status, commit log and a file tree with an integrated viewer (syntax highlighting + unified diff)
+- **Usage indicator**, **focus mode**, and an optional **scheduled session trigger**
 
-Bu nedenle native tasarımda **baştan bağlayıcı** üç gereksinim var: PTY→UI ack-tabanlı backpressure, render-crash izolasyonu (PTY'ler UI'dan bağımsız yaşar) ve replay güvenliği (sequence-güvenli kesim, otomatik yanıt filtresi). Detay: [00-overview.md §4](docs/spec/00-overview.md).
+## Requirements
 
-## Spec dokümanları
-
-Keşif fazı Electron kod tabanının tamamını davranış spec'ine çevirdi (~213 davranış maddesi, 62 IPC kanalı). Yeni implementasyon eski kodu görmeden bu dokümanlardan yazılabilir:
-
-| Doküman | İçerik |
+| | |
 |---|---|
-| [00-overview.md](docs/spec/00-overview.md) | Keşif özeti: kavramlar, feature haritası, mimari, zorunlu gereksinimler |
-| [01-decisions.md](docs/spec/01-decisions.md) | **Bağlayıcı karar kaydı** (14 karar, 2026-06-11) |
-| [10-main-terminal-pty.md](docs/spec/10-main-terminal-pty.md) | PTY yönetimi: spawn, OSC parser, StatusStateMachine, OutputBuffer |
-| [11-ipc-surface.md](docs/spec/11-ipc-surface.md) | 62 kanallık IPC haritası → native servis API'sinin temeli |
-| [12-git-vcs.md](docs/spec/12-git-vcs.md) | Git entegrasyonu: repo keşfi, status, commit log, file tree |
-| [13-main-services.md](docs/spec/13-main-services.md) | Config, persona, action, notification, system servisleri |
-| [20-renderer-terminal.md](docs/spec/20-renderer-terminal.md) | Terminal UI: render path, grid matematiği, spawn akışları |
-| [21-renderer-state.md](docs/spec/21-renderer-state.md) | State modeli: store'lar, reconciliation, odak kuralları, persistence |
-| [22-renderer-ui.md](docs/spec/22-renderer-ui.md) | UI kabuğu: layout, sidebar'lar, Settings, Setup, FileViewer |
-| [23-design-system.md](docs/spec/23-design-system.md) | Görsel tasarım sistemi: token'lar, tipografi, component görünümleri |
-| [30-app-shell.md](docs/spec/30-app-shell.md) | App lifecycle: pencere, quit akışı, menü, izinler, paketleme |
-| [40](docs/spec/40-bug-black-screen.md) / [41](docs/spec/41-bug-stream-oom.md) | Bug kök neden analizleri |
+| macOS | 14 (Sonoma) or newer |
+| Toolchain | Xcode 16+ (or a Swift 6.0 toolchain) — check with `swift --version` |
+| Git | any recent version, for the repo/VCS features |
+| Agent CLI | [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`) and/or Codex (`codex`) on your `PATH` |
 
-## Kapsam (karar kaydından)
+Install the Claude Code CLI if you don't have it yet:
 
-> **Mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 3 bilinçli değişiklik** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal içi arama, side-by-side diff).
+```bash
+npm install -g @anthropic-ai/claude-code
+claude --version
+```
 
-Öne çıkan kararlar: görsel kimlik korunuyor (mor/violet dark tema + JetBrains Mono, semantic uyarlama ile), `~/.lumi` persistence formatları aynen okunup yazılıyor (Electron ↔ native gidip-gelme mümkün), diff görünümü unified diff ile başlıyor. Tamamı: [01-decisions.md](docs/spec/01-decisions.md).
+Lumi launches `claude` / `codex` through your login shell, so anything that works in your terminal works here. There is no separate API key to configure in Lumi.
 
-## Durum
+## Run from source
 
-- [x] Keşif fazı — spec dokümanları tamam
-- [x] Kapsam kararları — 14/14 karara bağlandı
-- [ ] Tasarım fazı — native mimari (SwiftTerm, PTY servis katmanı, DI, SwiftUI/AppKit dengesi)
-- [ ] İmplementasyon
-- [ ] Davranış-eşleşme ve SOLID denetimi
+```bash
+git clone https://github.com/berkaysazlioglu/Lumi.git
+cd Lumi/LumiPackages
+swift run Lumi
+```
+
+That's all you need — SwiftPM fetches and builds the dependencies (SwiftTerm, Highlightr, Yams) itself, so the first build needs a network connection and takes a minute or two. Later builds are incremental.
+
+Debug builds intentionally keep their data in `~/.lumi-dev` so you can develop without touching your real configuration.
+
+## Build a Lumi.app bundle
+
+```bash
+Scripts/make-app.sh          # release build, ad-hoc signed → dist/Lumi.app
+```
+
+Ad-hoc signing is fine on your own machine. For distribution, sign with a Developer ID and notarize:
+
+```bash
+IDENTITY="Developer ID Application: Your Name (TEAMID)" Scripts/make-app.sh
+ditto -c -k --keepParent dist/Lumi.app dist/Lumi.zip
+xcrun notarytool submit dist/Lumi.zip --keychain-profile <your-profile> --wait
+xcrun stapler staple dist/Lumi.app
+```
+
+## First launch
+
+1. A setup screen checks your shell, PTY support and agent CLIs, and offers to fix what it can.
+2. Point **Projects root** at the folder that holds your repositories (e.g. `~/Developer`), or add individual paths.
+3. Open a repo tab and press the new-terminal button — or pick a persona to start an agent session directly.
+
+Release builds store everything under `~/.lumi`:
+
+```
+~/.lumi/config.json       settings (projects root, provider, theme, notifications…)
+~/.lumi/ui-state.json     window bounds, open tabs, layout
+~/.lumi/personas/         persona YAML files
+~/.lumi/actions/          quick action YAML files (+ .history/ backups)
+```
+
+Per-project personas and actions can also live in `<repo>/.lumi/personas/` and `<repo>/.lumi/actions/`, where they override the user-level ones and can be committed with the repo.
+
+## Tests
+
+```bash
+cd LumiPackages
+swift test
+```
+
+## Project layout
+
+```
+LumiPackages/Sources/
+  LumiKit/        models, protocols, shared support (no dependencies)
+  LumiTerminal/   PTY process, terminal sessions, SwiftTerm integration
+  LumiServices/   config, git/repo, personas, actions, notifications, system checks
+  LumiState/      observable stores (service → store → UI)
+  LumiUI/         SwiftUI views and the design system
+  LumiApp/        executable + AppContainer (dependency-injection root)
+docs/spec/        behaviour specification and binding decision log
+docs/design/      binding design record for the native implementation
+Scripts/          make-app.sh (bundle + sign + notarization notes)
+```
+
+Dependencies flow one way: `LumiKit ← LumiTerminal / LumiServices / LumiState ← LumiUI`. The UI layer holds no business logic, and everything is wired manually in `AppContainer`.
+
+## Design notes
+
+Three requirements were baked into the architecture from day one, after root-causing two serious bugs in the Electron version ([black screen](docs/spec/40-bug-black-screen.md), [stream OOM](docs/spec/41-bug-stream-oom.md)):
+
+- **Ack-based backpressure** from PTY to UI, so heavy output can never grow an unbounded buffer
+- **Render-crash isolation** — PTY sessions live independently of the UI
+- **Replay safety** — sequence-safe truncation and filtering of terminal auto-responses, so replayed output can't be typed back into a live session
+
+Full context: [docs/spec/00-overview.md](docs/spec/00-overview.md) and [docs/design/00-architecture.md](docs/design/00-architecture.md).
+
+## Status
+
+Working macOS app, built and used locally; not yet distributed as a notarized release. Some verification is still manual (long-run performance profiling, microphone permission chain for voice mode, Gatekeeper check on a notarized build).

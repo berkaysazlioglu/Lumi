@@ -20,3 +20,4 @@ build/
 *.app.dSYM.zip
 *.ipa
 dist/
+/.idea
