@@ -175,6 +175,10 @@ public final class TerminalSessionManager: TerminalServicing {
         session(for: id)?.outputStream()
     }
 
+    public func screenSnapshot(id: TerminalID) -> TerminalScreenSnapshot? {
+        session(for: id)?.screenSnapshot()
+    }
+
     private func session(for id: TerminalID) -> TerminalSession? {
         sessions.first { $0.id == id }
     }

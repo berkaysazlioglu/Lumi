@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "LumiServices", targets: ["LumiServices"]),
         .library(name: "LumiState", targets: ["LumiState"]),
         .library(name: "LumiUI", targets: ["LumiUI"]),
+        .library(name: "LumiRemote", targets: ["LumiRemote"]),
         .executable(name: "Lumi", targets: ["LumiApp"]),
     ],
     dependencies: [
@@ -23,6 +24,9 @@ let package = Package(
         ),
         .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+        // Remote dashboard'un HTTP + WebSocket sunucusu (kullanıcı onayı 2026-07-20):
+        // hafif, saf Swift, transitive bağımlılık getirmez.
+        .package(url: "https://github.com/swhitty/FlyingFox.git", from: "0.27.0"),
     ],
     targets: [
         .target(name: "LumiKit"),
@@ -57,15 +61,24 @@ let package = Package(
                 .copy("Resources/logo.png"),
             ]
         ),
+        .target(
+            name: "LumiRemote",
+            dependencies: [
+                "LumiKit",
+                .product(name: "FlyingFox", package: "FlyingFox"),
+            ],
+            resources: [.copy("Resources/dashboard.html")]
+        ),
         .executableTarget(
             name: "LumiApp",
-            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"],
+            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI", "LumiRemote"],
             resources: [.copy("Resources/icon.png")]
         ),
         .testTarget(name: "LumiKitTests", dependencies: ["LumiKit"]),
         .testTarget(name: "LumiTerminalTests", dependencies: ["LumiTerminal"]),
         .testTarget(name: "LumiServicesTests", dependencies: ["LumiServices"]),
         .testTarget(name: "LumiStateTests", dependencies: ["LumiState"]),
+        .testTarget(name: "LumiRemoteTests", dependencies: ["LumiRemote"]),
         .testTarget(name: "LumiUITests", dependencies: ["LumiUI"]),
     ]
 )

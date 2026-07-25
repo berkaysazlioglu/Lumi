@@ -104,6 +104,9 @@ Persistence karar 9 uyumlu: `config.json`'a **additive** `sessionTrigger` nested
 
 Mimari: `ActivityMonitoring` (LumiKit sınırı) → `SystemActivityMonitor` (LumiServices, CGEventSource; idle sorgusu Accessibility/Input-Monitoring izni GEREKTİRMEZ) → `UsageAutoRefreshStore` (LumiState; `SessionScheduleStore` iskeleti — config'i `update(_:)` ile izler, döngüde uyur/tetikler, `UsageStore.refresh()` çağırır). Config değişimi `ConfigSideEffectCoordinator` köprüsünden akar (karar 3). Persistence karar 9 uyumlu: `config.json`'a **additive** `usageAutoRefresh` nested key'i (`enabled`/`intervalMinutes`); yoksa kapalı default'a düşer (disabled / 15 dk) ve geçersiz aralık izinli set'e clamp'lenir.
 
+### 21. Remote dashboard — yerel ağdan izleme + girdi (v1 spec'ine ek)
+v1'de yoktu; kullanıcı talebi (2026-07-20). Telefondan (aynı yerel ağ) aktif terminalleri listeleme, ekran metnini canlı izleme ve Claude'a girdi gönderme. Yeni **LumiRemote** SPM hedefi + **FlyingFox** bağımlılığı (kullanıcı onaylı). Sunucu **otomatik başlamaz** — topbar ikonu → popover'dan Start/Stop; popover URL + QR kod gösterir. Kapsam bilinçli dar: terminal açma/kapama yok, renk/ANSI yok (düz metin snapshot), kimlik doğrulama yok (yalnız güvenilen yerel ağ; kullanıcı başlatınca açılır, kapatınca kapanır). Ekran metni için `TerminalServicing`'e additive `screenText(id:)` eklendi. Detay: [06-remote-dashboard.md](../design/06-remote-dashboard.md).
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).

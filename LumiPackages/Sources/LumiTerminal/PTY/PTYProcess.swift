@@ -105,6 +105,18 @@ public final class PTYProcess: @unchecked Sendable {
             sigemptyset(&emptySet)
             sigprocmask(SIG_SETMASK, &emptySet, nil)
 
+            // Miras kalan tanıtıcıları kapat (stdio hariç). Kritik: remote
+            // dashboard'un dinleme/bağlantı soketleri çocuğa sızarsa, çocuk
+            // yaşadığı sürece portu rehin alır — sunucu durdurulup yeniden
+            // başlatılamaz ve istekler kimsenin accept etmediği sokete düşer.
+            // close async-signal-safe'tir; 3..<limit döngüsü fork-exec arasında güvenlidir.
+            let maxFD = getdtablesize()
+            var fd: Int32 = 3
+            while fd < maxFD {
+                _ = close(fd)
+                fd += 1
+            }
+
             if let cwdC { _ = chdir(cwdC) }
             _ = execve(argv[0], argv, envp)
             _exit(127)

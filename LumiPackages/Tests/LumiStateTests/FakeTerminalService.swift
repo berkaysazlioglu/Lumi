@@ -57,6 +57,12 @@ final class FakeTerminalService: TerminalServicing {
         outputBroadcaster(for: id).stream()
     }
 
+    var screenSnapshots: [TerminalID: TerminalScreenSnapshot] = [:]
+
+    func screenSnapshot(id: TerminalID) -> TerminalScreenSnapshot? {
+        screenSnapshots[id]
+    }
+
     func emit(_ event: TerminalEvent) {
         broadcaster.send(event)
     }
