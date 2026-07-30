@@ -35,6 +35,8 @@ final class TerminalSession {
     private let outputBroadcaster = EventBroadcaster<String>()
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
+    /// Snapshot renk çözümü için uygulanan son tema (applyTheme'de güncellenir).
+    private var currentTheme: TerminalTheme = .lumi
 
     init(repoPath: String, name: String, task: String?, font: NSFont) throws {
         let id = TerminalID()
@@ -116,6 +118,16 @@ final class TerminalSession {
 
     func outputStream() -> AsyncStream<String> {
         outputBroadcaster.stream()
+    }
+
+    /// Buffer'ın anlık görüntüsü (design/06): scrollback düz metin + görünür
+    /// ekran stilli koşular. SwiftTerm buffer'ı MainActor-affine olduğundan
+    /// burada senkron okunur.
+    func screenSnapshot() -> TerminalScreenSnapshot {
+        TerminalScreenRenderer.snapshot(
+            of: terminalView.getTerminal(),
+            theme: currentTheme
+        )
     }
 
     /// Ack noktası: SwiftTerm feed'i senkron parse eder; dönüş = tüketildi
@@ -239,6 +251,7 @@ final class TerminalSession {
     /// tetiklemediğinden ardından buffer'dan tam çizim gerekir.
     func applyTheme(_ theme: TerminalTheme) {
         guard !isTerminated else { return }
+        currentTheme = theme
         theme.apply(to: terminalView)
         redrawFromBuffer()
     }

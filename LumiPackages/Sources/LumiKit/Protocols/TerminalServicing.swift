@@ -31,6 +31,11 @@ public protocol TerminalServicing: AnyObject, Sendable {
     /// (design/01 §3 fan-out). Tüketici yavaşlığı terminali durduramaz;
     /// 4KB rolling ring drop'a toleranslıdır. Terminal yoksa nil.
     func outputStream(id: TerminalID) -> AsyncStream<String>?
+
+    /// Emülatör buffer'ının anlık görüntüsü — remote dashboard tüketicisi
+    /// (design/06): scrollback kuyruğu düz metin, görünür ekran renk/stil
+    /// koşuları. SwiftTerm buffer'ı MainActor'da okunur. Terminal yoksa nil.
+    func screenSnapshot(id: TerminalID) -> TerminalScreenSnapshot?
 }
 
 /// Canlı terminal NSView'larını UI'a köprüleyen sınır (design/00 §2).

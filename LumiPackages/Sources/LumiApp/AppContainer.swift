@@ -1,5 +1,6 @@
 import Foundation
 import LumiKit
+import LumiRemote
 import LumiServices
 import LumiState
 import LumiTerminal
@@ -33,6 +34,8 @@ final class AppContainer {
     let settings: SettingsStore
     let usageStore: UsageStore
     let usageAutoRefresh: UsageAutoRefreshStore
+    let remoteDashboardServer: any RemoteDashboardServing
+    let remoteDashboard: RemoteDashboardStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
 
@@ -78,6 +81,10 @@ final class AppContainer {
         settings = SettingsStore(config: config, toasts: toasts)
         usageStore = UsageStore(service: usageService)
         usageAutoRefresh = UsageAutoRefreshStore(usage: usageStore, activity: activityMonitor)
+        remoteDashboardServer = RemoteDashboardServer(
+            provider: TerminalServiceRemoteAdapter(service: terminal)
+        )
+        remoteDashboard = RemoteDashboardStore(server: remoteDashboardServer, toasts: toasts)
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -273,6 +280,8 @@ final class AppContainer {
         bridgeTasks.forEach { $0.cancel() }
         sessionSchedule.stop()
         usageAutoRefresh.stop()
+        // Sunucu terminal aboneliği tutar — killAll'dan ÖNCE düşürülür
+        await remoteDashboard.shutdown()
         terminal.killAll()
         await config.flushPendingWrites()
         // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)

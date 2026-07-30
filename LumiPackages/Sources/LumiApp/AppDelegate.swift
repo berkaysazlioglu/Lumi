@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: container.settings,
             sessionSchedule: container.sessionSchedule,
             usage: container.usageStore,
+            remoteDashboard: container.remoteDashboard,
             toasts: container.toasts,
             viewProvider: container.terminal.viewRegistry,
             highlighter: HighlightrEngine(),

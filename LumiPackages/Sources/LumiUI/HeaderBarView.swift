@@ -29,8 +29,10 @@ struct HeaderBarView: View {
     let personasStore: PersonasStore
     let settings: SettingsStore
     let usage: UsageStore
+    let remoteDashboard: RemoteDashboardStore
 
     @State private var isAddRepoHovering = false
+    @State private var isRemotePopoverOpen = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -71,6 +73,14 @@ struct HeaderBarView: View {
             // toggle'lar (sağdan sola: settings, git, fullscreen).
             HStack(spacing: 8) {
                 UsageIndicatorView(store: usage)
+                HeaderIconButton(
+                    icon: "antenna.radiowaves.left.and.right",
+                    isActive: remoteDashboard.isRunning,
+                    action: { isRemotePopoverOpen.toggle() }
+                )
+                .popover(isPresented: $isRemotePopoverOpen, arrowEdge: .bottom) {
+                    RemoteDashboardPopover(store: remoteDashboard)
+                }
                 HeaderIconButton(
                     icon: "arrow.up.left.and.arrow.down.right",
                     isActive: workspace.isFocusMode,

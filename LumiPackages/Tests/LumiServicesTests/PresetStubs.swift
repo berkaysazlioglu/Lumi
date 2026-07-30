@@ -40,6 +40,8 @@ final class StubTerminalService: TerminalServicing {
         outputBroadcaster.stream()
     }
 
+    func screenSnapshot(id: TerminalID) -> TerminalScreenSnapshot? { nil }
+
     func emitOutput(_ text: String) {
         outputBroadcaster.send(text)
     }
