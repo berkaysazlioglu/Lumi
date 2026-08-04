@@ -2,7 +2,8 @@
 # Lumi.app bundle üretimi (design/04 faz 6).
 #
 # Kullanım:
-#   Scripts/make-app.sh                          # release build + ad-hoc imza
+#   Scripts/make-app.sh                          # release build + ad-hoc imza → dist/Lumi.app
+#   Scripts/make-app.sh --install                # + /Applications/Lumi.app'e kur
 #   IDENTITY="Developer ID Application: ..." Scripts/make-app.sh   # gerçek imza + hardened runtime
 #
 # Notarization (Developer ID imzası sonrası):
@@ -10,6 +11,14 @@
 #   xcrun notarytool submit dist/Lumi.zip --keychain-profile <profil> --wait
 #   xcrun stapler staple dist/Lumi.app
 set -euo pipefail
+
+INSTALL=0
+for arg in "$@"; do
+  case "$arg" in
+    --install) INSTALL=1 ;;
+    *) echo "Bilinmeyen parametre: $arg (desteklenen: --install)" >&2; exit 1 ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
@@ -76,6 +85,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSMicrophoneUsageDescription</key>
     <string>Lumi needs microphone access for Claude Code voice mode.</string>
 </dict>
+</plist>
 PLIST
 
 # Entitlements (spec/30): yalnız audio-input — V8'e özgü JIT/unsigned-memory/
@@ -89,8 +99,8 @@ cat > "$ENTITLEMENTS" <<'ENT'
     <key>com.apple.security.device.audio-input</key>
     <true/>
 </dict>
+</plist>
 ENT
-echo "</plist>" >> "$ENTITLEMENTS"
 
 echo "▸ İmzalama…"
 if [ -n "${IDENTITY:-}" ]; then
@@ -107,3 +117,14 @@ fi
 echo "▸ Doğrulama…"
 codesign --verify --verbose=2 "$APP"
 echo "✓ $APP hazır"
+
+if [ "$INSTALL" -eq 1 ]; then
+  echo "▸ /Applications'a kurulum…"
+  if pgrep -xq Lumi; then
+    echo "  HATA: Lumi çalışıyor — önce uygulamadan çık, sonra tekrar dene." >&2
+    exit 1
+  fi
+  rm -rf /Applications/Lumi.app
+  ditto "$APP" /Applications/Lumi.app
+  echo "✓ /Applications/Lumi.app kuruldu"
+fi
