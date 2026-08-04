@@ -244,4 +244,84 @@ final class GitServiceTests: XCTestCase {
         )
         XCTAssertTrue(rootDiff.hunks.flatMap(\.lines).allSatisfy { $0.kind == .addition })
     }
+
+    // MARK: - Görsel önizleme (karar 21)
+
+    /// PNG imzasıyla başlayan, birbirinden farklı sahte binary içerikler.
+    private func pngBytes(_ marker: UInt8) -> Data {
+        Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, marker])
+    }
+
+    private func writeBinary(_ name: String, _ data: Data) throws {
+        try data.write(to: repoDir.appendingPathComponent(name))
+    }
+
+    func testImagePreviewReturnsBothSidesForModifiedImage() async throws {
+        try writeBinary("logo.png", pngBytes(1))
+        try commitAll("add image")
+        try writeBinary("logo.png", pngBytes(2))
+        try commitAll("change image")
+
+        let commits = await service.commits(repoPath: repoDir.path, branch: nil)
+        let latest = try XCTUnwrap(commits.first?.hash)
+
+        let preview = await service.imagePreview(
+            repoPath: repoDir.path, file: "logo.png", sha: latest
+        )
+        XCTAssertEqual(preview.before, pngBytes(1))
+        XCTAssertEqual(preview.after, pngBytes(2))
+        XCTAssertFalse(preview.isTooLarge)
+    }
+
+    func testImagePreviewHasNoBeforeSideInRootCommit() async throws {
+        try writeBinary("logo.png", pngBytes(1))
+        try commitAll("add image")
+
+        let commits = await service.commits(repoPath: repoDir.path, branch: nil)
+        let root = try XCTUnwrap(commits.first?.hash)
+
+        let preview = await service.imagePreview(
+            repoPath: repoDir.path, file: "logo.png", sha: root
+        )
+        XCTAssertNil(preview.before) // parent yok → eklenen dosya
+        XCTAssertEqual(preview.after, pngBytes(1))
+        XCTAssertTrue(preview.hasContent)
+    }
+
+    func testImagePreviewWithoutShaComparesHeadWithWorkingTree() async throws {
+        try writeBinary("logo.png", pngBytes(1))
+        try commitAll("add image")
+        try writeBinary("logo.png", pngBytes(9)) // commit edilmemiş değişiklik
+
+        let preview = await service.imagePreview(
+            repoPath: repoDir.path, file: "logo.png", sha: nil
+        )
+        XCTAssertEqual(preview.before, pngBytes(1))
+        XCTAssertEqual(preview.after, pngBytes(9))
+    }
+
+    func testImagePreviewOfUntrackedFileHasOnlyAfterSide() async throws {
+        try write("a.txt", "seed")
+        try commitAll("initial")
+        try writeBinary("new.png", pngBytes(3))
+
+        let preview = await service.imagePreview(
+            repoPath: repoDir.path, file: "new.png", sha: nil
+        )
+        XCTAssertNil(preview.before)
+        XCTAssertEqual(preview.after, pngBytes(3))
+    }
+
+    /// Karar 11: path-traversal guard TÜM path alan metodlarda — burada sessiz
+    /// (boş önizleme), çünkü imagePreview liste operasyonları gibi throw etmez.
+    func testImagePreviewRejectsPathOutsideRepo() async throws {
+        try write("a.txt", "seed")
+        try commitAll("initial")
+
+        let preview = await service.imagePreview(
+            repoPath: repoDir.path, file: "../../etc/hosts", sha: nil
+        )
+        XCTAssertFalse(preview.hasContent)
+        XCTAssertFalse(preview.isTooLarge)
+    }
 }

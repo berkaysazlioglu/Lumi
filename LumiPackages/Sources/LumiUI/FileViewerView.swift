@@ -4,7 +4,8 @@ import SwiftUI
 
 /// FileViewer modal'ı (spec/22): view / diff / commit-diff modları.
 /// Diff'ler side-by-side render (karar 4 revize); commit-diff dosya seçiminde
-/// lazy yüklenir (karar 6).
+/// lazy yüklenir (karar 6). Markdown dosyaları render'lı tek kolon, görseller
+/// before/after önizleme olarak gösterilir (karar 21).
 struct FileViewerView: View {
     let store: FileViewerStore
     let highlighter: any SyntaxHighlighting
@@ -50,6 +51,9 @@ struct FileViewerView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer()
+            if store.previewKind == .markdown {
+                markdownToggle
+            }
             Button {
                 store.close()
             } label: {
@@ -67,11 +71,34 @@ struct FileViewerView: View {
     }
 
     private var headerIcon: String {
+        if store.previewKind == .image { return "photo" }
         switch store.mode {
         case .view: return "doc.text"
         case .diff: return "plus.forwardslash.minus"
         case .commitDiff: return "clock.arrow.circlepath"
         }
+    }
+
+    /// Markdown'da render'lı ↔ ham geçişi (karar 21; oturumluk, persist edilmez).
+    private var markdownToggle: some View {
+        let isRendered = store.rendersMarkdown
+        return Button {
+            store.rendersMarkdown.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isRendered ? "textformat" : "chevron.left.slash.chevron.right")
+                Text(isRendered ? "Rendered" : "Raw")
+            }
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundStyle(isRendered ? Theme.accentPrimary : Theme.textSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background((isRendered ? Theme.accentPrimary : Theme.textMuted).opacity(0.18))
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(isRendered ? "Show raw markdown diff" : "Show rendered markdown")
     }
 
     private var headerTitle: String {
@@ -85,11 +112,7 @@ struct FileViewerView: View {
     private var content: some View {
         switch store.mode {
         case .view:
-            HighlightedCodeView(
-                code: store.fileContent ?? "",
-                fileName: store.filePath,
-                highlighter: highlighter
-            )
+            viewContent
         case .diff:
             diffContent
         case .commitDiff:
@@ -103,18 +126,43 @@ struct FileViewerView: View {
     }
 
     @ViewBuilder
+    private var viewContent: some View {
+        if let preview = store.imagePreview {
+            ImagePreviewView(preview: preview, showsComparison: false)
+        } else if isRenderedMarkdown {
+            MarkdownDiffView(model: MarkdownDiffBuilder.buildDocument(store.fileContent ?? ""))
+        } else {
+            HighlightedCodeView(
+                code: store.fileContent ?? "",
+                fileName: store.filePath,
+                highlighter: highlighter
+            )
+        }
+    }
+
+    @ViewBuilder
     private var diffContent: some View {
         if store.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let preview = store.imagePreview {
+            ImagePreviewView(preview: preview, showsComparison: true)
         } else if let diff = store.diff {
-            SideBySideDiffView(diff: diff, fontSize: 12)
+            if isRenderedMarkdown {
+                MarkdownDiffView(model: MarkdownDiffBuilder.build(diff))
+            } else {
+                SideBySideDiffView(diff: diff, fontSize: 12)
+            }
         } else {
             Text("(no diff)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var isRenderedMarkdown: Bool {
+        store.previewKind == .markdown && store.rendersMarkdown
     }
 
     private var commitFileList: some View {

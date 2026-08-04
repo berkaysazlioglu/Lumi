@@ -118,6 +118,30 @@ public struct DiffLine: Sendable, Equatable {
     }
 }
 
+// MARK: - Görsel önizleme (karar 21)
+
+/// Görsel dosyanın karşılaştırmalı ham baytları (diff yerine önizleme).
+/// `before`/`after` bağımsız olarak nil olabilir: eklenen dosyada `before`,
+/// silinen dosyada `after` yoktur. İkisi de nil + `isTooLarge == false` ise
+/// önizleme üretilemedi (UI placeholder gösterir).
+public struct ImagePreview: Sendable, Equatable {
+    /// Tek tarafın bellek sınırı (`GitService.maxImagePreviewBytes`) aşılırsa o
+    /// taraf yüklenmez ve bu bayrak kalkar.
+    public let filePath: String
+    public let before: Data?
+    public let after: Data?
+    public let isTooLarge: Bool
+
+    public init(filePath: String, before: Data?, after: Data?, isTooLarge: Bool = false) {
+        self.filePath = filePath
+        self.before = before
+        self.after = after
+        self.isTooLarge = isTooLarge
+    }
+
+    public var hasContent: Bool { before != nil || after != nil }
+}
+
 // MARK: - File tree (spec/12 §9)
 
 public struct FileTreeNode: Sendable, Equatable, Identifiable {

@@ -239,6 +239,71 @@ public struct GitService: GitServicing {
         return UnifiedDiffParser.parse(output.stdout, filePath: file)
     }
 
+    // MARK: - Görsel önizleme (karar 21)
+
+    /// Tek bir tarafın bellek sınırı: bunun üstündeki blob yüklenmez, UI
+    /// "too large" gösterir (viewer'ın 100MB'lık bir PSD'yi RAM'e almaması için).
+    static let maxImagePreviewBytes = 20 * 1024 * 1024
+
+    private struct BlobResult {
+        let data: Data?
+        let isTooLarge: Bool
+
+        static let missing = BlobResult(data: nil, isTooLarge: false)
+    }
+
+    public func imagePreview(repoPath: String, file: String, sha: String?) async -> ImagePreview {
+        guard let absolute = try? resolveInsideRepo(repoPath, file) else {
+            fputs("[lumi-git] imagePreview reddedildi (repo dışı path): \(file)\n", stderr)
+            return ImagePreview(filePath: file, before: nil, after: nil)
+        }
+        // Commit modunda iki taraf da blob; working-tree modunda "after" disktir.
+        let before: BlobResult
+        let after: BlobResult
+        if let sha {
+            before = await blob(repoPath: repoPath, revision: "\(sha)^", file: file)
+            after = await blob(repoPath: repoPath, revision: sha, file: file)
+        } else {
+            before = await blob(repoPath: repoPath, revision: "HEAD", file: file)
+            after = Self.readCapped(absolute)
+        }
+        return ImagePreview(
+            filePath: file,
+            before: before.data,
+            after: after.data,
+            isTooLarge: before.isTooLarge || after.isTooLarge
+        )
+    }
+
+    /// `git show <revision>:<path>` — path repo köküne göredir (cwd = repo kökü).
+    /// Eksik taraf (root commit'in parent'ı, eklenen/silinen dosya) BEKLENEN
+    /// durumdur: sessizce nil döner, log gürültüsü üretilmez.
+    private func blob(repoPath: String, revision: String, file: String) async -> BlobResult {
+        let output = await ProcessRunner.runRaw(
+            Self.gitExecutable,
+            arguments: ["show", "\(revision):\(file)"],
+            currentDirectory: repoPath,
+            timeout: Self.commandTimeout
+        )
+        guard let output, output.exitCode == 0, !output.stdout.isEmpty else { return .missing }
+        guard output.stdout.count <= Self.maxImagePreviewBytes else {
+            return BlobResult(data: nil, isTooLarge: true)
+        }
+        return BlobResult(data: output.stdout, isTooLarge: false)
+    }
+
+    /// Disk içeriği — boyut önce attribute'tan okunur (sınır üstü dosya hiç
+    /// belleğe alınmaz).
+    private static func readCapped(_ absolutePath: String) -> BlobResult {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: absolutePath),
+              let size = attributes[.size] as? Int else { return .missing }
+        guard size <= maxImagePreviewBytes else { return BlobResult(data: nil, isTooLarge: true) }
+        guard let data = FileManager.default.contents(atPath: absolutePath), !data.isEmpty else {
+            return .missing
+        }
+        return BlobResult(data: data, isTooLarge: false)
+    }
+
     // MARK: - Path traversal guard (karar 11: TÜM path'lerde)
 
     func resolveInsideRepo(_ repoPath: String, _ relativePath: String) throws -> String {

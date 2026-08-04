@@ -23,4 +23,9 @@ public protocol GitServicing: Sendable {
     func commitFiles(repoPath: String, sha: String) async -> [CommitFile]
     /// Karar 6 (lazy): dosyaya tıklanınca tek dosyanın diff'i.
     func commitFileDiff(repoPath: String, sha: String, file: String) async throws -> UnifiedDiff
+    /// Karar 21: görsel dosyalar diff yerine önizlemeyle gösterilir. `sha`
+    /// verilirse commit'in öncesi/sonrası blob'ları (`sha^:file` / `sha:file`),
+    /// verilmezse `HEAD:file` ↔ disk. Liste operasyonları gibi SESSİZ: eksik
+    /// taraf nil'dir (eklenen/silinen dosya ya da root commit rutin durumdur).
+    func imagePreview(repoPath: String, file: String, sha: String?) async -> ImagePreview
 }

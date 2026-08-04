@@ -102,6 +102,7 @@ public protocol GitServicing: Sendable {          // stateless; git CLI + porcel
     func fileDiff(repoPath: String, file: String) async throws -> UnifiedDiff
     func commitFiles(repoPath: String, sha: String) async throws -> [CommitFile]      // karar 6: yalnız liste
     func commitFileDiff(repoPath: String, sha: String, file: String) async throws -> UnifiedDiff  // lazy
+    func imagePreview(repoPath: String, file: String, sha: String?) async -> ImagePreview         // karar 21
 }
 ```
 
@@ -110,6 +111,7 @@ public protocol GitServicing: Sendable {          // stateless; git CLI + porcel
 - **Status sadeleşmesi korunur:** staged/unstaged ayrımı yok; `modified|added|deleted|renamed|untracked`; rename'de `to` path.
 - **Path-traversal guard'ı TÜM path alan metodlarda** (karar 11 — Electron'da yalnız `readFile` korumalıydı): repo köküne canonical-path kontrolü; ihlal → `LumiError.pathOutsideRepo`.
 - `fileDiff`/`commitFileDiff` çıktısı tiplenmiş `UnifiedDiff` modelidir (hunk'lar; FileViewer doğrudan render eder — [03 §6](./03-ui-shell.md)).
+- **`imagePreview` (karar 21):** görsel dosyalarda metin diff'i yerine ham blob çifti. `sha` verilirse `git show sha^:file` ↔ `git show sha:file`, verilmezse `HEAD:file` ↔ disk. Çıktı `ProcessRunner.runRaw` ile **`Data`** olarak alınır (UTF8 decode görselleri bozar). Liste operasyonları gibi **sessiz**: eksik taraf nil'dir (root commit'in parent'ı, eklenen/silinen dosya, untracked dosya — hepsi rutin), yalnız path-traversal ihlali loglanır. Taraf başına `maxImagePreviewBytes` (20MB) sınırı; disk tarafında boyut önce file attribute'undan okunur, sınır üstü dosya belleğe hiç alınmaz.
 
 ---
 

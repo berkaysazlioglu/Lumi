@@ -14,6 +14,14 @@ enum ProcessRunner {
         let stderr: String
     }
 
+    /// Binary-güvenli varyantın çıktısı: stdout UTF8'e çevrilmeden döner
+    /// (görsel blob'ları — `git show sha:file`, karar 21).
+    struct RawOutput: Sendable {
+        let exitCode: Int32
+        let stdout: Data
+        let stderr: Data
+    }
+
     private final class OnceFlag: @unchecked Sendable {
         private let lock = NSLock()
         private var fired = false
@@ -38,10 +46,10 @@ enum ProcessRunner {
             data.append(chunk)
         }
 
-        var text: String {
+        var bytes: Data {
             lock.lock()
             defer { lock.unlock() }
-            return String(decoding: data, as: UTF8.self)
+            return data
         }
     }
 
@@ -54,6 +62,29 @@ enum ProcessRunner {
         standardInput: Data? = nil,
         timeout: TimeInterval
     ) async -> Output? {
+        guard let raw = await runRaw(
+            executable,
+            arguments: arguments,
+            currentDirectory: currentDirectory,
+            standardInput: standardInput,
+            timeout: timeout
+        ) else { return nil }
+        return Output(
+            exitCode: raw.exitCode,
+            stdout: String(decoding: raw.stdout, as: UTF8.self),
+            stderr: String(decoding: raw.stderr, as: UTF8.self)
+        )
+    }
+
+    /// `run` ile aynı semantik; stdout/stderr ham `Data` olarak döner (UTF8
+    /// decode kaybı olmadan — görsel blob'ları için).
+    static func runRaw(
+        _ executable: String,
+        arguments: [String],
+        currentDirectory: String? = nil,
+        standardInput: Data? = nil,
+        timeout: TimeInterval
+    ) async -> RawOutput? {
         await withCheckedContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
@@ -103,10 +134,10 @@ enum ProcessRunner {
             }
             group.notify(queue: .global(qos: .utility)) {
                 guard once.tryFire() else { return }
-                continuation.resume(returning: Output(
+                continuation.resume(returning: RawOutput(
                     exitCode: process.terminationStatus,
-                    stdout: stdout.text,
-                    stderr: stderr.text
+                    stdout: stdout.bytes,
+                    stderr: stderr.bytes
                 ))
             }
 

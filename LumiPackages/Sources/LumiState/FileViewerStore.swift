@@ -25,8 +25,16 @@ public final class FileViewerStore {
     public private(set) var filePath = ""
     public private(set) var fileContent: String?
     public private(set) var diff: UnifiedDiff?
+    /// Karar 21: görsel dosyalarda `diff`/`fileContent` yerine bu dolu olur.
+    public private(set) var imagePreview: ImagePreview?
     public private(set) var commitContext: CommitContext?
     public private(set) var isLoading = false
+    /// Markdown dosyalarında render'lı sunum (kapatılınca ham metin/diff).
+    /// Oturumluk — persist edilmez (spec/21 §11).
+    public var rendersMarkdown = true
+
+    /// Aktif dosyanın sunum sınıfı (uzantıdan).
+    public var previewKind: FilePreviewKind { FilePreviewKind.of(path: filePath) }
 
     @ObservationIgnored private let git: any GitServicing
     @ObservationIgnored private let toasts: ToastStore
@@ -39,6 +47,11 @@ public final class FileViewerStore {
     // MARK: - Sunum modları
 
     public func presentView(repoPath: String, filePath: String) async {
+        // Görsel dosyada metin okuma anlamsız (binary → bozuk UTF8): önizleme
+        guard FilePreviewKind.of(path: filePath) != .image else {
+            await presentImage(mode: .view, repoPath: repoPath, filePath: filePath, sha: nil)
+            return
+        }
         let succeeded = await toasts.reporting {
             self.fileContent = try await self.git.readFile(repoPath: repoPath, file: filePath)
         }
@@ -47,11 +60,16 @@ public final class FileViewerStore {
         self.filePath = filePath
         mode = .view
         diff = nil
+        imagePreview = nil
         commitContext = nil
         isPresented = true
     }
 
     public func presentDiff(repoPath: String, filePath: String) async {
+        guard FilePreviewKind.of(path: filePath) != .image else {
+            await presentImage(mode: .diff, repoPath: repoPath, filePath: filePath, sha: nil)
+            return
+        }
         let succeeded = await toasts.reporting {
             self.diff = try await self.git.fileDiff(repoPath: repoPath, file: filePath)
         }
@@ -60,6 +78,7 @@ public final class FileViewerStore {
         self.filePath = filePath
         mode = .diff
         fileContent = nil
+        imagePreview = nil
         commitContext = nil
         isPresented = true
     }
@@ -85,6 +104,17 @@ public final class FileViewerStore {
         filePath = path
         isLoading = true
         defer { isLoading = false }
+        diff = nil
+        imagePreview = nil
+        guard FilePreviewKind.of(path: path) != .image else {
+            await presentImage(
+                mode: .commitDiff,
+                repoPath: repoPath,
+                filePath: path,
+                sha: context.sha
+            )
+            return
+        }
         await toasts.reporting {
             self.diff = try await self.git.commitFileDiff(
                 repoPath: self.repoPath,
@@ -94,10 +124,31 @@ public final class FileViewerStore {
         }
     }
 
+    /// Karar 21: görsel dosyalar diff/metin yerine önizlemeyle sunulur. Git
+    /// tarafı sessizdir (eksik taraf normaldir), o yüzden toast koridoru yok —
+    /// üretilemeyen önizlemeyi UI placeholder ile bildirir.
+    private func presentImage(
+        mode newMode: Mode,
+        repoPath: String,
+        filePath: String,
+        sha: String?
+    ) async {
+        let preview = await git.imagePreview(repoPath: repoPath, file: filePath, sha: sha)
+        self.repoPath = repoPath
+        self.filePath = filePath
+        self.mode = newMode
+        fileContent = nil
+        diff = nil
+        if newMode != .commitDiff { commitContext = nil }
+        imagePreview = preview
+        isPresented = true
+    }
+
     public func close() {
         isPresented = false
         fileContent = nil
         diff = nil
+        imagePreview = nil
         commitContext = nil
         filePath = ""
     }
