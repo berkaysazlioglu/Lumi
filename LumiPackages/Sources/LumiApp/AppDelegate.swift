@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
+        window.delegate = self // windowShouldClose → quit-onay akışı (aşağıda)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.minSize = NSSize(width: 1000, height: 600)
@@ -427,5 +428,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+}
+
+// MARK: - NSWindowDelegate (çarpı butonu → quit-onay akışı)
+
+extension AppDelegate: NSWindowDelegate {
+    /// Çarpı (X) pencereyi DOĞRUDAN kapatmaz. Pencere önce kapansaydı quit-onay
+    /// dialogu (SwiftUI, pencere içeriğinde) görünmez kalır ve `.terminateLater`
+    /// cevapsız asılırdı — app penceresiz halde Dock'ta takılırdı. Kapatma isteği
+    /// Cmd+Q ile aynı `applicationShouldTerminate` akışına yönlendirilir (spec/30
+    /// §3 paritesi: v1 de `close` event'ini yakalayıp onaya çevirir). Pencere
+    /// yalnız uygulama gerçekten çıkarken (terminate) kapanır; onay iptalinde
+    /// açık kalır.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if isShutdownComplete { return true }
+        NSApp.terminate(nil)
+        return false
     }
 }
