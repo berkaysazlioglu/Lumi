@@ -104,6 +104,11 @@ Persistence karar 9 uyumlu: `config.json`'a **additive** `sessionTrigger` nested
 
 Mimari: `ActivityMonitoring` (LumiKit sınırı) → `SystemActivityMonitor` (LumiServices, CGEventSource; idle sorgusu Accessibility/Input-Monitoring izni GEREKTİRMEZ) → `UsageAutoRefreshStore` (LumiState; `SessionScheduleStore` iskeleti — config'i `update(_:)` ile izler, döngüde uyur/tetikler, `UsageStore.refresh()` çağırır). Config değişimi `ConfigSideEffectCoordinator` köprüsünden akar (karar 3). Persistence karar 9 uyumlu: `config.json`'a **additive** `usageAutoRefresh` nested key'i (`enabled`/`intervalMinutes`); yoksa kapalı default'a düşer (disabled / 15 dk) ve geçersiz aralık izinli set'e clamp'lenir.
 
+### 22. PTY env: `COLORTERM=truecolor` her zaman set edilir (bug fix, 2026-08-04)
+v1 spec'i PTY env'ini `process.env` + `TERM=xterm-256color` olarak tanımlar; `COLORTERM` set edilmez. Bu, launch bağlamına göre değişen davranış üretiyordu: `swift run` (dev) dış terminalin `COLORTERM=truecolor`'ını miras alıp PTY child'a sızdırırken, Finder'dan açılan paketli .app'te değişken hiç yoktu → Claude Code CLI (supports-color tespiti) 256-renk paletine düşüyor ve terminal renkleri **yalnız paketli build'de soluk** görünüyordu (pencere color-space pinlemesi — a8dff8a — bu farkı çözmez; window.colorSpace her iki bağlamda da aynı doğrulandı).
+
+Karar: PTY child'ın gördüğü terminal emülatörü **Lumi'dir** (SwiftTerm, 24-bit destekli); `TERM` gibi `COLORTERM` da miras değerden bağımsız olarak Lumi'nin kendi yeteneğini deklare eder → `TerminalEnvironment.childEnvironment()` her zaman `COLORTERM=truecolor` yazar. Böylece dev ve paketli build aynı (truecolor) çıktıyı alır.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).

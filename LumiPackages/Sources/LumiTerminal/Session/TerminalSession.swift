@@ -51,17 +51,11 @@ final class TerminalSession {
         self.ioQueue = queue
         self.pipeline = TerminalPipeline(queue: queue)
 
-        var environment = ProcessInfo.processInfo.environment
-        environment["TERM"] = "xterm-256color"
-        if environment["LANG"] == nil {
-            environment["LANG"] = "en_US.UTF-8"
-        }
-
         self.pty = try PTYProcess(
             executable: ShellResolver.defaultShell(),
             args: ["-l"],
             cwd: repoPath,
-            env: environment,
+            env: TerminalEnvironment.childEnvironment(),
             initialCols: Self.initialCols,
             initialRows: Self.initialRows,
             queue: queue

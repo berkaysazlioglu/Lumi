@@ -46,7 +46,7 @@ final class PTYProcess {
 
 - `forkpty` çağrısı için SwiftTerm `PseudoTerminalHelpers` referans alınabilir; bizim kattığımız değer dispatch-source yaşam döngüsüdür.
 - **Okuma:** master fd üzerinde `DispatchSourceRead`, terminal başına serial queue. Handler tek non-blocking `read()` (≤64 KB) yapar. `.suspend` dönerse source **kendini** suspend eder (eşzamanlı-suspend yarışı yok); `resumeReading()` lock altındaki `isSuspended` bayrağıyla dengeyi korur.
-- **Spawn paritesi ([spec/10](../spec/10-main-terminal-pty.md)):** shell seçim zinciri (macOS: `zsh → bash → sh`, `which` ile doğrulanır, process ömrü boyunca cache), her zaman `<shell> -l` (login); `claude`/`codex` PTY argv'si değil, sonradan `write()` ile enjekte edilir. `TERM=xterm-256color`, başlangıç 120×30, `cwd: repoPath`, env = `fixProcessPath` sonucu.
+- **Spawn paritesi ([spec/10](../spec/10-main-terminal-pty.md)):** shell seçim zinciri (macOS: `zsh → bash → sh`, `which` ile doğrulanır, process ömrü boyunca cache), her zaman `<shell> -l` (login); `claude`/`codex` PTY argv'si değil, sonradan `write()` ile enjekte edilir. `TERM=xterm-256color` + `COLORTERM=truecolor` (her ikisi de miras değeri ezer — Lumi'nin kendi yeteneğini deklare eder, karar 22), başlangıç 120×30, `cwd: repoPath`, env = `fixProcessPath` sonucu.
 - **Crash dayanıklılığı:** global, lock-korumalı child-pid registry + `atexit`/`SIGTERM` handler'ı `killpg` döngüsü (async-signal-safe) — yakalanmamış crash'te bile zombi `claude` ağacı kalmaz (§4.3).
 
 ---
