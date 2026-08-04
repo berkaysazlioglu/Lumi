@@ -96,10 +96,14 @@ public final class TerminalSessionManager: TerminalServicing {
             throw LumiError.terminalLimitReached(max: maxTerminals)
         }
         spawnCounter += 1
+        // Karar 23: claude komutuna --session-id enjeksiyonu (veya mevcut
+        // flag'ten çıkarım) — ID meta'da taşınır, quit'te resume için persist edilir.
+        let prepared = ClaudeSessionCommand.prepare(command: command)
         let session = try TerminalSession(
             repoPath: repoPath,
             name: "Terminal \(spawnCounter)",
             task: task,
+            claudeSessionID: prepared.sessionID,
             font: font
         )
         session.delegate = self
@@ -125,8 +129,8 @@ public final class TerminalSessionManager: TerminalServicing {
             }
         )
         broadcaster.send(.spawned(session.meta))
-        if let command {
-            session.write(command + "\r")
+        if let command = prepared.command {
+            session.scheduleLaunchCommand(command)
         }
         return session.meta
     }

@@ -199,6 +199,10 @@ public struct UIState: Codable, Sendable, Equatable {
     public var projectGridLayouts: [String: GridLayout]
     public var windowBounds: WindowBounds?
     public var windowMaximized: Bool?
+    /// Karar 23 (additive): graceful quit'te canlı claude oturumları buraya
+    /// yazılır; açılışta tüketilir (okunur + boşaltılır) ve `claude --resume`
+    /// ile aynı chat'ten devam edilir. Boş liste = devam edilecek oturum yok.
+    public var resumeSessions: [ResumeSession]
     /// Legacy `gridColumns` alanının (number | "auto") çevirisi — yalnız OKUNUR
     /// (spec/21 §13 migration'ı için); yazımda overlay'e girmez, ham anahtar
     /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
@@ -222,6 +226,7 @@ public struct UIState: Codable, Sendable, Equatable {
         projectGridLayouts: [String: GridLayout],
         windowBounds: WindowBounds?,
         windowMaximized: Bool?,
+        resumeSessions: [ResumeSession] = [],
         legacyGridColumns: GridLayout? = nil
     ) {
         self.openTabs = openTabs
@@ -231,7 +236,20 @@ public struct UIState: Codable, Sendable, Equatable {
         self.projectGridLayouts = projectGridLayouts
         self.windowBounds = windowBounds
         self.windowMaximized = windowMaximized
+        self.resumeSessions = resumeSessions
         self.legacyGridColumns = legacyGridColumns
+    }
+}
+
+/// Karar 23: quit anında canlı olan bir claude oturumunun kaydı — açılışta
+/// `claude --resume <sessionID>` ile aynı repo'da devam edilir.
+public struct ResumeSession: Codable, Sendable, Equatable {
+    public let repoPath: String
+    public let sessionID: String
+
+    public init(repoPath: String, sessionID: String) {
+        self.repoPath = repoPath
+        self.sessionID = sessionID
     }
 }
 

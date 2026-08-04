@@ -205,6 +205,8 @@ final class AppContainer {
         if let active = workspace.activeTab {
             workspace.onActiveRepoChanged?(nil, active)
         }
+
+        await resumeClaudeSessions()
     }
 
     private func startBridges() {
@@ -264,6 +266,22 @@ final class AppContainer {
         })
     }
 
+    /// Karar 23: önceki graceful quit'te persist edilen claude oturumlarını
+    /// açık tab'ı duran repo'larda `claude --resume <id> || claude` ile yeniden
+    /// spawn eder. Kayıtlar TEK SEFERLİK tüketilir (önce boşaltılır — spawn
+    /// başarısız olsa bile bayat liste sonraki açılışlara sarkmaz).
+    private func resumeClaudeSessions() async {
+        let entries = await config.uiState().resumeSessions
+        guard !entries.isEmpty else { return }
+        await config.updateUIState { $0.resumeSessions = [] }
+        for entry in entries where workspace.openTabs.contains(entry.repoPath) {
+            terminals.spawn(
+                in: entry.repoPath,
+                command: ClaudeSessionCommand.resumeCommand(sessionID: entry.sessionID)
+            )
+        }
+    }
+
     func defaultRepoPath() async -> String {
         let appConfig = await config.config()
         return appConfig.projectsRoot.isEmpty ? NSHomeDirectory() : appConfig.projectsRoot
@@ -273,6 +291,15 @@ final class AppContainer {
         bridgeTasks.forEach { $0.cancel() }
         sessionSchedule.stop()
         usageAutoRefresh.stop()
+        // Karar 23: killAll'dan ÖNCE canlı claude oturumları persist edilir —
+        // bir sonraki açılış aynı chat'lerden devam eder. Graceful /exit gerekmez:
+        // transcript kill sonrası da sağlamdır (ampirik doğrulama karar 23'te).
+        let resumeSessions = terminal.terminals.compactMap { meta in
+            meta.claudeSessionID.map {
+                ResumeSession(repoPath: meta.repoPath, sessionID: $0)
+            }
+        }
+        await config.updateUIState { $0.resumeSessions = resumeSessions }
         terminal.killAll()
         await config.flushPendingWrites()
         // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)

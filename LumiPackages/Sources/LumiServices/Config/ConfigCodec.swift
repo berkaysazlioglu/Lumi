@@ -181,6 +181,14 @@ enum ConfigCodec {
         if let value = boolValue(dict["windowMaximized"]) {
             state.windowMaximized = value
         }
+        // Karar 23 (additive): açılışta tüketilecek claude resume kayıtları
+        if let raw = dict["resumeSessions"] as? [[String: Any]] {
+            state.resumeSessions = raw.compactMap { entry in
+                guard let repoPath = entry["repoPath"] as? String,
+                      let sessionID = entry["sessionID"] as? String else { return nil }
+                return ResumeSession(repoPath: repoPath, sessionID: sessionID)
+            }
+        }
         // Legacy global gridColumns: "auto" | number → migration girdisi (spec/21 §13)
         if let legacy = dict["gridColumns"] {
             if let text = legacy as? String, text == "auto" {
@@ -204,6 +212,11 @@ enum ConfigCodec {
                 ["mode": layout.mode.rawValue, "count": layout.count,
                  "heightMode": layout.heightMode.rawValue,
                  "heightRatio": layout.heightRatio.rawValue]
+            },
+            // Karar 23: HER yazımda overlay'e girer — koşullu yazılsaydı merge
+            // tüketilmiş (boşaltılmış) listeyi diskte bayat bırakırdı.
+            "resumeSessions": state.resumeSessions.map { entry in
+                ["repoPath": entry.repoPath, "sessionID": entry.sessionID]
             },
         ]
         if let bounds = state.windowBounds {

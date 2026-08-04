@@ -63,6 +63,10 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     public var task: String?
     public var oscTitle: String?
     public var status: TerminalStatus
+    /// Karar 23: spawn komutuna enjekte edilen (veya komuttan çıkarılan) claude
+    /// oturum kimliği — quit'te persist edilip açılışta resume için kullanılır.
+    /// nil = bu terminal Lumi'nin izlediği bir claude oturumu taşımıyor.
+    public let claudeSessionID: String?
 
     public init(
         id: TerminalID,
@@ -71,7 +75,8 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         createdAt: Date,
         task: String? = nil,
         oscTitle: String? = nil,
-        status: TerminalStatus = .idle
+        status: TerminalStatus = .idle,
+        claudeSessionID: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -80,6 +85,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.task = task
         self.oscTitle = oscTitle
         self.status = status
+        self.claudeSessionID = claudeSessionID
     }
 }
 

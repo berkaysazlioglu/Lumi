@@ -117,6 +117,26 @@ v1 spec'i PTY env'ini `process.env` + `TERM=xterm-256color` olarak tanımlar; `C
 
 Karar: PTY child'ın gördüğü terminal emülatörü **Lumi'dir** (SwiftTerm, 24-bit destekli); `TERM` gibi `COLORTERM` da miras değerden bağımsız olarak Lumi'nin kendi yeteneğini deklare eder → `TerminalEnvironment.childEnvironment()` her zaman `COLORTERM=truecolor` yazar. Böylece dev ve paketli build aynı (truecolor) çıktıyı alır.
 
+### 23. Claude oturumları Lumi restart'ında devam eder (v1 spec'ine ek, 2026-08-04)
+Kullanıcı talebi: Lumi kapatılırken açık Claude chat'leri kaybolmasın; uygulama yeniden açıldığında aynı konuşmalardan devam edilsin. v1'de yoktu (terminaller quit'te ölür, restore yok).
+
+Ampirik bulgular (claude CLI v2.1.221, PTY testleriyle doğrulandı):
+- claude çıkışta `Resume this session with: claude --resume <uuid>` basar; uuid, `~/.claude/projects/<cwd-slug>/<uuid>.jsonl` transcript dosya adıyla aynıdır.
+- `--session-id <uuid>` ile oturum ID'si **spawn anında dışarıdan atanabilir**.
+- `--resume` aynı ID'yi korur (fork yalnız `--fork-session` ile) → ID restart döngüleri boyunca stabildir.
+- SIGKILL sonrası bile transcript sağlam ve resume çalışır → quit'te graceful `/exit` **gerekmez**.
+- Mesajsız oturumda `claude -r <id>` "No conversation found" ile exit 1 verir.
+
+Mekanizma — çıktı scraping YOK (terminal içeriğinde geçen herhangi bir `claude --resume ...` metni yanlış pozitif üretirdi; ayrıca kill-güvenli ve çoklu-terminal-güvenli olan yol ID'yi baştan bilmektir):
+1. **Spawn:** Launch komutunun ilk token'ı `claude` ise ve komut oturum belirleyici flag taşımıyorsa `--session-id <lumi-üretimi-uuid>` enjekte edilir (`ClaudeSessionCommand.prepare`, TerminalSessionManager.spawn içinde — tüm çağrı noktalarını kapsar); ID `TerminalMeta.claudeSessionID`'de taşınır. Komutta `--session-id <uuid>` / `--resume <uuid>` / `-r <uuid>` zaten varsa komut değiştirilmez, ID oradan okunur.
+   **Yazım zamanlaması (`LaunchCommandGate`, saha düzeltmesi 2026-08-04):** Launch komutu spawn'dan hemen sonra DEĞİL, shell hazır olunca yazılır — erken PTY yazımı login-shell init'inin girdi flush'una (tcsetattr TCSAFLUSH) denk gelip kaybolabiliyor; sahada `--session-id` claude'a hiç ulaşmadı ve resume boş oturuma düştü. Kapı: shell'in ilk çıktısından sonra 150ms sessizlik (prompt çizimi bitti), hiç çıktı gelmezse 2s üst sınırda yine de yazım. Tüm launch komutlarına uygulanır (codex dahil).
+2. **Quit (graceful her yol):** `shutdown()` killAll'dan ÖNCE claudeSessionID'li terminalleri `ui-state.json`'a yazar — additive `resumeSessions` key'i (`[{repoPath, sessionID}]`).
+3. **Açılış:** Bootstrap `resumeSessions`'ı okur ve hemen temizler (tek seferlik tüketim); openTabs'ta duran repo'larda `claude --resume <id> || claude` komutuyla terminal spawn eder. `|| claude`: mesajsız/silinmiş oturumda taze claude'a düşer (exit 1 ampirik). Resume komutu da prepare()'dan geçtiğinden meta AYNI ID'yi taşır → sonraki quit'te zincir kesintisiz sürer.
+
+Bilinçli sınırlar: (a) kullanıcının shell'e elle yazdığı `claude` çağrıları izlenmez — terminalin son Lumi-spawn'lı oturumu neyse o devam eder; (b) crash'te persist yoktur, özellik graceful quit kapsamındadır; (c) codex kapsam dışı (eşdeğer session-id/resume CLI yüzeyi doğrulanmadı).
+
+Persistence karar 9 uyumlu: `ui-state.json`'a **additive** `resumeSessions` key'i; eski sürüm görmezse yok sayar, bilinmeyen-anahtar korumasıyla diğer alanlar bozulmaz.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).

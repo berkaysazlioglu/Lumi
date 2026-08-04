@@ -36,7 +36,13 @@ final class TerminalSession {
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
 
-    init(repoPath: String, name: String, task: String?, font: NSFont) throws {
+    init(
+        repoPath: String,
+        name: String,
+        task: String?,
+        claudeSessionID: String? = nil,
+        font: NSFont
+    ) throws {
         let id = TerminalID()
         self.id = id
         self.meta = TerminalMeta(
@@ -44,7 +50,8 @@ final class TerminalSession {
             name: name,
             repoPath: repoPath,
             createdAt: Date(),
-            task: task
+            task: task,
+            claudeSessionID: claudeSessionID
         )
 
         let queue = DispatchQueue(label: "lumi.terminal.\(id.raw.uuidString)", qos: .utility)
@@ -117,6 +124,7 @@ final class TerminalSession {
     /// PTY suspend'de kalır, veri kaybolmaz.
     private func deliver(_ batch: Data) {
         guard !isTerminated else { return }
+        launchGate?.noteOutput()
         terminalView.feed(byteArray: ArraySlice([UInt8](batch)))
         if pipeline.flow.noteConsumed(batch.count) {
             pty.resumeReading()
@@ -144,10 +152,26 @@ final class TerminalSession {
         guard !isTerminated else { return }
         isTerminated = true
         pendingResize?.cancel()
+        launchGate?.cancel()
+        launchGate = nil
         delegate?.session(self, didExitWithCode: code)
     }
 
     // MARK: - Komutlar
+
+    private var launchGate: LaunchCommandGate?
+
+    /// Launch komutunu shell hazır olunca yazar (karar 23): erken PTY yazımı
+    /// shell init'inin girdi-flush'una denk gelip kaybolabiliyor — bkz.
+    /// `LaunchCommandGate`.
+    func scheduleLaunchCommand(_ command: String) {
+        let gate = LaunchCommandGate()
+        launchGate = gate
+        gate.start { [weak self] in
+            self?.write(command + "\r")
+            self?.launchGate = nil
+        }
+    }
 
     func write(_ text: String) {
         write(Data(text.utf8))
