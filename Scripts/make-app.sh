@@ -2,9 +2,14 @@
 # Lumi.app bundle üretimi (design/04 faz 6).
 #
 # Kullanım:
-#   Scripts/make-app.sh                          # release build + ad-hoc imza → dist/Lumi.app
+#   Scripts/make-app.sh                          # release build + imza → dist/Lumi.app
 #   Scripts/make-app.sh --install                # + /Applications/Lumi.app'e kur
 #   IDENTITY="Developer ID Application: ..." Scripts/make-app.sh   # gerçek imza + hardened runtime
+#
+# İmza sırası: IDENTITY → keychain'deki ilk geçerli "Apple Development" → ad-hoc.
+# TCC (Downloads/Photos/Calendar/mikrofon izinleri) imza kimliğine bağlıdır: ad-hoc
+# imzada kimlik build'e özgü CDHash olduğundan her kurulumda izinler sıfırlanır ve
+# macOS yeniden sorar. Sertifikayla imza kimliği sabit kalır → izinler bir kez verilir.
 #
 # Notarization (Developer ID imzası sonrası):
 #   ditto -c -k --keepParent dist/Lumi.app dist/Lumi.zip
@@ -84,6 +89,26 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Lumi needs microphone access for Claude Code voice mode.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Claude Code sessions running inside Lumi may read or write files here.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Claude Code sessions running inside Lumi may read or write files here.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Claude Code sessions running inside Lumi may read or write files here.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>A command run by a Claude Code session touched the Photos library. Lumi itself does not use your photos.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>A command run by a Claude Code session touched calendar data. Lumi itself does not use your calendar.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>A command run by a Claude Code session touched reminders data. Lumi itself does not use your reminders.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>A command run by a Claude Code session touched contacts data. Lumi itself does not use your contacts.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Claude Code sessions may use AppleScript (e.g. notifications) via commands you run.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>Claude Code sessions running inside Lumi may read or write files on network volumes.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Claude Code sessions running inside Lumi may read or write files on removable volumes.</string>
 </dict>
 </plist>
 PLIST
@@ -110,8 +135,19 @@ if [ -n "${IDENTITY:-}" ]; then
   echo "  Developer ID ile imzalandı: $IDENTITY"
   echo "  Notarization için script başındaki komutlara bak."
 else
-  codesign --force --entitlements "$ENTITLEMENTS" --sign - "$APP"
-  echo "  Ad-hoc imzalandı (yerel kullanım; dağıtım için IDENTITY ver)."
+  # Kararlı TCC kimliği için keychain'deki geçerli bir geliştirme sertifikası
+  # tercih edilir; yoksa ad-hoc'a düşülür (izinler her build'de sıfırlanır).
+  DEV_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk -F'"' '/Apple Development/ {print $2; exit}')"
+  if [ -n "$DEV_IDENTITY" ]; then
+    codesign --force --entitlements "$ENTITLEMENTS" --sign "$DEV_IDENTITY" "$APP"
+    echo "  Geliştirme sertifikasıyla imzalandı: $DEV_IDENTITY"
+    echo "  (TCC izinleri build'ler arası kalıcı — dağıtım için IDENTITY ver.)"
+  else
+    codesign --force --entitlements "$ENTITLEMENTS" --sign - "$APP"
+    echo "  UYARI: Ad-hoc imzalandı — TCC izinleri her build'de yeniden sorulur."
+    echo "  Kalıcı izin için bir Apple Development sertifikası kur ya da IDENTITY ver."
+  fi
 fi
 
 echo "▸ Doğrulama…"
