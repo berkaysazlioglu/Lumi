@@ -14,8 +14,13 @@ final class UsageStoreTests: XCTestCase {
 
     private func makeSnapshot(percent: Int) -> UsageSnapshot {
         UsageSnapshot(
-            fiveHour: UsageWindow(percentUsed: percent, resetsAt: nil, resetsRaw: "", timezone: nil),
-            weekAll: nil, weekSonnet: nil, weekOpus: nil,
+            limits: [
+                UsageLimit(
+                    kind: .session,
+                    rawLabel: "Current session",
+                    window: UsageWindow(percentUsed: percent, resetsAt: nil, resetsRaw: "", timezone: nil)
+                )
+            ],
             mode: .subscription,
             fetchedAt: Date()
         )

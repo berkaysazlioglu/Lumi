@@ -21,7 +21,59 @@ public struct UsageWindow: Sendable, Equatable {
     }
 }
 
+/// `/usage` çıktısındaki TEK bir limit satırı: türü + ham etiketi + penceresi.
+///
+/// Model listesi CLI tarafında değişkendir (Sonnet/Opus/Fable satırları gelir,
+/// gider). Bu yüzden snapshot sabit alanlar yerine bu tipten oluşan bir LİSTE
+/// tutar: 3 yerine 2 (ya da 5) limit dönmesi hata değil, normal durumdur.
+public struct UsageLimit: Sendable, Equatable, Identifiable {
+    public enum Kind: Sendable, Equatable {
+        /// 5 saatlik oturum limiti (topbar göstergesinin kaynağı).
+        case session
+        /// Haftalık toplam ("all models").
+        case weeklyAll
+        /// Haftalık model-özel limit; ad CLI çıktısından gelir ("Opus", "Fable"…).
+        case weeklyModel(String)
+        /// Tanınmayan ama limit biçiminde (`N% used`) gelen satır — düşürülmez.
+        case other
+    }
+
+    public let kind: Kind
+    /// `:` öncesindeki ham etiket (örn. `Current week (Fable)`).
+    public let rawLabel: String
+    public let window: UsageWindow
+
+    public init(kind: Kind, rawLabel: String, window: UsageWindow) {
+        self.kind = kind
+        self.rawLabel = rawLabel
+        self.window = window
+    }
+
+    /// Aynı limitin iki kez gelmesini ayırt etmek için stabil anahtar.
+    public var id: String {
+        switch kind {
+        case .session: return "session"
+        case .weeklyAll: return "week.all"
+        case .weeklyModel(let name): return "week.\(name.lowercased())"
+        case .other: return "other.\(rawLabel.lowercased())"
+        }
+    }
+
+    /// UI başlığı — tanınan türler normalize edilir, tanınmayan ham etiketi kullanır.
+    public var title: String {
+        switch kind {
+        case .session: return "5-hour session"
+        case .weeklyAll: return "Weekly (all models)"
+        case .weeklyModel(let name): return "Weekly (\(name))"
+        case .other: return rawLabel
+        }
+    }
+}
+
 /// `claude -p "/usage"` çıktısının yapısal hali (design/05 §5). Immutable.
+///
+/// `limits` CLI'ın yazdığı SIRAYI korur; UI bu listeyi olduğu gibi gezer →
+/// yeni bir model limiti eklendiğinde ya da kaldırıldığında kod değişmez.
 public struct UsageSnapshot: Sendable, Equatable {
     public enum Mode: String, Sendable {
         case subscription
@@ -29,32 +81,37 @@ public struct UsageSnapshot: Sendable, Equatable {
         case unknown
     }
 
-    public let fiveHour: UsageWindow?      // en önemli alan (topbar göstergesi)
-    public let weekAll: UsageWindow?
-    public let weekSonnet: UsageWindow?
-    public let weekOpus: UsageWindow?
+    public let limits: [UsageLimit]
     public let mode: Mode
     public let fetchedAt: Date
 
-    public init(
-        fiveHour: UsageWindow?,
-        weekAll: UsageWindow?,
-        weekSonnet: UsageWindow?,
-        weekOpus: UsageWindow?,
-        mode: Mode,
-        fetchedAt: Date
-    ) {
-        self.fiveHour = fiveHour
-        self.weekAll = weekAll
-        self.weekSonnet = weekSonnet
-        self.weekOpus = weekOpus
+    public init(limits: [UsageLimit], mode: Mode, fetchedAt: Date) {
+        self.limits = limits
         self.mode = mode
         self.fetchedAt = fetchedAt
     }
 
-    /// En az bir pencere parse edilebildi mi? (mode `.unknown` + tüm pencereler
-    /// nil → servis "biçim tanınmadı" hatası verir, design/05 §hata yönetimi.)
-    public var hasAnyWindow: Bool {
-        fiveHour != nil || weekAll != nil || weekSonnet != nil || weekOpus != nil
+    /// En önemli alan (topbar göstergesi): 5 saatlik oturum.
+    public var fiveHour: UsageWindow? { window(ofKind: .session) }
+
+    /// Haftalık toplam.
+    public var weekAll: UsageWindow? { window(ofKind: .weeklyAll) }
+
+    /// Haftalık model-özel limit (ad karşılaştırması case-insensitive).
+    public func weekly(model: String) -> UsageWindow? {
+        limits.first {
+            if case .weeklyModel(let name) = $0.kind {
+                return name.caseInsensitiveCompare(model) == .orderedSame
+            }
+            return false
+        }?.window
     }
+
+    public func window(ofKind kind: UsageLimit.Kind) -> UsageWindow? {
+        limits.first { $0.kind == kind }?.window
+    }
+
+    /// En az bir pencere parse edilebildi mi? (mode `.unknown` + hiç limit yok
+    /// → servis "biçim tanınmadı" hatası verir, design/05 §hata yönetimi.)
+    public var hasAnyWindow: Bool { !limits.isEmpty }
 }

@@ -4,45 +4,58 @@ import Foundation
 /// (design/05 §4). Process spawn'dan bağımsız → örnek çıktılarla unit-test edilir.
 /// Dayanıklı: tam string eşleşmesine güvenmez (regex + içerir-kontrolü); eksik
 /// satır / bozuk değer / API-key modu crash üretmez, yalnız o alanı boş bırakır.
+///
+/// Limitler SABİT alanlara değil, CLI sırasını koruyan bir LİSTEYE toplanır:
+/// model-özel haftalık satırlar (Sonnet/Opus/Fable…) eklenip kaldırılabilir;
+/// tanınmayan ama limit biçimindeki satır da düşürülmez (`.other`).
 public enum UsageOutputParser {
     /// - Parameters:
     ///   - raw: ham stdout.
     ///   - now: `fetchedAt` ve reset yılı için referans (test'te sabitlenir).
     public static func parse(_ raw: String, now: Date = Date()) -> UsageSnapshot {
-        let mode = detectMode(raw)
-        var fiveHour: UsageWindow?
-        var weekAll: UsageWindow?
-        var weekSonnet: UsageWindow?
-        var weekOpus: UsageWindow?
+        var limits: [UsageLimit] = []
 
         for rawLine in raw.split(whereSeparator: \.isNewline) {
             let line = String(rawLine)
             guard let colon = line.firstIndex(of: ":") else { continue }
-            let label = line[..<colon].lowercased()
+            let label = String(line[..<colon]).trimmingCharacters(in: .whitespaces)
             let value = String(line[line.index(after: colon)...])
-            guard let window = parseWindow(value, now: now) else { continue }
+            guard isLimitValue(value), let window = parseWindow(value, now: now) else { continue }
 
-            // Sıra önemli: "session" → 5sa; "sonnet"/"opus" haftalık alt model;
-            // niteleyicisiz "week" → tüm modeller.
-            if label.contains("session") {
-                fiveHour = window
-            } else if label.contains("sonnet") {
-                weekSonnet = window
-            } else if label.contains("opus") {
-                weekOpus = window
-            } else if label.contains("week") {
-                weekAll = window
+            let limit = UsageLimit(kind: classify(label), rawLabel: label, window: window)
+            // Aynı limit iki kez gelirse yerinde güncellenir (sıra korunur).
+            if let existing = limits.firstIndex(where: { $0.id == limit.id }) {
+                limits[existing] = limit
+            } else {
+                limits.append(limit)
             }
         }
 
-        return UsageSnapshot(
-            fiveHour: fiveHour,
-            weekAll: weekAll,
-            weekSonnet: weekSonnet,
-            weekOpus: weekOpus,
-            mode: mode,
-            fetchedAt: now
-        )
+        return UsageSnapshot(limits: limits, mode: detectMode(raw), fetchedAt: now)
+    }
+
+    // MARK: - Etiket sınıflandırma
+
+    /// `Current session` → oturum; `Current week (…)` → haftalık toplam ya da
+    /// model-özel; ikisi de değilse `.other` (veri düşürülmez).
+    private static func classify(_ label: String) -> UsageLimit.Kind {
+        let lower = label.lowercased()
+        if lower.contains("session") { return .session }
+        guard lower.contains("week") else { return .other }
+        guard let qualifier = parenthetical(label) else { return .weeklyAll }
+        let name = qualifier
+            .replacingOccurrences(of: #"(?i)\s*\bonly\b"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        if name.isEmpty || name.lowercased().contains("all model") { return .weeklyAll }
+        return .weeklyModel(name)
+    }
+
+    /// Son parantez çiftinin içi (`Current week (Fable)` → `Fable`).
+    private static func parenthetical(_ text: String) -> String? {
+        guard let open = text.lastIndex(of: "("),
+              let close = text.lastIndex(of: ")"),
+              open < close else { return nil }
+        return String(text[text.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - Mod
@@ -55,6 +68,14 @@ public enum UsageOutputParser {
     }
 
     // MARK: - Tek satır → pencere
+
+    /// Limit satırı mı? Çıktının "What's contributing" bölümündeki
+    /// `Top MCP servers: UnityMCP 36%` gibi satırlar limit DEĞİLDİR; yalnız
+    /// `N% used` kalıbı ya da `resets` içeren değerler limit sayılır.
+    private static func isLimitValue(_ value: String) -> Bool {
+        value.range(of: #"(?i)\d+%\s*used"#, options: .regularExpression) != nil
+            || value.range(of: #"(?i)\bresets\b"#, options: .regularExpression) != nil
+    }
 
     /// Değer kısmından yüzde + reset çıkarır. İkisi de yoksa nil (pencere değil).
     private static func parseWindow(_ value: String, now: Date) -> UsageWindow? {

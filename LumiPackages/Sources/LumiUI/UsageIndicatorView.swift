@@ -119,10 +119,16 @@ private struct UsagePopover: View {
     private var content: some View {
         if let snapshot = store.snapshot {
             VStack(alignment: .leading, spacing: 14) {
-                windowRow("5-hour session", snapshot.fiveHour)
-                windowRow("Weekly (all models)", snapshot.weekAll)
-                windowRow("Weekly (Sonnet)", snapshot.weekSonnet)
-                windowRow("Weekly (Opus)", snapshot.weekOpus)
+                // Limit sayısı CLI'a göre değişir (model satırları eklenip
+                // kaldırılabilir) → listeyi olduğu gibi gez.
+                ForEach(snapshot.limits) { limit in
+                    UsageWindowRow(title: limit.title, window: limit.window)
+                }
+                if snapshot.limits.isEmpty {
+                    Text("No limit reported.")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                }
                 if snapshot.mode == .apiKey {
                     Text("API key mode — no subscription limit.")
                         .font(.system(size: 11, design: .monospaced))
@@ -141,13 +147,6 @@ private struct UsagePopover: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.error)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder
-    private func windowRow(_ title: String, _ window: UsageWindow?) -> some View {
-        if let window {
-            UsageWindowRow(title: title, window: window)
         }
     }
 

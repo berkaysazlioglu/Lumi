@@ -20,8 +20,81 @@ final class UsageOutputParserTests: XCTestCase {
         XCTAssertEqual(snapshot.mode, .subscription)
         XCTAssertEqual(snapshot.fiveHour?.percentUsed, 20)
         XCTAssertEqual(snapshot.weekAll?.percentUsed, 41)
-        XCTAssertEqual(snapshot.weekSonnet?.percentUsed, 1)
-        XCTAssertNil(snapshot.weekOpus)
+        XCTAssertEqual(snapshot.weekly(model: "Sonnet")?.percentUsed, 1)
+        XCTAssertNil(snapshot.weekly(model: "Opus"))
+    }
+
+    func testLimitsKeepCliOrderAndTitles() {
+        let snapshot = UsageOutputParser.parse(fullOutput, now: now)
+        XCTAssertEqual(
+            snapshot.limits.map(\.title),
+            ["5-hour session", "Weekly (all models)", "Weekly (Sonnet)"]
+        )
+    }
+
+    /// Regresyon: model-özel haftalık satır, haftalık TOPLAMI ezmemeli
+    /// (eski parser "Current week (Fable)" satırını `weekAll` sanıyordu).
+    func testModelWeeklyLineDoesNotOverwriteWeeklyTotal() {
+        let output = """
+        You are currently using your subscription to power your Claude Code usage
+
+        Current session: 0% used · resets Jul 27 at 7:59pm (Europe/Istanbul)
+        Current week (all models): 7% used · resets Aug 1 at 3:59pm (Europe/Istanbul)
+        Current week (Fable): 2% used · resets Aug 1 at 3:59pm (Europe/Istanbul)
+        """
+        let snapshot = UsageOutputParser.parse(output, now: now)
+        XCTAssertEqual(snapshot.weekAll?.percentUsed, 7)
+        XCTAssertEqual(snapshot.weekly(model: "Fable")?.percentUsed, 2)
+        XCTAssertEqual(snapshot.limits.count, 3)
+    }
+
+    /// Model limiti kaldırılırsa (3 yerine 2 satır) hata değil — kalanlar durur.
+    func testFewerLimitsAreParsedWithoutError() {
+        let output = """
+        You are currently using your subscription to power your Claude Code usage
+
+        Current session: 5% used · resets Jun 12 at 1:39pm (Europe/Istanbul)
+        Current week (all models): 10% used · resets Jun 13 at 3:59pm (Europe/Istanbul)
+        """
+        let snapshot = UsageOutputParser.parse(output, now: now)
+        XCTAssertEqual(snapshot.limits.count, 2)
+        XCTAssertEqual(snapshot.fiveHour?.percentUsed, 5)
+        XCTAssertEqual(snapshot.weekAll?.percentUsed, 10)
+        XCTAssertNil(snapshot.weekly(model: "Sonnet"))
+        XCTAssertTrue(snapshot.hasAnyWindow)
+    }
+
+    /// İleride yeni bir model limiti eklenirse kod değişmeden listeye girer.
+    func testUnknownModelWeeklyLineIsKeptAsModelLimit() {
+        let output = """
+        Current week (all models): 12% used · resets Jun 13 at 3:59pm (Europe/Istanbul)
+        Current week (Somethingnew): 3% used · resets Jun 13 at 3:59pm (Europe/Istanbul)
+        """
+        let snapshot = UsageOutputParser.parse(output, now: now)
+        XCTAssertEqual(snapshot.limits.count, 2)
+        XCTAssertEqual(snapshot.limits.last?.kind, .weeklyModel("Somethingnew"))
+        XCTAssertEqual(snapshot.limits.last?.title, "Weekly (Somethingnew)")
+    }
+
+    /// "What's contributing" bölümü limit değildir — listeye sızmamalı.
+    func testContributingSectionLinesAreIgnored() {
+        let output = """
+        You are currently using your subscription to power your Claude Code usage
+
+        Current session: 0% used · resets Jul 27 at 7:59pm (Europe/Istanbul)
+        Current week (all models): 7% used · resets Aug 1 at 3:59pm (Europe/Istanbul)
+
+        What's contributing to your limits usage?
+
+        Last 24h · 684 requests · 11 sessions
+          71% of your usage was at >150k context
+          Top MCP servers: UnityMCP 36%
+          Top skills: /unity-mcp-skill 2%
+          Top subagents: deep-reasoner 3%, Explore 1%
+        """
+        let snapshot = UsageOutputParser.parse(output, now: now)
+        XCTAssertEqual(snapshot.limits.count, 2)
+        XCTAssertEqual(snapshot.limits.map(\.kind), [.session, .weeklyAll])
     }
 
     func testCapturesRawResetAndTimezone() {
@@ -43,19 +116,6 @@ final class UsageOutputParserTests: XCTestCase {
         XCTAssertEqual(components.minute, 39)
     }
 
-    func testMissingSonnetLineLeavesItNil() {
-        let output = """
-        You are currently using your subscription to power your Claude Code usage
-
-        Current session: 5% used · resets Jun 12 at 1:39pm (Europe/Istanbul)
-        Current week (all models): 10% used · resets Jun 13 at 3:59pm (Europe/Istanbul)
-        """
-        let snapshot = UsageOutputParser.parse(output, now: now)
-        XCTAssertEqual(snapshot.fiveHour?.percentUsed, 5)
-        XCTAssertEqual(snapshot.weekAll?.percentUsed, 10)
-        XCTAssertNil(snapshot.weekSonnet)
-    }
-
     func testApiKeyModeWithoutPercentLines() {
         let output = "You are currently using an API key to power your Claude Code usage"
         let snapshot = UsageOutputParser.parse(output, now: now)
@@ -64,10 +124,11 @@ final class UsageOutputParserTests: XCTestCase {
         XCTAssertFalse(snapshot.hasAnyWindow)
     }
 
-    func testOpusLineMapsToWeekOpus() {
+    func testOpusLineMapsToOpusWeeklyLimit() {
         let output = "Current week (Opus only): 7% used · resets Jun 14 at 9:00am (Europe/Istanbul)"
         let snapshot = UsageOutputParser.parse(output, now: now)
-        XCTAssertEqual(snapshot.weekOpus?.percentUsed, 7)
+        XCTAssertEqual(snapshot.weekly(model: "Opus")?.percentUsed, 7)
+        XCTAssertEqual(snapshot.limits.first?.title, "Weekly (Opus)")
     }
 
     func testLineWithoutResetStillKeepsPercent() {

@@ -40,14 +40,20 @@ claude -p "/usage"
 ```
 You are currently using your subscription to power your Claude Code usage
 
-Current session: 20% used · resets Jun 12 at 1:39pm (Europe/Istanbul)
-Current week (all models): 41% used · resets Jun 13 at 3:59pm (Europe/Istanbul)
-Current week (Sonnet only): 1% used · resets Jun 13 at 3:59pm (Europe/Istanbul)
+Current session: 0% used · resets Jul 27 at 7:59pm (Europe/Istanbul)
+Current week (all models): 7% used · resets Aug 1 at 3:59pm (Europe/Istanbul)
+Current week (Fable): 2% used · resets Aug 1 at 3:59pm (Europe/Istanbul)
+
+What's contributing to your limits usage?
+...
+Last 24h · 684 requests · 11 sessions
+  Top MCP servers: UnityMCP 36%
 ```
 
 Toleranslar:
-- Satır sayısı plana göre değişir: "Sonnet only" / "Opus" satırı olmayabilir.
+- **Model-özel haftalık satırların sayısı ve adı SABİT DEĞİLDİR** (`Sonnet only` / `Opus` / `Fable` … gelir, gider). Parse bu satırları isme göre sabit alanlara bağlamaz; 3 yerine 2 limit dönmesi hata değildir.
 - API key ile (abonelik yerine) çalışan kullanıcıda ilk satır farklıdır ve yüzde satırları hiç gelmeyebilir → `.apiKey` modu, crash yok.
+- Çıktı, limitlerden sonra bir **"What's contributing"** bölümü içerir; oradaki `Top MCP servers: … 36%` gibi satırlar limit DEĞİLDİR ve listeye girmemelidir.
 - Çıktı İngilizce gelir (locale İngilizce varsayılır).
 
 ## 4. Parse
@@ -55,15 +61,16 @@ Toleranslar:
 Satır-bazlı, dayanıklı (tam string eşleşmesine güvenme, regex):
 
 1. Her satır `:` öncesi **etiket** + sonrası **değer** olarak ayrılır.
-2. Etiket eşlemesi (case-insensitive, içerir-kontrolü):
-   - `Current session` → `fiveHour` (**öncelikli alan**)
-   - `Current week (all models)` → `weekAll`
-   - `Current week (Sonnet only)` → `weekSonnet`
-   - `Opus` içeren → `weekOpus`
-3. Değer satırından:
+2. Satır ancak değer kısmı `N% used` kalıbına uyuyorsa **ya da** `resets` içeriyorsa limit sayılır (contributing bölümü bu filtreyle elenir).
+3. Etiket sınıflandırması (case-insensitive) — `UsageLimit.Kind`:
+   - `session` içeren → `.session` (**öncelikli alan**, topbar göstergesi)
+   - `week` içeren + parantez yok / parantez içi `all models` → `.weeklyAll`
+   - `week` içeren + parantez içi model adı (`only` eki atılır) → `.weeklyModel("Fable")` — ad çıktıdan gelir, whitelist YOK
+   - hiçbiri değil → `.other` (ham etiketle gösterilir, veri düşürülmez)
+4. Değer satırından:
    - **Yüzde:** `(\d+)%` → `Int` (0–100), bulunamazsa `nil`.
    - **Reset:** `resets (.+?)(?:\s*\(.*\))?$` → ham reset string'i (örn. `Jun 12 at 1:39pm`); parantez içi timezone (`Europe/Istanbul`) ayrı yakalanır.
-4. Reset zamanı mümkünse `Date`'e çevrilir: format `MMM d 'at' h:mma`, yıl yok → içinde bulunulan yıl. Parse başarısızsa ham string saklanır ve UI'da gösterilir — parse hatası veriyi düşürmez.
+5. Reset zamanı mümkünse `Date`'e çevrilir: format `MMM d 'at' h:mma`, yıl yok → içinde bulunulan yıl. Parse başarısızsa ham string saklanır ve UI'da gösterilir — parse hatası veriyi düşürmez.
 
 ## 5. Değer tipleri
 
@@ -77,15 +84,26 @@ UsageWindow = {
   timezone:    String?
 }
 
+UsageLimit = {
+  kind:     .session | .weeklyAll | .weeklyModel(String) | .other
+  rawLabel: String        // ":" öncesi ham etiket
+  window:   UsageWindow
+  title:    String        // türetilmiş UI başlığı ("Weekly (Fable)")
+  id:       String        // dedupe anahtarı
+}
+
 UsageSnapshot = {
-  fiveHour:   UsageWindow?   // en önemlisi
-  weekAll:    UsageWindow?
-  weekSonnet: UsageWindow?
-  weekOpus:   UsageWindow?
+  limits:     [UsageLimit]   // CLI SIRASINI korur; uzunluk sabit DEĞİL
   mode:       .subscription | .apiKey | .unknown
   fetchedAt:  Date
+  // türetilmiş erişimler:
+  fiveHour:   UsageWindow?   // en önemlisi (topbar)
+  weekAll:    UsageWindow?
+  weekly(model:) -> UsageWindow?
 }
 ```
+
+**Neden liste (2026-07-27):** Sabit `weekSonnet`/`weekOpus` alanları CLI'ın model satırlarını değiştirmesine dayanmıyordu — `Current week (Fable)` satırı, niteliyici tanınmadığı için `weekAll` alanına düşüp haftalık toplamı EZİYORDU. Liste + `Kind` modeli hem bu hatayı kökten kaldırır hem de limit sayısının azalıp artmasını (Fable satırının ileride kalkması dâhil) kod değişikliği olmadan taşır. UI `limits`'i olduğu gibi gezer.
 
 `parseUsageOutput(_ raw: String) -> UsageSnapshot` saf fonksiyon olur — process spawn'dan bağımsız, örnek çıktılarla unit test edilebilir.
 
@@ -127,10 +145,10 @@ Bileşenler (SOLID/DI):
 - `LumiServices`: `UsageService` (`actor`) — `BinaryLocator` (SystemService ile ortak, DRY) → `ProcessRunner` (15sn timeout) → parse; `claude -p "/usage"`.
 - `LumiState`: `UsageStore` (`@Observable @MainActor`), test için `now` enjekte edilebilir; `UsageAutoRefreshStore` (opt-in periyodik tazeleme, idle-gate'li döngü — `SessionScheduleStore` iskeleti).
 - `LumiKit`/`LumiServices`: `ActivityMonitoring` protokolü + `SystemActivityMonitor` (CGEventSource idle sayacı, izin gerektirmez).
-- `LumiUI`: `UsageIndicatorView` — topbar'da grid kontrolünün **solunda** kompakt 5sa yüzdesi; **tıklamayla** (hover değil — 2026-06-12 kullanıcı kararı) tüm pencereleri progress bar + reset süreleri + refresh ile gösteren popover açılır.
+- `LumiUI`: `UsageIndicatorView` — topbar'da grid kontrolünün **solunda** kompakt 5sa yüzdesi; **tıklamayla** (hover değil — 2026-06-12 kullanıcı kararı) tüm pencereleri progress bar + reset süreleri + refresh ile gösteren popover açılır. Popover satırları `snapshot.limits` üzerinde `ForEach` ile üretilir (sabit satır listesi yok — model limiti eklenir/kalkarsa UI kendiliğinden uyar).
 - DI: `AppContainer` `usageService`/`usageStore`'u inşa eder ve bootstrap'te ilk yüklemeyi tetikler.
 
-Testler: `UsageOutputParserTests` (tam çıktı, eksik Sonnet, API-key, Opus, reset'siz satır, bozuk satır, %0/%100, çöp girdi, reset→Date+tz+yıl), `UsageStoreTests` (load-once, min-interval, hata son snapshot'ı korur). Gerçek `claude -p "/usage"` çıktısı §3 kontratıyla birebir doğrulandı.
+Testler: `UsageOutputParserTests` (tam çıktı, limit sırası/başlıkları, **Fable satırı haftalık toplamı ezmez** regresyonu, 2 limitli çıktı, bilinmeyen model adı, contributing bölümünün elenmesi, API-key, Opus, reset'siz satır, bozuk satır, %0/%100, çöp girdi, reset→Date+tz+yıl), `UsageStoreTests` (load-once, min-interval, hata son snapshot'ı korur). Gerçek `claude -p "/usage"` çıktısı §3 kontratıyla birebir doğrulandı (2026-07-27, Fable satırlı sürüm).
 
 ## 7. Kapsam dışı (şimdilik)
 
