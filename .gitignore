@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# Signing certificates — asla commit'lenmez
+*.p12
+
 # Xcode
 xcuserdata/
 DerivedData/
