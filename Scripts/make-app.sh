@@ -39,7 +39,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
 DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
 APP="$DIST/Lumi.app"
-VERSION="${VERSION:-0.6.0}"
+VERSION="${VERSION:-0.6.1}"
 
 echo "▸ Release build…"
 # NEDEN xcodebuild (swift build DEĞİL): `swift build`'in ürettiği Bundle.module
