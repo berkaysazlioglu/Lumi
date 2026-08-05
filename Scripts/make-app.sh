@@ -5,25 +5,35 @@
 #   Scripts/make-app.sh                          # release build + imza → dist/Lumi.app
 #   Scripts/make-app.sh --install                # + /Applications/Lumi.app'e kur
 #   IDENTITY="Developer ID Application: ..." Scripts/make-app.sh   # gerçek imza + hardened runtime
+#   IDENTITY="Developer ID Application: ..." Scripts/make-app.sh --notarize
+#       # + notarize + staple + dağıtım paketleri:
+#       #   dist/Lumi-<VERSION>-<arch>-mac.zip, .dmg, SHA256SUMS-<VERSION>.txt
 #
 # İmza sırası: IDENTITY → keychain'deki ilk geçerli "Apple Development" → ad-hoc.
 # TCC (Downloads/Photos/Calendar/mikrofon izinleri) imza kimliğine bağlıdır: ad-hoc
 # imzada kimlik build'e özgü CDHash olduğundan her kurulumda izinler sıfırlanır ve
 # macOS yeniden sorar. Sertifikayla imza kimliği sabit kalır → izinler bir kez verilir.
 #
-# Notarization (Developer ID imzası sonrası):
-#   ditto -c -k --keepParent dist/Lumi.app dist/Lumi.zip
-#   xcrun notarytool submit dist/Lumi.zip --keychain-profile <profil> --wait
-#   xcrun stapler staple dist/Lumi.app
+# --notarize, keychain'de kayıtlı bir notarytool profili ister (varsayılan ad:
+# lumi-notary, NOTARY_PROFILE ile değiştirilebilir). Bir kez kaydetmek için:
+#   xcrun notarytool store-credentials lumi-notary \
+#     --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
 set -euo pipefail
 
 INSTALL=0
+NOTARIZE=0
 for arg in "$@"; do
   case "$arg" in
     --install) INSTALL=1 ;;
-    *) echo "Bilinmeyen parametre: $arg (desteklenen: --install)" >&2; exit 1 ;;
+    --notarize) NOTARIZE=1 ;;
+    *) echo "Bilinmeyen parametre: $arg (desteklenen: --install, --notarize)" >&2; exit 1 ;;
   esac
 done
+
+if [ "$NOTARIZE" -eq 1 ] && [ -z "${IDENTITY:-}" ]; then
+  echo "HATA: --notarize için IDENTITY (Developer ID Application sertifikası) gerekli." >&2
+  exit 1
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
@@ -133,7 +143,7 @@ if [ -n "${IDENTITY:-}" ]; then
   codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
     --sign "$IDENTITY" "$APP"
   echo "  Developer ID ile imzalandı: $IDENTITY"
-  echo "  Notarization için script başındaki komutlara bak."
+  [ "$NOTARIZE" -eq 0 ] && echo "  Notarization için --notarize parametresini kullan."
 else
   # Kararlı TCC kimliği için keychain'deki geçerli bir geliştirme sertifikası
   # tercih edilir; yoksa ad-hoc'a düşülür (izinler her build'de sıfırlanır).
@@ -153,6 +163,46 @@ fi
 echo "▸ Doğrulama…"
 codesign --verify --verbose=2 "$APP"
 echo "✓ $APP hazır"
+
+if [ "$NOTARIZE" -eq 1 ]; then
+  PROFILE="${NOTARY_PROFILE:-lumi-notary}"
+  ARCH="$(uname -m)"
+  ZIP="$DIST/Lumi-${VERSION}-${ARCH}-mac.zip"
+  DMG="$DIST/Lumi-${VERSION}-${ARCH}-mac.dmg"
+
+  echo "▸ Notarization — app (profil: $PROFILE)…"
+  NOTARIZE_ZIP="$DIST/Lumi-notarize-upload.zip"
+  ditto -c -k --keepParent "$APP" "$NOTARIZE_ZIP"
+  xcrun notarytool submit "$NOTARIZE_ZIP" --keychain-profile "$PROFILE" --wait
+  rm -f "$NOTARIZE_ZIP"
+  xcrun stapler staple "$APP"
+
+  echo "▸ Dağıtım zip'i…"
+  rm -f "$ZIP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+
+  echo "▸ DMG…"
+  STAGE="$DIST/dmg-stage"
+  rm -rf "$STAGE"
+  mkdir -p "$STAGE"
+  ditto "$APP" "$STAGE/Lumi.app"
+  ln -s /Applications "$STAGE/Applications"
+  rm -f "$DMG"
+  hdiutil create -volname "Lumi" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+  rm -rf "$STAGE"
+  codesign --force --sign "$IDENTITY" "$DMG"
+
+  echo "▸ Notarization — dmg…"
+  xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+  xcrun stapler staple "$DMG"
+
+  echo "▸ SHA256 checksum…"
+  (cd "$DIST" && shasum -a 256 "$(basename "$ZIP")" "$(basename "$DMG")" > "SHA256SUMS-${VERSION}.txt")
+  echo "✓ Dağıtım paketleri hazır:"
+  echo "  $ZIP"
+  echo "  $DMG"
+  echo "  $DIST/SHA256SUMS-${VERSION}.txt"
+fi
 
 if [ "$INSTALL" -eq 1 ]; then
   echo "▸ /Applications'a kurulum…"
