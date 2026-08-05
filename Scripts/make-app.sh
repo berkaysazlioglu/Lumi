@@ -37,23 +37,37 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
-DIST="$ROOT/dist"
+DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
 APP="$DIST/Lumi.app"
 VERSION="${VERSION:-0.6.0}"
 
 echo "▸ Release build…"
+# NEDEN xcodebuild (swift build DEĞİL): `swift build`'in ürettiği Bundle.module
+# accessor'ı bundle'ı yalnız app kökünde ve build makinesindeki mutlak .build
+# yolunda arar — Contents/Resources'a bakmaz. Böyle bir binary başka makinede
+# (örn. CI build'i kullanıcı makinesinde) açılışta fatalError ile çöker.
+# Xcode'un build sistemi ise Bundle.main.resourceURL'i (Contents/Resources)
+# arayan bir accessor üretir; bizim modüller + Highlightr/SwiftTerm dahil
+# tüm resource bundle çözümlemesi app içinde çalışır.
+ARCH="$(uname -m)"
+DERIVED="$PKG/.build/xcode"
 cd "$PKG"
-swift build -c release --product Lumi
+xcodebuild -scheme Lumi -configuration Release \
+  -destination "generic/platform=macOS" \
+  -derivedDataPath "$DERIVED" \
+  ARCHS="$ARCH" CODE_SIGNING_ALLOWED=NO \
+  -quiet build
+PRODUCTS="$DERIVED/Build/Products/Release"
 
 echo "▸ Bundle iskeleti…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp "$PKG/.build/release/Lumi" "$APP/Contents/MacOS/Lumi"
+cp "$PRODUCTS/Lumi" "$APP/Contents/MacOS/Lumi"
 
 # SPM resource bundle'ları (default YAML'lar, fontlar) Bundle.module'ün
 # araması için Resources altına kopyalanır
-for bundle in "$PKG"/.build/release/*.bundle; do
+for bundle in "$PRODUCTS"/*.bundle; do
   [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
 
@@ -166,7 +180,6 @@ echo "✓ $APP hazır"
 
 if [ "$NOTARIZE" -eq 1 ]; then
   PROFILE="${NOTARY_PROFILE:-lumi-notary}"
-  ARCH="$(uname -m)"
   ZIP="$DIST/Lumi-${VERSION}-${ARCH}-mac.zip"
   DMG="$DIST/Lumi-${VERSION}-${ARCH}-mac.dmg"
 
