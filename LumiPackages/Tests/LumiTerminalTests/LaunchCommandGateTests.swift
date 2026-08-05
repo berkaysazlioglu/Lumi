@@ -40,11 +40,16 @@ final class LaunchCommandGateTests: XCTestCase {
         var fired = 0
         gate.start { fired += 1 }
 
-        // Act — 30ms aralıklı çıktı sürerken sessizlik penceresi (60ms) dolamaz
+        // Act — 30ms aralıklı çıktı sürerken sessizlik penceresi (60ms) dolamaz.
+        // Yavaş CI runner'da sleep 60ms'yi aşabilir; o durumda ateşleme meşrudur,
+        // assert yalnız pencere içinde kalındıysa yapılır.
         for _ in 0..<4 {
+            let start = ContinuousClock.now
             gate.noteOutput()
             try? await Task.sleep(for: .milliseconds(30))
-            XCTAssertEqual(fired, 0)
+            if ContinuousClock.now - start < .milliseconds(60) {
+                XCTAssertEqual(fired, 0)
+            }
         }
         await waitUntil { fired > 0 }
 
