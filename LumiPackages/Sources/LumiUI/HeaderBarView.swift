@@ -31,6 +31,7 @@ struct HeaderBarView: View {
     let terminals: TerminalListStore
     let settings: SettingsStore
     let usage: UsageStore
+    let tabInteraction: TabStripInteractionModel
 
     var body: some View {
         HStack(spacing: 0) {
@@ -118,7 +119,7 @@ struct HeaderBarView: View {
     // MARK: - Tab'ler (RepoTabStrip: scroll + reorder + (+))
 
     private var tabStrip: some View {
-        RepoTabStrip(workspace: workspace, repoStore: repoStore)
+        RepoTabStrip(workspace: workspace, repoStore: repoStore, interaction: tabInteraction)
     }
 
     private func gridLayoutMenu(for repoPath: String) -> some View {

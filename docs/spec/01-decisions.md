@@ -164,6 +164,17 @@ Sadeleştirme: Settings → Terminal'deki "Color Theme" picker'ı ve altyapısı
 - **Tab overflow:** şerit artık sabit 600px değil, header'da kalan genişliğin tamamını alır; sığmayanlar scroll'lanır ve aktif tab otomatik görünür alana kaydırılır.
 - **Modülerlik:** `HeaderBarView` yalnız kompozisyon; `RepoTabStrip`, `NewTerminalButton`, `HeaderControls` ayrı dosyalar.
 
+### 28. File-tree tarama güvenliği: autoreleasepool, symlink takibi yok, tavan, FSEvents filtresi (2026-09-04)
+Bug fix: `~` gibi devasa bir dizin `type: repo` olarak eklenip aktif tab olunca uygulama dakikada ~300 MB büyüyüp takılıyordu (2.9M girdi, 1 thread %100). Üç kök neden, dört düzeltme:
+
+- **Autorelease sızıntısı (asıl neden):** `FileTreeBuilder.scan` cooperative pool'da koşar; runloop olmadığı için `contentsOfDirectory`'nin autoreleased NSString/NSURL çöpü tarama bitene kadar drain olmazdı. Artık her dizin kendi `autoreleasepool { }` bloğunda taranır; tür tespiti `lstat` ile yapılır (Foundation çöpü yok).
+- **Symlink takip edilmez:** `fileExists(atPath:)` symlink'i çözüyordu → döngülerde sonsuz tarama. `lstat` ile symlink'ler dosya olarak listelenir, içine girilmez (spec/12 §1 "dirent paritesi" notunun bilinçli kararı).
+- **Girdi/derinlik tavanı:** `FileTreeBuilder.Limits` (default 100.000 düğüm, 32 derinlik). Tavan aşılınca o seviyenin girdileri listelenir ama alt dizinlere inilmez; sessiz kırpma. Spec/12 §9'daki "sınır YOK" cümlesi bu kararla geçersizdir.
+- **Backpressure:** FSEvents üreticisi tam-rescan tüketicisinden hızlıysa unbounded `AsyncStream` şişerdi. `KeyedRefreshCoalescer` (LumiState) tarama uçuştayken gelen event'leri tek follow-up'a çöker; `RepoStore` yalnız `.reposChanged` dinler; tarama `Task.detached` ile actor dışında koşar.
+- **Gürültü filtresi:** hardcoded exclude listesine Unity/Xcode/SwiftPM/CocoaPods çıktıları eklendi (`Library`, `Temp`, `Logs`, `obj`, `DerivedData`, `.build`, `Pods`); `RecursiveDirectoryWatcher` bu dizinlere düşen event batch'lerini yutar (`.git` hariç — git panel canlılığı).
+
+Kullanıcıya görünen etki: `Library` adlı gerçek kaynak klasörleri ağaçta soluk görünür ve expand edilemez (kabul edilen bedel). "Repo olarak ekle" akışına ayrı bir uyarı eklenmedi; tavan tek başına güvenliği sağlar.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, personas + quick actions — karar 25).

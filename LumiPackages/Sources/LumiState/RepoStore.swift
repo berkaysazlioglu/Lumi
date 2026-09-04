@@ -29,7 +29,8 @@ public final class RepoStore {
         consumeTask = Task { @MainActor [weak self, service] in
             let stream = await service.events()
             await self?.reload()
-            for await _ in stream {
+            // Yalnız repo listesi event'i; fileTreeChanged AppContainer köprüsünün işi
+            for await event in stream where event == .reposChanged {
                 await self?.reload()
             }
         }

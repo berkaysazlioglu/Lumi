@@ -2,67 +2,59 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-import UniformTypeIdentifiers
-
-/// Header tab şeridi: repo tab'leri + (+) butonu tek yatay ScrollView'da.
-/// (+) her zaman son tab'ın HEMEN ardında durur. Şerit kalan tüm genişliği alır;
-/// sığmayan tab'lar scroll'lanır ve aktif tab görünür alana kaydırılır.
-/// Tab'lar sürükle-bırak ile yeniden sıralanır (canlı: üstünden geçilen tab'ın
-/// yerine kayar); sıra `WorkspaceStore.moveTab` üzerinden persist edilir.
+/// Header tab şeridi: repo tab'leri + (+) butonu tek HStack'te. (+) her zaman
+/// son tab'ın HEMEN ardında durur. Şerit kalan tüm genişliği alır; tab'lar
+/// sığmazsa metinleri kısalarak daralır (ikon + kapatma her zaman görünür).
+///
+/// Bu view yalnız ÇİZER: chip frame'lerini (hosting koordinatı) modele yayınlar,
+/// sürükleme offset'ini ve hover'ı modelden okur. Seçme / reorder / hover
+/// etkileşimi `TabStripInteractionView`'da (AppKit, hosting dışı) — gerekçe
+/// `TabStripInteractionModel`. ScrollView bilinçli olarak yok.
 struct RepoTabStrip: View {
     let workspace: WorkspaceStore
     let repoStore: RepoStore
+    let interaction: TabStripInteractionModel
 
     @State private var isAddRepoHovering = false
-    @State private var draggingTab: String?
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(workspace.openTabs, id: \.self) { repoPath in
-                        tabChip(repoPath)
-                    }
-                    addRepoButton
-                }
+        HStack(spacing: 4) {
+            ForEach(workspace.openTabs, id: \.self) { repoPath in
+                tabChip(repoPath)
             }
-            .onChange(of: workspace.activeTab) { _, active in
-                guard let active else { return }
-                withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(active) }
-            }
+            addRepoButton
+                .fixedSize()
+        }
+        .onPreferenceChange(TabChipFramesKey.self) { frames in
+            Task { @MainActor in interaction.chipFrames = frames }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Şerit boşluğuna bırakılan sürükleme: durumu temizle (chip opaklığı geri gelir)
-        .onDrop(of: [.plainText], isTargeted: nil) { _ in
-            draggingTab = nil
-            return true
-        }
     }
 
     private func tabChip(_ repoPath: String) -> some View {
-        RepoTabChip(
+        let drag = interaction.dragging
+        let isDragging = drag?.tab == repoPath
+        return RepoTabChip(
             name: repoStore.repo(at: repoPath)?.name
                 ?? (repoPath as NSString).lastPathComponent,
             isActive: workspace.activeTab == repoPath,
-            onSelect: { workspace.setActiveTab(repoPath) },
+            isHovering: interaction.hoveredTab == repoPath,
             onClose: { name in
                 workspace.requestCloseTab(repoPath, repoName: name)
             }
         )
-        .id(repoPath)
-        .opacity(draggingTab == repoPath ? 0.4 : 1)
-        .onDrag {
-            draggingTab = repoPath
-            return NSItemProvider(object: repoPath as NSString)
-        }
-        .onDrop(
-            of: [.plainText],
-            delegate: TabReorderDropDelegate(
-                target: repoPath,
-                dragging: $draggingTab,
-                move: { workspace.moveTab($0, to: $1) }
-            )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: TabChipFramesKey.self,
+                    value: [repoPath: geo.frame(in: .global)]
+                )
+            }
         )
+        .offset(x: isDragging ? (drag?.translation ?? 0) : 0)
+        .zIndex(isDragging ? 1 : 0)
+        .opacity(isDragging ? 0.85 : 1)
+        .animation(.easeInOut(duration: 0.15), value: workspace.openTabs)
     }
 
     private var addRepoButton: some View {
@@ -98,37 +90,24 @@ struct RepoTabStrip: View {
     }
 }
 
-/// Canlı yeniden sıralama: sürüklenen tab başka bir tab'ın üstüne girdiği anda
-/// onun konumuna taşınır (bırakmayı beklemez). Drop tamamlanınca durum sıfırlanır.
-private struct TabReorderDropDelegate: DropDelegate {
-    let target: String
-    @Binding var dragging: String?
-    let move: (String, String) -> Void
-
-    func dropEntered(info: DropInfo) {
-        guard let dragging, dragging != target else { return }
-        withAnimation(.easeInOut(duration: 0.15)) { move(dragging, target) }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return true
+/// Chip'lerin şerit koordinatındaki frame'leri (drop hedefi hesabı için).
+private struct TabChipFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { $1 }
     }
 }
 
 /// Repo tab'i (v1 globals.css .repo-tab): pasif şeffaf, aktif elevated +
 /// accent kenarlık; kapatma butonu yalnız hover'da görünür, hover'ı kırmızı.
+/// Seçme/sürükleme/hover chip'te DEĞİL — `TabStripInteractionView` (AppKit).
 struct RepoTabChip: View {
     let name: String
     let isActive: Bool
-    let onSelect: () -> Void
+    /// Hover, AppKit etkileşim katmanından gelir (`TabStripInteractionModel`).
+    let isHovering: Bool
     let onClose: (String) -> Void
 
-    @State private var isHovering = false
     @State private var isCloseHovering = false
 
     var body: some View {
@@ -157,8 +136,6 @@ struct RepoTabChip: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
         .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
-        .onHover { isHovering = $0 }
     }
 
     private var closeButton: some View {

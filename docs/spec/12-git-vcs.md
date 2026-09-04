@@ -118,7 +118,7 @@ Renderer tarafındaki tüketiciler: sol sidebar'daki **Project Context** (file t
 - Ignored **klasörlerin içine girilmez** (`children: []`) — node_modules gibi dev dizinlerde performans için. Dizin eşleştirmesi `path + '/'` (sondaki slash) ile yapılır ki dizin-spesifik gitignore kuralları doğru çalışsın.
 - Okunamayan dizinler (izin hatası vb.) boş children olarak sessizce geçilir.
 - **Sıralama (her seviyede):** 1) klasörler dosyalardan önce, 2) her grup içinde ignored OLMAYANLAR ignored olanlardan önce, 3) alfabetik (`localeCompare`).
-- Derinlik/eleman sayısı sınırı YOK — kökten gerçekten devasa, gitignore'lanmamış ağaçlar tamamen taranır.
+- Derinlik/eleman sayısı sınırı YOK — kökten gerçekten devasa, gitignore'lanmamış ağaçlar tamamen taranır. **Native sapması (karar 28):** 100.000 düğüm / 32 derinlik tavanı; symlink'ler takip edilmez; hardcoded listeye `Library`, `Temp`, `Logs`, `obj`, `DerivedData`, `.build`, `Pods` eklendi.
 
 **Kullanıcıya görünen etki (ProjectContext):**
 - Sol sidebar'da ağaç görünümü; ignored öğeler soluk (faded) CSS class'ı ile gösterilir ve ignored klasörler **expand edilemez** (tıklama no-op).

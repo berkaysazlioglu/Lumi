@@ -73,9 +73,14 @@ public actor RepoService: RepoServicing {
 
     // MARK: - File tree (spec/12 §9, karar 7)
 
+    /// Tarama actor dışında, detached bir utility task'te koşar: devasa bir
+    /// kökte dakikalar sürebilen senkron iş RepoService'i (repo listesi,
+    /// watcher yönetimi) kilitlemesin (karar 28).
     public func fileTree(repoPath: String) async -> [FileTreeNode] {
         let ignored = await gitIgnoredPaths(repoPath)
-        return FileTreeBuilder.build(root: repoPath, ignoredPaths: ignored)
+        return await Task.detached(priority: .utility) {
+            FileTreeBuilder.build(root: repoPath, ignoredPaths: ignored)
+        }.value
     }
 
     /// Tek git çağrısıyla ignored set'i: nested .gitignore + global excludes +
@@ -99,7 +104,8 @@ public actor RepoService: RepoServicing {
         fileTreeWatchers[repoPath] = RecursiveDirectoryWatcher(
             path: repoPath,
             latency: Self.fileTreeWatchLatency,
-            queue: watchQueue
+            queue: watchQueue,
+            excludedNames: FileTreeBuilder.watchNoiseNames
         ) { [broadcaster] in
             broadcaster.send(.fileTreeChanged(repoPath: repoPath))
         }

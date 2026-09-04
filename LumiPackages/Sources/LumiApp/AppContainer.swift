@@ -184,16 +184,22 @@ final class AppContainer {
 
     private func startBridges() {
         // fileTreeChanged → file tree tazeleme + git panelleri canlılığı (spec/12 §12)
+        // Coalescing (karar 28): tarama uçuştayken gelen event'ler tek bir
+        // follow-up'a çöker; for-await döngüsü asla taramayı beklemez.
+        let refreshCoalescer = KeyedRefreshCoalescer { [weak self] repoPath in
+            guard let self else { return }
+            await self.repoStore.loadFileTree(repoPath)
+            if self.workspace.activeTab == repoPath {
+                await self.gitStore.refresh(repoPath)
+            }
+        }
         let repoEventBridge = Task { @MainActor [weak self] in
             guard let service = self?.repoService else { return }
             let stream = await service.events()
             for await event in stream {
-                guard let self else { return }
+                guard self != nil else { return }
                 if case .fileTreeChanged(let repoPath) = event {
-                    await self.repoStore.loadFileTree(repoPath)
-                    if self.workspace.activeTab == repoPath {
-                        await self.gitStore.refresh(repoPath)
-                    }
+                    refreshCoalescer.request(repoPath)
                 }
             }
         }
