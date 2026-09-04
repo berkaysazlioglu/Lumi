@@ -254,10 +254,14 @@ final class TerminalSession {
 
     /// Font (aile + boyut) canlı uygular. SwiftTerm setter zinciri hücre
     /// boyutlarını yeniden hesaplar, resize'lar (PTY'ye SIGWINCH) ve needsDisplay
-    /// işaretler — ek iş gerekmez.
+    /// işaretler. Ek olarak host'tan yeniden yerleşim istenir: hücre boyutu
+    /// değişince ızgaranın kapladığı alan da değişir ve ortalama (TerminalGridFit)
+    /// yalnız layout'ta yapılır — istenmezse boşluk bir sonraki resize'a dek
+    /// yeniden alta/sağa kayardı.
     func setFont(_ font: NSFont) {
         guard !isTerminated else { return }
         terminalView.font = font
+        terminalView.superview?.needsLayout = true
     }
 
     func terminate() {

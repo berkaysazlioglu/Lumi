@@ -42,15 +42,13 @@ public final class TerminalViewRegistry: TerminalViewProviding {
 
     public func attachView(for id: TerminalID, into container: NSView) {
         guard let entry = entries[id] else { return }
-        let bounds = container.bounds
         if entry.view.superview === container {
             // Reassert yolu (host her layout'ta çağırır): frame GERÇEK boyuta
             // oturduğunda buffer'dan tam çizim istenir. Tab değişiminde host
             // yeniden yaratılır ve ilk attach 0×0 bounds'la gelir — o anda
             // yapılan repaint'in setNeedsDisplay'i no-op kalır; içerik ancak
             // burada, boyut oturunca görünür olur (boş kart bug'ının onarımı).
-            if !bounds.isEmpty, !entry.view.frame.equalTo(bounds) {
-                entry.view.frame = bounds
+            if TerminalGridFit.fit(entry.view, in: container) {
                 entry.view.needsDisplay = true
                 entry.onRedraw()
             }
@@ -58,13 +56,15 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         }
         entry.view.removeFromSuperview()
         // 0×0 container'a (SwiftUI layout vermeden önceki makeNSView anı) frame
-        // ATANMAZ: SwiftTerm'i sıfıra küçültmek emülatörü gereksiz resize eder ve
-        // ardından gelen repaint'in setNeedsDisplay(bounds)'unu no-op yapardı.
-        // Eski frame korunur; layout gelince yukarıdaki reassert dalı oturtur.
-        if !bounds.isEmpty {
-            entry.view.frame = bounds
-        }
-        entry.view.autoresizingMask = [.width, .height]
+        // ATANMAZ (fit boş bounds'ta no-op'tur): SwiftTerm'i sıfıra küçültmek
+        // emülatörü gereksiz resize eder ve ardından gelen repaint'in
+        // setNeedsDisplay(bounds)'unu no-op yapardı. Eski frame korunur; layout
+        // gelince yukarıdaki reassert dalı oturtur.
+        TerminalGridFit.fit(entry.view, in: container)
+        // Frame'in tek otoritesi host'tur (TerminalHostContainer her setFrameSize/
+        // layout'ta yeniden oturtur). autoresizing view'ı ızgara katı olmayan bir
+        // boyuta esnetip aradaki her karede gereksiz cols/rows değişimi doğururdu.
+        entry.view.autoresizingMask = []
         container.addSubview(entry.view)
         // "Görünür olunca fit" garantisi: frame ataması SwiftTerm'in cols/rows
         // hesabını tetikler; sizeChanged delegate'i resize'ı PTY'ye iletir.
@@ -84,7 +84,7 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     public func refreshAttachedViews() {
         for entry in entries.values {
             guard let superview = entry.view.superview, !superview.bounds.isEmpty else { continue }
-            entry.view.frame = superview.bounds
+            TerminalGridFit.fit(entry.view, in: superview)
             entry.view.needsDisplay = true
             // setHidden(false) + requestRepaint → SIGWINCH; needsDisplay tek başına
             // TUI'yi yeniden çizdirmediğinden (boş kart) repaint sinyali şart.

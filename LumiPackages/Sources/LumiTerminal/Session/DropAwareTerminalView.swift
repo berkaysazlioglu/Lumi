@@ -250,3 +250,20 @@ final class DropAwareTerminalView: TerminalView {
         return (objects as? [URL]) ?? []
     }
 }
+
+// MARK: - Izgara geometrisi (host ortalaması)
+
+extension DropAwareTerminalView: TerminalGridSizing {
+    /// SwiftTerm hücre boyutunu (`cellDimension`) dışarı açmaz; `getOptimalFrameSize()`
+    /// = hücre × güncel satır/sütun (+ scroller genişliği) üzerinden geri türetilir.
+    /// Scroller `hideScroller()` ile kalıcı gizli olduğundan o terim 0'dır — scroller
+    /// tekrar görünür yapılırsa bu hesap gözden geçirilmeli.
+    /// Host bununla ızgarayı container içinde ortalar — bkz. `TerminalGridFit`.
+    var cellSize: CGSize {
+        let terminal = getTerminal()
+        let optimal = getOptimalFrameSize().size
+        let cols = CGFloat(max(1, terminal.cols))
+        let rows = CGFloat(max(1, terminal.rows))
+        return CGSize(width: optimal.width / cols, height: optimal.height / rows)
+    }
+}

@@ -38,13 +38,15 @@ final class TerminalHostContainer: NSView {
     }
 
     /// Tek subview (terminal emülatörü) bounds'a oturtulur; gerçek delta varsa
-    /// redraw da işaretlenir (geçiş sonrası bayat/boş kart onarımı).
+    /// redraw da işaretlenir (geçiş sonrası bayat/boş kart onarımı). Oturtma
+    /// `TerminalGridFit`'e devredilir: ızgara hücre boyutunun tam katı olduğundan
+    /// bounds'u doldurmaz ve artan boşluk ortalanır (yoksa hepsi alta/sağa düşer).
     private func pinTerminalView() {
         guard !bounds.isEmpty else { return } // layout öncesi 0×0'a pinleme
         guard let terminalView = subviews.first else { return }
-        guard !terminalView.frame.equalTo(bounds) else { return }
-        terminalView.frame = bounds
-        terminalView.needsDisplay = true
+        if TerminalGridFit.fit(terminalView, in: self) {
+            terminalView.needsDisplay = true
+        }
     }
 }
 
