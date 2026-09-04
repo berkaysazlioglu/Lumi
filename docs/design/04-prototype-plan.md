@@ -33,8 +33,8 @@ App target + `LumiPackages` iskeleti; AppKit pencere (fullSizeContentView, traff
 ### Faz 4 — Git paneli + FileViewer
 `GitService` porcelain parse; sağ sidebar (commits/changes); commit akışı; Highlightr viewer + unified-diff renderer; lazy commit-diff; `git check-ignore` file-tree bayrakları.
 
-### Faz 5 — Actions & Personas
-Seed asimetrisi; YAML store'lar + dizin izleme + `.history/`; `ActionEngine` (rolling-buffer `wait_for`); `AgentCommandBuilder` (temp system-prompt temizliği, codex rastgele-delimiter heredoc dahil); AI destekli create/edit.
+### Faz 5 — Actions & Personas (**kaldırıldı — karar 25**, 2026-09-04)
+Tamamlanmış, sonra sadeleştirme için projeden çıkarılmıştır. Orijinal kapsam: Seed asimetrisi; YAML store'lar + dizin izleme + `.history/`; `ActionEngine` (rolling-buffer `wait_for`); `AgentCommandBuilder` (temp system-prompt temizliği, codex rastgele-delimiter heredoc dahil); AI destekli create/edit.
 
 ### Faz 6 — Kabuk cilası + paketleme
 4 adımlı onboarding; Settings anlık-uygulama + yan etki koordinatörü; focus mode + hover bar + traffic-light gizleme; quit-onay sağlamlaştırma; sleep/wake; **mikrofon-izni TCC zinciri testi** (audio-input entitlement + PTY çocuklarına inherit — claude voice mode); Developer ID imza + notarization; DMG. Auto-update yok (karar 8).
@@ -49,5 +49,5 @@ Faz 3–5, faz 2 bittikten sonra paralelleştirilebilir: her dikiş yeri fake'i 
 - **Faz 2:** Golden format-parite testleri yeşil (Electron ↔ native gidiş-geliş — karar 9); hata koridoru testi: fırlatılan her `LumiError` toast'a düşer.
 - **Faz 3:** `StatusStateMachine` + `OSCStreamParser` + `ProviderInferencer` + `PTYInputFilter` + `OutputCoalescer` + `FlowController` + `UTF8StreamDecoder` saf unit testleri (bölünmüş-✳ testi dahil); bildirim interval-sızıntısı testi; komşu-odak/minimize kural testleri.
 - **Faz 4:** `defaultBranch..branch` log semantiği, porcelain parse, path-traversal guard testleri.
-- **Faz 5:** Seed asimetrisi (persona ezilir / `modified_at`'li action korunur), `.history/` max-20, `wait_for` rolling-ring + timeout testleri.
+- **Faz 5 (kaldırıldı):** Seed asimetrisi (persona ezilir / `modified_at`'li action korunur), `.history/` max-20, `wait_for` rolling-ring + timeout testleri.
 - **Faz 6:** Quit akışının her yolu (Cmd+Q/Dock/logout) onaydan geçer; notarized build Gatekeeper'dan geçer; voice-mode mikrofon zinciri gerçek cihazda doğrulanır.

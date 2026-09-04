@@ -18,6 +18,14 @@ public final class TerminalListStore {
     /// Prompt kuyruğu bunu görünce duraklar (spec/10: status'ten ayrı sinyal).
     public private(set) var awaitingDecisionIDs: Set<TerminalID> = []
 
+    /// Karar 24: açıkken working'e geçen terminal otomatik minimize edilir ve
+    /// turn bitince / girdi beklenince otomatik restore edilir. Config aynası —
+    /// composition root günceller.
+    @ObservationIgnored public var autoMinimizeOnSend = false
+    /// Yalnız BU özelliğin minimize ettikleri — elle minimize edilenler otomatik
+    /// restore edilmez; elle restore takibi düşürür (kullanıcı niyeti kazanır).
+    @ObservationIgnored private var autoMinimizedIDs: Set<TerminalID> = []
+
     @ObservationIgnored private var lastActiveByRepo: [String: TerminalID] = [:]
     @ObservationIgnored private let service: any TerminalServicing
     @ObservationIgnored private let toasts: ToastStore
@@ -123,11 +131,13 @@ public final class TerminalListStore {
     /// Restore odaklamaz — odaklı restore yalnız bildirim/bell tıklamasıyla.
     public func restore(_ id: TerminalID) {
         minimizedIDs.remove(id)
+        autoMinimizedIDs.remove(id)
     }
 
     /// Bildirim tıklaması istisnası: önce restore, sonra odak (spec/21 §6).
     public func restoreAndFocus(_ id: TerminalID) {
         minimizedIDs.remove(id)
+        autoMinimizedIDs.remove(id)
         focus(id)
     }
 
@@ -182,11 +192,17 @@ public final class TerminalListStore {
             remove(id)
         case .statusChanged(let id, let status):
             update(id) { $0.status = status }
+            applyAutoMinimize(id, status: status)
         case .titleChanged(let id, let title):
             update(id) { $0.oscTitle = title }
         case .awaitingDecisionChanged(let id, let awaiting):
             if awaiting {
                 awaitingDecisionIDs.insert(id)
+                // İzin promptu da "girdi bekliyor"dur (karar 24) — status
+                // working'de kalsa bile otomatik minimize edilen geri açılır.
+                if autoMinimizedIDs.contains(id) {
+                    restore(id)
+                }
             } else {
                 awaitingDecisionIDs.remove(id)
             }
@@ -196,6 +212,22 @@ public final class TerminalListStore {
             if let meta = meta(for: id) {
                 toasts.show(.bell, title: meta.name, message: "Bell", terminalID: id)
             }
+        }
+    }
+
+    /// Karar 24: working → otomatik minimize (yalnız toggle açıkken ve zaten
+    /// minimize değilken); diğer tüm durumlar (waiting-*/idle/error) turn'ün
+    /// bittiği ya da girdi beklendiği anlamına gelir → otomatik minimize edilen
+    /// restore edilir. Restore branch'i toggle'a bakmaz — özellik kapatılsa bile
+    /// önceden gizlenen terminal minimize'da mahsur kalmaz. Odak verilmez
+    /// (spec/21 §6: odaklı restore yalnız bildirim tıklamasıyla).
+    private func applyAutoMinimize(_ id: TerminalID, status: TerminalStatus) {
+        if status == .working {
+            guard autoMinimizeOnSend, !minimizedIDs.contains(id) else { return }
+            minimize(id)
+            autoMinimizedIDs.insert(id)
+        } else if autoMinimizedIDs.contains(id) {
+            restore(id)
         }
     }
 
@@ -238,6 +270,7 @@ public final class TerminalListStore {
         }
 
         minimizedIDs.remove(id)
+        autoMinimizedIDs.remove(id)
         awaitingDecisionIDs.remove(id)
         terminals.remove(at: index)
     }

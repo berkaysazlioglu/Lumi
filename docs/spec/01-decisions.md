@@ -81,12 +81,12 @@ v1/spec-13 §4.3'te bell toast sinyali ayardan bağımsız her durumda gönderil
 
 ### 18. Terminal customization (v1 spec'ine ek)
 v1'de terminal yalnız tek sabit tema + font boyutu sunuyordu. Native'de Settings → Terminal sekmesine dört yeni ayar eklenir; **dördü de hem yeni spawn'lara hem TÜM açık terminallere anında uygulanır** (font smoothing canlı-uygulama deseniyle):
-- **Renk teması preset'i:** 7 built-in tema (Lumi default + Dracula, One Dark, Nord, Solarized Dark/Light, GitHub Light). SwiftTerm `installColors` + native bg/fg/cursor/selection.
+- ~~**Renk teması preset'i:** 7 built-in tema~~ — **kaldırıldı (karar 26)**; palet sabit Lumi.. SwiftTerm `installColors` + native bg/fg/cursor/selection.
 - **Font ailesi:** sistemdeki monospace aileler; boş = bundle'daki JetBrains Mono. Aile + boyut tek `NSFont`'a birlikte çözülür, çözülemezse JetBrains Mono fallback.
 - **Canlı font size:** v1'de yalnız yeni terminaller alıyordu; native'de açık terminallere de anında uygulanır (`terminalView.font` setter zinciri resize + SIGWINCH üretir).
 - **Cursor stili + blink:** Block/Underline/Bar × blink → SwiftTerm `CursorStyle` (TUI DECSCUSR ile ezebilir — son-kazanır).
 
-Persistence karar 9 uyumlu: `config.json`'a 4 **additive** key eklenir (`terminalTheme`, `terminalFontFamily`, `terminalCursorStyle`, `terminalCursorBlink`); eski sürümler bu key'leri görmezse default'a düşer (lumi / boş / block / true) ve native bilinmeyen-key korumasıyla diskteki diğer alanlar bozulmaz.
+Persistence karar 9 uyumlu: `config.json`'a 3 **additive** key eklenir (`terminalFontFamily`, `terminalCursorStyle`, `terminalCursorBlink`; `terminalTheme` karar 26 ile okunmaz/yazılmaz, diskte kalırsa yok sayılır); eski sürümler bu key'leri görmezse default'a düşer (boş / block / true) ve native bilinmeyen-key korumasıyla diskteki diğer alanlar bozulmaz.
 
 ### 19. Zamanlanmış oturum tetikleyici (v1 spec'ine ek)
 v1'de yoktu. Kullanıcının 5 saatlik Claude kullanım penceresini her gün belirli bir saatte (örn. iş başı) **öngörülebilir biçimde başlatması** için Settings → **Session** sekmesine eklenir: aktivasyon toggle'ı + saat seçici (yerel HH:MM) + prompt alanı (default `"hello"`) + "Start session now" test butonu. Uygulama açıkken, aktifse, seçilen saatte tetiklenir.
@@ -137,8 +137,35 @@ Bilinçli sınırlar: (a) kullanıcının shell'e elle yazdığı `claude` çağ
 
 Persistence karar 9 uyumlu: `ui-state.json`'a **additive** `resumeSessions` key'i; eski sürüm görmezse yok sayar, bilinmeyen-anahtar korumasıyla diğer alanlar bozulmaz.
 
+### 24. Gönderimde otomatik minimize (opt-in toggle, v1 spec'ine ek, 2026-08-19)
+Kullanıcı talebi: mesaj gönderilen chat, asistan çalışırken grid'de yer kaplamasın; işi bitince ya da girdi bekleyince kendiliğinden geri gelsin.
+
+Davranış (Settings → Terminal → "Auto-Minimize on Send", varsayılan KAPALI):
+- Terminal `working`'e geçince (mesaj gönderildi sinyali — Claude'da OSC title, Codex'te input/aktivite; spec/10 §5'in mevcut geçişleri, yeni algılama yok) otomatik minimize edilir ve `autoMinimizedIDs`'te izlenir. Aktif terminal minimize olursa odak mevcut kuralla görünür komşuya kayar (spec/21 §6).
+- `working` dışına her geçiş (`waiting-*` / `idle` / `error`) VE "karar bekliyor" sinyali (`awaitingDecisionChanged(true)` — izin promptu da girdi beklemektir) otomatik minimize edileni restore eder. Restore odak VERMEZ — spec/21 §6 değişmezi korunur (odaklı restore yalnız bildirim tıklaması).
+- Yalnız bu özelliğin minimize ettikleri otomatik restore edilir: elle minimize edilen chat'e dokunulmaz; elle restore izlemeyi düşürür (kullanıcı niyeti kazanır). Restore branch'i toggle'a bakmaz — özellik kapatılsa bile önceden gizlenen terminal minimize'da mahsur kalmaz.
+
+Mimari: mantık `TerminalListStore.applyAutoMinimize`'da (statusChanged event'i üzerinden, ayrı servis yok); toggle değeri config aynasıdır — bootstrap'te ve `ConfigSideEffectCoordinator` diff'iyle store'a itilir. Persistence karar 9 uyumlu: `config.json`'a **additive** `autoMinimizeOnSend` bool key'i; yoksa/yanlış tipliyse kapalı default.
+
+### 25. Personas ve Quick Actions kaldırıldı (2026-09-04)
+Kullanıcı kararı: uygulama sadeleştirilirken sol sidebar'daki **Personas** ve **Quick Actions** bölümleri ve tüm alt yapısı (spec/13 §2–§3: `Persona`/`Action` modelleri, `PersonaServicing`/`ActionServicing`, YAML codec + Yams bağımlılığı, seed/`.history/`, `ActionEngine`, `AgentCommandBuilder`, `PersonasStore`/`ActionsStore`, header dropdown'daki persona girdileri, `default-personas/`/`default-actions/` bundle resource'ları) projeden çıkarıldı.
+
+- `~/.lumi/personas/` ve `~/.lumi/actions/` dizinleri artık okunmaz/yazılmaz; diskte varsa dokunulmaz (karar 9 — silme yok).
+- "New <Provider>" dropdown'u yalnız **New Bash** içerir.
+- `TerminalServicing.outputStream(id:)` fan-out'u kalır (ileride başka tüketiciler için); `LumiError.actionStepTimedOut` kaldırıldı.
+- Orca'dan taşınacak özellikler için yer açar; ileride benzer bir "preset" ihtiyacı doğarsa yeniden tasarlanır, eski YAML şeması bağlayıcı değildir.
+
+### 26. Terminal renk teması seçimi kaldırıldı (2026-09-04)
+Sadeleştirme: Settings → Terminal'deki "Color Theme" picker'ı ve altyapısı (`TerminalThemeCatalog`/`TerminalThemeOption`, 7 preset, `AppConfig.terminalTheme`, `TerminalSessionManager.theme`, `ConfigSideEffectCoordinator.onTerminalThemeChanged`) kaldırıldı. `TerminalTheme` tek sabit palete (Lumi) indirildi; spawn'da `DropAwareTerminalView` uygular. `config.json`'daki eski `terminalTheme` key'i okunmaz, yeniden yazımda taşınmaz (bilinmeyen-key koruması diğer alanları korur).
+
+### 27. Header düzeltmeleri: traffic light hit-test, tab reorder, tab overflow (2026-09-04)
+- **Traffic light tıklama alanı:** butonlar 28px titlebar container'ının dışına taşındığı için superview bounds'u hit-test'i kırpıyordu (yalnız üst şerit tıklanabiliyordu). Electron `RedrawTrafficLights` paritesi: `TrafficLightLayout` container'ı `TopBarMetrics.height`'a büyütür, butonları içinde ortalar; resize/fullscreen/focus-mode dönüşünde yeniden uygulanır.
+- **Tab reorder:** repo tab'leri sürükle-bırak ile yeniden sıralanır (canlı: üstünden geçilen tab'ın yerini alır). `WorkspaceStore.moveTab(_:to:)` sırayı `ui-state.json` `openTabs`'a persist eder; aktif tab değişmez.
+- **Tab overflow:** şerit artık sabit 600px değil, header'da kalan genişliğin tamamını alır; sığmayanlar scroll'lanır ve aktif tab otomatik görünür alana kaydırılır.
+- **Modülerlik:** `HeaderBarView` yalnız kompozisyon; `RepoTabStrip`, `NewTerminalButton`, `HeaderControls` ayrı dosyalar.
+
 ## Kapsam özeti
 
-Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama).
+Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, personas + quick actions — karar 25).
 
 Buna ek olarak [00-overview.md](./00-overview.md) §4'teki bug-türevli zorunlu gereksinimler (PTY→UI backpressure, render-crash izolasyonu, replay güvenliği) tasarımın başından bağlayıcıdır.

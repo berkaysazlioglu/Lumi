@@ -178,7 +178,7 @@ final class TerminalSession {
     }
 
     /// Tüm PTY-bound yazımların tek hunisi (design/01 §4): klavye, SwiftTerm
-    /// oto-yanıtları, ActionEngine, persona — hepsi filtre + serial io queue'dan geçer.
+    /// oto-yanıtları, programatik write — hepsi filtre + serial io queue'dan geçer.
     func write(_ data: Data) {
         guard !isTerminated else { return }
         ioQueue.async { [pipeline, pty] in
@@ -249,15 +249,6 @@ final class TerminalSession {
     func setFontSmoothing(_ enabled: Bool) {
         guard terminalView.fontSmoothing != enabled else { return }
         terminalView.fontSmoothing = enabled
-        redrawFromBuffer()
-    }
-
-    /// Renk teması canlı uygular (Settings → Theme). `installColors` 256-paleti
-    /// kendisi redraw'lar; ama native bg/fg/selection setter'ları redraw
-    /// tetiklemediğinden ardından buffer'dan tam çizim gerekir.
-    func applyTheme(_ theme: TerminalTheme) {
-        guard !isTerminated else { return }
-        theme.apply(to: terminalView)
         redrawFromBuffer()
     }
 

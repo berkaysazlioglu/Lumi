@@ -20,9 +20,10 @@ final class ConfigSideEffectCoordinator {
     /// Font ailesi de aynı NSFont'a font size ile birlikte çözülür — boyutla
     /// AYNI callback'i tetikler (composition root taze AppConfig'den font kurar).
     var onTerminalFontFamilyChanged: (() -> Void)?
-    var onTerminalThemeChanged: ((String) -> Void)?
     /// Cursor stil VE blink tek köprüden akar (ikisi birlikte bir CursorStyle olur).
     var onTerminalCursorChanged: ((TerminalCursorShape, Bool) -> Void)?
+    /// Karar 24: gönderimde otomatik minimize toggle'ı değişti — store'a yansır.
+    var onAutoMinimizeOnSendChanged: ((Bool) -> Void)?
     /// Zamanlanmış oturum tetikleyici ayarı değişti — scheduler yeniden kurulur.
     var onSessionTriggerChanged: ((SessionTrigger) -> Void)?
     /// Usage auto-refresh ayarı değişti — tazeleme döngüsü yeniden kurulur.
@@ -72,15 +73,15 @@ final class ConfigSideEffectCoordinator {
                 if old.terminalFontFamily != new.terminalFontFamily {
                     self.onTerminalFontFamilyChanged?()
                 }
-                if old.terminalTheme != new.terminalTheme {
-                    self.onTerminalThemeChanged?(new.terminalTheme)
-                }
                 if old.terminalCursorStyle != new.terminalCursorStyle
                     || old.terminalCursorBlink != new.terminalCursorBlink {
                     self.onTerminalCursorChanged?(
                         TerminalCursorShape.parse(new.terminalCursorStyle),
                         new.terminalCursorBlink
                     )
+                }
+                if old.autoMinimizeOnSend != new.autoMinimizeOnSend {
+                    self.onAutoMinimizeOnSendChanged?(new.autoMinimizeOnSend)
                 }
                 if old.sessionTrigger != new.sessionTrigger {
                     self.onSessionTriggerChanged?(new.sessionTrigger)

@@ -38,9 +38,6 @@ enum ConfigCodec {
         if let value = boolValue(dict["terminalFontSmoothing"]) {
             config.terminalFontSmoothing = value
         }
-        if let value = dict["terminalTheme"] as? String {
-            config.terminalTheme = value
-        }
         if let value = dict["terminalFontFamily"] as? String {
             config.terminalFontFamily = value
         }
@@ -57,6 +54,9 @@ enum ConfigCodec {
             if let value = boolValue(nested["seenEnabled"]) { settings.seenEnabled = value }
             if let value = intValue(nested["seenIntervalMinutes"]) { settings.seenIntervalMinutes = value }
             config.notifications = settings
+        }
+        if let value = boolValue(dict["autoMinimizeOnSend"]) {
+            config.autoMinimizeOnSend = value
         }
         if let nested = dict["sessionTrigger"] as? [String: Any] {
             let defaults = SessionTrigger.defaults
@@ -96,7 +96,6 @@ enum ConfigCodec {
             "theme": config.theme,
             "terminalFontSize": config.terminalFontSize,
             "terminalFontSmoothing": config.terminalFontSmoothing,
-            "terminalTheme": config.terminalTheme,
             "terminalFontFamily": config.terminalFontFamily,
             "terminalCursorStyle": config.terminalCursorStyle,
             "terminalCursorBlink": config.terminalCursorBlink,
@@ -106,6 +105,7 @@ enum ConfigCodec {
                 "seenEnabled": config.notifications.seenEnabled,
                 "seenIntervalMinutes": config.notifications.seenIntervalMinutes,
             ] as [String: Any],
+            "autoMinimizeOnSend": config.autoMinimizeOnSend,
             "sessionTrigger": [
                 "enabled": config.sessionTrigger.enabled,
                 "hour": config.sessionTrigger.hour,

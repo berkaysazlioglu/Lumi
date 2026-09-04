@@ -161,6 +161,20 @@ public final class WorkspaceStore {
         }
     }
 
+    /// Sürükle-bırak yeniden sıralama: `repoPath` tab'ı `target` tab'ının
+    /// konumunu alır (aradaki tab'lar bir kayar — canlı reorder semantiği).
+    /// Aktif tab değişmez; sıra persist edilir.
+    public func moveTab(_ repoPath: String, to target: String) {
+        guard repoPath != target,
+              let from = openTabs.firstIndex(of: repoPath),
+              let to = openTabs.firstIndex(of: target) else { return }
+        var tabs = openTabs
+        tabs.remove(at: from)
+        tabs.insert(repoPath, at: to)
+        openTabs = tabs
+        persist()
+    }
+
     /// Guard (spec/21 §9): minimize edilmiş terminali olan tab dialog'suz kapanmaz.
     public func requestCloseTab(_ repoPath: String, repoName: String) {
         let minimizedCount = terminals.minimizedTerminals(in: repoPath).count

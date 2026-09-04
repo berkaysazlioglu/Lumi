@@ -14,8 +14,6 @@ final class AppContainer {
     let system: any SystemServicing
     let repoService: any RepoServicing
     let gitService: any GitServicing
-    let personaService: any PersonaServicing
-    let actionService: any ActionServicing
     let notifications: any NotificationServicing
     let usageService: any UsageServicing
     let activityMonitor: any ActivityMonitoring
@@ -28,8 +26,6 @@ final class AppContainer {
     let repoStore: RepoStore
     let gitStore: GitStore
     let fileViewer: FileViewerStore
-    let personasStore: PersonasStore
-    let actionsStore: ActionsStore
     let settings: SettingsStore
     let usageStore: UsageStore
     let usageAutoRefresh: UsageAutoRefreshStore
@@ -54,18 +50,6 @@ final class AppContainer {
         activityMonitor = SystemActivityMonitor()
         sessionStarter = SessionStarterService()
         terminal = TerminalSessionManager()
-        personaService = PersonaService(
-            paths: paths,
-            seedDirectory: LumiServicesResources.defaultPersonasDirectory,
-            terminal: terminal,
-            config: config
-        )
-        actionService = ActionService(
-            paths: paths,
-            seedDirectory: LumiServicesResources.defaultActionsDirectory,
-            terminal: terminal,
-            config: config
-        )
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
         promptQueue = PromptQueueStore(service: terminal)
@@ -73,8 +57,6 @@ final class AppContainer {
         repoStore = RepoStore(service: repoService)
         gitStore = GitStore(git: gitService, toasts: toasts)
         fileViewer = FileViewerStore(git: gitService, toasts: toasts)
-        personasStore = PersonasStore(service: personaService, toasts: toasts)
-        actionsStore = ActionsStore(service: actionService, toasts: toasts)
         settings = SettingsStore(config: config, toasts: toasts)
         usageStore = UsageStore(service: usageService)
         usageAutoRefresh = UsageAutoRefreshStore(usage: usageStore, activity: activityMonitor)
@@ -103,10 +85,6 @@ final class AppContainer {
 
         await system.fixProcessPath()
 
-        // Seed asimetrisi (design/00 §3): persona ezilir, action modified_at'liyse korunur
-        await personaService.seedDefaults()
-        await actionService.seedDefaults()
-
         let appConfig = await config.config()
         terminal.setMaxTerminals(appConfig.maxTerminals)
         terminal.font = LumiFonts.mono(
@@ -114,12 +92,12 @@ final class AppContainer {
             size: CGFloat(appConfig.terminalFontSize)
         )
         terminal.fontSmoothing = appConfig.terminalFontSmoothing
-        terminal.theme = TerminalTheme.preset(id: appConfig.terminalTheme)
         terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
             shape: TerminalCursorShape.parse(appConfig.terminalCursorStyle),
             blink: appConfig.terminalCursorBlink
         )
         notifications.updateSettings(appConfig.notifications)
+        terminals.autoMinimizeOnSend = appConfig.autoMinimizeOnSend
         sessionSchedule.update(appConfig.sessionTrigger)
         usageAutoRefresh.update(appConfig.usageAutoRefresh)
         repoStore.additionalPaths = appConfig.additionalPaths
@@ -131,8 +109,6 @@ final class AppContainer {
         terminals.start()
         promptQueue.start()
         repoStore.start()
-        personasStore.start()
-        actionsStore.start()
         settings.start()
         await repoStore.reload()
         await workspace.load(repos: repoStore.repos)
@@ -158,13 +134,13 @@ final class AppContainer {
         configCoordinator.onTerminalFontSmoothingChanged = { [weak self] enabled in
             self?.terminal.fontSmoothing = enabled
         }
-        configCoordinator.onTerminalThemeChanged = { [weak self] id in
-            self?.terminal.theme = TerminalTheme.preset(id: id)
-        }
         configCoordinator.onTerminalCursorChanged = { [weak self] shape, blink in
             self?.terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
                 shape: shape, blink: blink
             )
+        }
+        configCoordinator.onAutoMinimizeOnSendChanged = { [weak self] enabled in
+            self?.terminals.autoMinimizeOnSend = enabled
         }
         configCoordinator.onSessionTriggerChanged = { [weak self] trigger in
             self?.sessionSchedule.update(trigger)
@@ -192,9 +168,6 @@ final class AppContainer {
                 if let previous, previous != current {
                     await self.repoService.unwatchFileTree(repoPath: previous)
                 }
-                // Persona/action project scope'u aktif tab'ı izler
-                await self.personasStore.setProject(current)
-                await self.actionsStore.setProject(current)
                 guard let current else { return }
                 await self.repoService.watchFileTree(repoPath: current)
                 await self.repoStore.loadFileTree(current)
@@ -302,7 +275,7 @@ final class AppContainer {
         await config.updateUIState { $0.resumeSessions = resumeSessions }
         terminal.killAll()
         await config.flushPendingWrites()
-        // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)
+        // Temp dizini (Electron will-quit paritesi + karar 11)
         try? FileManager.default.removeItem(at: paths.tempDir)
     }
 }

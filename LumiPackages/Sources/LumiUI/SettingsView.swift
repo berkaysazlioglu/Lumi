@@ -248,7 +248,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionTitle(
                 title: "Terminal",
-                description: "Limit, color theme, font, and cursor. Changes apply instantly."
+                description: "Limit, font, and cursor. Changes apply instantly."
             )
             SettingsField(
                 title: "Max Terminals",
@@ -265,12 +265,6 @@ struct SettingsView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
                 .frame(width: 140, alignment: .leading)
-            }
-            SettingsField(
-                title: "Color Theme",
-                hint: "Applies to all open terminals instantly"
-            ) {
-                themePicker
             }
             SettingsField(
                 title: "Font Family",
@@ -303,8 +297,7 @@ struct SettingsView: View {
             SettingsField(
                 title: "Font Smoothing",
                 hint: "macOS stem darkening — bolder strokes when on. "
-                    + "Off matches the thinner v1 look. Applies instantly.",
-                isLast: true
+                    + "Off matches the thinner v1 look. Applies instantly."
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.current.terminalFontSmoothing },
@@ -315,51 +308,22 @@ struct SettingsView: View {
                 .labelsHidden()
                 .tint(Theme.accentPrimary)
             }
-        }
-    }
-
-    private var themePicker: some View {
-        VStack(spacing: 4) {
-            ForEach(TerminalThemeCatalog.all) { option in
-                themeRow(option)
+            SettingsField(
+                title: "Auto-Minimize on Send",
+                hint: "Minimize a chat while the assistant works on your message; "
+                    + "bring it back when it finishes or waits for input.",
+                isLast: true
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.current.autoMinimizeOnSend },
+                    set: { settings.setAutoMinimizeOnSend($0) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                .tint(Theme.accentPrimary)
             }
         }
-    }
-
-    private func themeRow(_ option: TerminalThemeOption) -> some View {
-        let isActive = settings.current.terminalTheme == option.id
-        return Button {
-            settings.setTerminalTheme(option.id)
-        } label: {
-            HStack(spacing: 10) {
-                HStack(spacing: 2) {
-                    ForEach(Array(option.previewHex.enumerated()), id: \.offset) { _, hex in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color(hex: hex))
-                            .frame(width: 12, height: 16)
-                    }
-                }
-                Text(option.name)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textPrimary)
-                Spacer(minLength: 0)
-                if isActive {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Theme.accentPrimary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(isActive ? Theme.accentVivid.opacity(0.1) : Theme.bgDeep)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isActive ? Theme.accentVivid : Theme.border, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private var fontFamilyPicker: some View {
@@ -414,7 +378,7 @@ struct SettingsView: View {
             )
             SettingsToggleRow(
                 title: "Left Sidebar",
-                hint: "Sessions · Project Context · Quick Actions panel",
+                hint: "Sessions · Project Context panel",
                 isOn: Binding(
                     get: { workspace.leftSidebarOpen },
                     set: { workspace.setLeftSidebarOpen($0) }

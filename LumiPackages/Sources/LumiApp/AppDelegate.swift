@@ -107,8 +107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             promptQueue: container.promptQueue,
             gitStore: container.gitStore,
             fileViewer: container.fileViewer,
-            personasStore: container.personasStore,
-            actionsStore: container.actionsStore,
             settings: container.settings,
             sessionSchedule: container.sessionSchedule,
             usage: container.usageStore,
@@ -134,25 +132,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeWindowFocus(window)
         observeWindowBounds(window)
         observeFullScreen(window)
-        centerTrafficLights()
+        applyTrafficLightLayout()
         // İlk layout butonları sıfırlayabilir — bir sonraki runloop'ta tekrar uygula
-        DispatchQueue.main.async { [weak self] in self?.centerTrafficLights() }
+        DispatchQueue.main.async { [weak self] in self?.applyTrafficLightLayout() }
         isRestoringWindow = false
     }
 
-    /// Traffic light'ları 52px header'ın dikey ORTASINA taşır (v1
-    /// trafficLightPosition paritesi). Titlebar 28px olduğundan butonlar
-    /// container'ın altına (negatif y) konumlanır; AppKit resize/fullscreen'de
-    /// sıfırladığı için bu noktalardan yeniden uygulanır.
-    func centerTrafficLights() {
+    /// Traffic light hizası — `TrafficLightLayout` (titlebar container'ı header
+    /// yüksekliğine büyütür; tıklama alanı kırpılmaz).
+    func applyTrafficLightLayout() {
         guard let window else { return }
-        let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        let buttons = types.compactMap { window.standardWindowButton($0) }
-        guard let containerHeight = buttons.first?.superview?.bounds.height else { return }
-        for button in buttons {
-            let y = containerHeight - TopBarMetrics.height / 2 - button.frame.height / 2
-            button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: y))
-        }
+        TrafficLightLayout.apply(to: window)
     }
 
     private func observeFullScreen(_ window: NSWindow) {
@@ -160,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
             center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.centerTrafficLights()
+                    self?.applyTrafficLightLayout()
                     self?.refreshTerminalsAfterTransition()
                 }
             }
@@ -232,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     self?.scheduleBoundsPersist()
-                    self?.centerTrafficLights() // resize titlebar layout'unu sıfırlar
+                    self?.applyTrafficLightLayout() // resize titlebar layout'unu sıfırlar
                 }
             }
         }
@@ -316,10 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setTrafficLightsHidden(_ hidden: Bool) {
         guard let window else { return }
-        for buttonType: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
-            window.standardWindowButton(buttonType)?.isHidden = hidden
-        }
-        if !hidden { centerTrafficLights() } // tekrar gösterirken hizayı koru
+        TrafficLightLayout.setHidden(hidden, in: window)
     }
 
     /// Dock ikonu: bundle'lıyken Info.plist'teki .icns geçerlidir; `swift run`

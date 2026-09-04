@@ -9,8 +9,6 @@ Open your repositories as tabs, spawn as many terminals as you need inside each 
 - **Repo tabs** — discover projects under a root folder, or add individual paths; non-git folders work too
 - **Multiple terminals per repo** — each one a real login-shell PTY, with a live status indicator (`idle / working / waiting / error`) driven by terminal title and notification escape sequences
 - **Native notifications** when an agent finishes a turn or needs input
-- **Personas** — YAML presets (system prompt, model, tool permissions) that open a ready-to-use agent session
-- **Quick Actions** — YAML automations that spawn a terminal and run scripted steps (`write` / `wait_for` / `delay`)
 - **Git panel** — status, commit log and a file tree with an integrated viewer (syntax highlighting + unified diff)
 - **Usage indicator**, **focus mode**, and an optional **scheduled session trigger**
 
@@ -63,18 +61,14 @@ xcrun stapler staple dist/Lumi.app
 
 1. A setup screen checks your shell, PTY support and agent CLIs, and offers to fix what it can.
 2. Point **Projects root** at the folder that holds your repositories (e.g. `~/Developer`), or add individual paths.
-3. Open a repo tab and press the new-terminal button — or pick a persona to start an agent session directly.
+3. Open a repo tab and press the new-terminal button to start an agent session.
 
 Release builds store everything under `~/.lumi`:
 
 ```
 ~/.lumi/config.json       settings (projects root, provider, theme, notifications…)
 ~/.lumi/ui-state.json     window bounds, open tabs, layout
-~/.lumi/personas/         persona YAML files
-~/.lumi/actions/          quick action YAML files (+ .history/ backups)
 ```
-
-Per-project personas and actions can also live in `<repo>/.lumi/personas/` and `<repo>/.lumi/actions/`, where they override the user-level ones and can be committed with the repo.
 
 ## Tests
 
@@ -89,7 +83,7 @@ swift test
 LumiPackages/Sources/
   LumiKit/        models, protocols, shared support (no dependencies)
   LumiTerminal/   PTY process, terminal sessions, SwiftTerm integration
-  LumiServices/   config, git/repo, personas, actions, notifications, system checks
+  LumiServices/   config, git/repo, notifications, system checks
   LumiState/      observable stores (service → store → UI)
   LumiUI/         SwiftUI views and the design system
   LumiApp/        executable + AppContainer (dependency-injection root)

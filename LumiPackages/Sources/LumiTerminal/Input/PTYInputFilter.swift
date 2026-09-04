@@ -7,7 +7,7 @@ import Foundation
 /// yönettiği için CLI daima "focused" bilmelidir.
 ///
 /// Tarama chunk içidir: her yazım kaynağı (klavye event'i, SwiftTerm oto-yanıtı,
-/// ActionEngine step'i) tam sequence yazar; ESC'i sonraki chunk'ı bekletmek gerçek
+/// programatik write) tam sequence yazar; ESC'i sonraki chunk'ı bekletmek gerçek
 /// ESC tuşunu geciktirirdi (design/01 §4).
 struct PTYInputFilter {
     /// Defense-in-depth kapısı (spec/00 §4.2-9): canlı-olmayan feed senaryoları için;

@@ -1,16 +1,10 @@
 import AppKit
 import SwiftTerm
 
-/// Terminal renk teması — config'de saklanabilen, SwiftTerm'e uygulanabilen preset sistemi.
-/// NSColor Sendable olmadığından renkler UInt32 hex olarak saklanır; NSColor computed
-/// property ile üretilir. apply(to:) MainActor'da çağrılmalıdır.
-public struct TerminalTheme: Equatable, Sendable, Identifiable {
-    // MARK: - Public alanlar
-
-    public let id: String      // config.json'da saklanan değer, ör. "lumi"
-    public let name: String    // UI'da gösterilecek ad, ör. "Lumi"
-
-    // Renkler — hex (0xRRGGBB). NSColor computed property ile üretilir.
+/// Terminal renk paleti — tek sabit palet (Lumi, v1 xterm.js paritesi; karar 26:
+/// kullanıcı seçimli tema sistemi kaldırıldı). NSColor Sendable olmadığından
+/// renkler UInt32 hex olarak saklanır; apply(to:) MainActor'da çağrılmalıdır.
+public struct TerminalTheme: Equatable, Sendable {
     public let backgroundHex: UInt32
     public let foregroundHex: UInt32
     public let cursorHex: UInt32
@@ -19,13 +13,6 @@ public struct TerminalTheme: Equatable, Sendable, Identifiable {
     public let selectionHex: UInt32
     /// 16-elemanlı ANSI palet (0–7 normal, 8–15 bright). Her eleman 0xRRGGBB.
     public let ansiHex: [UInt32]
-
-    /// UI picker'ında preview için öne çıkan renkler:
-    /// background, foreground, cursor ve ilk 6 ANSI rengi.
-    public var previewColors: [UInt32] {
-        [backgroundHex, foregroundHex, cursorHex]
-        + Array(ansiHex.prefix(6))
-    }
 
     // MARK: - NSColor helpers (non-Sendable, sadece MainActor'da kullan)
 
@@ -50,34 +37,36 @@ public struct TerminalTheme: Equatable, Sendable, Identifiable {
         view.installColors(swiftTermPalette)
     }
 
-    // MARK: - Preset erişimi
+    // MARK: - Lumi paleti (v1 src/renderer/components/Terminal/constants.ts)
 
-    /// Tüm preset'ler — UI picker sırası.
-    public static let all: [TerminalTheme] = [
-        .lumi, .dracula, .oneDark, .nord,
-        .solarizedDark, .solarizedLight, .githubLight
-    ]
-
-    /// Mevcut Lumi teması — default.
-    public static let lumi = TerminalThemePresets.lumi
-
-    /// id'ye göre preset döner; bilinmeyen id → .lumi.
-    public static func preset(id: String) -> TerminalTheme {
-        all.first { $0.id == id } ?? .lumi
-    }
-
-    // MARK: - Özel preseller (dahili kısayollar)
-
-    static let dracula      = TerminalThemePresets.dracula
-    static let oneDark      = TerminalThemePresets.oneDark
-    static let nord         = TerminalThemePresets.nord
-    static let solarizedDark  = TerminalThemePresets.solarizedDark
-    static let solarizedLight = TerminalThemePresets.solarizedLight
-    static let githubLight  = TerminalThemePresets.githubLight
+    public static let lumi = TerminalTheme(
+        backgroundHex:  0x12121F,
+        foregroundHex:  0xE2E2F0,
+        cursorHex:      0xA78BFA,
+        cursorTextHex:  0x12121F,
+        selectionHex:   0x4D8B5CF6, // 0x8B5CF6 @ ~30% opacity
+        ansiHex: [
+            0x0A0A12, // 0: black
+            0xF87171, // 1: red
+            0x4ADE80, // 2: green
+            0xFBBF24, // 3: yellow
+            0xA78BFA, // 4: blue
+            0x8B5CF6, // 5: magenta
+            0x22D3EE, // 6: cyan
+            0xE2E2F0, // 7: white
+            0x4A4A6A, // 8: bright black
+            0xF87171, // 9: bright red
+            0x4ADE80, // 10: bright green
+            0xFBBF24, // 11: bright yellow
+            0xA78BFA, // 12: bright blue
+            0x8B5CF6, // 13: bright magenta
+            0x22D3EE, // 14: bright cyan
+            0xFFFFFF, // 15: bright white
+        ]
+    )
 
     // MARK: - Private helpers
 
-    /// SwiftTerm 16-bit bileşen paleti (UInt32 hex → SwiftTerm.Color).
     private var swiftTermPalette: [SwiftTerm.Color] {
         ansiHex.map { hex in
             SwiftTerm.Color(

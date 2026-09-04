@@ -140,6 +140,35 @@ final class WorkspaceStoreTests: XCTestCase {
         try await waitForPersist()
     }
 
+    func testMoveTabReordersAndPersists() async throws {
+        store.openTab("/r/alpha")
+        store.openTab("/r/beta")
+        store.openTab("/r/gamma")
+        let before = await config.uiStateUpdateCount
+
+        // Sağdan sola: gamma alpha'nın yerini alır, diğerleri sağa kayar
+        store.moveTab("/r/gamma", to: "/r/alpha")
+        XCTAssertEqual(store.openTabs, ["/r/gamma", "/r/alpha", "/r/beta"])
+
+        // Soldan sağa: alpha beta'nın yerini alır, beta sola kayar
+        store.moveTab("/r/alpha", to: "/r/beta")
+        XCTAssertEqual(store.openTabs, ["/r/gamma", "/r/beta", "/r/alpha"])
+        XCTAssertEqual(store.activeTab, "/r/gamma", "aktif tab taşımayla değişmez")
+        try await waitForPersist(minimumCount: before + 1)
+        let persisted = await config.uiState().openTabs
+        XCTAssertEqual(persisted, ["/r/gamma", "/r/beta", "/r/alpha"])
+    }
+
+    func testMoveTabIgnoresUnknownOrSelfTarget() {
+        store.openTab("/r/alpha")
+        store.openTab("/r/beta")
+
+        store.moveTab("/r/alpha", to: "/r/alpha")
+        store.moveTab("/r/alpha", to: "/r/nope")
+        store.moveTab("/r/nope", to: "/r/alpha")
+        XCTAssertEqual(store.openTabs, ["/r/alpha", "/r/beta"])
+    }
+
     func testCloseActiveTabActivatesLastTab() {
         store.openTab("/r/alpha")
         store.openTab("/r/beta")

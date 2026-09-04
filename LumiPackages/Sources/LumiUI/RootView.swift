@@ -44,8 +44,6 @@ public struct RootView: View {
     private let promptQueue: PromptQueueStore
     private let gitStore: GitStore
     private let fileViewer: FileViewerStore
-    private let personasStore: PersonasStore
-    private let actionsStore: ActionsStore
     private let settings: SettingsStore
     private let sessionSchedule: SessionScheduleStore
     private let usage: UsageStore
@@ -62,8 +60,6 @@ public struct RootView: View {
         promptQueue: PromptQueueStore,
         gitStore: GitStore,
         fileViewer: FileViewerStore,
-        personasStore: PersonasStore,
-        actionsStore: ActionsStore,
         settings: SettingsStore,
         sessionSchedule: SessionScheduleStore,
         usage: UsageStore,
@@ -79,8 +75,6 @@ public struct RootView: View {
         self.promptQueue = promptQueue
         self.gitStore = gitStore
         self.fileViewer = fileViewer
-        self.personasStore = personasStore
-        self.actionsStore = actionsStore
         self.settings = settings
         self.sessionSchedule = sessionSchedule
         self.usage = usage
@@ -215,7 +209,6 @@ public struct RootView: View {
             workspace: workspace,
             repoStore: repoStore,
             terminals: terminals,
-            personasStore: personasStore,
             settings: settings,
             usage: usage
         )
@@ -232,8 +225,6 @@ public struct RootView: View {
                         repoPath: active,
                         repoStore: repoStore,
                         terminals: terminals,
-                        personasStore: personasStore,
-                        actionsStore: actionsStore,
                         onOpenFile: { path in
                             Task { await fileViewer.presentView(repoPath: active, filePath: path) }
                         },
@@ -369,15 +360,13 @@ public struct RootView: View {
             // Topbar ile aynı modern split-button (DRY): hover'da dropdown açılır.
             NewTerminalButton(
                 provider: settings.current.aiProvider,
-                personas: personasStore.personas,
                 onNewProvider: {
                     terminals.spawn(
                         in: repoPath,
                         command: settings.current.aiProvider.launchCommand
                     )
                 },
-                onNewBash: { terminals.spawn(in: repoPath, task: "Bash") },
-                onPersona: { personasStore.spawn($0, repoPath: repoPath) }
+                onNewBash: { terminals.spawn(in: repoPath, task: "Bash") }
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

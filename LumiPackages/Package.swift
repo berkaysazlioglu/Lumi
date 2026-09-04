@@ -22,7 +22,6 @@ let package = Package(
             revision: "24a68bcadc479d945c7ca32f21ac0a8ab895c690"
         ),
         .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
     ],
     targets: [
         .target(name: "LumiKit"),
@@ -33,17 +32,7 @@ let package = Package(
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
             ]
         ),
-        .target(
-            name: "LumiServices",
-            dependencies: [
-                "LumiKit",
-                .product(name: "Yams", package: "Yams"),
-            ],
-            resources: [
-                .copy("Resources/default-actions"),
-                .copy("Resources/default-personas"),
-            ]
-        ),
+        .target(name: "LumiServices", dependencies: ["LumiKit"]),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
         .target(
             name: "LumiUI",

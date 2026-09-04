@@ -33,13 +33,6 @@ public final class TerminalSessionManager: TerminalServicing {
             sessions.forEach { $0.setFontSmoothing(fontSmoothing) }
         }
     }
-    /// Renk teması. Canlı uygulanır: yeni spawn'lar + tüm açık terminaller.
-    public var theme: TerminalTheme = .lumi {
-        didSet {
-            guard theme != oldValue else { return }
-            sessions.forEach { $0.applyTheme(theme) }
-        }
-    }
     /// Caret şekli + blink (SwiftTerm CursorStyle'a çözülmüş). Canlı uygulanır.
     public var cursorStyle: CursorStyle = .blinkBlock {
         didSet {
@@ -108,9 +101,8 @@ public final class TerminalSessionManager: TerminalServicing {
         )
         session.delegate = self
         session.setFontSmoothing(fontSmoothing)
-        // Spawn-time: manager'ın güncel tema + cursor değerlerini uygula
-        // (DropAwareTerminalView'daki hardcoded lumi default'unu ezer).
-        session.applyTheme(theme)
+        // Spawn-time: manager'ın güncel cursor değerini uygula (palet sabit —
+        // DropAwareTerminalView zaten TerminalTheme.lumi uygular).
         session.setCursorStyle(cursorStyle)
         sessions.append(session)
         viewRegistry.register(

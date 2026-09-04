@@ -27,7 +27,7 @@ public protocol TerminalServicing: AnyObject, Sendable {
     func setMaxTerminals(_ n: Int)
     func events() -> AsyncStream<TerminalEvent>
 
-    /// Decode edilmiş çıktı chunk'ları — ActionEngine `wait_for` tüketicisi
+    /// Decode edilmiş çıktı chunk'ları — harici tüketiciler için fan-out
     /// (design/01 §3 fan-out). Tüketici yavaşlığı terminali durduramaz;
     /// 4KB rolling ring drop'a toleranslıdır. Terminal yoksa nil.
     func outputStream(id: TerminalID) -> AsyncStream<String>?

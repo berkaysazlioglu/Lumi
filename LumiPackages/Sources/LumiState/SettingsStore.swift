@@ -76,10 +76,6 @@ public final class SettingsStore {
         apply { $0.terminalFontSmoothing = enabled }
     }
 
-    public func setTerminalTheme(_ id: String) {
-        apply { $0.terminalTheme = id }
-    }
-
     public func setTerminalFontFamily(_ family: String) {
         apply { $0.terminalFontFamily = family }
     }
@@ -94,6 +90,10 @@ public final class SettingsStore {
 
     public func setNotifications(_ settings: NotificationSettings) {
         apply { $0.notifications = settings }
+    }
+
+    public func setAutoMinimizeOnSend(_ enabled: Bool) {
+        apply { $0.autoMinimizeOnSend = enabled }
     }
 
     public func setSessionTrigger(_ trigger: SessionTrigger) {

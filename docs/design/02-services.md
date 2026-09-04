@@ -31,11 +31,7 @@ Genel kurallar:
 | `ui-state:get / set` | `ConfigServicing.uiState / updateUIState` |
 | `window:toggle-maximize / minimize / close / set-traffic-light-visibility` | IPC'siz — `MainWindowController` iç metodları (custom titlebar butonları native'de yok; traffic-light gizleme focus-mode akışında, [03 §2](./03-ui-shell.md)) |
 | `dialog:open-folder` | `SystemServicing.chooseFolder()` |
-| `actions:list / execute / delete / history / restore / create-new / edit` | `ActionServicing` aynı adlı metodlar |
-| `actions:load-project / default-ids` | `actions(projectPath:)` parametresiyle ve `Action.isDefault` alanıyla emilir |
-| `actions:changed` (push) | `ActionServicing.events()` (Void) |
-| `personas:list / load-project / spawn` | `PersonaServicing.personas(projectPath:) / spawn` |
-| `personas:changed` (push) | `PersonaServicing.events()` (Void) |
+| `actions:*` / `personas:*` | **Kaldırıldı** (karar 25) — karşılığı yok |
 | `system:check-run / check-fix` | `SystemServicing.runChecks / fix` |
 | `shell:open-external` | `SystemServicing.openExternal` (http/https whitelist **korunur**; ihlal → görünür hata) |
 | `app:confirm-quit` / `app:quit-confirmed` | IPC'siz — `applicationShouldTerminate` → `.terminateLater` akışı ([03 §2](./03-ui-shell.md)) |
@@ -115,53 +111,15 @@ public protocol GitServicing: Sendable {          // stateless; git CLI + porcel
 
 ---
 
-## 5. PersonaServicing
+## 5. PersonaServicing — **kaldırıldı (karar 25, 2026-09-04)**
 
-```swift
-public protocol PersonaServicing: Actor, Sendable {
-    func personas(projectPath: String?) async throws -> [Persona]   // project, user'ı id ile EZER (gizler)
-    func spawn(personaID: String, repoPath: String) async throws -> TerminalMeta
-    func events() -> AsyncStream<Void>                              // personasChanged
-}
-```
-
-- **Seed: her startup'ta default'lar EZİLİR** (`Bundle.module/default-personas/` → `~/.lumi/personas/`) — asimetrinin persona tarafı, birebir parite.
-- YAML şema paritesi: `id`, `label` zorunlu; `provider`, `claude{systemPrompt, appendSystemPrompt, model, allowedTools[], disallowedTools[], tools, permissionMode, maxTurns}`, `codex{model?}`.
-- User + project (`<repo>/.lumi/personas/`) dizinleri izlenir; değişiklik → tam reload → changed yayını.
-- `spawn`: yeni terminal + `task = persona.label`; provider = `persona.provider ?? config.aiProvider`; komut `AgentCommandBuilder` üzerinden enjekte edilir.
+Persona ön ayarları projeden çıkarıldı; protokol, servis, YAML codec ve seed yok. Eski tasarım için git geçmişine bakılabilir.
 
 ---
 
-## 6. ActionServicing (store + engine)
+## 6. ActionServicing — **kaldırıldı (karar 25, 2026-09-04)**
 
-```swift
-public protocol ActionServicing: Actor, Sendable {
-    func actions(projectPath: String?) async throws -> [Action]     // Action.isDefault dahil
-    func execute(actionID: String, repoPath: String) async throws -> TerminalMeta
-    func delete(actionID: String, scope: ActionScope, projectPath: String?) async throws
-    func history(actionID: String) async throws -> [ActionVersion]
-    func restore(actionID: String, version: String) async throws
-    func createNew(repoPath: String) async throws -> TerminalMeta   // AI destekli
-    func edit(actionID: String, scope: ActionScope, projectPath: String?) async throws -> TerminalMeta
-    func events() -> AsyncStream<Void>                              // actionsChanged
-}
-```
-
-**Store paritesi:**
-- **Seed asimetrisi birebir:** hedef dosyada `modified_at` varsa default ezilmez (kullanıcı düzenlemesi korunur, id default işaretli kalır); parse-bozuk dosya ezilir; deprecated default'lar user dizininden silinir. **`create-project` default sete konmaz** (karar 12).
-- Versiyonlama: değişiklikte `.history/<id>/<iso-ts>.yaml` backup (`:` → `-`, ms kırpılır), **max 20**, en eski silinir; default dosya silinirse anında yeniden seed. Silme, dosya adına değil **id alanına** dizin taramasıyla.
-- User + project dizin watcher'ları; her durumda tam reload + changed.
-
-**Engine paritesi + onaylı düzeltmeler:**
-- `execute` daima **yeni** terminal açar; limit doluysa `LumiError.terminalLimitReached` **fırlatır** (sessiz `null` taşınmaz — karar 5/11).
-- Step'ler sıralı: `write{content}` (\r-sonlu; `AgentCommandBuilder` dönüşümünden geçer) / `wait_for{pattern, timeout=10sn}` / `delay{ms}`.
-- **`wait_for` rolling buffer:** terminalin output stream'inden ([01 §3](./01-terminal-subsystem.md)) beslenen **4 KB rolling ring** üzerinde regex — tek-chunk eşleşme zorunluluğu bug'ı düzeltilir, 10 sn timeout semantiği korunur (karar 11). Timeout → `LumiError.actionStepTimedOut`.
-
-**`AgentCommandBuilder` (`buildAgentCommand` portu):**
-- Claude: içerik `claude ` ile başlıyorsa flag enjeksiyonu (`--system-prompt-file` / `--append-system-prompt-file` temp dosyaları, `--model`, `--allowedTools "A" "B"`, `--disallowedTools`, `--tools`, `--permission-mode`, `--max-turns`) + ` -- ` ayracı. **Temp system-prompt dosyaları izlenir ve uygulama çıkışında + oturum kapanışında silinir** (hiç-temizlenmeme bug'ı taşınmaz — karar 11); adlandırma çakışmasız (UUID).
-- Codex: `codex` ile başlıyorsa ve config'de model varsa ve `--model` yoksa enjekte.
-- Eşleşmeyen içerik (örn. `git pull\r`) değişmeden geçer.
-- AI create/edit akışları: ephemeral `__create-action`/`__edit-action`; claude'da prompt `appendSystemPrompt` flag'iyle, codex'te **çağrı başına rastgele UUID delimiter'lı heredoc** (prompt-injection guard'ı birebir). Edit prompt'u AI'ya `modified_at` güncelletir.
+Quick Action otomasyonları (`ActionEngine`, `AgentCommandBuilder`, `.history/`) projeden çıkarıldı. `TerminalServicing.outputStream(id:)` fan-out'u terminal katmanında korunur.
 
 ---
 

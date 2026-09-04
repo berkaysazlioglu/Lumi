@@ -32,11 +32,10 @@ Lumi.xcodeproj
 └── LumiPackages/Package.swift
     ├── LumiKit        — domain modelleri, TÜM servis protokolleri, LumiError,
     │                    LumiPaths (~/.lumi çözümlemesi), Debouncer, EventBroadcaster,
-    │                    JSON/YAML codec'ler (yalnız Yams'a bağımlı)
+    │                    JSON codec'ler (bağımlılıksız)
     ├── LumiTerminal   — PTYProcess, okuma/yazma pipeline'ı, StatusStateMachine,
     │                    OSC parser, TerminalViewRegistry (SwiftTerm: internal detay)
-    ├── LumiServices   — Config/Repo/Git/Persona/Action/Notification/System servisleri;
-    │                    default-actions/ ve default-personas/ Bundle.module resource
+    ├── LumiServices   — Config/Repo/Git/Notification/System servisleri
     ├── LumiState      — @Observable @MainActor store'lar; servislerin tek tüketicisi
     └── LumiUI         — SwiftUI view'lar + Theme; yalnız LumiState + LumiKit görür
 ```
@@ -57,9 +56,9 @@ LumiKit ──► (yalnız Yams)
 
 | Modül | Sorumluluk | Public yüzey |
 |---|---|---|
-| **LumiKit** | Domain modelleri (`TerminalID`, `TerminalMeta`, `TerminalStatus`, `Repo`, `FileNode`, `GitCommit`, `Persona`, `Action`, `AppConfig`, `UIState`, `AgentProvider`), tüm servis protokolleri ([02](./02-services.md)), event enum'ları, `LumiError`, `LumiPaths`, ortak yardımcılar | Hepsi |
+| **LumiKit** | Domain modelleri (`TerminalID`, `TerminalMeta`, `TerminalStatus`, `Repo`, `FileNode`, `GitCommit`, `AppConfig`, `UIState`, `AgentProvider`), tüm servis protokolleri ([02](./02-services.md)), event enum'ları, `LumiError`, `LumiPaths`, ortak yardımcılar | Hepsi |
 | **LumiTerminal** | Terminal alt sistemi ([01](./01-terminal-subsystem.md)) | `TerminalService: TerminalServicing` + `TerminalViewRegistry: TerminalViewProviding` — başka hiçbir şey public değil |
-| **LumiServices** | Diğer tüm servis implementasyonları + bundle resource seed'leri | Protokol başına bir somut tip |
+| **LumiServices** | Diğer tüm servis implementasyonları | Protokol başına bir somut tip |
 | **LumiState** | View-state store'ları ([03 §4](./03-ui-shell.md)) | Store'lar |
 | **LumiUI** | Tüm SwiftUI view'ları + tasarım sistemi | `RootView`, `Theme` |
 | **Lumi (app)** | AppKit lifecycle, pencere, menü, quit akışı, composition root, config yan etki koordinasyonu, sleep/wake + focus bildirimlerinin servislere bağlanması | — |
@@ -78,8 +77,6 @@ LumiKit ──► (yalnız Yams)
     let viewRegistry: TerminalViewProviding
     let repo: RepoServicing
     let git: GitServicing
-    let personas: PersonaServicing
-    let actions: ActionServicing
     let notifications: NotificationServicing
     let system: SystemServicing
     // store'lar
@@ -87,8 +84,6 @@ LumiKit ──► (yalnız Yams)
     let terminals: TerminalListStore
     let repoStore: RepoStore
     let gitStore: GitStore
-    let actionsStore: ActionsStore
-    let personasStore: PersonasStore
     let toasts: ToastStore
     let settings: SettingsStore
     // bağlantı
@@ -103,10 +98,9 @@ LumiKit ──► (yalnız Yams)
 
 1. `AppContainer` kur (tüm servis + store'lar; henüz iş yapılmaz).
 2. `system.fixProcessPath()` — **her PTY spawn'dan ve SystemChecker'dan önce** ([02 §8](./02-services.md)).
-3. Seed: persona'lar ezilir, action'lar `modified_at` varsa korunur ([02 §6](./02-services.md)).
-4. Store'lar `start()` — servis stream'lerini tüketmeye başlar.
-5. Pencere + menü kur (`MainWindowController`, `MainMenuBuilder`).
-6. `config.isFirstRun()` → onboarding sihirbazı **veya** ana UI.
+3. Store'lar `start()` — servis stream'lerini tüketmeye başlar.
+4. Pencere + menü kur (`MainWindowController`, `MainMenuBuilder`).
+5. `config.isFirstRun()` → onboarding sihirbazı **veya** ana UI.
 
 ---
 

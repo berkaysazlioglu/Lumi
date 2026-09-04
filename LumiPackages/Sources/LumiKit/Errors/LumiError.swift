@@ -12,7 +12,6 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case fileOperationFailed(path: String, detail: String)
     case configIOFailed(file: String, detail: String)
     case yamlInvalid(file: String, detail: String)
-    case actionStepTimedOut(actionID: String, step: Int)
     case externalURLBlocked(URL)
     case systemCheckFailed(check: String, detail: String)
     case notificationPermissionDenied
@@ -39,8 +38,6 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Could not read or write \(file): \(detail)"
         case .yamlInvalid(let file, let detail):
             return "Invalid YAML in \(file): \(detail)"
-        case .actionStepTimedOut(let actionID, let step):
-            return "Action \(actionID) timed out at step \(step + 1)."
         case .externalURLBlocked(let url):
             return "Blocked external URL (only http/https allowed): \(url.absoluteString)"
         case .systemCheckFailed(let check, let detail):

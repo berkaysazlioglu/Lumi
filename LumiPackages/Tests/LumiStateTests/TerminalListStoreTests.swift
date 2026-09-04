@@ -121,6 +121,95 @@ final class TerminalListStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTerminalID, first.id)
     }
 
+    // MARK: - Gönderimde otomatik minimize (karar 24)
+
+    func testAutoMinimizeOnWorkingWhenEnabled() {
+        store.autoMinimizeOnSend = true
+        let first = makeTerminal("t1")
+        let second = makeTerminal("t2")
+        store.focus(second.id)
+
+        store.apply(.statusChanged(second.id, .working))
+        XCTAssertTrue(store.isMinimized(second.id))
+        XCTAssertEqual(store.activeTerminalID, first.id, "aktif minimize olunca odak komşuya kayar")
+    }
+
+    func testAutoMinimizedRestoresOnWaitingWithoutFocus() {
+        store.autoMinimizeOnSend = true
+        let first = makeTerminal("t1")
+        let second = makeTerminal("t2")
+        store.focus(second.id)
+        store.apply(.statusChanged(second.id, .working))
+
+        store.apply(.statusChanged(second.id, .waitingUnseen))
+        XCTAssertFalse(store.isMinimized(second.id))
+        XCTAssertEqual(store.activeTerminalID, first.id, "otomatik restore odak vermez (spec/21 §6)")
+    }
+
+    func testAutoMinimizedRestoresOnIdleAndError() {
+        store.autoMinimizeOnSend = true
+        let first = makeTerminal("t1")
+        store.apply(.statusChanged(first.id, .working))
+        store.apply(.statusChanged(first.id, .idle))
+        XCTAssertFalse(store.isMinimized(first.id))
+
+        store.apply(.statusChanged(first.id, .working))
+        store.apply(.statusChanged(first.id, .error))
+        XCTAssertFalse(store.isMinimized(first.id))
+    }
+
+    func testWorkingDoesNothingWhenDisabled() {
+        let only = makeTerminal("t1")
+
+        store.apply(.statusChanged(only.id, .working))
+        XCTAssertFalse(store.isMinimized(only.id))
+    }
+
+    func testManuallyMinimizedIsNotAutoRestored() {
+        store.autoMinimizeOnSend = true
+        let only = makeTerminal("t1")
+        store.minimize(only.id)
+
+        store.apply(.statusChanged(only.id, .working))
+        store.apply(.statusChanged(only.id, .waitingUnseen))
+        XCTAssertTrue(store.isMinimized(only.id), "elle minimize edilen otomatik restore edilmez")
+    }
+
+    func testManualRestoreDuringWorkingDropsTracking() {
+        store.autoMinimizeOnSend = true
+        let only = makeTerminal("t1")
+        store.apply(.statusChanged(only.id, .working))
+        XCTAssertTrue(store.isMinimized(only.id))
+
+        store.restore(only.id)
+        store.apply(.statusChanged(only.id, .waitingUnseen))
+        XCTAssertFalse(store.isMinimized(only.id))
+
+        // Sonraki mesaj döngüsü yeniden minimize eder
+        store.apply(.statusChanged(only.id, .working))
+        XCTAssertTrue(store.isMinimized(only.id))
+    }
+
+    func testDisablingToggleMidWorkStillRestores() {
+        store.autoMinimizeOnSend = true
+        let only = makeTerminal("t1")
+        store.apply(.statusChanged(only.id, .working))
+
+        store.autoMinimizeOnSend = false
+        store.apply(.statusChanged(only.id, .waitingUnseen))
+        XCTAssertFalse(store.isMinimized(only.id), "toggle kapansa da mahsur kalmaz")
+    }
+
+    func testAwaitingDecisionRestoresAutoMinimized() {
+        store.autoMinimizeOnSend = true
+        let only = makeTerminal("t1")
+        store.apply(.statusChanged(only.id, .working))
+        XCTAssertTrue(store.isMinimized(only.id))
+
+        store.apply(.awaitingDecisionChanged(only.id, true))
+        XCTAssertFalse(store.isMinimized(only.id), "izin promptu da girdi bekliyor sayılır")
+    }
+
     // MARK: - lastActiveByRepo (spec/21 §9 yan etkisi)
 
     func testActivateRepoRestoresLastActive() {
