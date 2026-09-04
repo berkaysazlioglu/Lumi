@@ -203,7 +203,8 @@ private struct UsagePopover: View {
 }
 
 /// Tek pencere satırı: başlık + yüzde + progress bar + reset zamanı.
-private struct UsageWindowRow: View {
+/// (internal — `fillFraction` clamp'i birim testten görünür olsun diye.)
+struct UsageWindowRow: View {
     let title: String
     let window: UsageWindow
 
@@ -240,7 +241,7 @@ private struct UsageWindowRow: View {
         .frame(height: 6)
     }
 
-    private var fillFraction: CGFloat {
+    var fillFraction: CGFloat {
         guard let percent = window.percentUsed else { return 0 }
         return CGFloat(min(100, max(0, percent))) / 100
     }

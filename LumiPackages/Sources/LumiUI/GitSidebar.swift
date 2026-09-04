@@ -226,8 +226,9 @@ struct GitSidebar: View {
     }
 
     /// "5m ago / 3h ago / 2d ago" — relative format UI katmanında.
-    static func relativeTime(_ date: Date) -> String {
-        let seconds = max(0, Date().timeIntervalSince(date))
+    /// `now` yalnız test için enjekte edilir (default: şimdi).
+    static func relativeTime(_ date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, now.timeIntervalSince(date))
         let minutes = Int(seconds / 60)
         if minutes < 60 { return "\(minutes)m ago" }
         let hours = minutes / 60

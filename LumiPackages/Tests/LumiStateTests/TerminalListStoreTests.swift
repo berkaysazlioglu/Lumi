@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import LumiKit
+import LumiTestSupport
 @testable import LumiState
 
 /// Komşu-odak / minimize / lastActiveByRepo kuralları (Electron paritesi) —

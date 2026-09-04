@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import LumiKit
+import LumiTestSupport
 @testable import LumiServices
 
 @MainActor
@@ -24,51 +25,17 @@ private final class FakeScheduler: RepeatingScheduling {
     }
 }
 
-private final class FakePresenter: NotificationPresenting, @unchecked Sendable {
-    private let lock = NSLock()
-    private var presentedRecords: [(id: String, title: String, body: String)] = []
-    private var removedRecords: [String] = []
-
-    func requestAuthorization() async -> Bool { true }
-
-    @MainActor
-    func present(id: String, title: String, body: String) {
-        lock.lock()
-        presentedRecords.append((id, title, body))
-        lock.unlock()
-    }
-
-    @MainActor
-    func removeDelivered(id: String) {
-        lock.lock()
-        removedRecords.append(id)
-        lock.unlock()
-    }
-
-    var presented: [(id: String, title: String, body: String)] {
-        lock.lock()
-        defer { lock.unlock() }
-        return presentedRecords
-    }
-
-    var removed: [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return removedRecords
-    }
-}
-
 /// Electron bildirim tablosunun birebir testleri — Faz 3 çıkış kriterleri
 /// (interval-sızıntı testi dahil).
 @MainActor
 final class NotificationServiceTests: XCTestCase {
-    private var presenter: FakePresenter!
+    private var presenter: FakeNotificationPresenter!
     private var scheduler: FakeScheduler!
     private var service: NotificationService!
     private let terminalID = TerminalID()
 
     override func setUp() async throws {
-        presenter = FakePresenter()
+        presenter = FakeNotificationPresenter()
         scheduler = FakeScheduler()
         service = NotificationService(presenter: presenter, scheduler: scheduler)
         service.setWindowFocused(false) // bildirimlerin görünür olduğu durum

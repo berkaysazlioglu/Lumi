@@ -1,31 +1,7 @@
 import XCTest
 import LumiKit
+import LumiTestSupport
 @testable import LumiState
-
-/// Yazımı hep başarısız olan servis — sessiz `catch {}` yerine görünür hata
-/// (karar 5) sözleşmesini sürmek için.
-@MainActor
-private final class FailingWriteTerminalService: TerminalServicing {
-    private(set) var writeAttempts = 0
-
-    @discardableResult
-    func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
-        throw LumiError.spawnFailed(reason: "fake")
-    }
-
-    func write(id: TerminalID, text: String) throws {
-        writeAttempts += 1
-        throw LumiError.terminalNotFound(id)
-    }
-
-    func kill(id: TerminalID) throws {}
-    func killAll() {}
-    func resize(id: TerminalID, cols: Int, rows: Int) {}
-    func setFocused(_ id: TerminalID?) {}
-    func setWindowFocused(_ focused: Bool) {}
-    var terminals: [TerminalMeta] { [] }
-    func events() -> AsyncStream<TerminalEvent> { AsyncStream { $0.finish() } }
-}
 
 @MainActor
 final class PromptQueueStoreTests: XCTestCase {
@@ -160,7 +136,8 @@ final class PromptQueueStoreTests: XCTestCase {
     // MARK: - Başarısız yazım (karar 5: sessiz yutma yok)
 
     func testRepeatedInjectFailuresRaiseSingleToastAndKeepQueue() {
-        let service = FailingWriteTerminalService()
+        let service = FakeTerminalService()
+        service.failWrites = true
         let toasts = ToastStore(autoDismissAfter: 60)
         let store = PromptQueueStore(service: service, toasts: toasts, settleDelay: .zero)
         let id = TerminalID()
@@ -179,7 +156,8 @@ final class PromptQueueStoreTests: XCTestCase {
     }
 
     func testInjectFailuresBelowThresholdStaySilent() {
-        let service = FailingWriteTerminalService()
+        let service = FakeTerminalService()
+        service.failWrites = true
         let toasts = ToastStore(autoDismissAfter: 60)
         let store = PromptQueueStore(service: service, toasts: toasts, settleDelay: .zero)
         let id = TerminalID()

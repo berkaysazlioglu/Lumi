@@ -30,6 +30,17 @@ final class TerminalSession {
     let terminalView: TerminalView
     weak var delegate: TerminalSessionDelegate?
 
+    // MARK: - Gözlem noktaları (yalnız test)
+
+    /// PTY'ye FİİLEN yazılan (filtre sonrası) byte'lar; io queue'da çağrılır.
+    /// design/00 Ek A §A.2-12 entegrasyon testinin ölçüm noktası: "detach/attach
+    /// boyunca PTY'ye sıfır istenmeyen byte". Üretimde hiç set edilmez.
+    var onPTYWrite: (@Sendable (Data) -> Void)?
+
+    /// PTY'ye giden ioctl(TIOCSWINSZ) çağrıları; io queue'da çağrılır.
+    /// 150 ms resize debounce'unun (design/01 §6) ölçüm noktası.
+    var onPTYResize: (@Sendable (UInt16, UInt16) -> Void)?
+
     private let pty: PTYProcess
     private let ioQueue: DispatchQueue
     private let pipeline: TerminalPipeline
@@ -41,7 +52,9 @@ final class TerminalSession {
         name: String,
         task: String?,
         claudeSessionID: String? = nil,
-        font: NSFont
+        font: NSFont,
+        executable: String = ShellResolver.defaultShell(),
+        args: [String] = ["-l"]
     ) throws {
         let id = TerminalID()
         self.id = id
@@ -59,8 +72,8 @@ final class TerminalSession {
         self.pipeline = TerminalPipeline(queue: queue)
 
         self.pty = try PTYProcess(
-            executable: ShellResolver.defaultShell(),
-            args: ["-l"],
+            executable: executable,
+            args: args,
             cwd: repoPath,
             env: TerminalEnvironment.childEnvironment(),
             initialCols: Self.initialCols,
@@ -187,9 +200,10 @@ final class TerminalSession {
     /// oto-yanıtları, programatik write — hepsi filtre + serial io queue'dan geçer.
     func write(_ data: Data) {
         guard !isTerminated else { return }
-        ioQueue.async { [pipeline, pty] in
+        ioQueue.async { [pipeline, pty, onPTYWrite] in
             let filtered = pipeline.processInput(data)
             guard !filtered.isEmpty else { return }
+            onPTYWrite?(filtered)
             pty.write(filtered)
         }
     }
@@ -199,7 +213,8 @@ final class TerminalSession {
         pendingResize?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, !self.isTerminated else { return }
-            self.ioQueue.async { [pty = self.pty] in
+            self.ioQueue.async { [pty = self.pty, onPTYResize = self.onPTYResize] in
+                onPTYResize?(UInt16(cols), UInt16(rows))
                 pty.resize(cols: UInt16(cols), rows: UInt16(rows))
             }
         }

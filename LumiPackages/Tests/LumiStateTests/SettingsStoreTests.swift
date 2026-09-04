@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import LumiKit
+import LumiTestSupport
 @testable import LumiState
 
 /// Ayar yazımının bayat snapshot'a değil TAZE `current`'a uygulanması (1.2) ve
@@ -94,5 +95,130 @@ final class SettingsStoreTests: XCTestCase {
             self.store.current.projectsRoot == AppConfig.defaults.projectsRoot
         }
         XCTAssertEqual(toasts.toasts.count, 1, "karar 5: yazım hatası görünür")
+    }
+
+    // MARK: - refresh() (modal her açılışta taze config)
+
+    func testRefreshPullsValueWrittenOutsideTheStore() async {
+        var external = AppConfig.defaults
+        external.projectsRoot = "/tmp/from-disk"
+        await config.seed(external)
+
+        XCTAssertEqual(store.current.projectsRoot, AppConfig.defaults.projectsRoot, "mount'ta bayat")
+        await store.refresh()
+        XCTAssertEqual(store.current.projectsRoot, "/tmp/from-disk")
+    }
+
+    func testRefreshIsIdempotent() async {
+        await store.refresh()
+        let first = store.current
+        await store.refresh()
+        XCTAssertEqual(store.current, first)
+    }
+
+    // MARK: - start() event tüketimi
+
+    func testStartSeedsCurrentAndConsumesConfigChangedEvents() async throws {
+        var seeded = AppConfig.defaults
+        seeded.theme = "light"
+        await config.seed(seeded)
+
+        store.start()
+        try await waitUntil("ilk okuma") { self.store.current.theme == "light" }
+
+        var updated = seeded
+        updated.terminalFontSize = 19
+        config.emitConfigChange(old: seeded, new: updated)
+        try await waitUntil("event uygulandı") { self.store.current.terminalFontSize == 19 }
+    }
+
+    func testStartIgnoresNonConfigChangedEvents() async throws {
+        store.start()
+        try await waitUntil("abonelik") { await self.config.subscriberCount >= 1 }
+        let before = store.current
+
+        config.emit(.writeFailed(file: "ui-state.json", detail: "disk full"))
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(store.current, before, "yalnız configChanged uygulanır")
+    }
+
+    func testStartIsIdempotent() async throws {
+        store.start()
+        store.start()
+        try await waitUntil("abonelik") { await self.config.subscriberCount >= 1 }
+        try await Task.sleep(for: .milliseconds(50))
+        let count = await config.subscriberCount
+        XCTAssertEqual(count, 1, "ikinci start yeni tüketici açmamalı")
+    }
+
+    func testEventAfterStopDoesNotChangeState() async throws {
+        store.start()
+        try await waitUntil("abonelik") { await self.config.subscriberCount >= 1 }
+        let before = store.current
+
+        store.stop()
+        var updated = before
+        updated.theme = "solarized"
+        config.emitConfigChange(old: before, new: updated)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(store.current, before, "stop sonrası event state'i değiştirmez")
+    }
+
+    // MARK: - Font boyutu clamp'i (10…24)
+
+    func testFontSizeClampsToLowerBound() async throws {
+        store.setTerminalFontSize(4)
+        XCTAssertEqual(store.current.terminalFontSize, 10)
+        try await waitUntil("clamp'lenmiş değer diske indi") {
+            await self.config.config().terminalFontSize == 10
+        }
+    }
+
+    func testFontSizeClampsToUpperBound() async throws {
+        store.setTerminalFontSize(99)
+        XCTAssertEqual(store.current.terminalFontSize, 24)
+        try await waitUntil("clamp'lenmiş değer diske indi") {
+            await self.config.config().terminalFontSize == 24
+        }
+    }
+
+    func testFontSizeBoundsAreInclusive() {
+        store.setTerminalFontSize(10)
+        XCTAssertEqual(store.current.terminalFontSize, 10)
+        store.setTerminalFontSize(24)
+        XCTAssertEqual(store.current.terminalFontSize, 24)
+        store.setTerminalFontSize(13)
+        XCTAssertEqual(store.current.terminalFontSize, 13)
+    }
+
+    func testNegativeFontSizeIsClampedNotRejected() {
+        store.setTerminalFontSize(-5)
+        XCTAssertEqual(store.current.terminalFontSize, 10)
+    }
+
+    // MARK: - additionalPaths intent'leri
+
+    func testAddAndRemoveAdditionalPath() async throws {
+        store.addAdditionalPath("/tmp/extra", type: .root)
+        XCTAssertEqual(store.current.additionalPaths.count, 1)
+        let id = try XCTUnwrap(store.current.additionalPaths.first?.id)
+        XCTAssertEqual(store.current.additionalPaths.first?.type, .root)
+
+        try await waitUntil("ekleme diske indi") {
+            await self.config.config().additionalPaths.count == 1
+        }
+
+        store.removeAdditionalPath(id: id)
+        XCTAssertTrue(store.current.additionalPaths.isEmpty)
+        try await waitUntil("silme diske indi") {
+            await self.config.config().additionalPaths.isEmpty
+        }
+    }
+
+    func testRemoveUnknownAdditionalPathIsNoop() {
+        store.addAdditionalPath("/tmp/extra", type: .repo)
+        store.removeAdditionalPath(id: "does-not-exist")
+        XCTAssertEqual(store.current.additionalPaths.count, 1)
     }
 }

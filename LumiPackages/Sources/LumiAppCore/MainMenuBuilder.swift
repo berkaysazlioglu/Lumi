@@ -20,7 +20,20 @@ enum MainMenuBuilder {
         let toggleFocusMode: Selector
     }
 
+    /// Kurulmuş menü ağacı — `install` bunu `NSApp`'e bağlar, testler doğrudan
+    /// gezer (menü kurulumu NSApp'ten bağımsız kalır).
+    struct Menus {
+        let mainMenu: NSMenu
+        let windowMenu: NSMenu
+    }
+
     static func install(actions: Actions) {
+        let menus = build(actions: actions)
+        NSApp.mainMenu = menus.mainMenu
+        NSApp.windowsMenu = menus.windowMenu
+    }
+
+    static func build(actions: Actions) -> Menus {
         let mainMenu = NSMenu()
 
         let appItem = NSMenuItem()
@@ -135,8 +148,7 @@ enum MainMenuBuilder {
         windowItem.submenu = windowMenu
         mainMenu.addItem(windowItem)
 
-        NSApp.mainMenu = mainMenu
-        NSApp.windowsMenu = windowMenu
+        return Menus(mainMenu: mainMenu, windowMenu: windowMenu)
     }
 
     private static func targeted(

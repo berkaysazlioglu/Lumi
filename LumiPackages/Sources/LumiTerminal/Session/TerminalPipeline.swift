@@ -26,10 +26,22 @@ final class TerminalPipeline: @unchecked Sendable {
     var onDisplayTitle: (@Sendable (String) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
 
-    init(queue: DispatchQueue, flow: FlowController = FlowController()) {
+    /// Scheduler'lar enjekte edilebilir (varsayılan = io queue üzerinde gerçek
+    /// dispatch timer'ı): orkestrasyon testleri 16 ms / 3 sn beklemeden,
+    /// deterministik olarak koşar (design/01 §7 "öncelikli test hedefleri").
+    init(
+        queue: DispatchQueue,
+        flow: FlowController = FlowController(),
+        coalescerScheduler: OneShotScheduling? = nil,
+        silenceScheduler: OneShotScheduling? = nil
+    ) {
         self.flow = flow
-        self.coalescer = OutputCoalescer(scheduler: DispatchOneShotScheduler(queue: queue))
-        self.silenceTimer = CodexSilenceTimer(scheduler: DispatchOneShotScheduler(queue: queue))
+        self.coalescer = OutputCoalescer(
+            scheduler: coalescerScheduler ?? DispatchOneShotScheduler(queue: queue)
+        )
+        self.silenceTimer = CodexSilenceTimer(
+            scheduler: silenceScheduler ?? DispatchOneShotScheduler(queue: queue)
+        )
 
         coalescer.onFlush = { [weak self] data in
             self?.onFlushBatch?(data)

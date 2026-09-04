@@ -1,19 +1,7 @@
 import XCTest
 import LumiKit
+import LumiTestSupport
 @testable import LumiState
-
-/// SessionStarterServicing fake'i — kaydeder, istenirse hata fırlatır.
-private actor FakeSessionStarter: SessionStarterServicing {
-    private(set) var startedPrompts: [String] = []
-    private var errorToThrow: LumiError?
-
-    func setError(_ error: LumiError?) { errorToThrow = error }
-
-    func start(prompt: String) async throws {
-        startedPrompts.append(prompt)
-        if let errorToThrow { throw errorToThrow }
-    }
-}
 
 @MainActor
 final class SessionScheduleStoreTests: XCTestCase {
@@ -31,8 +19,8 @@ final class SessionScheduleStoreTests: XCTestCase {
         return utcCalendar.date(from: components)!
     }
 
-    private func makeStore(now: Date) -> (SessionScheduleStore, FakeSessionStarter) {
-        let starter = FakeSessionStarter()
+    private func makeStore(now: Date) -> (SessionScheduleStore, FakeSessionStarterService) {
+        let starter = FakeSessionStarterService()
         let store = SessionScheduleStore(
             starter: starter,
             calendar: utcCalendar,

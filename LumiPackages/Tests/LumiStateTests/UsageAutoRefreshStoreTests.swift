@@ -1,5 +1,6 @@
 import XCTest
 @testable import LumiKit
+import LumiTestSupport
 @testable import LumiState
 
 /// UsageAutoRefreshStore davranışı (karar 20): idle-gate'li tek adım — kullanıcı

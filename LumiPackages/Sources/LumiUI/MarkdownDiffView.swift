@@ -46,7 +46,7 @@ struct MarkdownDiffView: View {
                 .background(Theme.bgElevated)
         case .line(let line):
             HStack(alignment: .top, spacing: 8) {
-                Text(gutterLabel(line))
+                Text(MarkdownRowFormatting.gutterLabel(line))
                     .font(.system(size: fontSize - 2, design: .monospaced))
                     .foregroundStyle(Theme.textMuted)
                     .frame(width: Self.gutterWidth, alignment: .trailing)
@@ -71,7 +71,7 @@ struct MarkdownDiffView: View {
         switch line.style {
         case .heading(let level):
             Text(styledInline(line.content))
-                .font(.system(size: headingSize(level), weight: .bold))
+                .font(.system(size: MarkdownRowFormatting.headingSize(level, fontSize: fontSize), weight: .bold))
                 .foregroundStyle(level <= 2 ? Theme.accentPrimary : Theme.textPrimary)
                 .padding(.top, level <= 2 ? 6 : 3)
         case .bullet(let indent):
@@ -107,7 +107,7 @@ struct MarkdownDiffView: View {
                 .padding(.vertical, 1)
                 .background(Theme.bgDeep)
         case .fence:
-            Text(fenceLabel(line.content))
+            Text(MarkdownRowFormatting.fenceLabel(line.content))
                 .font(.system(size: fontSize - 3, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
                 .padding(.horizontal, 6)
@@ -133,37 +133,11 @@ struct MarkdownDiffView: View {
             .foregroundColor(Theme.textPrimary)
     }
 
-    /// ```` ```swift ```` → "swift"; dilsiz fence'te sadece işaret gösterilir.
-    private func fenceLabel(_ content: String) -> String {
-        let language = content.drop { $0 == "`" || $0 == "~" }
-            .trimmingCharacters(in: .whitespaces)
-        return language.isEmpty ? "···" : language.lowercased()
-    }
-
-    private func headingSize(_ level: Int) -> CGFloat {
-        switch level {
-        case 1: return fontSize + 7
-        case 2: return fontSize + 4
-        case 3: return fontSize + 2
-        default: return fontSize + 1
-        }
-    }
-
     private func styledInline(_ text: String) -> AttributedString {
         MarkdownInlineStyler.styled(text, fontSize: fontSize)
     }
 
     // MARK: - Diff işaretleri
-
-    /// "12 +" / "9 −" / "12" — sağa yaslı; numarası olmayan taraf boş kalır.
-    private func gutterLabel(_ line: MarkdownDiffBuilder.Line) -> String {
-        let number = (line.newLineNumber ?? line.oldLineNumber).map(String.init) ?? ""
-        switch line.kind {
-        case .addition: return "\(number) +"
-        case .deletion: return "\(number) −"
-        case .context: return number
-        }
-    }
 
     private func markerColor(_ kind: DiffLine.Kind) -> Color {
         switch kind {
@@ -186,5 +160,35 @@ struct MarkdownDiffView: View {
             .font(.system(size: fontSize, design: .monospaced))
             .foregroundStyle(Theme.textMuted)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// `MarkdownDiffView` satırlarının SAF biçimlendirme kuralları — view'dan
+/// bağımsız oldukları için ayrı bir enum'da durur ve birim testten görünür.
+enum MarkdownRowFormatting {
+    /// ```` ```swift ```` → "swift"; dilsiz fence'te sadece işaret gösterilir.
+    static func fenceLabel(_ content: String) -> String {
+        let language = content.drop { $0 == "`" || $0 == "~" }
+            .trimmingCharacters(in: .whitespaces)
+        return language.isEmpty ? "···" : language.lowercased()
+    }
+
+    static func headingSize(_ level: Int, fontSize: CGFloat) -> CGFloat {
+        switch level {
+        case 1: return fontSize + 7
+        case 2: return fontSize + 4
+        case 3: return fontSize + 2
+        default: return fontSize + 1
+        }
+    }
+
+    /// "12 +" / "9 −" / "12" — sağa yaslı; numarası olmayan taraf boş kalır.
+    static func gutterLabel(_ line: MarkdownDiffBuilder.Line) -> String {
+        let number = (line.newLineNumber ?? line.oldLineNumber).map(String.init) ?? ""
+        switch line.kind {
+        case .addition: return "\(number) +"
+        case .deletion: return "\(number) −"
+        case .context: return number
+        }
     }
 }

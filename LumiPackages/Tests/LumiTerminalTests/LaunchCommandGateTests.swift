@@ -3,11 +3,21 @@ import XCTest
 
 @MainActor
 final class LaunchCommandGateTests: XCTestCase {
+    /// "Ateşlememeli" assert'lerinde sabit uyku kaçınılmaz; marj gate'in KENDİ
+    /// sabitlerinden türetilir (magic number yok): en uzun iç bekleyişin katı
+    /// dolduktan sonra hâlâ ateşlenmemişse, hiç ateşlenmeyecektir.
+    private static let negativeAssertFactor = 3
+
     private func makeGate(
         quiet: Duration = .milliseconds(30),
         maxWait: Duration = .milliseconds(200)
     ) -> LaunchCommandGate {
         LaunchCommandGate(quietWindow: quiet, maxWait: maxWait)
+    }
+
+    /// Gate sabitlerine göre ifade edilen "hiçbir şey olmamalı" penceresi.
+    private func negativeAssertWindow(quiet: Duration, maxWait: Duration) -> Duration {
+        max(quiet, maxWait) * Self.negativeAssertFactor
     }
 
     private func waitUntil(
@@ -72,30 +82,36 @@ final class LaunchCommandGateTests: XCTestCase {
 
     func testFiresExactlyOnce() async {
         // Arrange — hem sessizlik hem maxWait tetiklenebilecek senaryo
-        let gate = makeGate(quiet: .milliseconds(20), maxWait: .milliseconds(60))
+        let quiet = Duration.milliseconds(20)
+        let maxWait = Duration.milliseconds(60)
+        let gate = makeGate(quiet: quiet, maxWait: maxWait)
         var fired = 0
         gate.start { fired += 1 }
 
-        // Act
+        // Act — ateşlemeyi POLLING ile bekle (sabit uyku yerine)
         gate.noteOutput()
-        try? await Task.sleep(for: .milliseconds(150))
-        gate.noteOutput() // ateşten SONRA gelen çıktı yeniden tetiklememeli
+        await waitUntil { fired > 0 }
+        XCTAssertEqual(fired, 1)
+
+        // Act — ateşten SONRA gelen çıktı yeniden tetiklememeli
+        gate.noteOutput()
+        try? await Task.sleep(for: negativeAssertWindow(quiet: quiet, maxWait: maxWait))
 
         // Assert
-        await waitUntil { fired > 0 }
-        try? await Task.sleep(for: .milliseconds(60))
         XCTAssertEqual(fired, 1)
     }
 
     func testCancelPreventsFiring() async {
         // Arrange
-        let gate = makeGate(quiet: .milliseconds(20), maxWait: .milliseconds(50))
+        let quiet = Duration.milliseconds(20)
+        let maxWait = Duration.milliseconds(50)
+        let gate = makeGate(quiet: quiet, maxWait: maxWait)
         var fired = 0
         gate.start { fired += 1 }
 
-        // Act
+        // Act — iptal sonrası hem quiet hem maxWait penceresi geçmiş olmalı
         gate.cancel()
-        try? await Task.sleep(for: .milliseconds(120))
+        try? await Task.sleep(for: negativeAssertWindow(quiet: quiet, maxWait: maxWait))
 
         // Assert
         XCTAssertEqual(fired, 0)

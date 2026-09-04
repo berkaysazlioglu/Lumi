@@ -47,15 +47,22 @@ let package = Package(
                 .copy("Resources/logo.png"),
             ]
         ),
-        .executableTarget(
-            name: "LumiApp",
+        // Uygulama katmanı iki parçadır: test edilebilir kütüphane (`LumiAppCore`)
+        // + yalnız `main.swift` içeren ince executable (`LumiApp` → ürün adı `Lumi`).
+        .target(
+            name: "LumiAppCore",
             dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"],
             resources: [.copy("Resources/icon.png")]
         ),
-        .testTarget(name: "LumiKitTests", dependencies: ["LumiKit"]),
-        .testTarget(name: "LumiTerminalTests", dependencies: ["LumiTerminal"]),
-        .testTarget(name: "LumiServicesTests", dependencies: ["LumiServices"]),
-        .testTarget(name: "LumiStateTests", dependencies: ["LumiState"]),
-        .testTarget(name: "LumiUITests", dependencies: ["LumiUI"]),
+        .executableTarget(name: "LumiApp", dependencies: ["LumiAppCore"]),
+        // Paylaşılan el yazımı fake'ler (design/00 §3). Test-only olduğu için
+        // Sources/ değil Tests/ altında durur; hiçbir ürün ona bağlı değildir.
+        .target(name: "LumiTestSupport", dependencies: ["LumiKit"], path: "Tests/LumiTestSupport"),
+        .testTarget(name: "LumiKitTests", dependencies: ["LumiKit", "LumiTestSupport"]),
+        .testTarget(name: "LumiTerminalTests", dependencies: ["LumiTerminal", "LumiTestSupport"]),
+        .testTarget(name: "LumiServicesTests", dependencies: ["LumiServices", "LumiTestSupport"]),
+        .testTarget(name: "LumiStateTests", dependencies: ["LumiState", "LumiTestSupport"]),
+        .testTarget(name: "LumiUITests", dependencies: ["LumiUI", "LumiTestSupport"]),
+        .testTarget(name: "LumiAppTests", dependencies: ["LumiAppCore", "LumiTestSupport"]),
     ]
 )

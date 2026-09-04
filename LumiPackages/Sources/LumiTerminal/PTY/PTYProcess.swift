@@ -131,8 +131,23 @@ public final class PTYProcess: @unchecked Sendable {
 
     deinit {
         // Normal yol kill/exit üzerinden temizler; bu, test/hata yolları için emniyettir.
-        if !cleanedUp && masterFD >= 0 {
-            close(masterFD)
+        // Askıda (suspended) bir DispatchSource release edilirse libdispatch trap'ler
+        // ("Release of a suspended object") — önce resume, sonra cancel şart. Cancel
+        // handler'ları `[weak self]` yakaladığı için burada artık koşmaz; fd'yi
+        // değerle yakalayan yeni bir handler ile kapatırız.
+        guard !cleanedUp else { return }
+        let fd = masterFD
+        if let write = writeSource {
+            if !writeArmed { write.resume() }
+            write.setCancelHandler {}
+            write.cancel()
+        }
+        if let read = readSource {
+            read.setCancelHandler { if fd >= 0 { close(fd) } }
+            if readSuspended { read.resume() }
+            read.cancel()
+        } else if fd >= 0 && !masterClosed {
+            close(fd)
         }
     }
 

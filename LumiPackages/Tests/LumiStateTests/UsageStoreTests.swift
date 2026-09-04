@@ -1,5 +1,6 @@
 import XCTest
 @testable import LumiKit
+import LumiTestSupport
 @testable import LumiState
 
 /// UsageStore davranışı (design/05 §6): tek-yön servis→store, manuel yenileme +
@@ -110,5 +111,58 @@ extension UsageStoreTests {
         )
 
         XCTAssertEqual(store.provider, .codex)
+    }
+
+    // MARK: - minRefreshInterval kapısı (2.8 tamamlayıcıları)
+
+    func testCanRefreshIsTrueBeforeAnyAttempt() {
+        let store = UsageStore(service: FakeUsageService(outcome: .success(makeSnapshot(percent: 1))))
+        XCTAssertTrue(store.canRefresh, "hiç denenmemişken kapı açık")
+    }
+
+    func testIntervalBoundaryIsInclusive() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 10)))
+        let store = UsageStore(service: service, now: { clock.value })
+
+        await store.loadInitialIfNeeded()
+        clock.value = Date(timeIntervalSince1970: 1000 + UsageStore.minRefreshInterval - 0.001)
+        XCTAssertFalse(store.canRefresh, "aralık dolmadan bir tık önce kapalı")
+
+        clock.value = Date(timeIntervalSince1970: 1000 + UsageStore.minRefreshInterval)
+        XCTAssertTrue(store.canRefresh, "tam aralıkta (>=) açık")
+        await store.refresh()
+        let count = await service.fetchCount
+        XCTAssertEqual(count, 2)
+    }
+
+    /// Kapı BAŞARISIZ denemede de kurulur — hata döngüsünde spam olmaz.
+    func testFailedAttemptAlsoArmsTheGate() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let service = FakeUsageService(outcome: .failure(.usageUnavailable(detail: "offline")))
+        let store = UsageStore(service: service, now: { clock.value })
+
+        await store.loadInitialIfNeeded()
+        XCTAssertFalse(store.canRefresh)
+
+        clock.value = Date(timeIntervalSince1970: 1010)
+        await store.refresh()
+        let count = await service.fetchCount
+        XCTAssertEqual(count, 1, "hata sonrası da min aralık beklenir")
+    }
+
+    /// Kapalı gösterge hiç istek atmaz — min aralık dolmuş olsa bile (karar 32).
+    func testDisabledStoreIgnoresTheGateEntirely() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 10)))
+        let store = UsageStore(service: service, now: { clock.value })
+
+        store.setEnabled(false)
+        clock.value = Date(timeIntervalSince1970: 9999)
+        XCTAssertFalse(store.canRefresh)
+        await store.refresh()
+
+        let count = await service.fetchCount
+        XCTAssertEqual(count, 0)
     }
 }

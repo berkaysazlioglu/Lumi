@@ -5,6 +5,7 @@ import XCTest
 final class TestScheduler: OneShotScheduling {
     private(set) var lastInterval: TimeInterval?
     private(set) var scheduleCount = 0
+    private(set) var cancelCount = 0
     private var block: (() -> Void)?
 
     var isScheduled: Bool { block != nil }
@@ -16,14 +17,18 @@ final class TestScheduler: OneShotScheduling {
     }
 
     func cancel() {
+        cancelCount += 1
         block = nil
         lastInterval = nil
     }
 
-    func fire() {
-        let pending = block
+    /// Dönüş: bekleyen bir blok gerçekten çalıştı mı (iptal edilmiş timer sessizdir).
+    @discardableResult
+    func fire() -> Bool {
+        guard let pending = block else { return false }
         block = nil
-        pending?()
+        pending()
+        return true
     }
 }
 
