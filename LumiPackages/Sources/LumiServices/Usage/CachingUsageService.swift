@@ -13,9 +13,11 @@ import LumiKit
 /// - Eşzamanlı çağrılar actor sayesinde serileşir; TTL içinde ikinci çağrı
 ///   ağa hiç çıkmaz.
 ///
-/// **Bağlanmadı:** K38 (aralık seti / TTL) kararı verilene kadar composition
-/// root'ta kullanılmaz; `UsageStore.minRefreshInterval` kapısı yerinde durur.
-public actor CachingUsageService<ClockType: Clock>: UsageServicing
+/// **Bağlı (K38-A):** `LiveServiceRegistry` her sağlayıcının servisini 300 sn
+/// TTL ile bu dekoratöre sarar (design/05 §cache "≥5 dk TTL"). `UsageStore`'un
+/// 60 sn'lik `minRefreshInterval` anti-spam kapısı ayrıca yerinde durur; ikisi
+/// farklı işleri yapar (kapı tıklama sıklığını, TTL ağ trafiğini sınırlar).
+public actor CachingUsageService<ClockType: Clock>: UsageServicing, UsageCacheInvalidating
 where ClockType.Duration == Duration {
     public nonisolated let provider: AgentProvider
 
@@ -47,6 +49,11 @@ where ClockType.Duration == Duration {
     /// Cache'i elle boşaltır (kullanıcının açık "refresh" niyeti için).
     public func invalidate() {
         cached = nil
+    }
+
+    /// `UsageCacheInvalidating` — `invalidate()`'in protokol yüzü.
+    public func invalidateCache() async {
+        invalidate()
     }
 
     private func freshSnapshot() -> UsageSnapshot? {

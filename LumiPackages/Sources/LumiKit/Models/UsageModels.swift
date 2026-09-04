@@ -58,16 +58,6 @@ public struct UsageLimit: Sendable, Equatable, Identifiable {
         case .other: return "other.\(rawLabel.lowercased())"
         }
     }
-
-    /// UI başlığı — tanınan türler normalize edilir, tanınmayan ham etiketi kullanır.
-    public var title: String {
-        switch kind {
-        case .session: return "5-hour session"
-        case .weeklyAll: return "Weekly (all models)"
-        case .weeklyModel(let name): return "Weekly (\(name))"
-        case .other: return rawLabel
-        }
-    }
 }
 
 /// `claude -p "/usage"` çıktısının yapısal hali (design/05 §5). Immutable.

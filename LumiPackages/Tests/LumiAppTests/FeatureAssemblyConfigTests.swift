@@ -244,7 +244,7 @@ final class FeatureAssemblyConfigTests: XCTestCase {
     /// Karar 11: `false` da propagate edilir (kapatma sinyali kaybolmaz).
     func testAutoMinimizeDisabledPropagates() {
         let assembly = build(TerminalFeatureAssembly())
-        shared.terminals.autoMinimizeOnSend = true
+        shared.terminals.applyAutoMinimize(true)
         var old = AppConfig.defaults
         old.autoMinimizeOnSend = true
         let change = changed(from: old) { $0.autoMinimizeOnSend = false }

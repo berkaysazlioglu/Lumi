@@ -142,7 +142,7 @@ private struct UsagePopover: View {
                 // Limit sayısı CLI'a göre değişir (model satırları eklenip
                 // kaldırılabilir) → listeyi olduğu gibi gez.
                 ForEach(snapshot.limits) { limit in
-                    UsageWindowRow(title: limit.title, window: limit.window)
+                    UsageWindowRow(title: limit.displayTitle, window: limit.window)
                 }
                 if snapshot.limits.isEmpty {
                     Text("No limit reported.")

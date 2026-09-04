@@ -10,15 +10,6 @@ public enum TerminalCursorShape: String, Codable, Sendable, CaseIterable, Identi
 
     public var id: String { rawValue }
 
-    /// UI etiketleri (segmented seçim).
-    public var label: String {
-        switch self {
-        case .block: return "Block"
-        case .underline: return "Underline"
-        case .bar: return "Bar"
-        }
-    }
-
     /// Geçersiz/bilinmeyen string → `.block` (additive alan güvenliği, karar 9).
     public static func parse(_ raw: String) -> TerminalCursorShape {
         TerminalCursorShape(rawValue: raw) ?? .block

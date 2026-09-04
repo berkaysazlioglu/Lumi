@@ -105,6 +105,59 @@ extension UsageStoreTests {
         XCTAssertEqual(count, 2)
     }
 
+    // MARK: - TTL cache köprüsü (K38-A)
+
+    /// Manuel yenileme, servis zincirindeki TTL cache'ini AÇIKÇA geçersizler —
+    /// aksi hâlde kullanıcı 5 dk boyunca aynı bayat yüzdeyi görürdü.
+    func testManualRefreshInvalidatesTheServiceCache() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 10)))
+        let store = UsageStore(service: service, cache: service, now: { clock.value })
+
+        await store.loadInitialIfNeeded()
+        var invalidations = await service.invalidateCount
+        XCTAssertEqual(invalidations, 0, "ilk yükleme cache'i boşaltmaz")
+
+        clock.value = Date(timeIntervalSince1970: 1100)
+        await store.refresh()
+
+        invalidations = await service.invalidateCount
+        XCTAssertEqual(invalidations, 1)
+        let fetches = await service.fetchCount
+        XCTAssertEqual(fetches, 2)
+    }
+
+    /// Min-interval kapısına takılan yenileme cache'e de dokunmaz (tıklama
+    /// spam'i cache'i boşaltıp bir sonraki isteği pahalılaştırmasın).
+    func testBlockedRefreshDoesNotInvalidateTheCache() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 10)))
+        let store = UsageStore(service: service, cache: service, now: { clock.value })
+
+        await store.loadInitialIfNeeded()
+        clock.value = Date(timeIntervalSince1970: 1010)
+        await store.refresh()
+
+        let invalidations = await service.invalidateCount
+        XCTAssertEqual(invalidations, 0)
+    }
+
+    /// Cache'siz kaynakta (dekoratör kurulmamışsa) store aynen çalışır.
+    func testRefreshWorksWithoutACacheInjected() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 10)))
+        let store = UsageStore(service: service, now: { clock.value })
+
+        await store.loadInitialIfNeeded()
+        clock.value = Date(timeIntervalSince1970: 1100)
+        await store.refresh()
+
+        let fetches = await service.fetchCount
+        XCTAssertEqual(fetches, 2)
+        let invalidations = await service.invalidateCount
+        XCTAssertEqual(invalidations, 0)
+    }
+
     func testProviderIsTakenFromService() {
         let store = UsageStore(
             service: FakeUsageService(provider: .codex, outcome: .success(makeSnapshot(percent: 1)))

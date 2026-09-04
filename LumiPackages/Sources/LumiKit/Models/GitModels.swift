@@ -36,17 +36,6 @@ public enum FileChangeStatus: String, Sendable, Equatable {
     case deleted
     case renamed
     case untracked
-
-    /// Changes panelindeki tek harfli rozet.
-    public var badge: String {
-        switch self {
-        case .modified: return "M"
-        case .added: return "A"
-        case .deleted: return "D"
-        case .renamed: return "R"
-        case .untracked: return "U"
-        }
-    }
 }
 
 public struct GitFileChange: Sendable, Equatable, Identifiable {

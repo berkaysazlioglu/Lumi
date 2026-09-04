@@ -24,11 +24,11 @@ final class UsageOutputParserTests: XCTestCase {
         XCTAssertNil(snapshot.weekly(model: "Opus"))
     }
 
-    func testLimitsKeepCliOrderAndTitles() {
+    func testLimitsKeepCliOrderAndKinds() {
         let snapshot = UsageOutputParser.parse(fullOutput, now: now)
         XCTAssertEqual(
-            snapshot.limits.map(\.title),
-            ["5-hour session", "Weekly (all models)", "Weekly (Sonnet)"]
+            snapshot.limits.map(\.kind),
+            [.session, .weeklyAll, .weeklyModel("Sonnet")]
         )
     }
 
@@ -73,7 +73,6 @@ final class UsageOutputParserTests: XCTestCase {
         let snapshot = UsageOutputParser.parse(output, now: now)
         XCTAssertEqual(snapshot.limits.count, 2)
         XCTAssertEqual(snapshot.limits.last?.kind, .weeklyModel("Somethingnew"))
-        XCTAssertEqual(snapshot.limits.last?.title, "Weekly (Somethingnew)")
     }
 
     /// "What's contributing" bölümü limit değildir — listeye sızmamalı.
@@ -128,7 +127,7 @@ final class UsageOutputParserTests: XCTestCase {
         let output = "Current week (Opus only): 7% used · resets Jun 14 at 9:00am (Europe/Istanbul)"
         let snapshot = UsageOutputParser.parse(output, now: now)
         XCTAssertEqual(snapshot.weekly(model: "Opus")?.percentUsed, 7)
-        XCTAssertEqual(snapshot.limits.first?.title, "Weekly (Opus)")
+        XCTAssertEqual(snapshot.limits.first?.kind, .weeklyModel("Opus"))
     }
 
     func testLineWithoutResetStillKeepsPercent() {

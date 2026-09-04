@@ -4,8 +4,8 @@ import LumiTestSupport
 import XCTest
 @testable import LumiState
 
-/// FileViewerStore'un dosya türüne göre yönlendirmesi (karar 21): görseller
-/// önizleme yoluna, metin/markdown mevcut diff yoluna gider.
+/// FileViewerStore'un sum-type sunumu (refactor 5.3) + dosya türüne göre
+/// yönlendirme (karar 21) + TEK hata kuralı (karar 5).
 @MainActor
 final class FileViewerStoreTests: XCTestCase {
     private func makeStore(_ git: FakeGitService) -> FileViewerStore {
@@ -18,18 +18,37 @@ final class FileViewerStoreTests: XCTestCase {
         after: Data([4, 5, 6])
     )
 
+    private func commit(_ hash: String = "abc123def", short: String = "abc123d") -> GitCommit {
+        GitCommit(
+            hash: hash,
+            shortHash: short,
+            message: "change",
+            author: "tester",
+            date: Date(timeIntervalSince1970: 0)
+        )
+    }
+
     // MARK: - view modu
 
     func testPresentViewLoadsTextThroughReadFile() async {
         let git = FakeGitService()
+        await git.setFileContent("# hello")
         let store = makeStore(git)
 
         await store.presentView(repoPath: "/repo", filePath: "docs/readme.md")
 
+        XCTAssertEqual(
+            store.presentation,
+            .file(
+                repoPath: "/repo",
+                filePath: "docs/readme.md",
+                mode: .view,
+                content: .loaded(.text("# hello"))
+            )
+        )
         XCTAssertTrue(store.isPresented)
         XCTAssertEqual(store.mode, .view)
         XCTAssertEqual(store.previewKind, .markdown)
-        XCTAssertNil(store.imagePreview)
         let readFileCalls = await git.readFileCalls
         XCTAssertEqual(readFileCalls, ["docs/readme.md"])
     }
@@ -42,8 +61,7 @@ final class FileViewerStoreTests: XCTestCase {
         await store.presentView(repoPath: "/repo", filePath: "assets/logo.png")
 
         XCTAssertEqual(store.previewKind, .image)
-        XCTAssertEqual(store.imagePreview, samplePreview)
-        XCTAssertNil(store.fileContent)
+        XCTAssertEqual(store.content, .loaded(.image(samplePreview)))
         let readFileCalls = await git.readFileCalls
         XCTAssertTrue(readFileCalls.isEmpty)
         // view modunda karşılaştırma yok → sha nil (HEAD ↔ disk)
@@ -61,20 +79,20 @@ final class FileViewerStoreTests: XCTestCase {
         await store.presentDiff(repoPath: "/repo", filePath: "assets/logo.png")
 
         XCTAssertEqual(store.mode, .diff)
-        XCTAssertEqual(store.imagePreview, samplePreview)
-        XCTAssertNil(store.diff)
+        XCTAssertEqual(store.content, .loaded(.image(samplePreview)))
         let fileDiffCalls = await git.fileDiffCalls
         XCTAssertTrue(fileDiffCalls.isEmpty)
     }
 
     func testPresentDiffKeepsTextPathForNonImage() async {
         let git = FakeGitService()
+        let diff = UnifiedDiff(filePath: "src/main.swift", isBinary: false, hunks: [])
+        await git.setDiff(diff)
         let store = makeStore(git)
 
         await store.presentDiff(repoPath: "/repo", filePath: "src/main.swift")
 
-        XCTAssertNotNil(store.diff)
-        XCTAssertNil(store.imagePreview)
+        XCTAssertEqual(store.content, .loaded(.diff(diff)))
         let fileDiffCalls = await git.fileDiffCalls
         XCTAssertEqual(fileDiffCalls, ["src/main.swift"])
     }
@@ -88,24 +106,17 @@ final class FileViewerStoreTests: XCTestCase {
             CommitFile(path: "docs/readme.md", status: .modified),
             CommitFile(path: "assets/logo.png", status: .modified),
         ])
+        let diff = UnifiedDiff(filePath: "docs/readme.md", isBinary: false, hunks: [])
+        await git.setDiff(diff)
         let store = makeStore(git)
-        let commit = GitCommit(
-            hash: "abc123def",
-            shortHash: "abc123d",
-            message: "change",
-            author: "tester",
-            date: Date(timeIntervalSince1970: 0)
-        )
 
-        await store.presentCommit(repoPath: "/repo", commit: commit)
+        await store.presentCommit(repoPath: "/repo", commit: commit())
         XCTAssertEqual(store.mode, .commitDiff)
         XCTAssertEqual(store.filePath, "docs/readme.md")
-        XCTAssertNotNil(store.diff)
-        XCTAssertNil(store.imagePreview)
+        XCTAssertEqual(store.content, .loaded(.diff(diff)))
 
         await store.selectCommitFile("assets/logo.png")
-        XCTAssertEqual(store.imagePreview, samplePreview)
-        XCTAssertNil(store.diff)
+        XCTAssertEqual(store.content, .loaded(.image(samplePreview)))
         // Commit modunda önizleme sha'ya bağlı (sha^ ↔ sha)
         let previewCalls = await git.imagePreviewCalls
         XCTAssertEqual(previewCalls, [.init(file: "assets/logo.png", sha: "abc123def")])
@@ -113,8 +124,30 @@ final class FileViewerStoreTests: XCTestCase {
         XCTAssertEqual(store.commitContext?.files.count, 2)
 
         await store.selectCommitFile("docs/readme.md")
-        XCTAssertNil(store.imagePreview)
-        XCTAssertNotNil(store.diff)
+        XCTAssertEqual(store.content, .loaded(.diff(diff)))
+    }
+
+    func testCommitWithNoFilesShowsInfoToastAndDoesNotPresent() async {
+        let git = FakeGitService()
+        await git.setCommitFiles([])
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let store = FileViewerStore(git: git, toasts: toasts)
+
+        await store.presentCommit(repoPath: "/repo", commit: commit("abcdef1234", short: "abcdef1"))
+
+        XCTAssertEqual(store.presentation, .hidden)
+        XCTAssertEqual(toasts.toasts.first?.kind, .info)
+        XCTAssertEqual(toasts.toasts.first?.title, "abcdef1")
+    }
+
+    func testSelectCommitFileWithoutContextIsNoop() async {
+        let git = FakeGitService()
+        let store = makeStore(git)
+        await store.selectCommitFile("a.txt")
+
+        XCTAssertEqual(store.presentation, .hidden)
+        let calls = await git.commitFileDiffCalls
+        XCTAssertTrue(calls.isEmpty)
     }
 
     // MARK: - Markdown toggle / kapanış
@@ -126,23 +159,67 @@ final class FileViewerStoreTests: XCTestCase {
         XCTAssertFalse(store.rendersMarkdown)
     }
 
-    func testCloseClearsImagePreview() async {
+    /// Render'lı markdown TÜREVDİR: dosya uzantısı + oturumluk tercih.
+    func testIsRenderedMarkdownDerivesFromExtensionAndToggle() async {
         let git = FakeGitService()
-        await git.setPreview(samplePreview)
         let store = makeStore(git)
 
-        await store.presentView(repoPath: "/repo", filePath: "assets/logo.png")
-        store.close()
+        await store.presentView(repoPath: "/repo", filePath: "docs/readme.md")
+        XCTAssertTrue(store.isRenderedMarkdown)
 
-        XCTAssertFalse(store.isPresented)
-        XCTAssertNil(store.imagePreview)
-        XCTAssertEqual(store.filePath, "")
+        store.rendersMarkdown = false
+        XCTAssertFalse(store.isRenderedMarkdown)
+
+        store.rendersMarkdown = true
+        await store.presentView(repoPath: "/repo", filePath: "src/main.swift")
+        XCTAssertFalse(store.isRenderedMarkdown, "markdown olmayan dosyada render yok")
     }
 
-    // MARK: - Hata yolları (KARAKTERİZASYON — mevcut davranış belgeleniyor)
+    /// `close()` TEK atamadır: sunum `.hidden` olur, tüm türevler sıfırlanır.
+    /// (Eski modelde `mode`/`repoPath` bayat kalıyordu — sum type bunu kaldırdı.)
+    func testCloseResetsEveryDerivedField() async {
+        let git = FakeGitService()
+        let store = makeStore(git)
+        await store.presentDiff(repoPath: "/repo", filePath: "a.txt")
+        store.rendersMarkdown = false
 
-    /// Karar 5 koridoru: okuma hatası toast'a düşer ve modal AÇILMAZ.
-    func testPresentViewFailureShowsToastAndDoesNotPresent() async {
+        store.close()
+
+        XCTAssertEqual(store.presentation, .hidden)
+        XCTAssertFalse(store.isPresented)
+        XCTAssertEqual(store.repoPath, "")
+        XCTAssertEqual(store.filePath, "")
+        XCTAssertNil(store.commitContext)
+        XCTAssertNil(store.content)
+        XCTAssertFalse(store.rendersMarkdown, "markdown tercihi oturum boyunca sürer")
+    }
+
+    // MARK: - Yarış koruması
+
+    /// Yavaş dönen ilk yükleme, kullanıcının bu arada açtığı yeni dosyayı EZMEZ
+    /// (eski modelde alanlar sırasız yazılabiliyordu).
+    func testStaleLoadDoesNotOverwriteNewerPresentation() async {
+        let git = FakeGitService()
+        await git.setReadFileDelay(.milliseconds(120))
+        await git.setFileContent("slow content")
+        let store = makeStore(git)
+
+        let slow = Task { await store.presentView(repoPath: "/repo", filePath: "slow.txt") }
+        await Task.yield()
+        await git.setReadFileDelay(.zero)
+        await git.setFileContent("fast content")
+        await store.presentView(repoPath: "/repo", filePath: "fast.txt")
+        await slow.value
+
+        XCTAssertEqual(store.filePath, "fast.txt")
+        XCTAssertEqual(store.content, .loaded(.text("fast content")))
+    }
+
+    // MARK: - Hata yolu: TEK kural (karar 5)
+
+    /// Yükleme hatası → içerik `.failed` + toast; modal YENİ dosyanın adıyla
+    /// açılır (eski davranış: hiç açılmıyordu).
+    func testFailedLoadPresentsFailedContentAndToast() async {
         let git = FakeGitService()
         await git.setError(.gitFailed(operation: "show", detail: "no such file"))
         let toasts = ToastStore(autoDismissAfter: 60)
@@ -150,36 +227,34 @@ final class FileViewerStoreTests: XCTestCase {
 
         await store.presentView(repoPath: "/repo", filePath: "missing.txt")
 
-        XCTAssertFalse(store.isPresented)
+        XCTAssertTrue(store.isPresented)
+        XCTAssertEqual(store.filePath, "missing.txt")
+        XCTAssertEqual(store.content, .failed("Git show failed: no such file"))
         XCTAssertEqual(toasts.toasts.count, 1)
-        XCTAssertEqual(store.filePath, "", "hatalı dosya adı state'e yazılmaz")
     }
 
-    /// ŞÜPHELİ (bug adayı — Faz 5'te ele alınacak, burada yalnız BELGELENİR):
-    /// açık bir dosya varken ikinci dosyanın okuması başarısız olursa modal
-    /// ÖNCEKİ dosyanın adıyla ve ÖNCEKİ içeriğiyle açık kalır — kullanıcı yeni
-    /// dosyayı açtığını sanabilir. Beklenen: ya modal kapanmalı ya da içerik
-    /// "yüklenemedi" durumuna geçmeli.
-    func testFailedSecondPresentLeavesPreviousFileVisible() async {
+    /// Eski tutarsızlık #1 kalktı: başarısız ikinci dosya ÖNCEKİ içeriği
+    /// ekranda bırakmaz.
+    func testFailedSecondPresentNeverKeepsPreviousFileVisible() async {
         let git = FakeGitService()
         await git.setFileContent("first content")
         let toasts = ToastStore(autoDismissAfter: 60)
         let store = FileViewerStore(git: git, toasts: toasts)
 
         await store.presentView(repoPath: "/repo", filePath: "a.txt")
-        XCTAssertEqual(store.fileContent, "first content")
+        XCTAssertEqual(store.content, .loaded(.text("first content")))
 
         await git.setError(.gitFailed(operation: "show", detail: "boom"))
         await store.presentView(repoPath: "/repo", filePath: "b.txt")
 
-        XCTAssertTrue(store.isPresented, "modal açık KALIR")
-        XCTAssertEqual(store.filePath, "a.txt", "eski dosya adı görünmeye devam eder")
-        XCTAssertEqual(store.fileContent, "first content", "eski içerik ekranda kalır")
-        XCTAssertEqual(toasts.toasts.count, 1, "hata en azından görünür kılınır")
+        XCTAssertEqual(store.filePath, "b.txt", "yeni dosya adı gösterilir")
+        XCTAssertEqual(store.content, .failed("Git show failed: boom"))
+        XCTAssertNil(store.content?.value, "eski içerik ekranda kalmaz")
+        XCTAssertEqual(toasts.toasts.count, 1)
     }
 
-    /// Aynı karakterizasyon diff yolunda: başarısız diff önceki diff'i bırakır.
-    func testFailedDiffLeavesPreviousDiffVisible() async {
+    /// Eski tutarsızlık #2 kalktı: diff yolu da aynı kurala uyar.
+    func testFailedDiffDoesNotKeepPreviousDiffVisible() async {
         let git = FakeGitService()
         let diff = UnifiedDiff(filePath: "a.txt", isBinary: false, hunks: [])
         await git.setDiff(diff)
@@ -187,18 +262,18 @@ final class FileViewerStoreTests: XCTestCase {
         let store = FileViewerStore(git: git, toasts: toasts)
 
         await store.presentDiff(repoPath: "/repo", filePath: "a.txt")
-        XCTAssertEqual(store.diff, diff)
+        XCTAssertEqual(store.content, .loaded(.diff(diff)))
 
         await git.setError(.gitFailed(operation: "diff", detail: "boom"))
         await store.presentDiff(repoPath: "/repo", filePath: "b.txt")
 
-        XCTAssertEqual(store.filePath, "a.txt")
-        XCTAssertEqual(store.diff, diff, "eski diff ekranda kalır")
+        XCTAssertEqual(store.filePath, "b.txt")
+        XCTAssertEqual(store.content, .failed("Git diff failed: boom"))
     }
 
-    /// Commit dosyası seçiminde hata: `diff` ÖNCE temizlendiği için ekran boşalır
-    /// (yukarıdaki iki yoldan farklı davranış — tutarsızlık kaydı).
-    func testFailedCommitFileSelectionClearsDiff() async {
+    /// Eski tutarsızlık #3 kalktı: commit yolu artık boş ekran değil, aynı
+    /// `.failed` durumunu gösterir.
+    func testFailedCommitFileSelectionShowsFailedContent() async {
         let git = FakeGitService()
         await git.setCommitFiles([
             CommitFile(path: "a.txt", status: .modified),
@@ -209,67 +284,33 @@ final class FileViewerStoreTests: XCTestCase {
         let toasts = ToastStore(autoDismissAfter: 60)
         let store = FileViewerStore(git: git, toasts: toasts)
 
-        await store.presentCommit(
-            repoPath: "/repo",
-            commit: GitCommit(hash: "abcdef1234", shortHash: "abcdef1", message: "m", author: "a", date: Date())
-        )
-        XCTAssertEqual(store.diff, diff)
+        await store.presentCommit(repoPath: "/repo", commit: commit("abcdef1234", short: "abcdef1"))
+        XCTAssertEqual(store.content, .loaded(.diff(diff)))
 
         await git.setError(.gitFailed(operation: "show", detail: "boom"))
         await store.selectCommitFile("b.txt")
 
-        XCTAssertNil(store.diff, "commit yolunda eski diff KORUNMAZ")
-        XCTAssertEqual(store.filePath, "b.txt", "dosya adı ise yeni dosyayı gösterir")
+        XCTAssertEqual(store.filePath, "b.txt")
+        XCTAssertEqual(store.content, .failed("Git show failed: boom"))
         XCTAssertFalse(store.isLoading)
+        XCTAssertEqual(store.commitContext?.files.count, 2, "commit bağlamı korunur")
         XCTAssertEqual(toasts.toasts.count, 1)
     }
 
-    func testCommitWithNoFilesShowsInfoToastAndDoesNotPresent() async {
+    /// Commit yükleme hatasında commit sunumu bozulmaz — yalnız içerik `.failed`.
+    func testFailedCommitSelectionKeepsCommitPresentation() async {
         let git = FakeGitService()
-        await git.setCommitFiles([])
-        let toasts = ToastStore(autoDismissAfter: 60)
-        let store = FileViewerStore(git: git, toasts: toasts)
-
-        await store.presentCommit(
-            repoPath: "/repo",
-            commit: GitCommit(hash: "abcdef1234", shortHash: "abcdef1", message: "m", author: "a", date: Date())
-        )
-
-        XCTAssertFalse(store.isPresented)
-        XCTAssertEqual(toasts.toasts.first?.kind, .info)
-        XCTAssertEqual(toasts.toasts.first?.title, "abcdef1")
-    }
-
-    func testSelectCommitFileWithoutContextIsNoop() async {
-        let git = FakeGitService()
+        await git.setCommitFiles([CommitFile(path: "a.txt", status: .modified)])
+        await git.setError(.gitFailed(operation: "show", detail: "boom"))
         let store = makeStore(git)
-        await store.selectCommitFile("a.txt")
 
-        XCTAssertEqual(store.filePath, "")
-        let calls = await git.commitFileDiffCalls
-        XCTAssertTrue(calls.isEmpty)
-    }
+        await store.presentCommit(repoPath: "/repo", commit: commit())
 
-    // MARK: - close() kısmi sıfırlama (karakterizasyon)
-
-    /// `close()` `mode`, `repoPath` ve `rendersMarkdown`'ı SIFIRLAMAZ; bir
-    /// sonraki sunuma kadar bayat kalırlar (her sunum yolu bunları yeniden
-    /// yazdığı için bugün görünür bir etkisi yok — Faz 5.3 sum type'ı bunu
-    /// yapısal olarak kaldıracak).
-    func testCloseLeavesModeAndRepoPathStale() async {
-        let git = FakeGitService()
-        let store = makeStore(git)
-        await store.presentDiff(repoPath: "/repo", filePath: "a.txt")
-        store.rendersMarkdown = false
-
-        store.close()
-
-        XCTAssertFalse(store.isPresented)
-        XCTAssertEqual(store.mode, .diff, "mode korunur")
-        XCTAssertEqual(store.repoPath, "/repo", "repoPath korunur")
-        XCTAssertFalse(store.rendersMarkdown, "markdown tercihi oturum boyunca sürer")
-        XCTAssertNil(store.diff)
-        XCTAssertNil(store.fileContent)
-        XCTAssertNil(store.commitContext)
+        guard case .commit(let repoPath, let context, let filePath, let content) = store.presentation
+        else { return XCTFail("commit sunumu bekleniyordu") }
+        XCTAssertEqual(repoPath, "/repo")
+        XCTAssertEqual(context.shortSha, "abc123d")
+        XCTAssertEqual(filePath, "a.txt")
+        XCTAssertEqual(content, .failed("Git show failed: boom"))
     }
 }

@@ -112,10 +112,10 @@ final class GitStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedFiles[repoPath], ["a.swift", "b.swift", "c.swift"])
     }
 
-    /// Karakterizasyon: HER status yüklemesi seçimi sıfırlar — kullanıcının
-    /// deselect ettiği dosyalar bir sonraki FSEvents tazelemesinde geri seçilir.
-    /// (Şüpheli davranış; Faz 5'te ele alınacak — burada yalnız BELGELENİR.)
-    func testReloadResetsUserDeselection() async {
+    /// Faz 5 bug fix'i (eski `testReloadResetsUserDeselection`'ın tersi):
+    /// kullanıcı deselect ettiyse FSEvents tazelemesi seçimi GERİ GETİRMEZ —
+    /// aksi halde commit ekranında istenmeyen dosya stage edilebiliyordu.
+    func testReloadPreservesUserDeselection() async {
         let git = FakeGitService()
         await git.setStatus(changes)
         let store = makeStore(git)
@@ -125,10 +125,116 @@ final class GitStoreTests: XCTestCase {
         XCTAssertFalse(store.isSelected(repoPath, path: "a.swift"))
 
         await store.loadChanges(repoPath)
-        XCTAssertTrue(
+        XCTAssertFalse(
             store.isSelected(repoPath, path: "a.swift"),
-            "select-all default her yüklemede geri gelir (mevcut davranış)"
+            "kullanıcı seçimi tazelemede korunur"
         )
+        XCTAssertEqual(store.selectedFiles[repoPath], ["b.swift", "c.swift"])
+    }
+
+    func testReloadKeepsSelectAllWhenUserNeverToggled() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+
+        await store.loadChanges(repoPath)
+        await store.loadChanges(repoPath)
+
+        XCTAssertEqual(
+            store.selectedFiles[repoPath], ["a.swift", "b.swift", "c.swift"],
+            "hiç toggle yoksa select-all default sürer"
+        )
+    }
+
+    func testReloadDropsVanishedFilesFromUserSelection() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadChanges(repoPath)
+        store.toggleFile(repoPath, path: "c.swift") // kullanıcı seçimi devreye girer
+
+        await git.setStatus([GitFileChange(path: "a.swift", status: .modified)])
+        await store.loadChanges(repoPath)
+
+        XCTAssertEqual(store.selectedFiles[repoPath], ["a.swift"], "kaybolan dosyalar seçimden düşer")
+    }
+
+    func testReloadDoesNotSelectNewFilesAfterUserToggle() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadChanges(repoPath)
+        store.toggleFile(repoPath, path: "a.swift")
+
+        await git.setStatus(changes + [GitFileChange(path: "d.swift", status: .added)])
+        await store.loadChanges(repoPath)
+
+        XCTAssertFalse(store.isSelected(repoPath, path: "d.swift"), "yeni dosya kendiliğinden seçilmez")
+        XCTAssertEqual(store.selectedFiles[repoPath], ["b.swift", "c.swift"])
+    }
+
+    func testUserSelectionTrackingIsPerRepo() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadChanges("/repo-a")
+        store.toggleFile("/repo-a", path: "a.swift")
+
+        await store.loadChanges("/repo-b")
+        XCTAssertEqual(
+            store.selectedFiles["/repo-b"], ["a.swift", "b.swift", "c.swift"],
+            "bir repodaki toggle diğerinin select-all default'unu kapatmaz"
+        )
+    }
+
+    // MARK: - Eviction (refactor 5.5)
+
+    func testEvictClearsEveryPerRepoCache() async {
+        let git = FakeGitService()
+        await git.setBranches([GitBranch(name: "main", isCurrent: true)])
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadAll(repoPath)
+        store.setCommitMessage("wip", for: repoPath)
+        store.toggleFile(repoPath, path: "a.swift")
+
+        store.evict(repoPath)
+
+        XCTAssertNil(store.branches[repoPath])
+        XCTAssertNil(store.commitsByBranch[repoPath])
+        XCTAssertNil(store.changes[repoPath])
+        XCTAssertNil(store.selectedFiles[repoPath])
+        XCTAssertNil(store.expandedBranches[repoPath])
+        XCTAssertEqual(store.commitMessage(for: repoPath), "")
+    }
+
+    func testEvictResetsUserSelectionTracking() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadChanges(repoPath)
+        store.toggleFile(repoPath, path: "a.swift")
+
+        store.evict(repoPath)
+        await store.loadChanges(repoPath)
+
+        XCTAssertEqual(
+            store.selectedFiles[repoPath], ["a.swift", "b.swift", "c.swift"],
+            "eviction sonrası taze repo gibi davranır"
+        )
+    }
+
+    func testEvictIsScopedToOneRepo() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadChanges("/repo-a")
+        await store.loadChanges("/repo-b")
+
+        store.evict("/repo-a")
+
+        XCTAssertNil(store.changes["/repo-a"])
+        XCTAssertEqual(store.changes["/repo-b"]?.count, 3)
     }
 
     func testToggleSelectAllClearsWhenEverythingSelected() async {

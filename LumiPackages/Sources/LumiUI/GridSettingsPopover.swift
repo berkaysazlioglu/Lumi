@@ -84,7 +84,7 @@ struct GridSettingsControl: View {
                     SegmentedRow(
                         options: LumiKit.GridLayout.HeightRatio.allCases,
                         isSelected: { $0 == layout.heightRatio },
-                        label: { $0.label },
+                        label: { $0.displayLabel },
                         onSelect: { var copy = layout; copy.heightRatio = $0; onChange(copy) }
                     )
                 }

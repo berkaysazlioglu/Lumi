@@ -29,13 +29,22 @@ public final class UsageStore {
     public static let minRefreshInterval: TimeInterval = 60
 
     @ObservationIgnored private let service: any UsageServicing
+    /// Servis zincirinde bir TTL cache varsa onun boşaltma yüzü (K38-A).
+    /// Opsiyonel: cache'siz bir kaynakta store aynen çalışır (ISP —
+    /// `UsageServicing` cache kavramını taşımaz).
+    @ObservationIgnored private let cache: (any UsageCacheInvalidating)?
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private var lastAttemptAt: Date?
     @ObservationIgnored private var hasLoadedOnce = false
 
-    public init(service: any UsageServicing, now: @escaping @MainActor () -> Date = { Date() }) {
+    public init(
+        service: any UsageServicing,
+        cache: (any UsageCacheInvalidating)? = nil,
+        now: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.provider = service.provider
         self.service = service
+        self.cache = cache
         self.now = now
     }
 
@@ -65,8 +74,14 @@ public final class UsageStore {
     }
 
     /// Kullanıcı refresh butonu; min aralık dışında ise yeniden çeker.
+    ///
+    /// Açık yenileme niyeti TTL cache'ini geçersizler (K38-A): aksi hâlde
+    /// kullanıcı 5 dk boyunca aynı bayat yüzdeyi görür ve buton "bozuk" sanılır.
+    /// Otomatik tazeleme de bu yoldan geçer; en küçük aralık (5 dk) TTL'e eşit
+    /// olduğundan pratikte fazladan istek üretmez.
     public func refresh() async {
         guard canRefresh else { return }
+        await cache?.invalidateCache()
         await performFetch()
     }
 

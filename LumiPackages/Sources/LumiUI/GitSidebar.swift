@@ -312,7 +312,7 @@ private struct FileChangeRow: View {
             }
             .buttonStyle(.plain)
 
-            Text(change.status.badge)
+            Text(change.status.badgeText)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(Theme.fileChangeColor(for: change.status))
                 .frame(width: 16, height: 16)

@@ -1,17 +1,13 @@
 import LumiKit
 import XCTest
 
-/// Provider → UI etiketi / launch komutu eşlemesi ("New Claude"
-/// butonu spawn sonrası `claude\r` enjekte eder).
+/// Provider → launch komutu eşlemesi ("New Claude" butonu spawn sonrası
+/// `claude\r` enjekte eder). UI etiketi artık LumiUI presenter'ında
+/// (refactor 5.9) — `AgentProviderPresentationTests`.
 final class AgentProviderTests: XCTestCase {
     func testLaunchCommandMatchesCLIExecutableName() {
         XCTAssertEqual(AgentProvider.claude.launchCommand, "claude")
         XCTAssertEqual(AgentProvider.codex.launchCommand, "codex")
-    }
-
-    func testDisplayNamesAreCapitalizedForButtons() {
-        XCTAssertEqual(AgentProvider.claude.displayName, "Claude")
-        XCTAssertEqual(AgentProvider.codex.displayName, "Codex")
     }
 
     func testAllCasesCoversEveryProvider() {

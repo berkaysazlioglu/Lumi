@@ -200,7 +200,7 @@ final class TerminalListStoreTests: XCTestCase {
     // MARK: - Gönderimde otomatik minimize (karar 24)
 
     func testAutoMinimizeOnWorkingWhenEnabled() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let first = makeTerminal("t1")
         let second = makeTerminal("t2")
         store.focus(second.id)
@@ -211,7 +211,7 @@ final class TerminalListStoreTests: XCTestCase {
     }
 
     func testAutoMinimizedRestoresOnWaitingWithoutFocus() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let first = makeTerminal("t1")
         let second = makeTerminal("t2")
         store.focus(second.id)
@@ -223,7 +223,7 @@ final class TerminalListStoreTests: XCTestCase {
     }
 
     func testAutoMinimizedRestoresOnIdleAndError() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let first = makeTerminal("t1")
         store.apply(.statusChanged(first.id, .working))
         store.apply(.statusChanged(first.id, .idle))
@@ -242,7 +242,7 @@ final class TerminalListStoreTests: XCTestCase {
     }
 
     func testManuallyMinimizedIsNotAutoRestored() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let only = makeTerminal("t1")
         store.minimize(only.id)
 
@@ -252,7 +252,7 @@ final class TerminalListStoreTests: XCTestCase {
     }
 
     func testManualRestoreDuringWorkingDropsTracking() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let only = makeTerminal("t1")
         store.apply(.statusChanged(only.id, .working))
         XCTAssertTrue(store.isMinimized(only.id))
@@ -267,17 +267,17 @@ final class TerminalListStoreTests: XCTestCase {
     }
 
     func testDisablingToggleMidWorkStillRestores() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let only = makeTerminal("t1")
         store.apply(.statusChanged(only.id, .working))
 
-        store.autoMinimizeOnSend = false
+        store.applyAutoMinimize(false)
         store.apply(.statusChanged(only.id, .waitingUnseen))
         XCTAssertFalse(store.isMinimized(only.id), "toggle kapansa da mahsur kalmaz")
     }
 
     func testAwaitingDecisionRestoresAutoMinimized() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let only = makeTerminal("t1")
         store.apply(.statusChanged(only.id, .working))
         XCTAssertTrue(store.isMinimized(only.id))

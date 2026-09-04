@@ -3,7 +3,10 @@ import LumiKit
 
 /// `UsageServicing` test ikamesi (design/00 §3 deseni). Sonuç kontrol edilebilir;
 /// fetch çağrı sayısı izlenir (min-interval / load-once doğrulaması için).
-public actor FakeUsageService: UsageServicing {
+///
+/// `UsageCacheInvalidating`'i de karşılar (K38-A): manuel yenilemenin cache'i
+/// gerçekten geçersizlediğini doğrulayan testler `invalidateCount`'a bakar.
+public actor FakeUsageService: UsageServicing, UsageCacheInvalidating {
     public nonisolated let provider: AgentProvider
 
     public enum Outcome: Sendable {
@@ -13,6 +16,7 @@ public actor FakeUsageService: UsageServicing {
 
     private var outcome: Outcome
     public private(set) var fetchCount = 0
+    public private(set) var invalidateCount = 0
 
     public init(provider: AgentProvider = .claude, outcome: Outcome) {
         self.provider = provider
@@ -21,6 +25,10 @@ public actor FakeUsageService: UsageServicing {
 
     public func setOutcome(_ outcome: Outcome) {
         self.outcome = outcome
+    }
+
+    public func invalidateCache() async {
+        invalidateCount += 1
     }
 
     public func fetch() async throws -> UsageSnapshot {

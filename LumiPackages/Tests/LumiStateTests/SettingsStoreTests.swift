@@ -183,6 +183,21 @@ final class SettingsStoreTests: XCTestCase {
         }
     }
 
+    /// Sınırların TEK tanımı modelde (refactor 5.7): store literal taşımaz.
+    func testFontSizeBoundsComeFromTheModel() {
+        XCTAssertEqual(AppConfig.terminalFontSizeRange, 10 ... 24)
+        store.setTerminalFontSize(AppConfig.terminalFontSizeRange.upperBound + 1)
+        XCTAssertEqual(
+            store.current.terminalFontSize,
+            AppConfig.terminalFontSizeRange.upperBound
+        )
+        store.setTerminalFontSize(AppConfig.terminalFontSizeRange.lowerBound - 1)
+        XCTAssertEqual(
+            store.current.terminalFontSize,
+            AppConfig.terminalFontSizeRange.lowerBound
+        )
+    }
+
     func testFontSizeBoundsAreInclusive() {
         store.setTerminalFontSize(10)
         XCTAssertEqual(store.current.terminalFontSize, 10)

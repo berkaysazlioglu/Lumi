@@ -40,14 +40,6 @@ public enum AgentProvider: String, Sendable, Codable, Equatable, CaseIterable {
     case claude
     case codex
 
-    /// UI etiketi (buton "New Claude"/"New Codex").
-    public var displayName: String {
-        switch self {
-        case .claude: return "Claude"
-        case .codex: return "Codex"
-        }
-    }
-
     /// Yeni provider terminalinde spawn sonrası enjekte edilen CLI komutu
     /// (önce shell açılır, sonra komut yazılır).
     public var launchCommand: String { rawValue }

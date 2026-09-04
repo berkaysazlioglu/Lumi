@@ -258,7 +258,7 @@ struct SettingsView: View {
             }
             SettingsField(
                 title: "Font Size",
-                hint: "10–24px; applies to all open terminals instantly"
+                hint: AppConfig.terminalFontSizeHint
             ) {
                 Stepper(
                     "\(settings.current.terminalFontSize) px",
@@ -266,7 +266,7 @@ struct SettingsView: View {
                         get: { settings.current.terminalFontSize },
                         set: { settings.setTerminalFontSize($0) }
                     ),
-                    in: 10...24
+                    in: AppConfig.terminalFontSizeRange
                 )
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
@@ -319,7 +319,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             SettingsSegmented(
                 options: TerminalCursorShape.allCases.map {
-                    .init(value: $0, label: $0.label)
+                    .init(value: $0, label: $0.displayLabel)
                 },
                 selection: Binding(
                     get: { TerminalCursorShape.parse(settings.current.terminalCursorStyle) },
@@ -652,7 +652,7 @@ struct SettingsView: View {
                 .foregroundStyle(Theme.textMuted)
             SettingsSegmented(
                 options: UsageAutoRefresh.allowedIntervals.map {
-                    .init(value: $0, label: "\($0) min")
+                    .init(value: $0, label: UsageAutoRefresh.intervalLabel($0))
                 },
                 selection: Binding(
                     get: { settings.current.usageAutoRefresh.intervalMinutes },

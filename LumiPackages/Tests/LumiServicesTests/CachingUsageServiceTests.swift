@@ -5,8 +5,8 @@ import XCTest
 
 @testable import LumiServices
 
-/// Refactor 3.11: TTL dekoratörü. **Composition root'a bağlı DEĞİL** — K38
-/// kararı verilene kadar yalnız burada yaşar.
+/// Refactor 3.11 + K38-A: TTL dekoratörü. Composition root'ta her kullanım
+/// servisi 300 sn TTL ile bununla sarılır (`LiveServiceRegistry`).
 final class CachingUsageServiceTests: XCTestCase {
     private func snapshot(percent: Int) -> UsageSnapshot {
         UsageSnapshot(
@@ -104,6 +104,22 @@ final class CachingUsageServiceTests: XCTestCase {
 
         _ = try await cache.fetch()
         await cache.invalidate()
+        _ = try await cache.fetch()
+
+        let count = await inner.fetchCount
+        XCTAssertEqual(count, 2)
+    }
+
+    /// `UsageCacheInvalidating` yüzü `invalidate()` ile aynı işi yapar —
+    /// `UsageStore` cache'i bu protokol üzerinden boşaltır (K38-A).
+    func testProtocolFacedInvalidateCacheForcesRefetch() async throws {
+        let inner = FakeUsageService(outcome: .success(snapshot(percent: 3)))
+        let clock = ManualClock()
+        let cache = makeCache(inner, clock: clock)
+
+        _ = try await cache.fetch()
+        let invalidating: any UsageCacheInvalidating = cache
+        await invalidating.invalidateCache()
         _ = try await cache.fetch()
 
         let count = await inner.fetchCount

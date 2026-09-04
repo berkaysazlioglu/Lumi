@@ -13,14 +13,20 @@ public final class GitStore {
     public private(set) var branches: [String: [GitBranch]] = [:]
     public private(set) var commitsByBranch: [String: [String: [GitCommit]]] = [:]
     public private(set) var changes: [String: [GitFileChange]] = [:]
-    public private(set) var selectedFiles: [String: Set<String>] = [:]
+    public private(set) var selectedFiles = KeyedToggleSet<String, String>()
+    /// Commit mesajı taslakları. **Faz 7 borcu:** `GitSidebar` bu sözlüğe
+    /// `Binding` üzerinden DOĞRUDAN yazdığı için henüz `private(set)` olamadı;
+    /// yeni çağrı yerleri `setCommitMessage(_:for:)` intent'ini kullanmalı.
     public var commitMessages: [String: String] = [:]
     public private(set) var isCommitting = false
 
     /// Branch accordion durumu: kullanıcı hiç toggle yapmadıysa current branch
     /// otomatik expand; toggle sonrası kullanıcının seçimi kalır.
-    public private(set) var expandedBranches: [String: Set<String>] = [:]
+    public private(set) var expandedBranches = KeyedToggleSet<String, String>()
     @ObservationIgnored private var userToggledRepos: Set<String> = []
+    /// Kullanıcı bu repo'da seçimi en az bir kez elle değiştirdi mi? Değiştirdiyse
+    /// tazeleme seçimi EZMEZ (bkz. `loadChanges`).
+    @ObservationIgnored private var reposWithUserSelection: Set<String> = []
 
     /// ISP (refactor 3.8): store yalnız sessiz-liste okumaları + commit yazımı
     /// yüzeyine bağlıdır; içerik/diff okumaları `FileViewerStore`'un işidir.
@@ -39,7 +45,7 @@ public final class GitStore {
         branches[repoPath] = branchList
         if !userToggledRepos.contains(repoPath),
            let current = branchList.first(where: { $0.isCurrent }) {
-            expandedBranches[repoPath, default: []].insert(current.name)
+            expandedBranches.insert(current.name, in: repoPath)
         }
 
         await loadChanges(repoPath)
@@ -81,11 +87,21 @@ public final class GitStore {
         }
     }
 
+    /// Tazeleme kuralı (Faz 5 bug fix'i): kullanıcı bu repo'da seçime hiç
+    /// DOKUNMADIYSA select-all default'u sürer. Bir kez toggle ettiyse seçim
+    /// KORUNUR — yalnız artık var olmayan dosyalar düşer, yeni görünen dosyalar
+    /// kendiliğinden SEÇİLMEZ. Önceki davranışta her FSEvents tazelemesi
+    /// deselect'i geri alıyordu ve commit ekranında istenmeyen dosya stage
+    /// edilme riski doğuyordu.
     public func loadChanges(_ repoPath: String) async {
         let list = await git.status(repoPath: repoPath)
         changes[repoPath] = list
-        // Select-all default: her status yüklemesinde sıfırlanır
-        selectedFiles[repoPath] = Set(list.map(\.path))
+        let present = Set(list.map(\.path))
+        if reposWithUserSelection.contains(repoPath) {
+            selectedFiles.replace((selectedFiles[repoPath] ?? []).intersection(present), in: repoPath)
+        } else {
+            selectedFiles.replace(present, in: repoPath)
+        }
     }
 
     /// fileTreeChanged köprüsü — git panellerinin canlılığı.
@@ -96,38 +112,44 @@ public final class GitStore {
     // MARK: - Seçim / accordion
 
     public func toggleFile(_ repoPath: String, path: String) {
-        var selection = selectedFiles[repoPath] ?? []
-        if selection.contains(path) {
-            selection.remove(path)
-        } else {
-            selection.insert(path)
-        }
-        selectedFiles[repoPath] = selection
+        reposWithUserSelection.insert(repoPath)
+        selectedFiles.toggle(path, in: repoPath)
     }
 
     public func toggleSelectAll(_ repoPath: String) {
+        reposWithUserSelection.insert(repoPath)
         let all = Set((changes[repoPath] ?? []).map(\.path))
         let current = selectedFiles[repoPath] ?? []
-        selectedFiles[repoPath] = current.count == all.count ? [] : all
+        selectedFiles.replace(current.count == all.count ? [] : all, in: repoPath)
     }
 
     public func isSelected(_ repoPath: String, path: String) -> Bool {
-        selectedFiles[repoPath]?.contains(path) ?? false
+        selectedFiles.contains(path, in: repoPath)
     }
 
     public func toggleBranch(_ repoPath: String, name: String) {
         userToggledRepos.insert(repoPath)
-        var expanded = expandedBranches[repoPath] ?? []
-        if expanded.contains(name) {
-            expanded.remove(name)
-        } else {
-            expanded.insert(name)
-        }
-        expandedBranches[repoPath] = expanded
+        expandedBranches.toggle(name, in: repoPath)
     }
 
     public func isBranchExpanded(_ repoPath: String, name: String) -> Bool {
-        expandedBranches[repoPath]?.contains(name) ?? false
+        expandedBranches.contains(name, in: repoPath)
+    }
+
+    // MARK: - Cache eviction (refactor 5.5)
+
+    /// Tab kapanınca repo'ya ait TÜM bellek cache'leri boşaltılır — aksi halde
+    /// açılıp kapanan her repo commit/branch/diff verisini kalıcı olarak
+    /// bellekte bırakıyordu.
+    public func evict(_ repoPath: String) {
+        branches.removeValue(forKey: repoPath)
+        commitsByBranch.removeValue(forKey: repoPath)
+        changes.removeValue(forKey: repoPath)
+        commitMessages.removeValue(forKey: repoPath)
+        selectedFiles.evict(repoPath)
+        expandedBranches.evict(repoPath)
+        userToggledRepos.remove(repoPath)
+        reposWithUserSelection.remove(repoPath)
     }
 
     // MARK: - Commit
@@ -136,9 +158,19 @@ public final class GitStore {
         !isCommitting
     }
 
+    // MARK: - Commit mesajı (kapsülleme, refactor 5.4)
+
+    public func commitMessage(for repoPath: String) -> String {
+        commitMessages[repoPath] ?? ""
+    }
+
+    public func setCommitMessage(_ message: String, for repoPath: String) {
+        commitMessages[repoPath] = message
+    }
+
     public func commit(_ repoPath: String) async {
         let files = Array(selectedFiles[repoPath] ?? []).sorted()
-        let message = (commitMessages[repoPath] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let message = commitMessage(for: repoPath).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !files.isEmpty, !message.isEmpty, !isCommitting else { return }
 
         isCommitting = true
@@ -148,7 +180,7 @@ public final class GitStore {
             try await self.git.commit(repoPath: repoPath, message: message, files: files)
         }
         if succeeded {
-            commitMessages[repoPath] = ""
+            setCommitMessage("", for: repoPath)
             await loadAll(repoPath)
         }
     }

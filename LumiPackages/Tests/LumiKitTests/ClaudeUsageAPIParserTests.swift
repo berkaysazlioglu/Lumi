@@ -31,12 +31,12 @@ final class ClaudeUsageAPIParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.mode, .subscription)
     }
 
-    func testScopedModelLimitCarriesDisplayName() {
+    func testScopedModelLimitCarriesModelNameAndRawLabel() {
         let snapshot = ClaudeUsageAPIParser.parse(fullResponse)
 
         let scoped = snapshot?.limits.last
         XCTAssertEqual(scoped?.kind, .weeklyModel("Fable"))
-        XCTAssertEqual(scoped?.title, "Weekly (Fable)")
+        XCTAssertEqual(scoped?.rawLabel, "Current week (Fable)")
     }
 
     func testParsesISO8601ResetWithFractionalSeconds() {
@@ -82,7 +82,7 @@ final class ClaudeUsageAPIParserTests: XCTestCase {
 
         XCTAssertEqual(snapshot?.limits.count, 1)
         XCTAssertEqual(snapshot?.limits.first?.kind, .other)
-        XCTAssertEqual(snapshot?.limits.first?.title, "brand_new_bucket")
+        XCTAssertEqual(snapshot?.limits.first?.rawLabel, "brand_new_bucket")
     }
 
     func testScopedLimitWithoutModelNameIsKeptAsOther() {

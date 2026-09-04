@@ -25,7 +25,7 @@ final class TerminalFeatureAssembly: FeatureAssembly {
     func start() async {
         let config = await services.config.config()
         applyAppearance(config)
-        shared.terminals.autoMinimizeOnSend = config.autoMinimizeOnSend
+        shared.terminals.applyAutoMinimize(config.autoMinimizeOnSend)
         promptQueue.start()
     }
 
@@ -45,7 +45,7 @@ final class TerminalFeatureAssembly: FeatureAssembly {
         }
         // Karar 24
         if old.autoMinimizeOnSend != new.autoMinimizeOnSend {
-            shared.terminals.autoMinimizeOnSend = new.autoMinimizeOnSend
+            shared.terminals.applyAutoMinimize(new.autoMinimizeOnSend)
         }
     }
 

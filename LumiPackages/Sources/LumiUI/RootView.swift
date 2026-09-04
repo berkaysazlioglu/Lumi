@@ -21,23 +21,13 @@ public struct RootView: View {
         }
     }
 
-    /// Settings/onboarding'in sistem etkileşimleri (NSOpenPanel, system checks).
+    /// Settings'in sistem etkileşimleri (NSOpenPanel). Onboarding'in sistem
+    /// çağrıları `OnboardingStore`'a taşındı (refactor 5.8).
     public struct ShellActions {
         public let chooseFolder: () async -> String?
-        public let runChecks: () async -> [SystemCheckResult]
-        /// Düzeltme aksiyonu sonucun KENDİSİNİ alır: hedef bağlantı
-        /// `SystemCheckResult.fixURL`'dedir (refactor 3.6 — checkID → URL
-        /// `switch`'i app katmanından kalktı).
-        public let fixCheck: (SystemCheckResult) -> Void
 
-        public init(
-            chooseFolder: @escaping () async -> String?,
-            runChecks: @escaping () async -> [SystemCheckResult],
-            fixCheck: @escaping (SystemCheckResult) -> Void
-        ) {
+        public init(chooseFolder: @escaping () async -> String?) {
             self.chooseFolder = chooseFolder
-            self.runChecks = runChecks
-            self.fixCheck = fixCheck
         }
     }
 
@@ -47,6 +37,7 @@ public struct RootView: View {
     private let promptQueue: PromptQueueStore
     private let gitStore: GitStore
     private let fileViewer: FileViewerStore
+    private let onboarding: OnboardingStore
     private let settings: SettingsStore
     private let sessionSchedule: SessionScheduleStore
     private let usageStores: [AgentProvider: UsageStore]
@@ -63,6 +54,7 @@ public struct RootView: View {
         promptQueue: PromptQueueStore,
         gitStore: GitStore,
         fileViewer: FileViewerStore,
+        onboarding: OnboardingStore,
         settings: SettingsStore,
         sessionSchedule: SessionScheduleStore,
         usageStores: [AgentProvider: UsageStore],
@@ -78,6 +70,7 @@ public struct RootView: View {
         self.promptQueue = promptQueue
         self.gitStore = gitStore
         self.fileViewer = fileViewer
+        self.onboarding = onboarding
         self.settings = settings
         self.sessionSchedule = sessionSchedule
         self.usageStores = usageStores
@@ -91,9 +84,7 @@ public struct RootView: View {
     public var body: some View {
         Group {
             if workspace.isOnboardingActive {
-                OnboardingView(settings: settings, shell: shellActions) {
-                    workspace.isOnboardingActive = false
-                }
+                OnboardingView(store: onboarding)
             } else {
                 dashboard
             }

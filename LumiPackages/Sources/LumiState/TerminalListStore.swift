@@ -24,7 +24,7 @@ public final class TerminalListStore: StoreLifecycle {
     /// Karar 24: açıkken working'e geçen terminal otomatik minimize edilir ve
     /// turn bitince / girdi beklenince otomatik restore edilir. Config aynası —
     /// composition root günceller.
-    @ObservationIgnored public var autoMinimizeOnSend = false
+    @ObservationIgnored public private(set) var autoMinimizeOnSend = false
     /// Yalnız BU özelliğin minimize ettikleri — elle minimize edilenler otomatik
     /// restore edilmez; elle restore takibi düşürür (kullanıcı niyeti kazanır).
     @ObservationIgnored private var autoMinimizedIDs: Set<TerminalID> = []
@@ -44,6 +44,12 @@ public final class TerminalListStore: StoreLifecycle {
     public init(service: any TerminalSessionControlling, toasts: ToastStore) {
         self.service = service
         self.toasts = toasts
+    }
+
+    /// Config aynasının tek yazarı (kapsülleme, refactor 5.4) — bootstrap ve
+    /// `configDidChange` buradan geçer.
+    public func applyAutoMinimize(_ enabled: Bool) {
+        autoMinimizeOnSend = enabled
     }
 
     /// Event tüketicisi canlı mı — `StoreLifecycle` sözleşmesinin

@@ -93,7 +93,9 @@ public final class SettingsStore: StoreLifecycle {
     }
 
     public func setTerminalFontSize(_ size: Int) {
-        let clamped = min(max(size, 10), 24)
+        // Sınırların tek tanımı modelde (refactor 5.7): SettingsView slider'ı da
+        // `AppConfig.terminalFontSizeRange`'den türer.
+        let clamped = AppConfig.clampTerminalFontSize(size)
         apply { $0.terminalFontSize = clamped }
     }
 

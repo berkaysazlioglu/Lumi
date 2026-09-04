@@ -89,7 +89,7 @@ public enum CodexUsageParser {
 
     private static func window(from value: Any?) -> RawWindow? {
         guard let entry = value as? [String: Any],
-              let percent = intValue(entry["usedPercent"]) else {
+              let percent = JSONValue.roundedInt(entry["usedPercent"], acceptingStrings: true) else {
             return nil
         }
         let date = resetDate(entry["resetsAt"])
@@ -100,26 +100,15 @@ public enum CodexUsageParser {
                 resetsRaw: date.map(UsageResetFormatter.string(from:)) ?? "",
                 timezone: nil
             ),
-            durationMinutes: intValue(entry["windowDurationMins"])
+            durationMinutes: JSONValue.roundedInt(entry["windowDurationMins"], acceptingStrings: true)
         )
     }
 
     /// Codex `resetsAt`'i Unix SANİYE olarak döner (Orca'nın notu; deneyle de
     /// doğrulandı). Milisaniye gelen bir sürüme karşı 1e10 eşiği korunur.
     static func resetDate(_ value: Any?) -> Date? {
-        guard let seconds = doubleValue(value), seconds.isFinite, seconds > 0 else { return nil }
+        guard let seconds = JSONValue.double(value, acceptingStrings: true),
+              seconds.isFinite, seconds > 0 else { return nil }
         return Date(timeIntervalSince1970: seconds > 10_000_000_000 ? seconds / 1000 : seconds)
-    }
-
-    private static func intValue(_ value: Any?) -> Int? {
-        guard let number = doubleValue(value), number.isFinite else { return nil }
-        return Int(number.rounded())
-    }
-
-    private static func doubleValue(_ value: Any?) -> Double? {
-        if let number = value as? Double { return number }
-        if let number = value as? Int { return Double(number) }
-        if let text = value as? String { return Double(text) }
-        return nil
     }
 }

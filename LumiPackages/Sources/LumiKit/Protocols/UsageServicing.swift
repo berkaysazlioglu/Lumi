@@ -12,3 +12,17 @@ public protocol UsageServicing: Sendable {
     /// Sağlayıcıya özgü kaynaktan snapshot çeker. Başarısızlıkta `LumiError`.
     func fetch() async throws -> UsageSnapshot
 }
+
+/// Kullanım verisi kaynağının cache'ini boşaltabilme yeteneği (K38-A).
+///
+/// **Neden ayrı protokol (ISP):** `UsageServicing` "bir snapshot getir"
+/// sözleşmesidir; cache bir dekoratör detayıdır. `ClaudeUsageService` /
+/// `CodexUsageService` gibi cache'siz kaynakların bu üyeyi (boş da olsa)
+/// taşıması, sözleşmeyi kullanmayan implementasyonlara bağımlılık yükler.
+/// Ayrı ve tek üyeli bir protokol, "kullanıcı açıkça yeniledi → bir sonraki
+/// okuma taze olmalı" niyetini yalnız onu gerçekten karşılayabilen tiplere
+/// bağlar.
+public protocol UsageCacheInvalidating: Sendable {
+    /// Bir sonraki `fetch()`'in kaynağa gitmesini garantiler.
+    func invalidateCache() async
+}

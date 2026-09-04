@@ -27,7 +27,7 @@ public enum ClaudeUsageAPIParser {
     }
 
     private static func limit(from entry: [String: Any]) -> UsageLimit? {
-        guard let percent = intValue(entry["percent"]) else { return nil }
+        guard let percent = JSONValue.roundedInt(entry["percent"], acceptingStrings: true) else { return nil }
         let kindRaw = (entry["kind"] as? String) ?? ""
         let modelName = scopedModelName(entry["scope"])
         let kind: UsageLimit.Kind
@@ -82,7 +82,8 @@ public enum ClaudeUsageAPIParser {
 
     private static func topLevelWindow(_ value: Any?) -> UsageWindow? {
         guard let entry = value as? [String: Any] else { return nil }
-        guard let percent = intValue(entry["utilization"]) ?? intValue(entry["used_percentage"])
+        guard let percent = JSONValue.roundedInt(entry["utilization"], acceptingStrings: true)
+            ?? JSONValue.roundedInt(entry["used_percentage"], acceptingStrings: true)
         else { return nil }
         return window(percent: percent, resetsAt: entry["resets_at"])
     }
@@ -108,22 +109,14 @@ public enum ClaudeUsageAPIParser {
             if let number = Double(trimmed) { return date(fromEpoch: number) }
             return parseISO8601(trimmed)
         }
-        if let number = value as? Double { return date(fromEpoch: number) }
-        if let number = value as? Int { return date(fromEpoch: Double(number)) }
-        return nil
+        guard let number = JSONValue.double(value) else { return nil }
+        return date(fromEpoch: number)
     }
 
     private static func date(fromEpoch value: Double) -> Date? {
         guard value.isFinite, value > 0 else { return nil }
         let seconds = value > 10_000_000_000 ? value / 1000 : value
         return Date(timeIntervalSince1970: seconds)
-    }
-
-    private static func intValue(_ value: Any?) -> Int? {
-        if let number = value as? Int { return number }
-        if let number = value as? Double { return number.isFinite ? Int(number.rounded()) : nil }
-        if let text = value as? String, let number = Double(text) { return Int(number.rounded()) }
-        return nil
     }
 
     // MARK: - Formatter'lar

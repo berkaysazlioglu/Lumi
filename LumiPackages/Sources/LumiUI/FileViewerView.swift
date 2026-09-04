@@ -110,59 +110,90 @@ struct FileViewerView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch store.mode {
-        case .view:
-            viewContent
-        case .diff:
-            diffContent
-        case .commitDiff:
+        switch store.presentation {
+        case .hidden:
+            EmptyView()
+        case .file(_, _, let mode, let loadable):
+            loadableContent(loadable, showsImageComparison: mode == .diff)
+        case .commit(_, _, _, let loadable):
             HStack(spacing: 0) {
                 commitFileList
                     .frame(width: 220)
                 Rectangle().fill(Theme.border).frame(width: 1)
-                diffContent
+                if let loadable {
+                    loadableContent(loadable, showsImageComparison: true)
+                } else {
+                    placeholder("(no file selected)")
+                }
             }
         }
     }
 
+    /// Tek içerik koridoru (refactor 5.3): yükleniyor → spinner, hata →
+    /// görünür mesaj, yüklendi → içerik tipine göre render. Eski dosyanın
+    /// içeriği hiçbir durumda ekranda kalmaz.
     @ViewBuilder
-    private var viewContent: some View {
-        if let preview = store.imagePreview {
-            ImagePreviewView(preview: preview, showsComparison: false)
-        } else if isRenderedMarkdown {
-            RenderedMarkdownDocumentView(text: store.fileContent ?? "")
-        } else {
-            HighlightedCodeView(
-                code: store.fileContent ?? "",
-                fileName: store.filePath,
-                highlighter: highlighter
-            )
+    private func loadableContent(
+        _ loadable: Loadable<ViewerContent>,
+        showsImageComparison: Bool
+    ) -> some View {
+        switch loadable {
+        case .loading:
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            failureState(message)
+        case .loaded(let viewerContent):
+            loadedContent(viewerContent, showsImageComparison: showsImageComparison)
         }
     }
 
     @ViewBuilder
-    private var diffContent: some View {
-        if store.isLoading {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let preview = store.imagePreview {
-            ImagePreviewView(preview: preview, showsComparison: true)
-        } else if let diff = store.diff {
-            if isRenderedMarkdown {
+    private func loadedContent(
+        _ viewerContent: ViewerContent,
+        showsImageComparison: Bool
+    ) -> some View {
+        switch viewerContent {
+        case .image(let preview):
+            ImagePreviewView(preview: preview, showsComparison: showsImageComparison)
+        case .text(let text):
+            if store.isRenderedMarkdown {
+                RenderedMarkdownDocumentView(text: text)
+            } else {
+                HighlightedCodeView(
+                    code: text,
+                    fileName: store.filePath,
+                    highlighter: highlighter
+                )
+            }
+        case .diff(let diff):
+            if store.isRenderedMarkdown {
                 RenderedMarkdownDiffView(diff: diff)
             } else {
                 SideBySideDiffView(diff: diff, fontSize: 12)
             }
-        } else {
-            Text("(no diff)")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Theme.textMuted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    private var isRenderedMarkdown: Bool {
-        store.previewKind == .markdown && store.rendersMarkdown
+    private func failureState(_ message: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(Theme.error)
+            Text(message)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, design: .monospaced))
+            .foregroundStyle(Theme.textMuted)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var commitFileList: some View {
@@ -173,7 +204,7 @@ struct FileViewerView: View {
                         Task { await store.selectCommitFile(file.path) }
                     } label: {
                         HStack(spacing: 6) {
-                            Text(file.status.badge)
+                            Text(file.status.badgeText)
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.fileChangeColor(for: file.status))
                                 .frame(width: 14)

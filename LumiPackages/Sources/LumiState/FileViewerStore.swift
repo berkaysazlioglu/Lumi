@@ -2,39 +2,80 @@ import Foundation
 import LumiKit
 import Observation
 
-/// FileViewer modal state'i (karar 4 unified diff,
-/// karar 6 lazy commit-diff). Persist edilmez.
+/// FileViewer'ın gösterdiği içerik (karar 4 side-by-side diff, karar 21
+/// render'lı markdown + görsel önizleme). Üç seçenek birbirini dışlar.
+public enum ViewerContent: Equatable, Sendable {
+    case text(String)
+    case diff(UnifiedDiff)
+    case image(ImagePreview)
+}
+
+/// Seçili commit'in kimliği + dosya listesi (karar 6: diff lazy yüklenir).
+public struct CommitContext: Equatable, Sendable {
+    public let sha: String
+    public let shortSha: String
+    public let files: [CommitFile]
+
+    public init(sha: String, shortSha: String, files: [CommitFile]) {
+        self.sha = sha
+        self.shortSha = shortSha
+        self.files = files
+    }
+}
+
+/// FileViewer'ın TEK state alanı (refactor 5.3).
+///
+/// Önceki model `mode` + 4 opsiyonel alan tutuyordu: 48 kombinasyondan ~5'i
+/// geçerliydi ve her sunum yolu diğer alanları elle `nil`liyordu. Sum type'ta
+/// "diff varken metin de dolu", "kapalı ama içerik duruyor", "hata aldık ama
+/// eski dosya ekranda" gibi durumlar temsil EDİLEMEZ.
+public enum ViewerPresentation: Equatable, Sendable {
+    /// Tek dosya sunumunun kaynağı: çalışma kopyası içeriği mi, diff mi.
+    /// (Yükleme sürerken ve hata durumunda içerikten türetilemediği için
+    /// vakanın kendisinde taşınır.)
+    public enum FileMode: Equatable, Sendable {
+        case view
+        case diff
+    }
+
+    case hidden
+    case file(
+        repoPath: String,
+        filePath: String,
+        mode: FileMode,
+        content: Loadable<ViewerContent>
+    )
+    /// `filePath`/`content` birlikte hareket eder: dosya seçilene kadar ikisi de
+    /// `nil` (commit açıldı, ilk dosyanın yüklemesi henüz başlamadı).
+    case commit(
+        repoPath: String,
+        context: CommitContext,
+        filePath: String?,
+        content: Loadable<ViewerContent>?
+    )
+}
+
+/// FileViewer modal state'i (karar 4 side-by-side diff, karar 6 lazy
+/// commit-diff, karar 21 markdown/görsel sunumu). Persist edilmez.
+///
+/// **Hata yolu tek kuraldır (karar 5):** herhangi bir yükleme başarısız olursa
+/// içerik `.failed(mesaj)` olur ve toast düşer — modal yeni dosyanın adıyla
+/// açık kalır, ÖNCEKİ dosyanın içeriği asla ekranda kalmaz.
 @Observable
 @MainActor
 public final class FileViewerStore {
-    public enum Mode: Equatable {
+    /// View katmanının okuduğu geniş mod (facade); commit sunumu `.commitDiff`.
+    public enum Mode: Equatable, Sendable {
         case view
         case diff
         case commitDiff
     }
 
-    public struct CommitContext: Equatable {
-        public let sha: String
-        public let shortSha: String
-        public let files: [CommitFile]
-    }
+    public private(set) var presentation: ViewerPresentation = .hidden
 
-    public private(set) var isPresented = false
-    public private(set) var mode: Mode = .view
-    public private(set) var repoPath = ""
-    public private(set) var filePath = ""
-    public private(set) var fileContent: String?
-    public private(set) var diff: UnifiedDiff?
-    /// Karar 21: görsel dosyalarda `diff`/`fileContent` yerine bu dolu olur.
-    public private(set) var imagePreview: ImagePreview?
-    public private(set) var commitContext: CommitContext?
-    public private(set) var isLoading = false
     /// Markdown dosyalarında render'lı sunum (kapatılınca ham metin/diff).
-    /// Oturumluk — persist edilmez.
+    /// Oturumluk — persist edilmez (design/03 §6 Rendered ⇄ Raw rozeti).
     public var rendersMarkdown = true
-
-    /// Aktif dosyanın sunum sınıfı (uzantıdan).
-    public var previewKind: FilePreviewKind { FilePreviewKind.of(path: filePath) }
 
     /// ISP (refactor 3.8): fırlatan içerik okumaları + sessiz `commitFiles`/
     /// `imagePreview`. Commit YAZIMI (`GitWriting`) bu store'un yüzeyinde yok.
@@ -46,43 +87,69 @@ public final class FileViewerStore {
         self.toasts = toasts
     }
 
+    // MARK: - Türev okumalar (view'ların facade'ı)
+
+    public var isPresented: Bool {
+        if case .hidden = presentation { return false }
+        return true
+    }
+
+    public var mode: Mode {
+        switch presentation {
+        case .hidden: return .view
+        case .file(_, _, let mode, _): return mode == .diff ? .diff : .view
+        case .commit: return .commitDiff
+        }
+    }
+
+    public var repoPath: String {
+        switch presentation {
+        case .hidden: return ""
+        case .file(let repoPath, _, _, _): return repoPath
+        case .commit(let repoPath, _, _, _): return repoPath
+        }
+    }
+
+    /// Gösterilen dosya; commit'te henüz dosya seçilmemişse boş.
+    public var filePath: String {
+        switch presentation {
+        case .hidden: return ""
+        case .file(_, let filePath, _, _): return filePath
+        case .commit(_, _, let filePath, _): return filePath ?? ""
+        }
+    }
+
+    public var commitContext: CommitContext? {
+        if case .commit(_, let context, _, _) = presentation { return context }
+        return nil
+    }
+
+    public var content: Loadable<ViewerContent>? {
+        switch presentation {
+        case .hidden: return nil
+        case .file(_, _, _, let content): return content
+        case .commit(_, _, _, let content): return content
+        }
+    }
+
+    public var isLoading: Bool { content?.isLoading ?? false }
+
+    public var failureMessage: String? { content?.failureMessage }
+
+    /// Aktif dosyanın sunum sınıfı (uzantıdan türetilir).
+    public var previewKind: FilePreviewKind { FilePreviewKind.of(path: filePath) }
+
+    /// Markdown render'ı fiilen açık mı: uzantı + oturumluk tercih.
+    public var isRenderedMarkdown: Bool { previewKind == .markdown && rendersMarkdown }
+
     // MARK: - Sunum modları
 
     public func presentView(repoPath: String, filePath: String) async {
-        // Görsel dosyada metin okuma anlamsız (binary → bozuk UTF8): önizleme
-        guard FilePreviewKind.of(path: filePath) != .image else {
-            await presentImage(mode: .view, repoPath: repoPath, filePath: filePath, sha: nil)
-            return
-        }
-        let succeeded = await toasts.reporting {
-            self.fileContent = try await self.git.readFile(repoPath: repoPath, file: filePath)
-        }
-        guard succeeded else { return }
-        self.repoPath = repoPath
-        self.filePath = filePath
-        mode = .view
-        diff = nil
-        imagePreview = nil
-        commitContext = nil
-        isPresented = true
+        await presentFile(mode: .view, repoPath: repoPath, filePath: filePath)
     }
 
     public func presentDiff(repoPath: String, filePath: String) async {
-        guard FilePreviewKind.of(path: filePath) != .image else {
-            await presentImage(mode: .diff, repoPath: repoPath, filePath: filePath, sha: nil)
-            return
-        }
-        let succeeded = await toasts.reporting {
-            self.diff = try await self.git.fileDiff(repoPath: repoPath, file: filePath)
-        }
-        guard succeeded else { return }
-        self.repoPath = repoPath
-        self.filePath = filePath
-        mode = .diff
-        fileContent = nil
-        imagePreview = nil
-        commitContext = nil
-        isPresented = true
+        await presentFile(mode: .diff, repoPath: repoPath, filePath: filePath)
     }
 
     /// Karar 6: commit seçilince yalnız dosya listesi; ilk dosya default seçilir
@@ -93,65 +160,125 @@ public final class FileViewerStore {
             toasts.show(.info, title: commit.shortHash, message: "Commit has no file changes")
             return
         }
-        self.repoPath = repoPath
-        mode = .commitDiff
-        fileContent = nil
-        commitContext = CommitContext(sha: commit.hash, shortSha: commit.shortHash, files: files)
-        isPresented = true
+        let context = CommitContext(sha: commit.hash, shortSha: commit.shortHash, files: files)
+        presentation = .commit(
+            repoPath: repoPath,
+            context: context,
+            filePath: nil,
+            content: nil
+        )
         await selectCommitFile(files[0].path)
     }
 
     public func selectCommitFile(_ path: String) async {
-        guard let context = commitContext else { return }
-        filePath = path
-        isLoading = true
-        defer { isLoading = false }
-        diff = nil
-        imagePreview = nil
-        guard FilePreviewKind.of(path: path) != .image else {
-            await presentImage(
-                mode: .commitDiff,
-                repoPath: repoPath,
-                filePath: path,
-                sha: context.sha
-            )
-            return
-        }
-        await toasts.reporting {
-            self.diff = try await self.git.commitFileDiff(
-                repoPath: self.repoPath,
-                sha: context.sha,
-                file: path
-            )
-        }
-    }
-
-    /// Karar 21: görsel dosyalar diff/metin yerine önizlemeyle sunulur. Git
-    /// tarafı sessizdir (eksik taraf normaldir), o yüzden toast koridoru yok —
-    /// üretilemeyen önizlemeyi UI placeholder ile bildirir.
-    private func presentImage(
-        mode newMode: Mode,
-        repoPath: String,
-        filePath: String,
-        sha: String?
-    ) async {
-        let preview = await git.imagePreview(repoPath: repoPath, file: filePath, sha: sha)
-        self.repoPath = repoPath
-        self.filePath = filePath
-        self.mode = newMode
-        fileContent = nil
-        diff = nil
-        if newMode != .commitDiff { commitContext = nil }
-        imagePreview = preview
-        isPresented = true
+        guard case .commit(let repoPath, let context, _, _) = presentation else { return }
+        presentation = .commit(
+            repoPath: repoPath,
+            context: context,
+            filePath: path,
+            content: .loading
+        )
+        let loaded = await load(repoPath: repoPath, filePath: path, mode: .diff, sha: context.sha)
+        guard isStillSelected(commitSha: context.sha, filePath: path) else { return }
+        presentation = .commit(
+            repoPath: repoPath,
+            context: context,
+            filePath: path,
+            content: loaded
+        )
     }
 
     public func close() {
-        isPresented = false
-        fileContent = nil
-        diff = nil
-        imagePreview = nil
-        commitContext = nil
-        filePath = ""
+        presentation = .hidden
+    }
+
+    // MARK: - Yükleme
+
+    private func presentFile(
+        mode: ViewerPresentation.FileMode,
+        repoPath: String,
+        filePath: String
+    ) async {
+        presentation = .file(
+            repoPath: repoPath,
+            filePath: filePath,
+            mode: mode,
+            content: .loading
+        )
+        let loaded = await load(repoPath: repoPath, filePath: filePath, mode: mode, sha: nil)
+        guard isStillPresenting(repoPath: repoPath, filePath: filePath, mode: mode) else { return }
+        presentation = .file(
+            repoPath: repoPath,
+            filePath: filePath,
+            mode: mode,
+            content: loaded
+        )
+    }
+
+    /// Tek yükleme koridoru: dosya türü yolu seçer, hata tek kurala düşer.
+    private func load(
+        repoPath: String,
+        filePath: String,
+        mode: ViewerPresentation.FileMode,
+        sha: String?
+    ) async -> Loadable<ViewerContent> {
+        // Görsel dosyada metin/diff okuma anlamsız (binary → bozuk UTF8).
+        // Git tarafı sessizdir (eksik taraf normaldir) — placeholder'ı UI çizer.
+        guard FilePreviewKind.of(path: filePath) != .image else {
+            let preview = await git.imagePreview(repoPath: repoPath, file: filePath, sha: sha)
+            return .loaded(.image(preview))
+        }
+        do {
+            return .loaded(try await readContent(
+                repoPath: repoPath,
+                filePath: filePath,
+                mode: mode,
+                sha: sha
+            ))
+        } catch let error as LumiError {
+            toasts.show(error: error)
+            return .failed(error.localizedDescription)
+        } catch {
+            let wrapped = LumiError.underlying(domain: "unknown", message: "\(error)")
+            toasts.show(error: wrapped)
+            return .failed(wrapped.localizedDescription)
+        }
+    }
+
+    private func readContent(
+        repoPath: String,
+        filePath: String,
+        mode: ViewerPresentation.FileMode,
+        sha: String?
+    ) async throws -> ViewerContent {
+        if let sha {
+            return .diff(try await git.commitFileDiff(repoPath: repoPath, sha: sha, file: filePath))
+        }
+        switch mode {
+        case .view:
+            return .text(try await git.readFile(repoPath: repoPath, file: filePath))
+        case .diff:
+            return .diff(try await git.fileDiff(repoPath: repoPath, file: filePath))
+        }
+    }
+
+    // MARK: - Yarış koruması
+    //
+    // Yükleme sürerken kullanıcı başka bir dosya açabilir; geç dönen sonuç
+    // yeni sunumu EZMEZ (eski davranışta alanlar sırasız yazılabiliyordu).
+
+    private func isStillPresenting(
+        repoPath: String,
+        filePath: String,
+        mode: ViewerPresentation.FileMode
+    ) -> Bool {
+        guard case .file(let currentRepo, let currentFile, let currentMode, _) = presentation
+        else { return false }
+        return currentRepo == repoPath && currentFile == filePath && currentMode == mode
+    }
+
+    private func isStillSelected(commitSha: String, filePath: String) -> Bool {
+        guard case .commit(_, let context, let currentFile, _) = presentation else { return false }
+        return context.sha == commitSha && currentFile == filePath
     }
 }

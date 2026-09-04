@@ -51,9 +51,13 @@ final class LiveServiceRegistry: ServiceRegistry {
         repo = RepoService()
         git = GitService()
         notifications = NotificationService(presenter: notificationPresenter)
+        // K38-A: her kullanım kaynağı 5 dk TTL cache dekoratörüyle sarılır
+        // (design/05 §cache "≥5 dk TTL"). En küçük otomatik tazeleme aralığı da
+        // 5 dk olduğundan (`UsageAutoRefresh.allowedIntervals`) döngü cache'e
+        // takılıp boşa dönmez; manuel yenileme cache'i açıkça geçersizler.
         usageServices = [
-            .claude: ClaudeUsageService(),
-            .codex: CodexUsageService(),
+            .claude: Self.cached(ClaudeUsageService()),
+            .codex: Self.cached(CodexUsageService()),
         ]
         activityMonitor = SystemActivityMonitor()
         sessionStarter = SessionStarterService()
@@ -61,6 +65,13 @@ final class LiveServiceRegistry: ServiceRegistry {
         terminalManager = manager
         terminal = manager
         viewProvider = manager.viewRegistry
+    }
+
+    /// Kullanım göstergesi TTL'i — design/05 §cache.
+    static let usageCacheTTL: Duration = .seconds(300)
+
+    private static func cached(_ service: any UsageServicing) -> any UsageServicing {
+        CachingUsageService(wrapping: service, ttl: usageCacheTTL)
     }
 
     func usage(for provider: AgentProvider) -> any UsageServicing {

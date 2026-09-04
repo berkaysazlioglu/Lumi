@@ -30,6 +30,8 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
 
     // MARK: Ayarlanabilir dönüşler
     public var fileContent = "# title\n"
+    /// `readFile` gecikmesi (yarış senaryoları).
+    public var readFileDelay: Duration = .zero
     public var branchesToReturn: [GitBranch] = []
     public var commitsToReturn: [GitCommit] = []
     public var statusToReturn: [GitFileChange] = []
@@ -62,6 +64,12 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
 
     public func setPreview(_ preview: ImagePreview) {
         previewToReturn = preview
+    }
+
+    /// `readFile` bu süre kadar askıda kalır — geç dönen yüklemenin yeni bir
+    /// sunumu ezmediğini doğrulamak için (FileViewerStore yarış koruması).
+    public func setReadFileDelay(_ delay: Duration) {
+        readFileDelay = delay
     }
 
     public func setBranches(_ list: [GitBranch]) {
@@ -120,6 +128,7 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
 
     public func readFile(repoPath: String, file: String) async throws -> String {
         readFileCalls.append(file)
+        if readFileDelay > .zero { try? await Task.sleep(for: readFileDelay) }
         if let errorToThrow { throw errorToThrow }
         return fileContent
     }

@@ -10,6 +10,7 @@ public final class FakeSystemService: SystemServicing, @unchecked Sendable {
     private var checkResults: [SystemCheckResult] = []
     private var folderToChoose: String?
     private var openExternalError: LumiError?
+    private var runChecksDelay: Duration = .zero
     private var trashError: LumiError?
 
     // MARK: Çağrı kaydı
@@ -31,6 +32,12 @@ public final class FakeSystemService: SystemServicing, @unchecked Sendable {
         lock.withLock { folderToChoose = path }
     }
 
+    /// `runChecks` bu süre kadar askıda kalır — "koşarken ilerleme bloklanır"
+    /// kuralını doğrulamak için.
+    public func setRunChecksDelay(_ delay: Duration) {
+        lock.withLock { runChecksDelay = delay }
+    }
+
     public func setOpenExternalError(_ error: LumiError?) {
         lock.withLock { openExternalError = error }
     }
@@ -49,10 +56,12 @@ public final class FakeSystemService: SystemServicing, @unchecked Sendable {
 
     // MARK: SystemServicing
     public func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] {
-        lock.withLock {
+        let delay = lock.withLock {
             runChecksProviders.append(selectedProvider)
-            return checkResults
+            return runChecksDelay
         }
+        if delay > .zero { try? await Task.sleep(for: delay) }
+        return lock.withLock { checkResults }
     }
 
     public func fixProcessPath() async {

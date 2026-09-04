@@ -18,7 +18,14 @@ final class UsageFeatureAssembly: FeatureAssembly {
         self.services = services
         var stores: [AgentProvider: UsageStore] = [:]
         for provider in AgentProvider.allCases {
-            stores[provider] = UsageStore(service: services.usage(for: provider))
+            let service = services.usage(for: provider)
+            // Hangi dekoratörlerin kurulu olduğunu bilmek composition root'un
+            // işidir (K38-A): `UsageServicing` cache kavramını taşımaz, store
+            // da bunu kendi keşfetmeye çalışmaz.
+            stores[provider] = UsageStore(
+                service: service,
+                cache: service as? any UsageCacheInvalidating
+            )
         }
         usageStores = stores
         usageAutoRefresh = UsageAutoRefreshStore(

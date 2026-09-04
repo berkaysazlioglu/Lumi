@@ -29,6 +29,7 @@ struct RootViewFactory {
             promptQueue: composition.terminal.promptQueue,
             gitStore: composition.repo.gitStore,
             fileViewer: composition.repo.fileViewer,
+            onboarding: composition.workspaceBoot.onboarding,
             settings: shared.settings,
             sessionSchedule: composition.sessionSchedule.sessionSchedule,
             usageStores: composition.usage.usageStores,
@@ -66,19 +67,7 @@ struct RootViewFactory {
 
     private func makeShellActions() -> RootView.ShellActions {
         RootView.ShellActions(
-            chooseFolder: { await registry.system.chooseFolder() },
-            runChecks: {
-                let provider = await registry.config.config().aiProvider
-                return await registry.system.runChecks(selectedProvider: provider)
-            },
-            // checkID → URL `switch`'i kalktı: düzeltme bağlantısını kontrolün
-            // kendisi üretir (`SystemCheckResult.fixURL`, refactor 3.6).
-            fixCheck: { check in
-                guard let url = check.fixURL else { return }
-                shared.toasts.reporting {
-                    try registry.system.openExternal(url)
-                }
-            }
+            chooseFolder: { await registry.system.chooseFolder() }
         )
     }
 }

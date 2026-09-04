@@ -150,7 +150,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         ),
         autoMinimizeOnSend: true,
         sessionTrigger: SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go"),
-        usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 1),
+        usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 15),
         usageIndicators: UsageIndicators(claude: false, codex: true)
     )
 
@@ -165,6 +165,143 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         windowBounds: WindowBounds(x: 10, y: 20, width: 1200, height: 800),
         windowMaximized: true,
         resumeSessions: [ResumeSession(repoPath: "/r/alpha", sessionID: "s-1")],
+        activeRoute: "tasks",
         legacyGridColumns: nil
     )
+}
+
+// MARK: - Alt codec'ler (refactor 5.7: bölüm başına decode/overlay çifti)
+
+/// Kök overlay'ler alt codec'lere devredildiği için bütünlük kontrolü de alt
+/// tip bazında yapılır: bir alt tipe alan eklenip o codec'in overlay'i
+/// güncellenmezse alan sessizce diske yazılmaz (karar 9).
+extension ConfigCodecIntegrityTests {
+    private func fields(of value: Any) -> Set<String> {
+        Set(Mirror(reflecting: value).children.compactMap(\.label))
+    }
+
+    /// Tek bir alt codec için iki yönlü kontrol: alan ⊆ overlay ve overlay ⊆ alan.
+    private func assertOverlayMatchesFields<T>(
+        _ value: T,
+        overlay: [String: Any],
+        exempt: Set<String> = [],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let names = fields(of: value)
+        XCTAssertFalse(names.isEmpty, "Mirror alan üretmedi", file: file, line: line)
+        let keys = Set(overlay.keys)
+
+        let missing = names.subtracting(exempt).subtracting(keys)
+        XCTAssertTrue(
+            missing.isEmpty,
+            "overlay bu alanları yazmıyor (karar 9): \(missing.sorted())",
+            file: file, line: line
+        )
+        let orphans = keys.subtracting(names)
+        XCTAssertTrue(
+            orphans.isEmpty,
+            "overlay'de modelde olmayan anahtar: \(orphans.sorted())",
+            file: file, line: line
+        )
+    }
+
+    func testNotificationSettingsCodecCoversEveryField() {
+        let value = NotificationSettings(
+            unseenEnabled: false, unseenIntervalMinutes: 7,
+            seenEnabled: false, seenIntervalMinutes: 11
+        )
+        assertOverlayMatchesFields(value, overlay: NotificationSettingsCodec.overlay(value))
+        XCTAssertEqual(NotificationSettingsCodec.decode(NotificationSettingsCodec.overlay(value)), value)
+    }
+
+    func testSessionTriggerCodecCoversEveryField() {
+        let value = SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go")
+        assertOverlayMatchesFields(value, overlay: SessionTriggerCodec.overlay(value))
+        XCTAssertEqual(SessionTriggerCodec.decode(SessionTriggerCodec.overlay(value)), value)
+    }
+
+    func testUsageAutoRefreshCodecCoversEveryField() {
+        let value = UsageAutoRefresh(enabled: true, intervalMinutes: 30)
+        assertOverlayMatchesFields(value, overlay: UsageAutoRefreshCodec.overlay(value))
+        XCTAssertEqual(UsageAutoRefreshCodec.decode(UsageAutoRefreshCodec.overlay(value)), value)
+    }
+
+    func testUsageIndicatorsCodecCoversEveryField() {
+        let value = UsageIndicators(claude: false, codex: true)
+        assertOverlayMatchesFields(value, overlay: UsageIndicatorsCodec.overlay(value))
+        XCTAssertEqual(UsageIndicatorsCodec.decode(UsageIndicatorsCodec.overlay(value)), value)
+    }
+
+    func testAdditionalPathCodecCoversEveryField() {
+        let value = AdditionalPath(id: "id-1", path: "/tmp/x", type: .root, label: "Extra")
+        assertOverlayMatchesFields(value, overlay: AdditionalPathCodec.overlay(value))
+        XCTAssertEqual(AdditionalPathCodec.decode(AdditionalPathCodec.overlay(value)), value)
+    }
+
+    /// `label` nil iken anahtar HİÇ yazılmaz (Electron paritesi) — bu yüzden
+    /// muafiyetle bakılır.
+    func testAdditionalPathOmitsNilLabel() {
+        let value = AdditionalPath(id: "id-2", path: "/tmp/y", type: .repo, label: nil)
+        let overlay = AdditionalPathCodec.overlay(value)
+        XCTAssertNil(overlay["label"])
+        assertOverlayMatchesFields(value, overlay: overlay, exempt: ["label"])
+        XCTAssertEqual(AdditionalPathCodec.decode(overlay), value)
+    }
+
+    func testGridLayoutCodecCoversEveryField() {
+        let value = GridLayout(mode: .columns, count: 3, heightMode: .fit, heightRatio: .third)
+        assertOverlayMatchesFields(value, overlay: GridLayoutCodec.overlay(value))
+        XCTAssertEqual(GridLayoutCodec.decode(GridLayoutCodec.overlay(value)), value)
+    }
+
+    func testWindowBoundsCodecCoversEveryField() {
+        let value = WindowBounds(x: 10, y: 20.5, width: 1200, height: 800)
+        assertOverlayMatchesFields(value, overlay: WindowBoundsCodec.overlay(value))
+        XCTAssertEqual(WindowBoundsCodec.decode(WindowBoundsCodec.overlay(value)), value)
+    }
+
+    /// Tam sayı koordinatlar `Int` olarak yazılır (580, 580.0 değil).
+    func testWindowBoundsWritesIntegralValuesAsIntegers() {
+        let overlay = WindowBoundsCodec.overlay(
+            WindowBounds(x: 580, y: 214.5, width: 1400, height: 900)
+        )
+        XCTAssertTrue(overlay["x"] is Int)
+        XCTAssertTrue(overlay["width"] is Int)
+        XCTAssertTrue(overlay["y"] is Double)
+    }
+
+    func testResumeSessionCodecCoversEveryField() {
+        let value = ResumeSession(repoPath: "/r/alpha", sessionID: "s-1")
+        assertOverlayMatchesFields(value, overlay: ResumeSessionCodec.overlay(value))
+        XCTAssertEqual(ResumeSessionCodec.decode(ResumeSessionCodec.overlay(value)), value)
+    }
+
+    /// Kök `AppConfig` overlay'i alt bölümleri gerçekten alt codec'lerin
+    /// ürettiği sözlüklerle doldurur (kopya tanım kalmadığının kanıtı).
+    func testRootOverlayDelegatesToSectionCodecs() throws {
+        let config = Self.nonDefaultConfig
+        let overlay = ConfigCodec.configOverlay(config)
+
+        let notifications = try XCTUnwrap(overlay["notifications"] as? [String: Any])
+        XCTAssertEqual(
+            notifications as NSDictionary,
+            NotificationSettingsCodec.overlay(config.notifications) as NSDictionary
+        )
+        let trigger = try XCTUnwrap(overlay["sessionTrigger"] as? [String: Any])
+        XCTAssertEqual(
+            trigger as NSDictionary,
+            SessionTriggerCodec.overlay(config.sessionTrigger) as NSDictionary
+        )
+        let autoRefresh = try XCTUnwrap(overlay["usageAutoRefresh"] as? [String: Any])
+        XCTAssertEqual(
+            autoRefresh as NSDictionary,
+            UsageAutoRefreshCodec.overlay(config.usageAutoRefresh) as NSDictionary
+        )
+        let indicators = try XCTUnwrap(overlay["usageIndicators"] as? [String: Any])
+        XCTAssertEqual(
+            indicators as NSDictionary,
+            UsageIndicatorsCodec.overlay(config.usageIndicators) as NSDictionary
+        )
+    }
 }

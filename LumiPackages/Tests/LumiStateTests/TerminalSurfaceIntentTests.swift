@@ -211,7 +211,7 @@ final class TerminalSurfaceIntentTests: XCTestCase {
     }
 
     func testAutoMinimizeOnSendPushesMinimizedSurfaceState() {
-        store.autoMinimizeOnSend = true
+        store.applyAutoMinimize(true)
         let terminal = makeTerminal("t1")
 
         store.apply(.statusChanged(terminal.id, .working))

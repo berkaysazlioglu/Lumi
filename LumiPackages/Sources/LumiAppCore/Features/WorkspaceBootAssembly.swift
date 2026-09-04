@@ -17,10 +17,18 @@ final class WorkspaceBootAssembly: FeatureAssembly {
 
     private var services: (any ServiceRegistry)!
     private var shared: SharedStores!
+    /// Onboarding akışının state'i (refactor 5.8) — `RootView` bunu okur.
+    private(set) var onboarding: OnboardingStore!
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
         self.services = services
         self.shared = shared
+        onboarding = OnboardingStore(
+            system: services.system,
+            settings: shared.settings,
+            toasts: shared.toasts,
+            onComplete: { [weak shared] in shared?.workspace.isOnboardingActive = false }
+        )
     }
 
     func start() async {

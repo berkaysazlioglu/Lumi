@@ -122,14 +122,14 @@ final class GridLayoutMathTests: XCTestCase {
                 container: CGSize(width: 1000, height: 800),
                 visibleCount: 1
             )
-            XCTAssertEqual(few[0].height, CGFloat(expected), "az terminal, oran \(ratio.label)")
+            XCTAssertEqual(few[0].height, CGFloat(expected), "az terminal, oran \(ratio.displayLabel)")
             // Çok terminal — aynı yükseklik, içerik viewport'u aşar (scroll)
             let many = GridLayoutMath.frames(
                 layout: layout(.columns, 1, .scroll, ratio),
                 container: CGSize(width: 1000, height: 800),
                 visibleCount: 5
             )
-            XCTAssertEqual(many[0].height, CGFloat(expected), "çok terminal, oran \(ratio.label)")
+            XCTAssertEqual(many[0].height, CGFloat(expected), "çok terminal, oran \(ratio.displayLabel)")
             XCTAssertGreaterThan(GridLayoutMath.contentHeight(frames: many), 800)
         }
     }

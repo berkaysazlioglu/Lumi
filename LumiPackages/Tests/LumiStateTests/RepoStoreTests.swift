@@ -48,9 +48,9 @@ final class RepoStoreTests: XCTestCase {
 
     func testGroupOrderIsProjectsRootThenAdditionalRootsThenStandalone() async {
         await service.setRepos([Self.standaloneRepo, Self.extraRepo, Self.rootRepo])
-        store.additionalPaths = [
+        store.setAdditionalPaths([
             AdditionalPath(id: "a1", path: "/extra", type: .root, label: "Extra")
-        ]
+        ])
         await store.reload()
 
         XCTAssertEqual(
@@ -67,10 +67,10 @@ final class RepoStoreTests: XCTestCase {
             source: .additionalRoot(path: "/second", label: nil)
         )
         await service.setRepos([second, Self.extraRepo])
-        store.additionalPaths = [
+        store.setAdditionalPaths([
             AdditionalPath(id: "a1", path: "/extra", type: .root, label: "Extra"),
             AdditionalPath(id: "a2", path: "/second", type: .root),
-        ]
+        ])
         await store.reload()
 
         XCTAssertEqual(store.groupedRepos.map(\.id), ["a1", "a2"])
@@ -80,9 +80,9 @@ final class RepoStoreTests: XCTestCase {
         // Boş root grubu KALIR (kullanıcı oraya repo koyabilsin diye görünür),
         // boş "Projects Root" / "Standalone Repos" grupları görünmez.
         await service.setRepos([])
-        store.additionalPaths = [
+        store.setAdditionalPaths([
             AdditionalPath(id: "a1", path: "/extra", type: .root, label: "Extra")
-        ]
+        ])
         await store.reload()
 
         XCTAssertEqual(store.groupedRepos.map(\.id), ["a1"])
@@ -91,7 +91,7 @@ final class RepoStoreTests: XCTestCase {
 
     func testRepoTypeAdditionalPathGetsNoGroupOfItsOwn() async {
         await service.setRepos([Self.standaloneRepo])
-        store.additionalPaths = [AdditionalPath(id: "a1", path: "/somewhere/solo", type: .repo)]
+        store.setAdditionalPaths([AdditionalPath(id: "a1", path: "/somewhere/solo", type: .repo)])
         await store.reload()
 
         XCTAssertEqual(store.groupedRepos.map(\.id), ["__standalone__"], "repo tipi Standalone'a düşer")
@@ -99,7 +99,7 @@ final class RepoStoreTests: XCTestCase {
 
     func testAdditionalRootLabelFallsBackToLastPathComponent() async {
         await service.setRepos([])
-        store.additionalPaths = [AdditionalPath(id: "a1", path: "/Users/dev/wkspaces/Github", type: .root)]
+        store.setAdditionalPaths([AdditionalPath(id: "a1", path: "/Users/dev/wkspaces/Github", type: .root)])
         await store.reload()
 
         XCTAssertEqual(store.groupedRepos.map(\.label), ["Github"])
@@ -175,6 +175,44 @@ final class RepoStoreTests: XCTestCase {
         XCTAssertEqual(store.fileTrees["/r"], replacement)
         let calls = await service.fileTreeCalls
         XCTAssertEqual(calls, ["/r", "/r"])
+    }
+
+    // MARK: - Eviction (refactor 5.5)
+
+    func testEvictClearsFileTreeCacheAndExpandState() async {
+        await service.setFileTree(Self.tree, for: "/r")
+        await store.loadFileTree("/r")
+
+        store.evict("/r")
+
+        XCTAssertNil(store.fileTrees["/r"])
+        XCTAssertNil(store.expandedNodes["/r"])
+    }
+
+    func testEvictRearmsAutoExpandOnNextLoad() async {
+        await service.setFileTree(Self.tree, for: "/r")
+        await store.loadFileTree("/r")
+        store.toggleNode("/r", path: "Sources") // kullanıcı kapattı
+
+        store.evict("/r")
+        await store.loadFileTree("/r")
+
+        XCTAssertEqual(
+            store.expandedNodes["/r"], ["Sources"],
+            "tab kapanıp yeniden açılınca ilk-yükleme davranışı geri gelir"
+        )
+    }
+
+    func testEvictIsScopedToOneRepo() async {
+        await service.setFileTree(Self.tree, for: "/r1")
+        await service.setFileTree(Self.tree, for: "/r2")
+        await store.loadFileTree("/r1")
+        await store.loadFileTree("/r2")
+
+        store.evict("/r1")
+
+        XCTAssertNil(store.fileTrees["/r1"])
+        XCTAssertEqual(store.fileTrees["/r2"], Self.tree)
     }
 
     // MARK: - start/stop event tüketimi

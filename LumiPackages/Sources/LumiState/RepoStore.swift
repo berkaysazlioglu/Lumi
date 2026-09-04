@@ -8,13 +8,15 @@ import Observation
 @MainActor
 public final class RepoStore: StoreLifecycle {
     public private(set) var repos: [Repo] = []
-    /// Gruplamanın "boş root grupları da göster" kuralı için config sırasıyla tutulur.
-    public var additionalPaths: [AdditionalPath] = []
+    /// Gruplamanın "boş root grupları da göster" kuralı için config sırasıyla
+    /// tutulur. Kapsülleme (refactor 5.4): iki yazar vardı (assembly bootstrap +
+    /// `configDidChange`); ikisi de artık `setAdditionalPaths(_:)` çağırır.
+    public private(set) var additionalPaths: [AdditionalPath] = []
 
     // File tree (file tree UI davranışları): repo başına cache (stale-while-
     /// revalidate), expand state (oturum içi), ilk-yüklemede kök klasör expand'i.
     public private(set) var fileTrees: [String: [FileTreeNode]] = [:]
-    public private(set) var expandedNodes: [String: Set<String>] = [:]
+    public private(set) var expandedNodes = KeyedToggleSet<String, String>()
     @ObservationIgnored private var autoExpandedRepos: Set<String> = []
 
     @ObservationIgnored private let service: any RepoServicing
@@ -45,6 +47,11 @@ public final class RepoStore: StoreLifecycle {
         repos = await service.repos()
     }
 
+    /// Config aynası (bootstrap + `configDidChange`).
+    public func setAdditionalPaths(_ paths: [AdditionalPath]) {
+        additionalPaths = paths
+    }
+
     public func repo(at path: String) -> Repo? {
         repos.first { $0.path == path }
     }
@@ -59,18 +66,21 @@ public final class RepoStore: StoreLifecycle {
             autoExpandedRepos.insert(repoPath)
             // İlk yüklemede kök seviyesindeki klasörler otomatik expand
             let rootFolders = tree.filter { $0.type == .folder && !$0.isIgnored }.map(\.path)
-            expandedNodes[repoPath, default: []].formUnion(rootFolders)
+            expandedNodes.formUnion(rootFolders, in: repoPath)
         }
     }
 
     public func toggleNode(_ repoPath: String, path: String) {
-        var expanded = expandedNodes[repoPath] ?? []
-        if expanded.contains(path) {
-            expanded.remove(path)
-        } else {
-            expanded.insert(path)
-        }
-        expandedNodes[repoPath] = expanded
+        expandedNodes.toggle(path, in: repoPath)
+    }
+
+    /// Tab kapanınca dosya ağacı cache'i + expand durumu boşaltılır
+    /// (refactor 5.5). Yeniden açılışta ağaç servisten taze çekilir ve kök
+    /// klasör auto-expand'i yeniden koşar.
+    public func evict(_ repoPath: String) {
+        fileTrees.removeValue(forKey: repoPath)
+        expandedNodes.evict(repoPath)
+        autoExpandedRepos.remove(repoPath)
     }
 
     // MARK: - Gruplama (groupReposBySource paritesi)

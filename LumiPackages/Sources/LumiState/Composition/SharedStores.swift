@@ -25,6 +25,12 @@ public final class SharedStores {
     public let terminals: TerminalListStore
     public let settings: SettingsStore
 
+    /// Workspace facade'ının alt store'ları (refactor 5.2). Faz 6'da
+    /// `ShellContext` bunları doğrudan alacak ve facade kalkacak.
+    public var navigation: NavigationStore { workspace.navigation }
+    public var layout: LayoutStore { workspace.layout }
+    public var dialogs: DialogRouter { workspace.dialogs }
+
     public init(
         toasts: ToastStore,
         workspace: WorkspaceStore,

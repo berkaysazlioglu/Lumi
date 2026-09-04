@@ -228,21 +228,52 @@ final class ConfigServiceTests: XCTestCase {
         let service = makeService()
 
         try await service.updateConfig {
-            $0.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 1)
+            $0.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 15)
         }
 
         let written = try readJSONDict(paths.configFile)
         let nested = try XCTUnwrap(written["usageAutoRefresh"] as? [String: Any])
         XCTAssertEqual(nested["enabled"] as? Bool, true)
-        XCTAssertEqual(nested["intervalMinutes"] as? Int, 1)
+        XCTAssertEqual(nested["intervalMinutes"] as? Int, 15)
         // Mevcut alanlar korunur (additive, karar 9)
         XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
 
         let reloaded = await ConfigService(paths: paths).config()
         XCTAssertEqual(
             reloaded.usageAutoRefresh,
-            UsageAutoRefresh(enabled: true, intervalMinutes: 1)
+            UsageAutoRefresh(enabled: true, intervalMinutes: 15)
         )
+    }
+
+    /// K38-A: izinli set {5, 15, 30}'a daraldı. Diskteki eski `1` (önceki set)
+    /// ilk OKUMADA 5'e clamp'lenir ve ilk yazımda clamp'li hâliyle diske döner.
+    /// Karar 9 ihlali değildir: aralık zaten baştan beri doğrulanan bir alandı,
+    /// yalnız izinli küme değişti; bilinmeyen anahtarlar yine korunur.
+    func testLegacyOneMinuteIntervalIsClampedOnReadAndWrite() async throws {
+        try writeFixture(
+            """
+            {
+              "projectsRoot": "/p",
+              "terminalFontSize": 13,
+              "maxTerminals": 12,
+              "usageAutoRefresh": { "enabled": true, "intervalMinutes": 1 }
+            }
+            """,
+            to: paths.configFile
+        )
+        let service = makeService()
+
+        let config = await service.config()
+        XCTAssertEqual(config.usageAutoRefresh.intervalMinutes, 5)
+        XCTAssertTrue(config.usageAutoRefresh.enabled, "clamp yalnız aralığa dokunur")
+
+        // Başka bir alanı değiştiren ilk yazımda clamp'li değer diske iner.
+        try await service.updateConfig { $0.theme = "light" }
+        let written = try readJSONDict(paths.configFile)
+        let nested = try XCTUnwrap(written["usageAutoRefresh"] as? [String: Any])
+        XCTAssertEqual(nested["intervalMinutes"] as? Int, 5)
+        // Bilinmeyen anahtar korunur (karar 9)
+        XCTAssertEqual(written["maxTerminals"] as? Int, 12)
     }
 
     func testUsageIndicatorsDefaultsWhenAbsent() async throws {
@@ -460,6 +491,37 @@ final class ConfigServiceTests: XCTestCase {
 
         let contents = try String(contentsOf: paths.uiStateFile, encoding: .utf8)
         XCTAssertFalse(contents.contains("580.0"), "tam sayı bounds Electron gibi int yazılmalı")
+    }
+
+    /// K34 (additive): `activeRoute` diske yazılır/okunur; legacy `activeView`
+    /// anahtarına DOKUNULMAZ (ayrı bir Electron alanıdır, karar 9).
+    func testActiveRouteRoundTripsAndLeavesLegacyActiveViewAlone() async throws {
+        try writeFixture(realUIStateFixture, to: paths.uiStateFile)
+        let service = makeService()
+
+        await service.updateUIState { $0.activeRoute = "tasks" }
+        await service.flushPendingWrites()
+
+        var written = try readJSONDict(paths.uiStateFile)
+        XCTAssertEqual(written["activeRoute"] as? String, "tasks")
+        XCTAssertEqual(written["activeView"] as? String, "terminals", "legacy alan korunur")
+
+        let reloaded = await ConfigService(paths: paths).uiState()
+        XCTAssertEqual(reloaded.activeRoute, "tasks")
+
+        // Repo tab'ına dönüş: bayat route diskte kalmasın diye açıkça null yazılır.
+        await service.updateUIState { $0.activeRoute = nil }
+        await service.flushPendingWrites()
+        written = try readJSONDict(paths.uiStateFile)
+        XCTAssertTrue(written["activeRoute"] is NSNull)
+        XCTAssertEqual(written["activeView"] as? String, "terminals")
+    }
+
+    /// Eski dosyada anahtar yok → nil (additive, karar 9).
+    func testActiveRouteDefaultsToNilWhenAbsent() async throws {
+        try writeFixture(realUIStateFixture, to: paths.uiStateFile)
+        let state = await makeService().uiState()
+        XCTAssertNil(state.activeRoute)
     }
 
     func testActiveTabTransitionsToExplicitNull() async throws {

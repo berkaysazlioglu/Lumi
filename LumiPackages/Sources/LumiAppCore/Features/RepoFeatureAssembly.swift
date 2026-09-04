@@ -35,7 +35,7 @@ final class RepoFeatureAssembly: FeatureAssembly {
     func start() async {
         let config = await services.config.config()
         // SIRA: additionalPaths start()'tan önce (aksi halde ilk reload eksik grup üretir)
-        repoStore.additionalPaths = config.additionalPaths
+        repoStore.setAdditionalPaths(config.additionalPaths)
         await services.repo.setRoots(
             projectsRoot: config.projectsRoot,
             additionalPaths: config.additionalPaths
@@ -47,13 +47,14 @@ final class RepoFeatureAssembly: FeatureAssembly {
         await shared.workspace.load(repos: repoStore.repos)
 
         wireActiveRepo()
+        wireTabClosed()
         startFileTreeBridge()
     }
 
     func configDidChange(old: AppConfig, new: AppConfig) {
         guard old.projectsRoot != new.projectsRoot
             || old.additionalPaths != new.additionalPaths else { return }
-        repoStore.additionalPaths = new.additionalPaths
+        repoStore.setAdditionalPaths(new.additionalPaths)
         let previous = rootsTask
         let repo = services.repo
         rootsTask = Task { @MainActor in
@@ -93,6 +94,17 @@ final class RepoFeatureAssembly: FeatureAssembly {
         // Bootstrap'te aktif tab varsa ilk yükleme (load() callback'ten önce kuruldu)
         if let active = shared.workspace.activeTab {
             shared.workspace.onActiveRepoChanged?(nil, active)
+        }
+    }
+
+    /// Tab kapanışı → repo'ya ait bellek cache'lerinin boşaltılması
+    /// (refactor 5.5). `LayoutStore.projectGridLayouts` KASITLI olarak
+    /// korunur: persist edilen kullanıcı tercihidir (karar 9).
+    private func wireTabClosed() {
+        shared.workspace.onTabClosed = { [weak self] repoPath in
+            guard let self else { return }
+            gitStore.evict(repoPath)
+            repoStore.evict(repoPath)
         }
     }
 
