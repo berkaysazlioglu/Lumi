@@ -8,7 +8,8 @@ import Observation
 @Observable
 @MainActor
 public final class WorkspaceStore {
-    public static let defaultGridLayout = GridLayout(mode: .auto, count: 2)
+    /// Yeni repo default'u: tek kolon + Fit (karar 31).
+    public static let defaultGridLayout = GridLayout(mode: .columns, count: 1, heightMode: .fit)
 
     public private(set) var openTabs: [String] = []
     public private(set) var activeTab: String?

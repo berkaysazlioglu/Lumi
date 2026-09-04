@@ -95,11 +95,12 @@ struct TerminalCardView: View {
         .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: meta.id, store: promptQueue)
     }
 
+    /// Kart header'ı: ince (karar 31) — 20px butonlar, 3px dikey padding.
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             StatusDot(status: meta.status)
             Text(meta.oscTitle ?? meta.task ?? meta.name)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
                 .lineLimit(1)
             Spacer()
@@ -112,8 +113,9 @@ struct TerminalCardView: View {
             CardHeaderButton(systemName: "minus", action: onMinimize)
             CardHeaderButton(systemName: "xmark", isDestructive: true, action: onClose)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.leading, 10)
+        .padding(.trailing, 6)
+        .padding(.vertical, 3)
         .background(Theme.bgElevated)
         .overlay(alignment: .bottom) {
             Theme.border.frame(height: 1)
@@ -139,7 +141,7 @@ struct StatusDot: View {
         let color = Theme.statusColor(for: status)
         Circle()
             .fill(color)
-            .frame(width: 8, height: 8)
+            .frame(width: 7, height: 7)
             .shadow(color: shouldPulse ? color.opacity(0.8) : .clear, radius: 3)
             .opacity(shouldPulse && isPulsing ? 0.4 : 1)
             .animation(
@@ -155,7 +157,7 @@ struct StatusDot: View {
     }
 }
 
-/// Kart header butonu (v1: 24×24, hover'da kapatma kırmızıya döner).
+/// Kart header butonu (ince: 20×20, hover'da kapatma kırmızıya döner).
 struct CardHeaderButton: View {
     let systemName: String
     var isDestructive = false
@@ -166,9 +168,9 @@ struct CardHeaderButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(hoverColor)
-                .frame(width: 24, height: 24)
+                .frame(width: 20, height: 20)
                 .background(isHovering ? hoverBackground : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .contentShape(Rectangle())

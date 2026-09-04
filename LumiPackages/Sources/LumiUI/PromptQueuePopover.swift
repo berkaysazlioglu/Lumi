@@ -15,9 +15,9 @@ struct PromptQueueToggleButton: View {
         Button { isOpen.toggle() } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: isPaused ? "pause.rectangle" : "list.bullet.rectangle")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(iconColor)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
                     .background(isHovering || isOpen ? Theme.bgSurface : .clear)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
                     .contentShape(Rectangle())

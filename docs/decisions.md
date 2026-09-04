@@ -187,6 +187,10 @@ Kullanıcıya görünen etki: `Library` adlı gerçek kaynak klasörleri ağaçt
 - Traffic light'lar sola yapışık değil, diğer macOS uygulamalarındaki doğal konumda: ilk buton x=16, barın dikey ortası, 20pt adım (Orca `hiddenInset` + `trafficLightPosition` paritesi). İçerik 80px'ten başlar.
 - Karar 27'deki titlebar container büyütme (hit-test) mekanizması aynen korunur; yalnız ölçüler değişti.
 
+### 31. Terminal kart header'ı inceltildi, grid default'u 1 kolon + Fit (2026-09-04)
+- Kart header'ı: 20px butonlar, 11px başlık, 3px dikey padding (v1 24px/6px yerine) — top bar (karar 30) ile aynı yoğunluk.
+- Kayıtlı yerleşimi olmayan repo için grid default'u `auto/2/scroll` yerine **`columns/1/fit`**: tek terminal pencereyi doldurur, scroll yok. `ui-state.json`'daki mevcut repo yerleşimleri aynen korunur (karar 9).
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, personas + quick actions — karar 25).
