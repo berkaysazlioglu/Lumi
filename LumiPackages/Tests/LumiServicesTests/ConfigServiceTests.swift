@@ -76,9 +76,12 @@ final class ConfigServiceTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// `waking`: event'i tetikleyen iş — dinleyici kurulduktan SONRA koşar
+    /// (tetikleyici önce çalışırsa event kaçar).
     private func awaitFirstEvent(
         _ stream: AsyncStream<ConfigEvent>,
-        timeout: Duration = .seconds(2)
+        timeout: Duration = .seconds(2),
+        waking: (@Sendable () async -> Void)? = nil
     ) async -> ConfigEvent? {
         await withTaskGroup(of: ConfigEvent?.self) { group in
             group.addTask {
@@ -86,6 +89,8 @@ final class ConfigServiceTests: XCTestCase {
                 return nil
             }
             group.addTask {
+                try? await Task.sleep(for: .milliseconds(20))
+                await waking?()
                 try? await Task.sleep(for: timeout)
                 return nil
             }
@@ -373,6 +378,60 @@ final class ConfigServiceTests: XCTestCase {
         let contents = try String(contentsOf: paths.configFile, encoding: .utf8)
         XCTAssertFalse(contents.contains("\\/"), "Electron düz / yazar; \\/ kaçışı parite bozar")
         XCTAssertTrue(contents.contains("/Users/dev/new root"))
+    }
+
+    // MARK: - Bozuk dosya (1.13)
+
+    /// Karar 9: bilinmeyen anahtarlar korunur. Parse edilemeyen dosyada merge
+    /// mümkün değildir — dosya defaults'la ezilmeden önce yedeklenmeli ve hata
+    /// event'e düşmeli (karar 5).
+    func testCorruptConfigIsBackedUpBeforeBeingOverwritten() async throws {
+        try writeFixture("{ bozuk json ", to: paths.configFile)
+        let service = makeService()
+        let stream = await service.events()
+
+        guard case .loadFailed(let file, let detail)? = await awaitFirstEvent(stream, waking: {
+            _ = await service.config()
+        }) else {
+            return XCTFail("loadFailed event'i gelmedi")
+        }
+        XCTAssertEqual(file, paths.configFile.lastPathComponent)
+        XCTAssertTrue(detail.contains("backed up to"), detail)
+
+        let backups = try Self.backupFiles(besides: paths.configFile)
+        XCTAssertEqual(backups.count, 1, "tam bir yedek beklenirdi: \(backups)")
+        XCTAssertEqual(
+            try String(contentsOf: backups[0], encoding: .utf8),
+            "{ bozuk json ",
+            "yedek bozuk dosyanın birebir kopyası olmalı"
+        )
+
+        // Yazım yedekten SONRA gerçekleşir ve artık geçerli JSON üretir.
+        try await service.updateConfig { $0.terminalFontSize = 14 }
+        let written = try readJSONDict(paths.configFile)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 14)
+        XCTAssertEqual(
+            try Self.backupFiles(besides: paths.configFile).count, 1,
+            "aynı dosya için tekrar tekrar yedek alınmamalı"
+        )
+    }
+
+    func testCorruptUIStateIsBackedUp() async throws {
+        try writeFixture("not json at all", to: paths.uiStateFile)
+        let service = makeService()
+
+        _ = await service.uiState()
+
+        let backups = try Self.backupFiles(besides: paths.uiStateFile)
+        XCTAssertEqual(backups.count, 1)
+    }
+
+    private static func backupFiles(besides url: URL) throws -> [URL] {
+        let directory = url.deletingLastPathComponent()
+        return try FileManager.default
+            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("\(url.lastPathComponent).bak-") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     // MARK: - UI state golden round-trip

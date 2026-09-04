@@ -25,7 +25,6 @@ final class TerminalPipeline: @unchecked Sendable {
     var onAwaitingDecisionChange: (@Sendable (Bool) -> Void)?
     var onDisplayTitle: (@Sendable (String) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
-    var onOutputText: (@Sendable (String) -> Void)?
 
     init(queue: DispatchQueue, flow: FlowController = FlowController()) {
         self.flow = flow
@@ -63,7 +62,6 @@ final class TerminalPipeline: @unchecked Sendable {
                 statusMachine.onOutputActivity()
                 silenceTimer.touch()
             }
-            onOutputText?(text)
         }
         coalescer.ingest(data)
         return directive == .suspend ? .suspend : .proceed
@@ -146,6 +144,16 @@ final class TerminalPipeline: @unchecked Sendable {
         silenceTimer.cancel()
         decisionTracker.reset()
         coalescer.flushNow()
+    }
+
+    /// Exit-cleanup'ın sıra-bağımlı ikinci yarısı (design/01 §6): timer iptal →
+    /// OSC buffer sil → status makinesine exit. Terminal kayıttan düştükten SONRA
+    /// çağrılır; buradan doğan status yayını tüketici tarafında (isTerminated)
+    /// süzülür — bayat push Electron paritesinde de yoktur.
+    func finishExit(code: Int32) {
+        silenceTimer.cancel()
+        oscParser.reset()
+        statusMachine.onExit(code: code)
     }
 
     var currentHint: AgentHint {

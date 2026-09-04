@@ -6,7 +6,9 @@ import Foundation
 /// atexit + SIGTERM süpürmesi yalnız async-signal-safe çağrılar kullanır:
 /// pid'ler sabit kapasiteli C dizisinde tutulur, handler killpg dışında bir şey yapmaz.
 
-private let sweepCapacity = 128
+/// Kapasite: spawn limiti kaldırıldıktan (karar 29) sonra üst sınır yok; 512 slot
+/// pratik tavanın çok üstünde ve sabit dizi async-signal-safe süpürmeyi korur.
+private let sweepCapacity = 512
 
 // Signal handler'dan locksuz okunur; yazımlar registry lock'u altındadır.
 nonisolated(unsafe) private let sweepSlots: UnsafeMutablePointer<pid_t> = {
@@ -41,6 +43,9 @@ final class PTYChildRegistry: @unchecked Sendable {
         signal(SIGTERM, handler)
     }
 
+    /// `PTYProcess.init`'ten (normal Swift bağlamı — signal handler DEĞİL) çağrılır,
+    /// bu yüzden assert + stderr logu güvenlidir. Taşma sessiz kalırsa o child
+    /// kapanış süpürmesinin dışında kalır (zombi ağaç riski) — görünür olmalı.
     func register(_ pid: pid_t) {
         lock.lock()
         defer { lock.unlock() }
@@ -48,6 +53,10 @@ final class PTYChildRegistry: @unchecked Sendable {
             sweepSlots[index] = pid
             return
         }
+        FileHandle.standardError.write(
+            Data("lumi: PTYChildRegistry dolu (\(sweepCapacity)); pid \(pid) süpürme dışı\n".utf8)
+        )
+        assertionFailure("PTYChildRegistry kapasitesi doldu (\(sweepCapacity))")
     }
 
     func unregister(_ pid: pid_t) {

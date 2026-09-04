@@ -10,10 +10,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case pathOutsideRepo(path: String)
     case fileOperationFailed(path: String, detail: String)
     case configIOFailed(file: String, detail: String)
-    case yamlInvalid(file: String, detail: String)
     case externalURLBlocked(URL)
     case systemCheckFailed(check: String, detail: String)
-    case notificationPermissionDenied
     case cliNotFound(binary: String)
     case usageUnavailable(detail: String)
     case sessionStartFailed(detail: String)
@@ -33,14 +31,10 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "File operation failed for \(path): \(detail)"
         case .configIOFailed(let file, let detail):
             return "Could not read or write \(file): \(detail)"
-        case .yamlInvalid(let file, let detail):
-            return "Invalid YAML in \(file): \(detail)"
         case .externalURLBlocked(let url):
             return "Blocked external URL (only http/https allowed): \(url.absoluteString)"
         case .systemCheckFailed(let check, let detail):
             return "System check \(check) failed: \(detail)"
-        case .notificationPermissionDenied:
-            return "Notification permission was denied. Enable it in System Settings."
         case .cliNotFound(let binary):
             return "\(binary) CLI not found in PATH."
         case .usageUnavailable(let detail):

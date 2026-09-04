@@ -8,7 +8,6 @@ import LumiState
 @MainActor
 final class ConfigSideEffectCoordinator {
     private let config: any ConfigServicing
-    private let terminal: any TerminalServicing
     private let repo: any RepoServicing
     private let repoStore: RepoStore
     private let notifications: any NotificationServicing
@@ -33,13 +32,11 @@ final class ConfigSideEffectCoordinator {
 
     init(
         config: any ConfigServicing,
-        terminal: any TerminalServicing,
         repo: any RepoServicing,
         repoStore: RepoStore,
         notifications: any NotificationServicing
     ) {
         self.config = config
-        self.terminal = terminal
         self.repo = repo
         self.repoStore = repoStore
         self.notifications = notifications

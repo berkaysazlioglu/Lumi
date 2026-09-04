@@ -18,6 +18,9 @@ public actor ConfigService: ConfigServicing {
     private var cachedUIState: UIState?
     private var cachedUIRaw: [String: Any]?
     private var pendingUIFlush: Task<Void, Never>?
+    /// Aynı bozuk dosya için tek yedek: `config()` her çağrıda diskten okur,
+    /// yedekleme her okumada tekrarlanmamalı.
+    private var backedUpFiles: Set<String> = []
 
     public init(paths: LumiPaths, writeDebounce: Duration = ConfigService.defaultWriteDebounce) {
         self.paths = paths
@@ -85,7 +88,7 @@ public actor ConfigService: ConfigServicing {
         pendingUIFlush = Task { [writeDebounce] in
             try? await Task.sleep(for: writeDebounce)
             guard !Task.isCancelled else { return }
-            await self.flushFromTask()
+            self.flushFromTask()
         }
     }
 
@@ -100,8 +103,15 @@ public actor ConfigService: ConfigServicing {
             try writeJSONObject(merged, to: paths.uiStateFile)
             cachedUIRaw = merged
         } catch {
-            // Debounce'lu arkaplan yazımı: kullanıcı akışını bloklamaz, iz bırakır
-            fputs("[lumi] ui-state.json yazılamadı: \(error)\n", stderr)
+            // Debounce'lu arkaplan yazımı: kullanıcı akışını bloklamaz ama
+            // sessiz de kalmaz — iz + event (karar 5).
+            let detail = (error as? LumiError)?.localizedDescription
+                ?? error.localizedDescription
+            fputs("[lumi] ui-state.json yazılamadı: \(detail)\n", stderr)
+            broadcaster.send(.writeFailed(
+                file: paths.uiStateFile.lastPathComponent,
+                detail: detail
+            ))
         }
     }
 
@@ -111,10 +121,39 @@ public actor ConfigService: ConfigServicing {
         guard let data = try? Data(contentsOf: url) else { return nil }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
-            fputs("[lumi] parse hatası, defaults kullanılacak: \(url.lastPathComponent)\n", stderr)
+            handleParseFailure(at: url)
             return nil
         }
         return dict
+    }
+
+    /// Bozuk dosya defaults'la EZİLMEDEN önce yanına kopyalanır: merge yalnız
+    /// parse edilebilen ham sözlük üzerinden çalışır, parse edilemeyen dosyada
+    /// bilinmeyen anahtarlar ilk yazımda kaybolurdu (karar 9 ihlali).
+    private func handleParseFailure(at url: URL) {
+        let detail: String
+        if backedUpFiles.insert(url.path).inserted {
+            let backup = url.deletingLastPathComponent().appendingPathComponent(
+                "\(url.lastPathComponent).bak-\(Self.backupTimestamp())"
+            )
+            do {
+                try FileManager.default.copyItem(at: url, to: backup)
+                detail = "invalid JSON; backed up to \(backup.lastPathComponent)"
+            } catch {
+                detail = "invalid JSON; backup failed: \(error.localizedDescription)"
+            }
+        } else {
+            detail = "invalid JSON"
+        }
+        fputs("[lumi] parse hatası, defaults kullanılacak: \(url.lastPathComponent) — \(detail)\n", stderr)
+        broadcaster.send(.loadFailed(file: url.lastPathComponent, detail: detail))
+    }
+
+    private static func backupTimestamp(now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: now)
     }
 
     private func writeJSONObject(_ object: [String: Any], to url: URL) throws {

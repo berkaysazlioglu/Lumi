@@ -3,34 +3,6 @@ import XCTest
 import LumiKit
 @testable import LumiState
 
-actor FakeConfigService: ConfigServicing {
-    private var storedUIState = UIState.defaults
-    private(set) var uiStateUpdateCount = 0
-
-    func seed(_ state: UIState) {
-        storedUIState = state
-    }
-
-    func config() -> AppConfig { .defaults }
-    func updateConfig(_ mutate: @Sendable (inout AppConfig) -> Void) throws {}
-
-    func uiState() -> UIState { storedUIState }
-
-    func updateUIState(_ mutate: @Sendable (inout UIState) -> Void) {
-        var state = storedUIState
-        mutate(&state)
-        storedUIState = state
-        uiStateUpdateCount += 1
-    }
-
-    func isFirstRun() -> Bool { false }
-    func flushPendingWrites() {}
-
-    func events() -> AsyncStream<ConfigEvent> {
-        AsyncStream { $0.finish() }
-    }
-}
-
 @MainActor
 final class WorkspaceStoreTests: XCTestCase {
     private var config: FakeConfigService!
@@ -200,6 +172,22 @@ final class WorkspaceStoreTests: XCTestCase {
         try await waitForPersist()
         let persisted = await config.uiState()
         XCTAssertEqual(persisted.projectGridLayouts["/r/alpha"], GridLayout(mode: .columns, count: 4, heightMode: .fit))
+    }
+
+    // MARK: - Persist sıralaması (1.17)
+
+    func testConcurrentPersistsWriteLatestSnapshotLast() async throws {
+        // İlk yazım yavaş: sırasız Task'larda ikinci yazım öne geçer ve bayat
+        // snapshot en son diske inerdi.
+        await config.setFirstUIStateWriteDelay(.milliseconds(50))
+
+        store.setLeftSidebarOpen(false)
+        store.setRightSidebarOpen(true)
+
+        try await waitForPersist(minimumCount: 2)
+        let persisted = await config.uiState()
+        XCTAssertFalse(persisted.leftSidebarOpen, "son snapshot her iki değişikliği de taşır")
+        XCTAssertTrue(persisted.rightSidebarOpen)
     }
 
     // MARK: - Maximize / solo

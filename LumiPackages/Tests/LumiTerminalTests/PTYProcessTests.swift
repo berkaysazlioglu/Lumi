@@ -139,6 +139,103 @@ final class PTYProcessTests: XCTestCase {
         pty.terminate()
     }
 
+    /// Kayıp-uyanma regresyonu (Faz 1.1): `readHandler` `.suspend` dönmeden hemen
+    /// önce (MainActor `deliver` → `noteConsumed` → `resumeReading` penceresinde)
+    /// resume istenirse, sonradan gerçekleşen suspend iptal edilmelidir. Aksi halde
+    /// FlowController suspended=false iken DispatchSource askıda kalır → terminal
+    /// kalıcı donar.
+    func testResumeRequestedDuringSuspendWindowCancelsSuspend() throws {
+        let queue = makeQueue()
+        let pty = try spawn("/bin/sh", args: ["-c", "yes | head -c 300000"], queue: queue)
+
+        let firstChunk = expectation(description: "first chunk")
+        firstChunk.assertForOverFulfill = false
+        let counter = ChunkCounter()
+
+        pty.startReading { data in
+            let count = counter.record(data.count)
+            if count == 1 {
+                // Yarış penceresinin birebir kurulumu: resume, suspend'den ÖNCE gelir
+                pty.resumeReading()
+                firstChunk.fulfill()
+                return .suspend
+            }
+            return .proceed
+        }
+
+        wait(for: [firstChunk], timeout: 5)
+
+        let deadline = Date().addingTimeInterval(5)
+        while counter.totalBytes < 100 * 1024 && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        XCTAssertGreaterThan(counter.totalBytes, 100 * 1024, "kayıp-uyanma: okuma askıda kaldı")
+
+        pty.terminate()
+    }
+
+    /// Başarılı resume bayrağı temizlemeli: resume sonrası gelen yeni `.suspend`
+    /// direktifi gerçekten suspend etmeli (bayat bayrak onu yutmamalı).
+    func testSuspendStillWorksAfterResume() throws {
+        let queue = makeQueue()
+        let pty = try spawn("/bin/cat", queue: queue)
+        let counter = ChunkCounter()
+        let firstChunk = expectation(description: "first chunk")
+        firstChunk.assertForOverFulfill = false
+        let secondChunk = expectation(description: "second chunk")
+        secondChunk.assertForOverFulfill = false
+
+        pty.startReading { _ in
+            let count = counter.record(1)
+            if count == 1 { firstChunk.fulfill() }
+            if count == 2 { secondChunk.fulfill() }
+            return .suspend
+        }
+
+        queue.async { pty.write(Data("a\n".utf8)) }
+        wait(for: [firstChunk], timeout: 5)
+
+        // Suspend'deyken yeni echo teslim edilmez
+        queue.async { pty.write(Data("b\n".utf8)) }
+        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertEqual(counter.callCount, 1, "suspend'de teslimat oldu")
+
+        pty.resumeReading()
+        wait(for: [secondChunk], timeout: 5)
+
+        // İkinci `.suspend` de tutmalı — resume bayrağı temizlenmiş olmalı
+        queue.async { pty.write(Data("c\n".utf8)) }
+        Thread.sleep(forTimeInterval: 0.3)
+        XCTAssertEqual(counter.callCount, 2, "resume sonrası suspend tutmadı")
+
+        pty.resumeReading() // askıda kaynak bırakmadan kapat
+        pty.terminate()
+    }
+
+    /// 1.4 stres: kapanış (cleanupIO) ile MainActor `resumeReading()` eşzamanlı
+    /// koşarken kaynak referansları kilit altında olmalı — çökme/veri yarışı yok.
+    func testConcurrentResumeDuringTerminateIsSafe() throws {
+        let queue = makeQueue()
+        let pty = try spawn("/bin/cat", queue: queue)
+        let exited = expectation(description: "exit callback")
+        pty.onExit = { _ in exited.fulfill() }
+        pty.startReading { _ in .proceed }
+
+        let stopper = DispatchQueue(label: "lumi.test.resume-spam")
+        let spamming = AtomicFlag(true)
+        stopper.async {
+            while spamming.value {
+                pty.resumeReading()
+            }
+        }
+
+        pty.terminate()
+        wait(for: [exited], timeout: 10)
+        spamming.value = false
+        // Kapanış sonrası da güvenli olmalı
+        pty.resumeReading()
+    }
+
     func testSameSizeResizeStillSignalsForegroundProcess() throws {
         let queue = makeQueue()
         // Emülatör reflow round-trip senaryosu (grid 2→3→2): PTY boyutu zaten
@@ -227,6 +324,27 @@ private final class OutputCollector: @unchecked Sendable {
         defer { lock.unlock() }
         buffer.append(data)
         return String(decoding: buffer, as: UTF8.self).contains(needle)
+    }
+}
+
+/// Testler arası basit thread-safe bayrak.
+private final class AtomicFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Bool
+
+    init(_ value: Bool) { self.storage = value }
+
+    var value: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+        set {
+            lock.lock()
+            storage = newValue
+            lock.unlock()
+        }
     }
 }
 

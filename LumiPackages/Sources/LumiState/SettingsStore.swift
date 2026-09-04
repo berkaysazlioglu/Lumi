@@ -13,6 +13,8 @@ public final class SettingsStore {
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private var consumeTask: Task<Void, Never>?
+    /// Monoton yazım sürümü: geç dönen disk okuması daha yeni bir apply'ı ezmesin.
+    @ObservationIgnored private var applyVersion = 0
 
     public init(config: any ConfigServicing, toasts: ToastStore) {
         self.config = config
@@ -25,8 +27,10 @@ public final class SettingsStore {
             let stream = await config.events()
             self?.current = await config.config()
             for await event in stream {
+                // self yoksa döngü sonlanır (aksi halde stream ömrü boyunca yaşar)
+                guard let self else { return }
                 guard case .configChanged(_, let new) = event else { continue }
-                self?.current = new
+                self.current = new
             }
         }
     }
@@ -45,11 +49,41 @@ public final class SettingsStore {
         var copy = current
         mutate(&copy)
         current = copy // UI anında yansır; kalıcı yazım + yan etkiler aşağıda
+        applyVersion += 1
+        let version = applyVersion
         Task { @MainActor in
             await toasts.reporting {
                 try await self.config.updateConfig(mutate)
             }
+            // Optimistik değer diskle uzlaşır (servis normalize edebilir, yazım
+            // başarısız olabilir; `updated == old` ise event de gelmez).
+            // Araya yeni bir apply girdiyse bayat okuma onu ezmez.
+            let fresh = await self.config.config()
+            guard version == self.applyVersion else { return }
+            self.current = fresh
         }
+    }
+
+    // MARK: - Bölüm bazlı güncellemeler (yazım anında TAZE `current`'tan okur)
+
+    /// View'ın body-anı snapshot'ına yazması ayar clobber'ına yol açıyordu:
+    /// mutasyon burada, yazım anındaki güncel değerin üzerine uygulanır.
+    public func updateNotifications(
+        _ mutate: @escaping @Sendable (inout NotificationSettings) -> Void
+    ) {
+        apply { mutate(&$0.notifications) }
+    }
+
+    public func updateSessionTrigger(
+        _ mutate: @escaping @Sendable (inout SessionTrigger) -> Void
+    ) {
+        apply { mutate(&$0.sessionTrigger) }
+    }
+
+    public func updateUsageAutoRefresh(
+        _ mutate: @escaping @Sendable (inout UsageAutoRefresh) -> Void
+    ) {
+        apply { mutate(&$0.usageAutoRefresh) }
     }
 
     // MARK: - Alan bazlı kolaylıklar

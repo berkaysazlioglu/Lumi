@@ -100,4 +100,7 @@ public enum TerminalEvent: Sendable, Equatable {
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)
     case bell(TerminalID)
+    /// PTY'ye yazım kalıcı olarak başarısız (EPIPE/EIO — child öldü).
+    /// Karar 5: sessiz yutma yok; store toast gösterir.
+    case writeFailed(TerminalID, errno: Int32)
 }

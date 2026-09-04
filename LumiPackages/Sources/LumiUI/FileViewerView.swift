@@ -130,7 +130,7 @@ struct FileViewerView: View {
         if let preview = store.imagePreview {
             ImagePreviewView(preview: preview, showsComparison: false)
         } else if isRenderedMarkdown {
-            MarkdownDiffView(model: MarkdownDiffBuilder.buildDocument(store.fileContent ?? ""))
+            RenderedMarkdownDocumentView(text: store.fileContent ?? "")
         } else {
             HighlightedCodeView(
                 code: store.fileContent ?? "",
@@ -149,7 +149,7 @@ struct FileViewerView: View {
             ImagePreviewView(preview: preview, showsComparison: true)
         } else if let diff = store.diff {
             if isRenderedMarkdown {
-                MarkdownDiffView(model: MarkdownDiffBuilder.build(diff))
+                RenderedMarkdownDiffView(diff: diff)
             } else {
                 SideBySideDiffView(diff: diff, fontSize: 12)
             }
@@ -200,6 +200,49 @@ struct FileViewerView: View {
             .padding(.vertical, 6)
         }
         .background(Theme.bgSurface)
+    }
+}
+
+/// Markdown dökümanı: model GeometryReader altında her body'de yeniden parse
+/// ediliyordu; içerik değişince BİR KEZ kurulur (HighlightedCodeView kalıbı).
+private struct RenderedMarkdownDocumentView: View {
+    let text: String
+
+    @State private var model: MarkdownDiffBuilder.Model?
+
+    var body: some View {
+        Group {
+            if let model {
+                MarkdownDiffView(model: model)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: text) {
+            model = MarkdownDiffBuilder.buildDocument(text)
+        }
+    }
+}
+
+/// Markdown diff'i — aynı kalıp; diff değişince bir kez hesaplanır.
+private struct RenderedMarkdownDiffView: View {
+    let diff: UnifiedDiff
+
+    @State private var model: MarkdownDiffBuilder.Model?
+
+    var body: some View {
+        Group {
+            if let model {
+                MarkdownDiffView(model: model)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: diff) {
+            model = MarkdownDiffBuilder.build(diff)
+        }
     }
 }
 

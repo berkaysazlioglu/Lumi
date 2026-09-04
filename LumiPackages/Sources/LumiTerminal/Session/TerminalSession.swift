@@ -9,6 +9,7 @@ protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool)
     func session(_ session: TerminalSession, didChangeTitle title: String)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
+    func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)
     func sessionDidBell(_ session: TerminalSession)
 }
 
@@ -32,7 +33,6 @@ final class TerminalSession {
     private let pty: PTYProcess
     private let ioQueue: DispatchQueue
     private let pipeline: TerminalPipeline
-    private let outputBroadcaster = EventBroadcaster<String>()
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
 
@@ -88,6 +88,9 @@ final class TerminalSession {
             pipeline.prepareForExit()
             hopToMain { self?.handleExit(code: code) }
         }
+        pty.onWriteFailure = { [weak self] code in
+            hopToMain { self?.handleWriteFailure(code) }
+        }
         pty.startReading { [pipeline] data in
             pipeline.processOutput(data)
         }
@@ -108,15 +111,6 @@ final class TerminalSession {
         pipeline.onDisplayTitle = { [weak self] title in
             hopToMain { self?.applyTitle(title) }
         }
-        // wait_for fan-out (design/01 §3): io queue'dan doğrudan yayın —
-        // tüketici yavaşlığı terminali durduramaz
-        pipeline.onOutputText = { [outputBroadcaster] text in
-            outputBroadcaster.send(text)
-        }
-    }
-
-    func outputStream() -> AsyncStream<String> {
-        outputBroadcaster.stream()
     }
 
     /// Ack noktası: SwiftTerm feed'i senkron parse eder; dönüş = tüketildi
@@ -154,7 +148,19 @@ final class TerminalSession {
         pendingResize?.cancel()
         launchGate?.cancel()
         launchGate = nil
+        // design/01 §6 sırası: terminal kayıttan düştükten (isTerminated) sonra,
+        // exit yayınından önce io tarafı kapanışı — timer iptal → OSC buffer sil →
+        // statusMachine.onExit. Buradan doğan status yayını applyStatus'ta süzülür.
+        ioQueue.async { [pipeline] in
+            pipeline.finishExit(code: code)
+        }
         delegate?.session(self, didExitWithCode: code)
+    }
+
+    /// PTY yazımı kalıcı olarak başarısız (child öldü) — karar 5: sessizce yutulmaz.
+    private func handleWriteFailure(_ code: Int32) {
+        guard !isTerminated else { return }
+        delegate?.session(self, didFailWriteWithErrno: code)
     }
 
     // MARK: - Komutlar

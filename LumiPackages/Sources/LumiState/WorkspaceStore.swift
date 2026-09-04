@@ -47,6 +47,8 @@ public final class WorkspaceStore {
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let terminals: TerminalListStore
+    /// Persist zincirinin kuyruğu (sıra garantisi için önceki yazım beklenir).
+    @ObservationIgnored private var pendingPersistTask: Task<Void, Never>?
 
     public init(config: any ConfigServicing, terminals: TerminalListStore) {
         self.config = config
@@ -253,13 +255,18 @@ public final class WorkspaceStore {
 
     // MARK: - Persistence (yalnız bu alt küme)
 
+    /// Her çağrının bağımsız Task açması varış sırasını garanti etmiyordu: geç
+    /// kalan BAYAT snapshot en son diske inebiliyordu. Yazımlar tek zincirde
+    /// serileştirilir — en son snapshot her zaman en sonda yazılır.
     private func persist() {
         let tabs = openTabs
         let active = activeTab
         let layouts = projectGridLayouts
         let left = leftSidebarOpen
         let right = rightSidebarOpen
-        Task { [config] in
+        let previous = pendingPersistTask
+        pendingPersistTask = Task { [config] in
+            await previous?.value
             await config.updateUIState { state in
                 state.openTabs = tabs
                 state.activeTab = active

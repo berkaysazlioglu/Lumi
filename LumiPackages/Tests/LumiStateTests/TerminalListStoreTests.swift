@@ -10,10 +10,12 @@ import LumiKit
 final class TerminalListStoreTests: XCTestCase {
     private var service: FakeTerminalService!
     private var store: TerminalListStore!
+    private var toasts: ToastStore!
 
     override func setUp() async throws {
         service = FakeTerminalService()
-        store = TerminalListStore(service: service, toasts: ToastStore(autoDismissAfter: 60))
+        toasts = ToastStore(autoDismissAfter: 60)
+        store = TerminalListStore(service: service, toasts: toasts)
     }
 
     private func makeTerminal(_ name: String, repo: String = "/repo/a") -> TerminalMeta {
@@ -280,5 +282,74 @@ final class TerminalListStoreTests: XCTestCase {
 
         store.closeAll(in: "/repo/a")
         XCTAssertEqual(Set(service.killedIDs), Set([first.id, second.id]))
+    }
+
+    // MARK: - Exit kodu bildirimi (Faz 1.5)
+
+    func testNonZeroExitShowsToast() {
+        let terminal = makeTerminal("t1")
+
+        store.apply(.exited(terminal.id, code: 3))
+
+        XCTAssertEqual(toasts.toasts.count, 1)
+        XCTAssertEqual(toasts.toasts.first?.kind, .error)
+        XCTAssertEqual(toasts.toasts.first?.message, "Terminal exited with code 3")
+        XCTAssertEqual(toasts.toasts.first?.title, "t1")
+    }
+
+    func testCleanExitShowsNoToast() {
+        let terminal = makeTerminal("t1")
+
+        store.apply(.exited(terminal.id, code: 0))
+
+        XCTAssertTrue(toasts.toasts.isEmpty)
+    }
+
+    /// Kill sinyallerinden doğan 128+signo kodları (SIGHUP/SIGTERM/SIGKILL)
+    /// normal kapanıştır — gürültü yapılmaz.
+    func testSignalExitCodesAreSuppressed() {
+        for code in [Int32(129), 143, 137] {
+            let terminal = makeTerminal("t-\(code)")
+            store.apply(.exited(terminal.id, code: code))
+        }
+
+        XCTAssertTrue(toasts.toasts.isEmpty)
+    }
+
+    /// Kullanıcının kendi kapattığı terminal için toast çıkmaz — kill akışıyla
+    /// çakışma yok.
+    func testUserInitiatedCloseSuppressesExitToast() {
+        let terminal = makeTerminal("t1")
+
+        store.close(terminal.id)
+        store.apply(.exited(terminal.id, code: 1))
+
+        XCTAssertTrue(toasts.toasts.isEmpty)
+    }
+
+    /// Kullanıcı kill'i takibi tek atımlıdır: aynı id yeniden doğarsa bastırma
+    /// devam etmez.
+    func testUserCloseSuppressionIsSingleShot() {
+        let terminal = makeTerminal("t1")
+        store.close(terminal.id)
+        store.apply(.exited(terminal.id, code: 1))
+
+        let reborn = makeTerminal("t2")
+        store.apply(.exited(reborn.id, code: 1))
+
+        XCTAssertEqual(toasts.toasts.count, 1)
+    }
+
+    // MARK: - Yazım hatası bildirimi (Faz 1.15)
+
+    func testWriteFailureShowsToast() {
+        let terminal = makeTerminal("t1")
+
+        store.apply(.writeFailed(terminal.id, errno: 32))
+
+        XCTAssertEqual(toasts.toasts.count, 1)
+        XCTAssertEqual(toasts.toasts.first?.kind, .error)
+        XCTAssertEqual(toasts.toasts.first?.title, "t1")
+        XCTAssertEqual(toasts.toasts.first?.message, "Write failed (errno 32)")
     }
 }

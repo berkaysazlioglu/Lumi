@@ -4,6 +4,12 @@ public enum ConfigEvent: Sendable, Equatable {
     /// Yan etki koordinatörü old/new'ü EŞİTLİKLE karşılaştırır — Electron'un
     /// truthiness bug'ı (0/boş string propagasyonu atlardı) yapısal olarak imkânsız.
     case configChanged(old: AppConfig, new: AppConfig)
+    /// Dosya parse edilemedi: defaults'a düşülmeden önce `<ad>.bak-<zaman>`
+    /// olarak yedeklendi (karar 9: bilinmeyen anahtarlar merge ile korunur,
+    /// parse edilemeyen dosyada bu mümkün değil). Karar 5: sessiz yutulmaz.
+    case loadFailed(file: String, detail: String)
+    /// Debounce'lu arka plan yazımı diske inemedi (ui-state).
+    case writeFailed(file: String, detail: String)
 }
 
 /// Config + UI-state persistence sınırı (design/02 §2).

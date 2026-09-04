@@ -28,6 +28,9 @@ public final class TerminalSessionManager: TerminalServicing {
             sessions.forEach { $0.setCursorStyle(cursorStyle) }
         }
     }
+    /// Global NSEvent monitörleri: kurulduklarında AppKit tarafından tutulur ve
+    /// yalnız `removeMonitor` ile bırakılırlar — token'lar kapanışta kaldırılmak
+    /// üzere saklanır (Faz 1.22 sızıntı düzeltmesi).
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
 
@@ -148,8 +151,17 @@ public final class TerminalSessionManager: TerminalServicing {
         broadcaster.stream()
     }
 
-    public func outputStream(id: TerminalID) -> AsyncStream<String>? {
-        session(for: id)?.outputStream()
+    /// Kapanış simetrisi: global event monitörlerini bırakır. Idempotent'tir.
+    /// (Faz 3'te `StoreLifecycle` ile composition root'a bağlanacak.)
+    public func shutdown() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
+        }
+        keyMonitor = nil
+        mouseMonitor = nil
     }
 
     private func session(for id: TerminalID) -> TerminalSession? {
@@ -173,6 +185,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
     func session(_ session: TerminalSession, didChangeTitle title: String) {
         guard isRegistered(session) else { return }
         broadcaster.send(.titleChanged(session.id, title))
+    }
+
+    func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.writeFailed(session.id, errno: code))
     }
 
     func sessionDidBell(_ session: TerminalSession) {

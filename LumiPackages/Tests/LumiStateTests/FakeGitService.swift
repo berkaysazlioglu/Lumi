@@ -10,6 +10,10 @@ actor FakeGitService: GitServicing {
     }
 
     var fileContent = "# title\n"
+    var branchesToReturn: [GitBranch] = []
+    /// `commits` bu süre kadar askıda kalır — eşzamanlılık ölçümü için
+    /// (actor reentrancy: askıdayken başka çağrılar içeri girebilir).
+    var commitsDelay: Duration = .zero
     var diffToReturn = UnifiedDiff(filePath: "", isBinary: false, hunks: [])
     var previewToReturn = ImagePreview(filePath: "", before: nil, after: nil)
     var commitFilesToReturn: [CommitFile] = []
@@ -18,6 +22,9 @@ actor FakeGitService: GitServicing {
     private(set) var fileDiffCalls: [String] = []
     private(set) var commitFileDiffCalls: [String] = []
     private(set) var imagePreviewCalls: [ImagePreviewCall] = []
+    private(set) var commitsCallCount = 0
+    private(set) var maxConcurrentCommitsCalls = 0
+    private var inFlightCommitsCalls = 0
 
     func setCommitFiles(_ files: [CommitFile]) {
         commitFilesToReturn = files
@@ -27,9 +34,26 @@ actor FakeGitService: GitServicing {
         previewToReturn = preview
     }
 
-    func branches(repoPath: String) async -> [GitBranch] { [] }
+    func setBranches(_ list: [GitBranch]) {
+        branchesToReturn = list
+    }
 
-    func commits(repoPath: String, branch: String?) async -> [GitCommit] { [] }
+    func setCommitsDelay(_ delay: Duration) {
+        commitsDelay = delay
+    }
+
+    func branches(repoPath: String) async -> [GitBranch] { branchesToReturn }
+
+    func commits(repoPath: String, branch: String?) async -> [GitCommit] {
+        commitsCallCount += 1
+        inFlightCommitsCalls += 1
+        maxConcurrentCommitsCalls = max(maxConcurrentCommitsCalls, inFlightCommitsCalls)
+        if commitsDelay != .zero {
+            try? await Task.sleep(for: commitsDelay)
+        }
+        inFlightCommitsCalls -= 1
+        return []
+    }
 
     func status(repoPath: String) async -> [GitFileChange] { [] }
 

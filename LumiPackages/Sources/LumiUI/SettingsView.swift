@@ -368,8 +368,7 @@ struct SettingsView: View {
     // MARK: - Notifications
 
     private var notificationsTab: some View {
-        let current = settings.current.notifications
-        return VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 24) {
             SettingsSectionTitle(
                 title: "Notifications",
                 description: "Repeat notification intervals while the assistant waits for input."
@@ -382,18 +381,14 @@ struct SettingsView: View {
                 isOn: Binding(
                     get: { settings.current.notifications.unseenEnabled },
                     set: { value in
-                        var updated = current
-                        updated.unseenEnabled = value
-                        settings.setNotifications(updated)
+                        settings.updateNotifications { $0.unseenEnabled = value }
                     }
                 )
             ) {
                 intervalStepper(Binding(
-                    get: { current.unseenIntervalMinutes },
+                    get: { settings.current.notifications.unseenIntervalMinutes },
                     set: { minutes in
-                        var updated = current
-                        updated.unseenIntervalMinutes = minutes
-                        settings.setNotifications(updated)
+                        settings.updateNotifications { $0.unseenIntervalMinutes = minutes }
                     }
                 ))
             }
@@ -403,18 +398,14 @@ struct SettingsView: View {
                 isOn: Binding(
                     get: { settings.current.notifications.seenEnabled },
                     set: { value in
-                        var updated = current
-                        updated.seenEnabled = value
-                        settings.setNotifications(updated)
+                        settings.updateNotifications { $0.seenEnabled = value }
                     }
                 )
             ) {
                 intervalStepper(Binding(
-                    get: { current.seenIntervalMinutes },
+                    get: { settings.current.notifications.seenIntervalMinutes },
                     set: { minutes in
-                        var updated = current
-                        updated.seenIntervalMinutes = minutes
-                        settings.setNotifications(updated)
+                        settings.updateNotifications { $0.seenIntervalMinutes = minutes }
                     }
                 ))
             }
@@ -574,10 +565,8 @@ struct SettingsView: View {
         }
     }
 
-    private func updateTrigger(_ mutate: (inout SessionTrigger) -> Void) {
-        var trigger = settings.current.sessionTrigger
-        mutate(&trigger)
-        settings.setSessionTrigger(trigger)
+    private func updateTrigger(_ mutate: @escaping @Sendable (inout SessionTrigger) -> Void) {
+        settings.updateSessionTrigger(mutate)
     }
 
     private var triggerTimeBinding: Binding<Date> {
@@ -706,10 +695,10 @@ struct SettingsView: View {
         }
     }
 
-    private func updateUsageAutoRefresh(_ mutate: (inout UsageAutoRefresh) -> Void) {
-        var copy = settings.current.usageAutoRefresh
-        mutate(&copy)
-        settings.setUsageAutoRefresh(copy)
+    private func updateUsageAutoRefresh(
+        _ mutate: @escaping @Sendable (inout UsageAutoRefresh) -> Void
+    ) {
+        settings.updateUsageAutoRefresh(mutate)
     }
 
     // MARK: - Shortcuts (salt-okunur referans)

@@ -58,10 +58,10 @@ public final class ToastStore {
             let dropped = toasts.removeFirst()
             dismissTasks.removeValue(forKey: dropped.id)?.cancel()
         }
-        dismissTasks[toast.id] = Task { [autoDismissAfter, id = toast.id] in
+        dismissTasks[toast.id] = Task { [weak self, autoDismissAfter, id = toast.id] in
             try? await Task.sleep(for: .seconds(autoDismissAfter))
             guard !Task.isCancelled else { return }
-            self.dismiss(id)
+            self?.dismiss(id)
         }
     }
 
@@ -72,12 +72,6 @@ public final class ToastStore {
     public func dismiss(_ id: UUID) {
         toasts.removeAll { $0.id == id }
         dismissTasks.removeValue(forKey: id)?.cancel()
-    }
-
-    public func clearAll() {
-        toasts.removeAll()
-        dismissTasks.values.forEach { $0.cancel() }
-        dismissTasks.removeAll()
     }
 
     // MARK: - Hata koridoru (karar 5)

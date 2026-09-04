@@ -2,12 +2,41 @@ import XCTest
 import LumiKit
 @testable import LumiState
 
+/// Yazımı hep başarısız olan servis — sessiz `catch {}` yerine görünür hata
+/// (karar 5) sözleşmesini sürmek için.
+@MainActor
+private final class FailingWriteTerminalService: TerminalServicing {
+    private(set) var writeAttempts = 0
+
+    @discardableResult
+    func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        throw LumiError.spawnFailed(reason: "fake")
+    }
+
+    func write(id: TerminalID, text: String) throws {
+        writeAttempts += 1
+        throw LumiError.terminalNotFound(id)
+    }
+
+    func kill(id: TerminalID) throws {}
+    func killAll() {}
+    func resize(id: TerminalID, cols: Int, rows: Int) {}
+    func setFocused(_ id: TerminalID?) {}
+    func setWindowFocused(_ focused: Bool) {}
+    var terminals: [TerminalMeta] { [] }
+    func events() -> AsyncStream<TerminalEvent> { AsyncStream { $0.finish() } }
+}
+
 @MainActor
 final class PromptQueueStoreTests: XCTestCase {
     private func makeStore() -> (PromptQueueStore, FakeTerminalService) {
         let service = FakeTerminalService()
         // settle=0 → testlerde deterministik: pendingInjection await edilir.
-        let store = PromptQueueStore(service: service, settleDelay: .zero)
+        let store = PromptQueueStore(
+            service: service,
+            toasts: ToastStore(autoDismissAfter: 60),
+            settleDelay: .zero
+        )
         return (store, service)
     }
 
@@ -126,5 +155,48 @@ final class PromptQueueStoreTests: XCTestCase {
         store.enqueue("a", for: id)
         store.apply(.exited(id, code: 0))
         XCTAssertEqual(store.count(for: id), 0)
+    }
+
+    // MARK: - Başarısız yazım (karar 5: sessiz yutma yok)
+
+    func testRepeatedInjectFailuresRaiseSingleToastAndKeepQueue() {
+        let service = FailingWriteTerminalService()
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let store = PromptQueueStore(service: service, toasts: toasts, settleDelay: .zero)
+        let id = TerminalID()
+        store.enqueue("go", for: id)
+
+        for _ in 0..<PromptQueueStore.injectFailureToastThreshold {
+            store.injectHead(id)
+        }
+
+        XCTAssertEqual(store.prompts(for: id), ["go"], "kuyruk korunur")
+        XCTAssertEqual(toasts.toasts.count, 1, "eşikte bir kez toast")
+
+        // Eşik geçildikten sonra tekrar tekrar toast basılmaz.
+        store.injectHead(id)
+        XCTAssertEqual(toasts.toasts.count, 1)
+    }
+
+    func testInjectFailuresBelowThresholdStaySilent() {
+        let service = FailingWriteTerminalService()
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let store = PromptQueueStore(service: service, toasts: toasts, settleDelay: .zero)
+        let id = TerminalID()
+        store.enqueue("go", for: id)
+
+        for _ in 0..<(PromptQueueStore.injectFailureToastThreshold - 1) {
+            store.injectHead(id)
+        }
+
+        XCTAssertTrue(toasts.toasts.isEmpty, "geçici hatalar kullanıcıyı rahatsız etmez")
+    }
+
+    func testSuccessfulInjectResetsFailureCounter() {
+        let (store, _) = makeStore()
+        let id = TerminalID()
+        store.enqueue("go", for: id)
+        store.injectHead(id)
+        XCTAssertEqual(store.consecutiveInjectFailures(for: id), 0)
     }
 }

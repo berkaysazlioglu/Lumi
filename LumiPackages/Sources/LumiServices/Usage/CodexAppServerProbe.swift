@@ -45,17 +45,24 @@ enum CodexAppServerProbe {
         timeout: TimeInterval
     ) async throws -> Data {
         let session = try ProbeSession(binary: binary)
-        defer { session.shutdown() }
+        // İptalde de süreç kapatılır: `awaitResponse` iptali yutuyordu ve
+        // çağıran vazgeçtikten sonra probe 30 sn boyunca yoklamaya devam
+        // ediyordu (arka planda görünmez bir codex süreciyle birlikte).
+        return try await withTaskCancellationHandler {
+            defer { session.shutdown() }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        session.send(request: 1, method: "initialize", params: [
-            "clientInfo": ["name": "lumi", "version": "1.0"],
-        ])
-        _ = try await session.awaitResponse(id: 1, deadline: deadline)
+            let deadline = Date().addingTimeInterval(timeout)
+            session.send(request: 1, method: "initialize", params: [
+                "clientInfo": ["name": "lumi", "version": "1.0"],
+            ])
+            _ = try await session.awaitResponse(id: 1, deadline: deadline)
 
-        session.send(notification: "initialized")
-        session.send(request: 2, method: method, params: [:])
-        return try await session.awaitResponse(id: 2, deadline: deadline)
+            session.send(notification: "initialized")
+            session.send(request: 2, method: method, params: [:])
+            return try await session.awaitResponse(id: 2, deadline: deadline)
+        } onCancel: {
+            session.shutdown()
+        }
     }
 }
 
@@ -77,6 +84,8 @@ private final class ProbeSession: @unchecked Sendable {
     private var responses: [Int: Result<Data, CodexAppServerProbe.ProbeError>] = [:]
     private var stderrText = ""
     private var isShutDown = false
+    /// `waitUntilExit` yalnız gerçekten başlatılmış süreçte çağrılabilir.
+    private var didLaunch = false
 
     init(binary: String) throws {
         process.executableURL = URL(fileURLWithPath: binary)
@@ -94,6 +103,9 @@ private final class ProbeSession: @unchecked Sendable {
 
         do {
             try process.run()
+            lock.lock()
+            didLaunch = true
+            lock.unlock()
         } catch {
             shutdown()
             throw CodexAppServerProbe.ProbeError.launchFailed
@@ -121,17 +133,20 @@ private final class ProbeSession: @unchecked Sendable {
 
     // MARK: - Okuma
 
+    /// `Task.sleep` `try?` ile sarılmaz: iptal yutulursa döngü deadline'a kadar
+    /// (30 sn) meşgul dönerdi. İptal `CancellationError` olarak yukarı çıkar.
     func awaitResponse(id: Int, deadline: Date) async throws -> Data {
         while true {
+            try Task.checkCancellation()
             if let result = takeResponse(id: id) { return try result.get() }
             if Date() >= deadline { throw CodexAppServerProbe.ProbeError.timedOut }
             if !process.isRunning {
                 // Kapanışta son chunk'lar hâlâ handler'a düşebilir; bir tur daha bak.
-                try? await Task.sleep(for: Self.pollInterval)
+                try await Task.sleep(for: Self.pollInterval)
                 if let result = takeResponse(id: id) { return try result.get() }
                 throw CodexAppServerProbe.ProbeError.exitedEarly(stderrExcerpt())
             }
-            try? await Task.sleep(for: Self.pollInterval)
+            try await Task.sleep(for: Self.pollInterval)
         }
     }
 
@@ -200,16 +215,21 @@ private final class ProbeSession: @unchecked Sendable {
 
     // MARK: - Sonlandırma
 
+    /// Idempotent. `terminate()` sonrası `waitUntilExit()` beklenir: aksi halde
+    /// çocuk süreç reap edilmeyip zombi olarak kalıyordu.
     func shutdown() {
         lock.lock()
         let alreadyDone = isShutDown
         isShutDown = true
+        let launched = didLaunch
         lock.unlock()
         guard !alreadyDone else { return }
 
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
         try? stdinPipe.fileHandleForWriting.close()
+        guard launched else { return }
         if process.isRunning { process.terminate() }
+        process.waitUntilExit()
     }
 }

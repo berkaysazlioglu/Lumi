@@ -17,8 +17,14 @@ public final class PromptQueueStore {
     public private(set) var queues: [TerminalID: [String]] = [:]
     public private(set) var pausedIDs: Set<TerminalID> = []
 
+    /// Kaçıncı ARDIŞIK başarısız yazımda kullanıcı uyarılır (öncesi geçici
+    /// sayılır, sonrası tekrar tekrar rahatsız etmez).
+    public static let injectFailureToastThreshold = 3
+
     @ObservationIgnored private let service: any TerminalServicing
+    @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private let settleDelay: Duration
+    @ObservationIgnored private var injectFailures: [TerminalID: Int] = [:]
     @ObservationIgnored private var statuses: [TerminalID: TerminalStatus] = [:]
     @ObservationIgnored private var awaitingDecisionIDs: Set<TerminalID> = []
     @ObservationIgnored private var settleTasks: [TerminalID: Task<Void, Never>] = [:]
@@ -26,8 +32,13 @@ public final class PromptQueueStore {
 
     /// Bekleme durumunun stabil sayılması için geçmesi gereken süre — anlık
     /// flicker'a ve kullanıcıya manuel müdahale aralığı tanımak için.
-    public init(service: any TerminalServicing, settleDelay: Duration = .milliseconds(1500)) {
+    public init(
+        service: any TerminalServicing,
+        toasts: ToastStore,
+        settleDelay: Duration = .milliseconds(1500)
+    ) {
         self.service = service
+        self.toasts = toasts
         self.settleDelay = settleDelay
     }
 
@@ -36,7 +47,9 @@ public final class PromptQueueStore {
         let stream = service.events()
         consumeTask = Task { @MainActor [weak self] in
             for await event in stream {
-                self?.apply(event)
+                // self yoksa döngü sonlanır (aksi halde stream ömrü boyunca yaşar)
+                guard let self else { return }
+                self.apply(event)
             }
         }
     }
@@ -125,8 +138,9 @@ public final class PromptQueueStore {
             pausedIDs.remove(id)
             statuses[id] = nil
             awaitingDecisionIDs.remove(id)
+            injectFailures[id] = nil
             cancelSettle(id)
-        case .spawned, .titleChanged, .bell:
+        case .spawned, .titleChanged, .bell, .writeFailed:
             break
         }
     }
@@ -159,9 +173,31 @@ public final class PromptQueueStore {
             try service.write(id: id, text: PromptInjection.encode(prompt))
             queue.removeFirst()
             queues[id] = queue
+            injectFailures[id] = nil
         } catch {
-            // Yazım başarısız: prompt kuyrukta kalır, sonraki bekleme'de tekrar denenir.
+            // Yazım başarısız: prompt kuyrukta kalır, sonraki bekleme'de tekrar
+            // denenir. Karar 5: sessizce yutulmaz — ardışık N. hatada bir kez
+            // görünür hata (her denemede toast basmak kullanıcıyı boğardı).
+            let failures = (injectFailures[id] ?? 0) + 1
+            injectFailures[id] = failures
+            guard failures == Self.injectFailureToastThreshold else { return }
+            toasts.show(
+                .error,
+                title: "Prompt queue stalled",
+                message: message(for: error),
+                terminalID: id
+            )
         }
+    }
+
+    private func message(for error: any Error) -> String {
+        let detail = (error as? LumiError)?.localizedDescription ?? "\(error)"
+        return "Queued prompt could not be sent: \(detail)"
+    }
+
+    /// Test yardımcısı: ardışık başarısız yazım sayacı.
+    func consecutiveInjectFailures(for id: TerminalID) -> Int {
+        injectFailures[id] ?? 0
     }
 
     private func cancelSettle(_ id: TerminalID) {

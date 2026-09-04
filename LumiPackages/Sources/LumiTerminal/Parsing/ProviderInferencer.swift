@@ -4,23 +4,31 @@ import Foundation
 /// Asimetri birebir korunur: "openai codex" hint'i her zaman codex'e çevirir;
 /// "claude code" yalnızca hint unknown iken claude'a çevirir (codex output ile düşmez).
 struct ProviderInferencer {
+    /// Her tuş vuruşunda derlenmesin diye önceden derlenir (Faz 1.24).
+    private static let codexCommand = CachedRegex("^codex(\\s|$)")
+    private static let claudeCommand = CachedRegex("^claude(\\s|$)")
+
     private(set) var hint: AgentHint = .unknown
 
     mutating func observeInput(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: "^codex(\\s|$)", options: .regularExpression) != nil {
+        if Self.codexCommand.matches(trimmed) {
             hint = .codex
-        } else if trimmed.range(of: "^claude(\\s|$)", options: .regularExpression) != nil {
+        } else if Self.claudeCommand.matches(trimmed) {
             hint = .claude
         }
     }
 
+    /// Sıcak yol: her output chunk'ında çağrılır. `lowercased()` kopyası yerine
+    /// case-insensitive arama kullanılır; hint codex ise hiçbir kalıp durumu
+    /// değiştiremez (asimetri) — erken çıkılır.
     mutating func observeOutput(_ text: String) {
-        let lower = text.lowercased()
-        if hint != .codex, lower.contains("openai codex") {
+        guard hint != .codex else { return }
+        if text.range(of: "openai codex", options: .caseInsensitive) != nil {
             hint = .codex
+            return
         }
-        if hint == .unknown, lower.contains("claude code") {
+        if hint == .unknown, text.range(of: "claude code", options: .caseInsensitive) != nil {
             hint = .claude
         }
     }

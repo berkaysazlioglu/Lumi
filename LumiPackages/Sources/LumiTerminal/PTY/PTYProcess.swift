@@ -25,6 +25,11 @@ public final class PTYProcess: @unchecked Sendable {
     private var readSource: DispatchSourceRead?
     private var writeSource: DispatchSourceWrite?
     private var readSuspended = false
+    /// Kayıp-uyanma koruması (design/00 Ek A §A.1-2): `handleReadable` `.suspend`
+    /// dönüşü ile `suspendReading()` arasındaki pencerede MainActor `resumeReading()`
+    /// çağırırsa istek burada saklanır ve bekleyen suspend iptal edilir. Aksi halde
+    /// FlowController suspended=false iken DispatchSource askıda kalır → terminal donar.
+    private var resumeRequested = false
     private var writeArmed = false
     private var didExit = false
     private var cleanedUp = false
@@ -36,6 +41,10 @@ public final class PTYProcess: @unchecked Sendable {
     /// @Sendable: aktör-izole bağlamda oluşturulan closure'ın izolasyon miras
     /// almasını engeller — io queue'dan çağrılır.
     public var onExit: (@Sendable (Int32) -> Void)?
+
+    /// PTY'ye yazım kalıcı olarak başarısız oldu (EPIPE/EIO — child öldü).
+    /// io queue üzerinde çağrılır; bekleyen buffer atılmadan önce errno taşınır.
+    public var onWriteFailure: (@Sendable (Int32) -> Void)?
 
     public init(
         executable: String,
@@ -148,8 +157,15 @@ public final class PTYProcess: @unchecked Sendable {
     public func resumeReading() {
         lock.lock()
         defer { lock.unlock() }
-        guard readSuspended, !cleanedUp, let source = readSource else { return }
+        guard !cleanedUp, let source = readSource else { return }
+        guard readSuspended else {
+            // Henüz suspend edilmedi: ya gerek yok ya da suspend yolda (yarış
+            // penceresi). İstek kaydedilir; `suspendReading` bunu görünce iptal eder.
+            resumeRequested = true
+            return
+        }
         readSuspended = false
+        resumeRequested = false
         source.resume()
     }
 
@@ -179,6 +195,12 @@ public final class PTYProcess: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard !readSuspended, !cleanedUp, let source = readSource else { return }
+        // Pencere içinde resume istendiyse suspend hiç yapılmaz (tek eşleşme:
+        // her suspend episode'unda en fazla bir resume isteği doğar).
+        if resumeRequested {
+            resumeRequested = false
+            return
+        }
         readSuspended = true
         source.suspend()
     }
@@ -194,7 +216,7 @@ public final class PTYProcess: @unchecked Sendable {
     /// write source ile drene edilir — kısmi yazım kaybı olmaz.
     public func write(_ data: Data) {
         dispatchPrecondition(condition: .onQueue(queue))
-        guard !didExit, !cleanedUp else { return }
+        guard !didExit, !isCleanedUp else { return }
         pendingWrite.append(data)
         drainWrites()
     }
@@ -214,8 +236,11 @@ public final class PTYProcess: @unchecked Sendable {
                 armWriteSource()
                 return
             }
-            // EPIPE vb. — child öldü; bekleyen yazım anlamsız
+            // EPIPE/EIO vb. — child öldü; bekleyen yazım anlamsız. Karar 5:
+            // sessizce yutulmaz, hata yukarı bildirilir (write==0 için EIO varsayılır).
+            let failure = written < 0 ? errno : EIO
             pendingWrite.removeAll()
+            onWriteFailure?(failure)
             return
         }
         disarmWriteSource()
@@ -248,7 +273,7 @@ public final class PTYProcess: @unchecked Sendable {
 
     public func resize(cols: UInt16, rows: UInt16) {
         dispatchPrecondition(condition: .onQueue(queue))
-        guard !cleanedUp else { return }
+        guard !isCleanedUp else { return }
         var current = winsize()
         let isUnchanged = ioctl(masterFD, TIOCGWINSZ, &current) == 0
             && current.ws_col == cols && current.ws_row == rows
@@ -274,7 +299,7 @@ public final class PTYProcess: @unchecked Sendable {
     /// yalnız repaint sinyali verir. PTY queue'da, asenkron çalışır.
     public func pokeRepaint() {
         queue.async { [weak self] in
-            guard let self, !self.cleanedUp else { return }
+            guard let self, !self.isCleanedUp else { return }
             let foregroundGroup = tcgetpgrp(self.masterFD)
             if foregroundGroup > 0 {
                 kill(-foregroundGroup, SIGWINCH)
@@ -340,31 +365,44 @@ public final class PTYProcess: @unchecked Sendable {
         onExit?(Self.exitCode(fromWaitStatus: status, waitResult: result))
     }
 
+    /// Kaynak referansları kilit altında yerel değişkene alınıp nil'lenir; cancel/resume
+    /// çağrıları kilit DIŞINDA yapılır (cancel handler `closeMasterIfNeeded` ile aynı
+    /// kilidi ister — NSLock recursive değildir). Böylece MainActor `resumeReading()`
+    /// ile eşzamanlı kapanış veri yarışı üretmez.
     private func cleanupIO() {
         lock.lock()
         let alreadyCleaned = cleanedUp
         cleanedUp = true
         let wasSuspended = readSuspended
         readSuspended = false
+        resumeRequested = false
         let wasWriteDisarmed = !writeArmed
         writeArmed = true
+        let read = readSource
+        let write = writeSource
+        readSource = nil
+        writeSource = nil
         lock.unlock()
         guard !alreadyCleaned else { return }
 
         pendingWrite.removeAll()
         // Suspended source cancel edilemez — önce resume (Dispatch kuralı)
-        if wasSuspended { readSource?.resume() }
-        if let writeSource {
-            if wasWriteDisarmed { writeSource.resume() }
-            writeSource.cancel()
-            self.writeSource = nil
+        if wasSuspended { read?.resume() }
+        if let write {
+            if wasWriteDisarmed { write.resume() }
+            write.cancel()
         }
-        if let readSource {
-            readSource.cancel() // cancel handler fd'yi kapatır
-            self.readSource = nil
+        if let read {
+            read.cancel() // cancel handler fd'yi kapatır
         } else {
             closeMasterIfNeeded()
         }
+    }
+
+    private var isCleanedUp: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cleanedUp
     }
 
     private var masterClosed = false

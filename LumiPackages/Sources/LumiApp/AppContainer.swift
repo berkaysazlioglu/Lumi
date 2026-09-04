@@ -34,6 +34,9 @@ final class AppContainer {
     let configCoordinator: ConfigSideEffectCoordinator
 
     private var bridgeTasks: [Task<Void, Never>] = []
+    /// Tek-atımlı kullanım yüklemesi: her tetiklemede öncekinin yerini alır
+    /// (bridgeTasks'a birikirse dizi sınırsız büyürdü).
+    private var usageIndicatorLoadTask: Task<Void, Never>?
 
     init(notificationPresenter: any NotificationPresenting = LogNotificationPresenter()) {
         #if DEBUG
@@ -56,7 +59,7 @@ final class AppContainer {
         terminal = TerminalSessionManager()
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
-        promptQueue = PromptQueueStore(service: terminal)
+        promptQueue = PromptQueueStore(service: terminal, toasts: toasts)
         sessionSchedule = SessionScheduleStore(starter: sessionStarter)
         repoStore = RepoStore(service: repoService)
         gitStore = GitStore(git: gitService, toasts: toasts)
@@ -71,7 +74,6 @@ final class AppContainer {
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
-            terminal: terminal,
             repo: repoService,
             repoStore: repoStore,
             notifications: notifications
@@ -156,18 +158,14 @@ final class AppContainer {
             guard let self else { return }
             self.applyUsageIndicators(indicators)
             // Yeni açılan sağlayıcı boş kalmasın: kapı açıldıktan sonra ilk yükleme.
-            self.bridgeTasks.append(Task { @MainActor [weak self] in
-                await self?.loadEnabledUsageIndicators()
-            })
+            self.scheduleUsageIndicatorLoad()
         }
         configCoordinator.start()
         startBridges()
 
         // Kullanım göstergeleri ilk yükleme — arka planda, bootstrap'i bloklamaz
         // (auto-refresh YOK; sonrası manuel, design/05 + kullanıcı kararı).
-        bridgeTasks.append(Task { @MainActor [weak self] in
-            await self?.loadEnabledUsageIndicators()
-        })
+        scheduleUsageIndicatorLoad()
 
         terminal.onTerminalViewFocused = { [weak self] id in
             self?.terminals.focus(id)
@@ -230,7 +228,7 @@ final class AppContainer {
                 case .exited(let id, _):
                     // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
                     self.notifications.terminalRemoved(id)
-                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell:
+                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell, .writeFailed:
                     break
                 }
             }
@@ -267,6 +265,14 @@ final class AppContainer {
         }
     }
 
+    /// Tek-atımlı ilk yükleme: öncekini iptal edip yerine geçer.
+    private func scheduleUsageIndicatorLoad() {
+        usageIndicatorLoadTask?.cancel()
+        usageIndicatorLoadTask = Task { @MainActor [weak self] in
+            await self?.loadEnabledUsageIndicators()
+        }
+    }
+
     /// Açık göstergelerin ilk yüklemesi. Kapalı store'da `loadInitialIfNeeded`
     /// zaten no-op'tur; sıra `AgentProvider.allCases` ile deterministiktir.
     private func loadEnabledUsageIndicators() async {
@@ -298,6 +304,13 @@ final class AppContainer {
 
     func shutdown() async {
         bridgeTasks.forEach { $0.cancel() }
+        usageIndicatorLoadTask?.cancel()
+        // start() ile simetri: başlatılan her tüketici burada durur.
+        configCoordinator.stop()
+        terminals.stop()
+        promptQueue.stop()
+        repoStore.stop()
+        settings.stop()
         sessionSchedule.stop()
         usageAutoRefresh.stop()
         // Karar 23: killAll'dan ÖNCE canlı claude oturumları persist edilir —
@@ -310,6 +323,8 @@ final class AppContainer {
         }
         await config.updateUIState { $0.resumeSessions = resumeSessions }
         terminal.killAll()
+        // Global NSEvent monitörleri (klavye/odak) bırakılır — sızıntı önlemi.
+        terminal.shutdown()
         await config.flushPendingWrites()
         // Temp dizini (Electron will-quit paritesi + karar 11)
         try? FileManager.default.removeItem(at: paths.tempDir)

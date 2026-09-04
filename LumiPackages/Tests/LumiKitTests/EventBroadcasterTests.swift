@@ -49,4 +49,35 @@ final class EventBroadcasterTests: XCTestCase {
         }
         XCTAssertTrue(received.isEmpty)
     }
+
+    /// Faz 1.19: opsiyonel buffering politikası — varsayılan davranış (unbounded)
+    /// korunur, isteyen akış en yeniyle sınırlanabilir.
+    func testBufferingNewestKeepsOnlyLatestEvents() async {
+        let broadcaster = EventBroadcaster<Int>(bufferingPolicy: .bufferingNewest(1))
+        let stream = broadcaster.stream()
+        broadcaster.send(1)
+        broadcaster.send(2)
+        broadcaster.send(3)
+        broadcaster.finishAll()
+
+        var received: [Int] = []
+        for await value in stream {
+            received.append(value)
+        }
+        XCTAssertEqual(received, [3])
+    }
+
+    func testDefaultPolicyBuffersEveryEvent() async {
+        let broadcaster = EventBroadcaster<Int>()
+        let stream = broadcaster.stream()
+        broadcaster.send(1)
+        broadcaster.send(2)
+        broadcaster.finishAll()
+
+        var received: [Int] = []
+        for await value in stream {
+            received.append(value)
+        }
+        XCTAssertEqual(received, [1, 2])
+    }
 }

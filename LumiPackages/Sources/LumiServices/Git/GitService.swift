@@ -52,14 +52,15 @@ public struct GitService: GitServicing {
     }
 
     public func commits(repoPath: String, branch: String?) async -> [GitCommit] {
-        let branchList = await branches(repoPath: repoPath)
-        let defaultBranch = Self.defaultBranch(from: branchList)
-
         var arguments = [
             "log", "--max-count=50",
             "--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%s",
         ]
         if let branch {
+            // Default branch YALNIZ gerektiğinde ve tek `for-each-ref` ile
+            // hesaplanır: eskiden her `commits` çağrısı ayrıca tam bir
+            // `git branch --list` koşturuyordu (N branch → 2N process).
+            let defaultBranch = await defaultBranch(in: repoPath)
             if let defaultBranch, branch != defaultBranch {
                 // Kritik UX: yalnız branch'e özgü commit'ler
                 arguments.append("\(defaultBranch)..\(branch)")
@@ -87,9 +88,25 @@ public struct GitService: GitServicing {
         }
     }
 
-    static func defaultBranch(from branches: [GitBranch]) -> String? {
-        if branches.contains(where: { $0.name == "main" }) { return "main" }
-        if branches.contains(where: { $0.name == "master" }) { return "master" }
+    /// Tek `for-each-ref` ile yalnız iki aday ref'i sorar — `branch --list`'in
+    /// tüm branch'leri listeleyip parse etmesine gerek yok.
+    private func defaultBranch(in repoPath: String) async -> String? {
+        let output = await runGit(
+            ["for-each-ref", "--format=%(refname:short)", "refs/heads/main", "refs/heads/master"],
+            in: repoPath
+        )
+        guard let output, output.exitCode == 0 else { return nil }
+        let names = Set(
+            output.stdout
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+        )
+        return Self.defaultBranch(from: names)
+    }
+
+    static func defaultBranch(from names: Set<String>) -> String? {
+        if names.contains("main") { return "main" }
+        if names.contains("master") { return "master" }
         return nil
     }
 
@@ -145,11 +162,13 @@ public struct GitService: GitServicing {
             _ = try resolveInsideRepo(repoPath, file)
         }
 
-        guard let addOutput = await runGit(["add", "--"] + files, in: repoPath),
-              addOutput.exitCode == 0 else {
+        // Detay İLK koşunun stderr'inden gelir: hata yolunda `add`'i ikinci kez
+        // çalıştırmak yan etkiyi tekrarlar ve gereksiz bir process daha açardı.
+        let addOutput = await runGit(["add", "--"] + files, in: repoPath)
+        guard let addOutput, addOutput.exitCode == 0 else {
             throw LumiError.gitFailed(
                 operation: "add",
-                detail: (await runGit(["add", "--"] + files, in: repoPath))?.stderr ?? "timeout"
+                detail: addOutput.map { String($0.stderr.prefix(500)) } ?? "timeout"
             )
         }
         guard let commitOutput = await runGit(
@@ -306,10 +325,18 @@ public struct GitService: GitServicing {
 
     // MARK: - Path traversal guard (karar 11: TÜM path'lerde)
 
+    /// İki taraf da `resolvingSymlinksInPath()` ile canonicalize edilir: aksi
+    /// halde repo içindeki bir symlink repo DIŞINA işaret ettiğinde guard
+    /// geçiliyordu (ayrıca `/var` ↔ `/private/var` uyumsuzluğu çözülür).
     func resolveInsideRepo(_ repoPath: String, _ relativePath: String) throws -> String {
-        let root = URL(fileURLWithPath: repoPath).standardizedFileURL.path
+        let root = URL(fileURLWithPath: repoPath)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
         let resolved = URL(fileURLWithPath: relativePath, relativeTo: URL(fileURLWithPath: root))
-            .standardizedFileURL.path
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
         guard resolved == root || resolved.hasPrefix(root + "/") else {
             throw LumiError.pathOutsideRepo(path: relativePath)
         }

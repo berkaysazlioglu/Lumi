@@ -10,25 +10,41 @@ struct SideBySideDiffView: View {
 
     private static let gutterWidth: CGFloat = 44
 
+    /// Satır modeli her body'de yeniden kurulmasın: diff değişince bir kez
+    /// hesaplanır (HighlightedCodeView kalıbı).
+    @State private var model: SideBySideDiffBuilder.Model?
+
     var body: some View {
-        let model = SideBySideDiffBuilder.build(diff)
         Group {
-            if model.isBinary {
-                placeholder("(binary file)")
-            } else if model.rows.isEmpty {
-                placeholder("(no changes)")
+            if let model {
+                content(model)
             } else {
-                ScrollView([.vertical]) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(model.rows.enumerated()), id: \.offset) { _, row in
-                            rowView(row)
-                        }
-                    }
-                }
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bgSurface)
+        .task(id: diff) {
+            model = SideBySideDiffBuilder.build(diff)
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ model: SideBySideDiffBuilder.Model) -> some View {
+        if model.isBinary {
+            placeholder("(binary file)")
+        } else if model.rows.isEmpty {
+            placeholder("(no changes)")
+        } else {
+            ScrollView([.vertical]) {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(model.rows.enumerated()), id: \.offset) { _, row in
+                        rowView(row)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder

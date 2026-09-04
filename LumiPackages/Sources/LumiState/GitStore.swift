@@ -7,6 +7,9 @@ import Observation
 @Observable
 @MainActor
 public final class GitStore {
+    /// Eşzamanlı `git log` tavanı (bkz. `loadCommits`).
+    static let maxConcurrentBranchLoads = 4
+
     public private(set) var branches: [String: [GitBranch]] = [:]
     public private(set) var commitsByBranch: [String: [String: [GitCommit]]] = [:]
     public private(set) var changes: [String: [GitFileChange]] = [:]
@@ -39,22 +42,41 @@ public final class GitStore {
 
         await loadChanges(repoPath)
 
-        let commits = await withTaskGroup(
+        commitsByBranch[repoPath] = await loadCommits(repoPath, branches: branchList)
+    }
+
+    /// Branch başına `git log` çağrısı — aynı anda en fazla
+    /// `maxConcurrentBranchLoads` tanesi koşar. Sınırsız TaskGroup, çok branch'li
+    /// repolarda her FSEvents tazelemesinde onlarca git süreci açıyordu.
+    private func loadCommits(
+        _ repoPath: String,
+        branches branchList: [GitBranch]
+    ) async -> [String: [GitCommit]] {
+        await withTaskGroup(
             of: (String, [GitCommit]).self,
             returning: [String: [GitCommit]].self
         ) { [git] group in
-            for branch in branchList {
+            var pending = branchList.makeIterator()
+
+            func addNext() -> Bool {
+                guard let branch = pending.next() else { return false }
                 group.addTask {
                     (branch.name, await git.commits(repoPath: repoPath, branch: branch.name))
                 }
+                return true
             }
+
+            for _ in 0 ..< Self.maxConcurrentBranchLoads {
+                guard addNext() else { break }
+            }
+
             var result: [String: [GitCommit]] = [:]
             for await (name, list) in group {
                 result[name] = list
+                _ = addNext()
             }
             return result
         }
-        commitsByBranch[repoPath] = commits
     }
 
     public func loadChanges(_ repoPath: String) async {

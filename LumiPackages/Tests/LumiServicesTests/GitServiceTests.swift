@@ -48,6 +48,23 @@ final class GitServiceTests: XCTestCase {
         )
     }
 
+    /// GIT_TRACE ile blok içinde çalışan gerçek `git` süreçlerini sayar.
+    private func withGitTrace(_ body: () async throws -> Void) async throws -> String {
+        let traceFile = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("lumi-git-trace-\(UUID().uuidString).log")
+        defer {
+            unsetenv("GIT_TRACE")
+            try? FileManager.default.removeItem(at: traceFile)
+        }
+        setenv("GIT_TRACE", traceFile.path, 1)
+        try await body()
+        return (try? String(contentsOf: traceFile, encoding: .utf8)) ?? ""
+    }
+
+    private static func gitRunCount(in trace: String) -> Int {
+        trace.split(separator: "\n").filter { $0.contains("built-in: git ") }.count
+    }
+
     private func commitAll(_ message: String) throws {
         try git("add", "-A")
         try git("commit", "-m", message)
@@ -182,6 +199,108 @@ final class GitServiceTests: XCTestCase {
         // Repo içi path normal çalışır
         let content = try await service.readFile(repoPath: repoDir.path, file: "safe.txt")
         XCTAssertEqual(content, "ok")
+    }
+
+    /// 1.12: guard `standardizedFileURL` ile symlink'i çözmüyordu — repo içindeki
+    /// bir symlink repo DIŞINA işaret ettiğinde okuma geçiyordu.
+    func testSymlinkEscapingRepoIsRejected() async throws {
+        try write("safe.txt", "ok")
+        try commitAll("base")
+
+        let outside = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("lumi-outside-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        try "secret".write(
+            to: outside.appendingPathComponent("secret.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try FileManager.default.createSymbolicLink(
+            at: repoDir.appendingPathComponent("link"),
+            withDestinationURL: outside
+        )
+
+        do {
+            _ = try await service.readFile(repoPath: repoDir.path, file: "link/secret.txt")
+            XCTFail("symlink üzerinden repo dışına okuma yapıldı")
+        } catch let error as LumiError {
+            XCTAssertEqual(error, .pathOutsideRepo(path: "link/secret.txt"))
+        }
+        // Repo içi yol etkilenmez (/var ↔ /private/var canonicalize edilir)
+        let safe = try await service.readFile(repoPath: repoDir.path, file: "safe.txt")
+        XCTAssertEqual(safe, "ok")
+    }
+
+    /// 1.9: `commits` her çağrıda ayrıca tam bir `git branch --list`
+    /// koşturuyordu (N branch → 2N process). Branch verilmediğinde default
+    /// branch hesabına hiç gerek yok.
+    func testCommitsWithoutBranchSpawnsSingleGitProcess() async throws {
+        try write("a.txt", "v1")
+        try commitAll("first")
+
+        let trace = try await withGitTrace {
+            _ = await service.commits(repoPath: repoDir.path, branch: nil)
+        }
+        XCTAssertEqual(
+            Self.gitRunCount(in: trace), 1,
+            "branch verilmediğinde tek git süreci yeterli:\n\(trace)"
+        )
+    }
+
+    /// Branch verildiğinde default branch hesabı tek ek süreçle yapılır
+    /// (`branch --list` + parse yerine hedefli `for-each-ref`).
+    func testCommitsWithBranchSpawnsAtMostTwoGitProcesses() async throws {
+        try write("a.txt", "v1")
+        try commitAll("main first")
+        try git("checkout", "-b", "feature")
+        try write("b.txt", "x")
+        try commitAll("feature only")
+
+        let trace = try await withGitTrace {
+            _ = await service.commits(repoPath: repoDir.path, branch: "feature")
+        }
+        XCTAssertLessThanOrEqual(Self.gitRunCount(in: trace), 2, trace)
+    }
+
+    // MARK: - Commit hata yolu (1.6)
+
+    /// 1.6: `add` hata yolunda detail üretmek için `git add` İKİNCİ kez
+    /// koşuyordu. GIT_TRACE ile gerçek çalıştırma sayısı ölçülür.
+    func testCommitAddFailureRunsAddOnlyOnce() async throws {
+        try write("safe.txt", "ok")
+        try commitAll("base")
+
+        let traceFile = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("lumi-git-trace-\(UUID().uuidString).log")
+        defer { try? FileManager.default.removeItem(at: traceFile) }
+        setenv("GIT_TRACE", traceFile.path, 1)
+        defer { unsetenv("GIT_TRACE") }
+
+        do {
+            try await service.commit(
+                repoPath: repoDir.path,
+                message: "m",
+                files: ["yok.txt"]
+            )
+            XCTFail("var olmayan dosyayla commit başarılı oldu")
+        } catch let error as LumiError {
+            guard case .gitFailed(let operation, let detail) = error else {
+                return XCTFail("beklenmeyen hata: \(error)")
+            }
+            XCTAssertEqual(operation, "add")
+            XCTAssertTrue(
+                detail.contains("yok.txt"),
+                "detail ilk add'in stderr'i olmalı, 'timeout' değil: \(detail)"
+            )
+        }
+
+        let trace = (try? String(contentsOf: traceFile, encoding: .utf8)) ?? ""
+        let addRuns = trace
+            .split(separator: "\n")
+            .filter { $0.contains("built-in: git add") }
+            .count
+        XCTAssertEqual(addRuns, 1, "git add ikinci kez koştu:\n\(trace)")
     }
 
     // MARK: - Diff'ler

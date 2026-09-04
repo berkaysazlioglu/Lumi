@@ -7,11 +7,17 @@ import Foundation
 public final class EventBroadcaster<Event: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<Event>.Continuation] = [:]
+    private let bufferingPolicy: AsyncStream<Event>.Continuation.BufferingPolicy
 
-    public init() {}
+    /// Varsayılan `.unbounded` mevcut davranışı korur (yaşam döngüsü event'leri
+    /// düşük hacimli ve kayıpsız olmalı). Yüksek hacimli/drop'a toleranslı
+    /// akışlar `.bufferingNewest(_:)` ile sınırlanabilir.
+    public init(bufferingPolicy: AsyncStream<Event>.Continuation.BufferingPolicy = .unbounded) {
+        self.bufferingPolicy = bufferingPolicy
+    }
 
     public func stream() -> AsyncStream<Event> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: bufferingPolicy) { continuation in
             let id = UUID()
             lock.lock()
             continuations[id] = continuation

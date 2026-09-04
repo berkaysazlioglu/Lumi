@@ -46,6 +46,13 @@ final class OSCStreamParser {
         return events
     }
 
+    /// Terminal kapanışında parser durumu sıfırlanır (design/01 §6 adım 5):
+    /// yarım kalmış sequence exit'ten sonra tamamlanıp hayalet event üretmez.
+    func reset() {
+        buffer = ""
+        state = .ground
+    }
+
     private func handle(_ character: Character, into events: inout [OSCEvent]) {
         switch state {
         case .ground:
@@ -112,8 +119,7 @@ final class OSCStreamParser {
             hint = .claude
         } else {
             let lower = raw.lowercased()
-            if lower.contains("claude code")
-                || lower.range(of: "\\bclaude\\b", options: .regularExpression) != nil {
+            if lower.contains("claude code") || claudeWord.matches(lower) {
                 hint = .claude
             }
         }
@@ -150,20 +156,24 @@ final class OSCStreamParser {
     static func interpretNotification(_ payload: String) -> OSCNotificationKind {
         let lower = payload.lowercased()
         // İzin kalıbı önce sınanır: turn-complete'ten ayrılmalı (kuyruk duraklar).
-        if lower.contains("needs your permission")
-            || lower.range(of: "\\bpermission\\b", options: .regularExpression) != nil {
+        if lower.contains("needs your permission") || permissionWord.matches(lower) {
             return .permissionRequest
         }
-        let patterns = [
-            "\\b(turn|task)\\s+(complete|completed|done|finished)\\b",
-            "waiting for input",
-            "all idle",
-            "idle state",
-        ]
-        for pattern in patterns
-        where lower.range(of: pattern, options: .regularExpression) != nil {
+        if turnComplete.matches(lower) {
+            return .codexTurnComplete
+        }
+        for marker in idleMarkers where lower.contains(marker) {
             return .codexTurnComplete
         }
         return .generic
     }
+
+    // MARK: - Önceden derlenmiş kalıplar (Faz 1.24)
+
+    private static let permissionWord = CachedRegex("\\bpermission\\b")
+    private static let turnComplete = CachedRegex("\\b(turn|task)\\s+(complete|completed|done|finished)\\b")
+    /// Literal kalıplar — regex derlemesine gerek yok, `contains` yeterli.
+    private static let idleMarkers = ["waiting for input", "all idle", "idle state"]
+
+    private static let claudeWord = CachedRegex("\\bclaude\\b")
 }

@@ -31,7 +31,9 @@ public final class RepoStore {
             await self?.reload()
             // Yalnız repo listesi event'i; fileTreeChanged AppContainer köprüsünün işi
             for await event in stream where event == .reposChanged {
-                await self?.reload()
+                // self yoksa döngü sonlanır (aksi halde stream ömrü boyunca yaşar)
+                guard let self else { return }
+                await self.reload()
             }
         }
     }
@@ -71,10 +73,6 @@ public final class RepoStore {
             expanded.insert(path)
         }
         expandedNodes[repoPath] = expanded
-    }
-
-    public func isNodeExpanded(_ repoPath: String, path: String) -> Bool {
-        expandedNodes[repoPath]?.contains(path) ?? false
     }
 
     // MARK: - Gruplama (groupReposBySource paritesi)

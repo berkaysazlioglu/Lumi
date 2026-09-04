@@ -27,6 +27,9 @@ public final class TerminalListStore {
     @ObservationIgnored private var autoMinimizedIDs: Set<TerminalID> = []
 
     @ObservationIgnored private var lastActiveByRepo: [String: TerminalID] = [:]
+    /// Kullanıcının kapattığı terminaller: exit kodu ne olursa olsun toast
+    /// gösterilmez (kendi kill'imiz hata değildir). Tek atımlıdır.
+    @ObservationIgnored private var userClosedIDs: Set<TerminalID> = []
     @ObservationIgnored private let service: any TerminalServicing
     @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private var consumeTask: Task<Void, Never>?
@@ -86,8 +89,12 @@ public final class TerminalListStore {
     }
 
     public func close(_ id: TerminalID) {
-        toasts.reporting {
+        userClosedIDs.insert(id)
+        let didKill = toasts.reporting {
             try self.service.kill(id: id)
+        }
+        if !didKill {
+            userClosedIDs.remove(id)
         }
     }
 
@@ -188,8 +195,13 @@ public final class TerminalListStore {
             terminals.append(meta)
             // Spawn eden path açıkça odaklar (store sözleşmesi)
             focus(meta.id)
-        case .exited(let id, _):
+        case .exited(let id, let code):
+            let name = meta(for: id)?.name ?? "Terminal"
+            let wasUserClose = userClosedIDs.remove(id) != nil
             remove(id)
+            if !wasUserClose, Self.isFailureExit(code) {
+                toasts.show(.error, title: name, message: "Terminal exited with code \(code)")
+            }
         case .statusChanged(let id, let status):
             update(id) { $0.status = status }
             applyAutoMinimize(id, status: status)
@@ -206,6 +218,13 @@ public final class TerminalListStore {
             } else {
                 awaitingDecisionIDs.remove(id)
             }
+        case .writeFailed(let id, let errno):
+            // Karar 5: ölü PTY'ye yazım sessizce yutulmaz
+            toasts.show(
+                .error,
+                title: meta(for: id)?.name ?? "Terminal",
+                message: "Write failed (errno \(errno))"
+            )
         case .bell(let id):
             // Emülatör BEL karakteri — status-güdümlü bell'ler ayrıca
             // NotificationService'ten gelir
@@ -213,6 +232,15 @@ public final class TerminalListStore {
                 toasts.show(.bell, title: meta.name, message: "Bell", terminalID: id)
             }
         }
+    }
+
+    /// Kullanıcıya bildirilecek çıkışlar: sıfır olmayan ve kill sinyalinden
+    /// (SIGHUP/SIGTERM/SIGKILL → 128+signo) doğmayan kodlar. Negatif kod
+    /// "çözülemedi" demektir (PTYProcess.exitCode) — gürültü yapılmaz.
+    static let normalExitCodes: Set<Int32> = [0, 128 + 1, 128 + 15, 128 + 9]
+
+    static func isFailureExit(_ code: Int32) -> Bool {
+        code > 0 && !normalExitCodes.contains(code)
     }
 
     /// Karar 24: working → otomatik minimize (yalnız toggle açıkken ve zaten
