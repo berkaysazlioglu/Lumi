@@ -8,6 +8,9 @@ struct TerminalGridView: View {
     let terminals: [TerminalMeta]
     let layout: LumiKit.GridLayout
     let activeTerminalID: TerminalID?
+    /// Feed watchdog'ın donmuş işaretlediği terminaller (design/00 Ek A §A.2-10).
+    /// Varsayılan boş: host bağlanana dek rozet çıkmaz.
+    var stalledIDs: Set<TerminalID> = []
     let viewProvider: any TerminalViewProviding
     let promptQueue: PromptQueueStore
     let onFocus: (TerminalID) -> Void
@@ -45,6 +48,7 @@ struct TerminalGridView: View {
                     TerminalCardView(
                         meta: meta,
                         isActive: activeTerminalID == meta.id,
+                        isStalled: stalledIDs.contains(meta.id),
                         viewProvider: viewProvider,
                         promptQueue: promptQueue,
                         onFocus: { onFocus(meta.id) },
@@ -65,6 +69,7 @@ struct TerminalGridView: View {
 struct TerminalCardView: View {
     let meta: TerminalMeta
     let isActive: Bool
+    var isStalled = false
     let viewProvider: any TerminalViewProviding
     @Bindable var promptQueue: PromptQueueStore
     let onFocus: () -> Void
@@ -99,6 +104,7 @@ struct TerminalCardView: View {
     private var header: some View {
         HStack(spacing: 6) {
             StatusDot(status: meta.status)
+            if isStalled { StalledBadge() }
             Text(meta.oscTitle ?? meta.task ?? meta.name)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
@@ -124,6 +130,20 @@ struct TerminalCardView: View {
         .onTapGesture(perform: onFocus)
         // Başlığa çift tık → maximize/solo (rahat çalışma)
         .simultaneousGesture(TapGesture(count: 2).onEnded(onMaximize))
+    }
+}
+
+/// Feed akışı donduğunda (Ek A §A.2-10) header'da beliren küçük uyarı rozeti.
+/// Siyah/boş kart yerine görünür durum: "veri geliyor ama ekrana çizilemiyor".
+struct StalledBadge: View {
+    var body: some View {
+        Text("stalled")
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(Theme.warning)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Theme.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
+            .accessibilityLabel("Terminal stalled")
     }
 }
 

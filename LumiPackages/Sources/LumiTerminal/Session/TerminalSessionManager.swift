@@ -21,28 +21,24 @@ public final class TerminalSessionManager: TerminalServicing {
     private var font: NSFont
     /// Caret şekli + blink (SwiftTerm CursorStyle'a çözülmüş). Canlı uygulanır.
     private var cursorStyle: CursorStyle = .blinkBlock
-    /// Global NSEvent monitörleri: kurulduklarında AppKit tarafından tutulur ve
-    /// yalnız `removeMonitor` ile bırakılırlar — token'lar kapanışta kaldırılmak
-    /// üzere saklanır (Faz 1.22 sızıntı düzeltmesi).
-    private var keyMonitor: Any?
-    private var mouseMonitor: Any?
+    /// Odağın tek otoritesi (Faz 4.3/4.9): `setFocused` ile gelen seçim burada
+    /// tutulur ki yüzey geçişleri (`setSurfaceState`) odağı yeniden türetmek
+    /// yerine aynı kaynaktan okusun — foreground olmak tek başına odak
+    /// kazandırmaz.
+    private var focusedID: TerminalID?
+    /// Terminal alt sisteminin tek uygulama-seviyesi NSEvent monitörü (refactor 4.7):
+    /// klavye eşlemesi, kart odağı, tekerlek/hover. Enjekte edilir ki testler gerçek
+    /// bir global monitör kurmadan (ya da kurulumu doğrulayarak) koşabilsin.
+    private let eventMonitor: TerminalEventMonitor
 
-    public init(font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)) {
+    public init(
+        font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular),
+        eventMonitor: TerminalEventMonitor = TerminalEventMonitor()
+    ) {
         self.font = font
-        installNaturalEditingMonitor()
-        installFocusClickMonitor()
-    }
-
-    private func installFocusClickMonitor() {
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            // First responder tıklama dispatch'i SONRASI oluşur — bir tur ertele
-            DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      let view = event.window?.firstResponder as? DropAwareTerminalView
-                else { return }
-                self.noteViewFocused(view)
-            }
-            return event
+        self.eventMonitor = eventMonitor
+        eventMonitor.start { [weak self] view in
+            self?.noteViewFocused(view)
         }
     }
 
@@ -73,20 +69,6 @@ public final class TerminalSessionManager: TerminalServicing {
         sessions.forEach { $0.setCursorStyle(style) }
     }
 
-    /// SwiftTerm keyDown'ı sealed olduğundan doğal-düzenleme eşlemeleri
-    /// (Option+Backspace → ^W vb.) dispatch'ten önce local monitor'la uygulanır.
-    /// Yalnız first responder bir Lumi terminal view'ıyken devreye girer.
-    private func installNaturalEditingMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard let view = event.window?.firstResponder as? DropAwareTerminalView,
-                  let bytes = NaturalEditingKeyMap.bytes(for: event) else {
-                return event
-            }
-            view.send(bytes)
-            return nil
-        }
-    }
-
     public var terminals: [TerminalMeta] {
         sessions.map(\.meta)
     }
@@ -108,20 +90,18 @@ public final class TerminalSessionManager: TerminalServicing {
         // Spawn-time: manager'ın güncel cursor değerini uygula (palet sabit —
         // DropAwareTerminalView zaten TerminalTheme.lumi uygular).
         session.setCursorStyle(cursorStyle)
+        // Katman sınırı (Faz 4.1): oturum superview'a dokunmaz; hücre boyutu
+        // değişince yeniden yerleşimi registry üzerinden host'tan ister.
+        let sessionID = session.id
+        session.onLayoutInvalidated = { [weak self] in
+            self?.viewRegistry.invalidateLayout(for: sessionID)
+        }
         sessions.append(session)
         viewRegistry.register(
             view: session.terminalView,
             for: session.id,
-            onVisibilityChange: { [weak session] visible in
-                session?.setHidden(!visible)
-                // Görünür olunca TUI'yi yeniden çizmeye zorla (boyut değişmese bile) —
-                // grid↔maximize round-trip'inde boş kalan kartın onarımı.
-                if visible { session?.requestRepaint() }
-            },
-            onRedraw: { [weak session] in
-                // Frame gerçek boyuta oturunca (tab değişimi sonrası reassert)
-                // buffer'dan poke'suz tam çizim — boş kart onarımının ikinci yarısı.
-                session?.redrawFromBuffer()
+            onVisibilityChange: { [weak self] visible in
+                self?.applyVisibility(visible, for: sessionID)
             }
         )
         broadcaster.send(.spawned(session.meta))
@@ -154,9 +134,33 @@ public final class TerminalSessionManager: TerminalServicing {
     }
 
     public func setFocused(_ id: TerminalID?) {
+        focusedID = id
         for session in sessions {
             session.setTabFocused(session.id == id)
         }
+    }
+
+    /// Faz 4.3 — tek terminalin yüzey durumu. Odak bilgisi manager'ın kendi
+    /// otoritesinden (`focusedID`) gelir: `.foreground` yalnız gerçekten seçili
+    /// terminale odak geri verir, diğerleri görünür ama odaksız kalır.
+    public func setSurfaceState(_ state: TerminalSurfaceState, for id: TerminalID) {
+        session(for: id)?.setSurfaceState(state, isFocused: focusedID == id)
+    }
+
+    /// Faz 4.3 — toplu yüzey geçişi (route/tab değişimi). `repoPath == nil` ⇒ tümü.
+    public func setSurfaceState(_ state: TerminalSurfaceState, in repoPath: String?) {
+        for session in sessions where repoPath == nil || session.meta.repoPath == repoPath {
+            session.setSurfaceState(state, isFocused: focusedID == session.id)
+        }
+    }
+
+    /// Registry görünürlük sinyalinin tek yorumu: yüzey durumu + (görünür olunca)
+    /// TUI'yi yeniden çizmeye zorlama. Boş kalan kartın onarımı buradan akar —
+    /// `requestRepaint` buffer'dan tam çizim + SIGWINCH poke'unu birlikte yapar.
+    private func applyVisibility(_ visible: Bool, for id: TerminalID) {
+        guard let session = session(for: id) else { return }
+        session.setSurfaceState(visible ? .foreground : .background, isFocused: focusedID == id)
+        if visible { session.requestRepaint() }
     }
 
     public func setWindowFocused(_ focused: Bool) {
@@ -167,17 +171,10 @@ public final class TerminalSessionManager: TerminalServicing {
         broadcaster.stream()
     }
 
-    /// Kapanış simetrisi: global event monitörlerini bırakır. Idempotent'tir.
+    /// Kapanış simetrisi: tek global event monitörünü bırakır. Idempotent'tir.
     /// (Faz 3'te `StoreLifecycle` ile composition root'a bağlanacak.)
     public func shutdown() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-        }
-        if let mouseMonitor {
-            NSEvent.removeMonitor(mouseMonitor)
-        }
-        keyMonitor = nil
-        mouseMonitor = nil
+        eventMonitor.stop()
     }
 
     private func session(for id: TerminalID) -> TerminalSession? {
@@ -203,6 +200,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.titleChanged(session.id, title))
     }
 
+    func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.stalled(session.id, stalled))
+    }
+
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32) {
         guard isRegistered(session) else { return }
         broadcaster.send(.writeFailed(session.id, errno: code))
@@ -217,6 +219,7 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         // Exit-cleanup sırası: önce kayıttan düş — stale push imkânsızlaşır —
         // sonra exit yayınla
         sessions.removeAll { $0.id == session.id }
+        if focusedID == session.id { focusedID = nil }
         viewRegistry.unregister(session.id)
         broadcaster.send(.exited(session.id, code: code))
     }

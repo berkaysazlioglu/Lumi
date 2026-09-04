@@ -55,11 +55,17 @@ final class TerminalSessionManagerSpawnTests: XCTestCase {
         XCTAssertNotNil(UUID(uuidString: id))
     }
 
-    /// Faz 1.22: global NSEvent monitörleri kapanışta bırakılır; çağrı idempotent.
-    func testShutdownRemovesEventMonitorsIdempotently() {
-        let manager = TerminalSessionManager()
+    /// Faz 1.22 + refactor 4.7: uygulama-seviyesi NSEvent monitörü artık TEK
+    /// (`TerminalEventMonitor`), manager tarafından kurulur ve kapanışta bırakılır;
+    /// çağrı idempotent.
+    func testShutdownRemovesEventMonitorIdempotently() {
+        let monitor = TerminalEventMonitor()
+        let manager = TerminalSessionManager(eventMonitor: monitor)
+        XCTAssertTrue(monitor.isRunning, "manager tek monitörü kurmadı")
 
         manager.shutdown()
+        XCTAssertFalse(monitor.isRunning, "shutdown monitörü bırakmadı")
         manager.shutdown()
+        XCTAssertFalse(monitor.isRunning)
     }
 }

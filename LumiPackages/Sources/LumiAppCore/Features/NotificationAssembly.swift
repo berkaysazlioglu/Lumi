@@ -59,7 +59,7 @@ final class NotificationAssembly: FeatureAssembly {
                     // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
                     self.services.notifications.terminalRemoved(id)
                 case .spawned, .titleChanged, .awaitingDecisionChanged, .bell,
-                     .writeFailed, .viewFocused:
+                     .writeFailed, .viewFocused, .stalled:
                     break
                 }
             }

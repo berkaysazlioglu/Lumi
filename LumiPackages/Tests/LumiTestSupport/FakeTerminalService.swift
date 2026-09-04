@@ -24,6 +24,9 @@ public final class FakeTerminalService: TerminalServicing {
     public private(set) var killAllCount = 0
     public private(set) var shutdownCount = 0
     public private(set) var focusCalls: [TerminalID?] = []
+    /// Yüzey durumu geçişleri (Faz 4.3): tekil (`id`) ve toplu (`repoPath`)
+    /// çağrılar aynı sırada tek listede birikir.
+    public private(set) var surfaceStateCalls: [SurfaceStateCall] = []
     public private(set) var windowFocusCalls: [Bool] = []
     public private(set) var resizeCalls: [(id: TerminalID, cols: Int, rows: Int)] = []
     public private(set) var writtenTexts: [(id: TerminalID, text: String)] = []
@@ -31,7 +34,28 @@ public final class FakeTerminalService: TerminalServicing {
     public private(set) var appliedFonts: [NSFont] = []
     public private(set) var appliedCursors: [(shape: TerminalCursorShape, blink: Bool)] = []
 
+    /// Kaydedilen yüzey geçişi: tekil çağrıda `id`, toplu çağrıda `repoPath`
+    /// dolu olur (`repoPath == nil` toplu çağrıda "tüm terminaller" demektir,
+    /// bu yüzden iki alan ayrı tutulur).
+    public struct SurfaceStateCall: Equatable, Sendable {
+        public let state: TerminalSurfaceState
+        public let id: TerminalID?
+        public let repoPath: String?
+
+        public init(state: TerminalSurfaceState, id: TerminalID?, repoPath: String?) {
+            self.state = state
+            self.id = id
+            self.repoPath = repoPath
+        }
+    }
+
     public init() {}
+
+    /// Kurulum gürültüsünü (spawn → focus) temizleyip yalnız test edilen
+    /// adımın odak trafiğini görebilmek için.
+    public func resetFocusCalls() {
+        focusCalls = []
+    }
 
     public var terminals: [TerminalMeta] { spawnedMetas }
 
@@ -81,6 +105,14 @@ public final class FakeTerminalService: TerminalServicing {
 
     public func setWindowFocused(_ focused: Bool) {
         windowFocusCalls.append(focused)
+    }
+
+    public func setSurfaceState(_ state: TerminalSurfaceState, for id: TerminalID) {
+        surfaceStateCalls.append(SurfaceStateCall(state: state, id: id, repoPath: nil))
+    }
+
+    public func setSurfaceState(_ state: TerminalSurfaceState, in repoPath: String?) {
+        surfaceStateCalls.append(SurfaceStateCall(state: state, id: nil, repoPath: repoPath))
     }
 
     // MARK: TerminalAppearanceControlling

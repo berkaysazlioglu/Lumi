@@ -1,30 +1,12 @@
 import Foundation
 
-struct OSCTitleEvent: Equatable {
-    let rawTitle: String
-    /// `/^.\s*/` paritesiyle ilk karakter + ardındaki boşluk soyulmuş hali; boşsa nil.
-    let displayTitle: String?
-    /// ✳ prefix → false (Claude idle); boş title → nil (karar yok); aksi → true.
-    let isWorking: Bool?
-    let providerHint: AgentHint?
-}
-
-enum OSCNotificationKind: Equatable {
-    case codexTurnComplete
-    /// Claude bir araç/komut için izin bekliyor (OSC 9 "needs your permission").
-    /// "Bekliyor" değil "karar bekliyor" sinyalidir — kuyruk buna duraklar.
-    case permissionRequest
-    case generic
-}
-
-enum OSCEvent: Equatable {
-    case title(OSCTitleEvent)
-    case notification(OSCNotificationKind)
-}
-
-/// Lumi'ye özgü OSC 0/2/9 semantiğini decode edilmiş stream üzerinde çıkaran parser.
-/// Emülatörden bilinçli olarak bağımsızdır: SwiftTerm aynı sequence'leri kendi işler,
-/// ama ✳-idle ve codex-turn-complete semantiği Lumi'nindir.
+/// OSC dizilerini decode edilmiş stream üzerinde ayıklayan **saf byte state
+/// machine**: `ESC ] kod ; payload (BEL | ESC \)` (önce gelen sonlandırıcı).
+///
+/// Faz 4.8'den beri yalnız ham `(code, payload)` üretir — hangi kodun ne anlama
+/// geldiği `OSCSemantics` implementasyonlarının işidir (OCP: yeni ajan/OSC 7/133
+/// desteği bu dosyaya dokunmadan eklenir). Emülatörden bilinçli olarak
+/// bağımsızdır: SwiftTerm aynı sequence'leri kendi işler.
 final class OSCStreamParser {
     static let maxBufferLength = 4096
 
@@ -38,8 +20,8 @@ final class OSCStreamParser {
     private var state: State = .ground
     private var buffer = ""
 
-    func feed(_ text: String) -> [OSCEvent] {
-        var events: [OSCEvent] = []
+    func feed(_ text: String) -> [OSCRawEvent] {
+        var events: [OSCRawEvent] = []
         for character in text {
             handle(character, into: &events)
         }
@@ -53,7 +35,7 @@ final class OSCStreamParser {
         state = .ground
     }
 
-    private func handle(_ character: Character, into events: inout [OSCEvent]) {
+    private func handle(_ character: Character, into events: inout [OSCRawEvent]) {
         switch state {
         case .ground:
             if character == "\u{1B}" { state = .escape }
@@ -88,92 +70,14 @@ final class OSCStreamParser {
         }
     }
 
-    private func finish(into events: inout [OSCEvent]) {
+    private func finish(into events: inout [OSCRawEvent]) {
         defer {
             buffer = ""
             state = .ground
         }
         let parts = buffer.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let first = parts.first, let command = Int(first) else { return }
+        guard let first = parts.first, let code = Int(first) else { return }
         let payload = parts.count > 1 ? String(parts[1]) : ""
-        switch command {
-        case 0, 2:
-            let event = Self.interpretTitle(payload)
-            OSCTracer.traceTitle(command: command, raw: payload, isWorking: event.isWorking)
-            events.append(.title(event))
-        case 9:
-            let kind = Self.interpretNotification(payload)
-            OSCTracer.traceNotification(raw: payload, kind: kind)
-            events.append(.notification(kind))
-        default:
-            break
-        }
+        events.append(OSCRawEvent(code: code, payload: payload))
     }
-
-    // MARK: - Semantik yorumlama
-
-    static func interpretTitle(_ raw: String) -> OSCTitleEvent {
-        let isIdleMark = raw.unicodeScalars.first == "\u{2733}"
-        var hint: AgentHint?
-        if isIdleMark {
-            hint = .claude
-        } else {
-            let lower = raw.lowercased()
-            if lower.contains("claude code") || claudeWord.matches(lower) {
-                hint = .claude
-            }
-        }
-
-        let isWorking: Bool?
-        if isIdleMark {
-            isWorking = false
-        } else if raw.isEmpty {
-            isWorking = nil
-        } else {
-            isWorking = true
-        }
-
-        let display = stripLeadingIconAndWhitespace(raw)
-        return OSCTitleEvent(
-            rawTitle: raw,
-            displayTitle: display.isEmpty ? nil : display,
-            isWorking: isWorking,
-            providerHint: hint
-        )
-    }
-
-    /// `/^.\s*/` paritesi: ilk karakter körlemesine atılır (✳/spinner ikonu hedeflenir,
-    /// ikonsuz title'ın ilk harfi de gider — bilinen trade-off).
-    static func stripLeadingIconAndWhitespace(_ string: String) -> String {
-        guard !string.isEmpty else { return "" }
-        var rest = string.dropFirst()
-        while let first = rest.first, first.isWhitespace {
-            rest = rest.dropFirst()
-        }
-        return String(rest)
-    }
-
-    static func interpretNotification(_ payload: String) -> OSCNotificationKind {
-        let lower = payload.lowercased()
-        // İzin kalıbı önce sınanır: turn-complete'ten ayrılmalı (kuyruk duraklar).
-        if lower.contains("needs your permission") || permissionWord.matches(lower) {
-            return .permissionRequest
-        }
-        if turnComplete.matches(lower) {
-            return .codexTurnComplete
-        }
-        for marker in idleMarkers where lower.contains(marker) {
-            return .codexTurnComplete
-        }
-        return .generic
-    }
-
-    // MARK: - Önceden derlenmiş kalıplar (Faz 1.24)
-
-    private static let permissionWord = CachedRegex("\\bpermission\\b")
-    private static let turnComplete = CachedRegex("\\b(turn|task)\\s+(complete|completed|done|finished)\\b")
-    /// Literal kalıplar — regex derlemesine gerek yok, `contains` yeterli.
-    private static let idleMarkers = ["waiting for input", "all idle", "idle state"]
-
-    private static let claudeWord = CachedRegex("\\bclaude\\b")
 }

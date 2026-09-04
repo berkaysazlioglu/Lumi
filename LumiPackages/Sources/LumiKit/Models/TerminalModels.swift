@@ -103,6 +103,10 @@ public enum TerminalEvent: Sendable, Equatable {
     /// PTY'ye yazım kalıcı olarak başarısız (EPIPE/EIO — child öldü).
     /// Karar 5: sessiz yutma yok; store toast gösterir.
     case writeFailed(TerminalID, errno: Int32)
+    /// Feed akışı durdu (in-flight byte var ama emülatör 2 sn'dir beslenemedi)
+    /// ya da düzeldi — design/00 Ek A §A.2-10 donma gözetimi. Ephemeral sinyal:
+    /// `TerminalMeta` formatına YAZILMAZ (karar 9), store'da geçici set'te durur.
+    case stalled(TerminalID, Bool)
     /// Terminal NSView'ı first responder oldu (karta tıklama). Store odağı
     /// buna göre senkronlar — composition root'ta callback köprüsü yerine
     /// diğer tüm terminal sinyalleriyle aynı kanaldan akar (Faz 3.7).

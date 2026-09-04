@@ -68,85 +68,50 @@ final class DropAwareTerminalView: TerminalView {
         super.viewDidMoveToWindow()
         hideScroller()
         if window == nil {
-            removeEventMonitor()
             scrollRedrawTask?.cancel()
             scrollRedrawTask = nil
-        } else {
-            installEventMonitor()
         }
     }
 
     // MARK: - Mouse: hover-caret bastırma + wheel scroll (v1 / xterm.js paritesi)
 
-    /// SwiftTerm'in `scrollWheel`'i ve `mouseMoved`'ı `public` (open değil); modül
-    /// dışından override edilemez. Event'ler SwiftTerm'e ulaşmadan local monitor ile
-    /// yakalanır. Pin'li revision'da (24a68bc) scrollWheel alt-buffer'ı kendisi de
-    /// ele alıyor (mouse-mode'da wheel forwarding, mouse-off'ta yön tuşu); yine de
-    /// araya girmemizin gerekçeleri:
-    /// 1. mouseMoved upstream bug'ı: hover'ı "sol buton release" (`ESC[<32;x;ym`)
-    ///    olarak kodlar (encodeButton release=3 +32) ve allowMouseReporting'i atlar
-    ///    — Claude tıklama sanıp caret'i taşır. anyEvent modunda hover'ı yutarız.
-    /// 2. Trackpad: SwiftTerm event.deltaY ile event başına sabit adım üretir
-    ///    (precise piksel delta'sını ve momentum'u tanımaz) — WheelStepAccumulator
-    ///    hücre-yüksekliği birimli birikimli çeviri yapar.
-    /// Event'i yuttuğumuz için upstream yoluyla çifte gönderim oluşmaz.
-    private var eventMonitor: Any?
+    // SwiftTerm'in `scrollWheel`'i ve `mouseMoved`'ı `public` (open değil); modül
+    // dışından override edilemez. Event'ler SwiftTerm'e ulaşmadan `TerminalEventMonitor`
+    // (uygulama-seviyesi TEK local monitor) tarafından yakalanır ve hit-test ile bu
+    // view'a yönlendirilir; burada yalnız terminale ÖZGÜ durum (birikim, redraw
+    // debounce) yaşar. Pin'li revision'da (24a68bc) scrollWheel alt-buffer'ı kendisi
+    // de ele alıyor (mouse-mode'da wheel forwarding, mouse-off'ta yön tuşu); yine de
+    // araya girmemizin gerekçeleri:
+    // 1. mouseMoved upstream bug'ı: hover'ı "sol buton release" (`ESC[<32;x;ym`)
+    //    olarak kodlar (encodeButton release=3 +32) ve allowMouseReporting'i atlar
+    //    — Claude tıklama sanıp caret'i taşır. anyEvent modunda hover'ı yutarız.
+    // 2. Trackpad: SwiftTerm event.deltaY ile event başına sabit adım üretir
+    //    (precise piksel delta'sını ve momentum'u tanımaz) — WheelStepAccumulator
+    //    hücre-yüksekliği birimli birikimli çeviri yapar.
+    // Event'i yuttuğumuz için upstream yoluyla çifte gönderim oluşmaz.
 
     /// Trackpad piksel-delta'larını adıma çeviren birikimli durum (terminal başına).
     private var wheelAccumulator = WheelStepAccumulator()
 
-    private func installEventMonitor() {
-        guard eventMonitor == nil else { return }
-        // NSEvent Sendable değil; monitor closure'u non-isolated. Yalnız Sendable
-        // skalerleri çıkarıp MainActor işine taşıyoruz (event/window referansı geçirmeden).
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .mouseMoved]) { [weak self] event in
-            // AppKit local monitor'ları main'de çağırır; synthetic event enjeksiyonu
-            // edge case'ine karşı sigorta — assumeIsolated trap'lemesin, event geçsin.
-            guard Thread.isMainThread else { return event }
-            let isScroll = event.type == .scrollWheel
-            let deltaY = isScroll ? event.scrollingDeltaY : 0
-            let isPrecise = isScroll && event.hasPreciseScrollingDeltas
-            let location = event.locationInWindow
-            let windowID = event.window.map(ObjectIdentifier.init)
-            let consumed = MainActor.assumeIsolated {
-                self?.handleMonitoredEvent(
-                    isScroll: isScroll, deltaY: deltaY, isPrecise: isPrecise,
-                    locationInWindow: location, windowID: windowID
-                ) ?? false
-            }
-            return consumed ? nil : event
-        }
+    /// Hover (mouseMoved): anyEvent (1003) modunda SwiftTerm hover'ı SGR "sol buton
+    /// release" olarak KODLAYIP yollar (upstream bug: encodeButton release=3 →
+    /// `ESC[<32;x;ym`) — Claude bunu tıklama sayıp caret'i taşır. Bu modda yut;
+    /// diğer modlarda SwiftTerm'e bırak.
+    /// Bilinçli trade-off: anyEvent aktifken (Claude hep açar) Cmd+hover link
+    /// önizlemesi de çalışmaz — geçirsek hover her seferinde caret'i taşırdı.
+    /// `true` → event yutuldu.
+    func shouldConsumeHover() -> Bool {
+        getTerminal().mouseMode == .anyEvent
     }
 
-    private func removeEventMonitor() {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
-        }
-    }
-
-    /// true → event yutuldu (SwiftTerm görmez). false → SwiftTerm normal işlesin.
-    private func handleMonitoredEvent(
-        isScroll: Bool, deltaY: CGFloat, isPrecise: Bool,
-        locationInWindow: NSPoint, windowID: ObjectIdentifier?
-    ) -> Bool {
-        // Tam-ekran overlay (Settings/FileViewer) açıkken terminal monitörü devre
-        // dışı: event'i consume etmeden geçir ki overlay'in ScrollView'i alsın.
-        guard !TerminalInputGate.shared.isSuppressed else { return false }
-        guard let window, ObjectIdentifier(window) == windowID else { return false }
-        let viewPoint = convert(locationInWindow, from: nil)
-        guard bounds.contains(viewPoint) else { return false }
-        let terminal = getTerminal()
-        guard isScroll else {
-            // Hover (mouseMoved): anyEvent (1003) modunda SwiftTerm hover'ı SGR
-            // "sol buton release" olarak KODLAYIP yollar (upstream bug: encodeButton
-            // release=3 → `ESC[<32;x;ym`) — Claude bunu tıklama sayıp caret'i taşır.
-            // Bu modda yut; diğer modlarda SwiftTerm'e bırak.
-            // Bilinçli trade-off: anyEvent aktifken (Claude hep açar) Cmd+hover link
-            // önizlemesi de çalışmaz — geçirsek hover her seferinde caret'i taşırdı.
-            return terminal.mouseMode == .anyEvent
-        }
-        return handleScroll(deltaY: deltaY, isPrecise: isPrecise, viewPoint: viewPoint, terminal: terminal)
+    /// Tekerlek/trackpad delta'sı. `true` → event yutuldu (SwiftTerm görmez).
+    func consumeScroll(deltaY: CGFloat, isPrecise: Bool, locationInWindow: NSPoint) -> Bool {
+        handleScroll(
+            deltaY: deltaY,
+            isPrecise: isPrecise,
+            viewPoint: convert(locationInWindow, from: nil),
+            terminal: getTerminal()
+        )
     }
 
     /// Alt-buffer'da wheel → uygulamanın beklediği sinyale çevrilir; normal buffer'da

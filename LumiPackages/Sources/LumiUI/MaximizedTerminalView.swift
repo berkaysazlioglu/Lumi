@@ -8,6 +8,8 @@ import SwiftUI
 struct MaximizedTerminalView: View {
     let maximized: TerminalMeta
     let others: [TerminalMeta]
+    /// Feed watchdog donma sinyali (design/00 Ek A §A.2-10); varsayılan kapalı.
+    var isStalled = false
     let viewProvider: any TerminalViewProviding
     @Bindable var promptQueue: PromptQueueStore
     let onSwitch: (TerminalID) -> Void
@@ -48,6 +50,7 @@ struct MaximizedTerminalView: View {
     private var header: some View {
         HStack(spacing: 8) {
             StatusDot(status: maximized.status)
+            if isStalled { StalledBadge() }
             Text(maximized.oscTitle ?? maximized.task ?? maximized.name)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)

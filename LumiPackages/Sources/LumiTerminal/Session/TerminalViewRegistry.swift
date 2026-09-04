@@ -10,11 +10,15 @@ import LumiKit
 public final class TerminalViewRegistry: TerminalViewProviding {
     private struct Entry {
         let view: NSView
+        /// Görünürlük geçişinin TEK kanalı (Faz 4.4/4B): yüzey durumu (coalescer
+        /// aralığı + odak) VE buffer'dan tam yeniden çizim bu callback'ten akar.
+        /// Ayrı bir `onRedraw` kancası vardı; her iki tetikleyicisinde
+        /// (`attachView`, `refreshAttachedViews`) görünürlük sinyaliyle birlikte
+        /// çağrıldığı için ikinci bir tam çizimden başka şey üretmiyordu.
+        /// Yalnız GERÇEK attach olayında çağrılır — frame deltasına bağlanmaz
+        /// (refactor 4.5): layout geçişi başına tam çizim, resize/animasyonda
+        /// N terminal × frame maliyeti doğuruyordu.
         let onVisibilityChange: (Bool) -> Void
-        /// Emülatör buffer'ından tam yeniden çizim (updateFullScreen) — SIGWINCH
-        /// poke'u İÇERMEZ; frame-oturma yolunda PTY resize zinciri SIGWINCH'i
-        /// zaten üretir, ek poke pencere resize'ında TUI'yi spam'lerdi.
-        let onRedraw: () -> Void
     }
 
     private var entries: [TerminalID: Entry] = [:]
@@ -22,10 +26,9 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     func register(
         view: NSView,
         for id: TerminalID,
-        onVisibilityChange: @escaping (Bool) -> Void,
-        onRedraw: @escaping () -> Void = {}
+        onVisibilityChange: @escaping (Bool) -> Void
     ) {
-        entries[id] = Entry(view: view, onVisibilityChange: onVisibilityChange, onRedraw: onRedraw)
+        entries[id] = Entry(view: view, onVisibilityChange: onVisibilityChange)
         // Spawn anında henüz hiçbir container'a bağlı değil — gizli politikayla başlar
         onVisibilityChange(false)
     }
@@ -40,36 +43,36 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         entries.first { $0.value.view === view }?.key
     }
 
+    /// Hücre boyutu değişti (font) → host'tan yeni bir layout geçişi iste.
+    /// Oturum superview'a dokunmaz (katman sınırı, Faz 4.1); yerleşim otoritesi
+    /// host'tadır — burada yalnız "yeniden yerleş" sinyali verilir.
+    func invalidateLayout(for id: TerminalID) {
+        entries[id]?.view.superview?.needsLayout = true
+    }
+
+    /// Reparent + görünürlük sinyali. **Frame'e DOKUNMAZ** (refactor 4.5): yerleşim
+    /// otoritesi tek yerdedir — `TerminalHostContainer.pinTerminalView` →
+    /// `TerminalGridFit.fit`. Host her AppKit layout geçişinde kendini onarmak için
+    /// bu metodu çağırır (reassert); zaten bağlıysa burada hiçbir iş yapılmaz, yoksa
+    /// her frame'de görünürlük sinyali (→ tam çizim) tetiklenir ve resize/animasyon
+    /// boyunca N terminal × frame maliyeti doğardı.
     public func attachView(for id: TerminalID, into container: NSView) {
         guard let entry = entries[id] else { return }
-        if entry.view.superview === container {
-            // Reassert yolu (host her layout'ta çağırır): frame GERÇEK boyuta
-            // oturduğunda buffer'dan tam çizim istenir. Tab değişiminde host
-            // yeniden yaratılır ve ilk attach 0×0 bounds'la gelir — o anda
-            // yapılan repaint'in setNeedsDisplay'i no-op kalır; içerik ancak
-            // burada, boyut oturunca görünür olur (boş kart bug'ının onarımı).
-            if TerminalGridFit.fit(entry.view, in: container) {
-                entry.view.needsDisplay = true
-                entry.onRedraw()
-            }
-            return
-        }
+        // Reassert yolu (host her layout'ta çağırır): view zaten burada — no-op.
+        // Frame'i host oturtur, çizim kararını da o verir (fit true → needsDisplay).
+        guard entry.view.superview !== container else { return }
         entry.view.removeFromSuperview()
-        // 0×0 container'a (SwiftUI layout vermeden önceki makeNSView anı) frame
-        // ATANMAZ (fit boş bounds'ta no-op'tur): SwiftTerm'i sıfıra küçültmek
-        // emülatörü gereksiz resize eder ve ardından gelen repaint'in
-        // setNeedsDisplay(bounds)'unu no-op yapardı. Eski frame korunur; layout
-        // gelince yukarıdaki reassert dalı oturtur.
-        TerminalGridFit.fit(entry.view, in: container)
         // Frame'in tek otoritesi host'tur (TerminalHostContainer her setFrameSize/
         // layout'ta yeniden oturtur). autoresizing view'ı ızgara katı olmayan bir
         // boyuta esnetip aradaki her karede gereksiz cols/rows değişimi doğururdu.
+        // 0×0 container'a (SwiftUI layout vermeden önceki makeNSView anı) frame
+        // ATANMAZ: SwiftTerm'i sıfıra küçültmek emülatörü gereksiz resize ederdi.
+        // Eski frame korunur; layout gelince host oturtur.
         entry.view.autoresizingMask = []
         container.addSubview(entry.view)
-        // "Görünür olunca fit" garantisi: frame ataması SwiftTerm'in cols/rows
-        // hesabını tetikler; sizeChanged delegate'i resize'ı PTY'ye iletir.
-        // Buffer'dan tam yeniden çizim: re-attach sonrası (grid round-trip) emülatör
-        // içeriği zaten elde; görünmesi için tüm bounds dirty işaretlenir.
+        // Gerçek attach olayı: buffer'dan tam yeniden çizim + görünürlük sinyali.
+        // Frame henüz 0×0 olabilir; `updateFullScreen`'in dirty işaretlemesi model
+        // tarafında kalıcıdır, host frame'i oturttuğunda içerik görünür olur.
         entry.view.needsDisplay = true
         entry.onVisibilityChange(true)
     }
@@ -77,18 +80,38 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     /// Fullscreen geçişi / pencere-space değişimi sonrası onarım. AppKit, native
     /// fullscreen'e girip çıkarken içerik view'ını ayrı bir space-window'a taşır;
     /// dönüşte SwiftTerm otomatik repaint etmez ve attach/detach yarışında frame
-    /// bayat (hatta sıfır) kalabilir → kart bozuk/boş görünür. Bağlı her view
-    /// superview bounds'una yeniden hizalanır (delta varsa SwiftTerm sizeChanged →
-    /// PTY resize zinciri kendiliğinden tetiklenir) ve redraw işaretlenir. Grid
-    /// round-trip onarımının (attachView'daki needsDisplay) fullscreen analogudur.
+    /// bayat (hatta sıfır) kalabilir → kart bozuk/boş görünür. Bağlı her view'ın
+    /// host'undan yeni bir layout geçişi istenir (frame'i host oturtur — refactor
+    /// 4.5; delta varsa SwiftTerm sizeChanged → PTY resize zinciri kendiliğinden
+    /// tetiklenir) ve buffer'dan tam çizim işaretlenir. Grid round-trip onarımının
+    /// (attachView) fullscreen analogudur.
     public func refreshAttachedViews() {
         for entry in entries.values {
             guard let superview = entry.view.superview, !superview.bounds.isEmpty else { continue }
-            TerminalGridFit.fit(entry.view, in: superview)
+            // Fit host'un işidir (refactor 4.5): onarım yalnız yeni bir layout
+            // geçişi ister; `TerminalHostContainer.layout()` frame'i oturtur.
+            superview.needsLayout = true
             entry.view.needsDisplay = true
-            // setHidden(false) + requestRepaint → SIGWINCH; needsDisplay tek başına
-            // TUI'yi yeniden çizdirmediğinden (boş kart) repaint sinyali şart.
+            // Görünürlük sinyali = foreground yüzeyi + requestRepaint (SIGWINCH);
+            // needsDisplay tek başına TUI'yi yeniden çizdirmez (boş kart).
             entry.onVisibilityChange(true)
+        }
+    }
+
+    /// Faz 4.4: canlı view şu an bir container'a bağlı mı.
+    public func isAttached(_ id: TerminalID) -> Bool {
+        entries[id]?.view.superview != nil
+    }
+
+    /// Faz 4.4: route geçişinin açık kapanışı — bağlı her view SENKRON sökülür
+    /// (`detachView`'un runloop ertelemesi burada YOK: erteleme SwiftUI'nin
+    /// dismantle/attach yarışına karşıdır, açık çağrıda böyle bir yarış yoktur)
+    /// ve her biri için gizli-terminal politikası devreye girer. View'lar yok
+    /// edilmez; emülatör durumu registry'de yaşamaya devam eder.
+    public func detachAll() {
+        for entry in entries.values where entry.view.superview != nil {
+            entry.view.removeFromSuperview()
+            entry.onVisibilityChange(false)
         }
     }
 

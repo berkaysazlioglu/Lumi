@@ -9,8 +9,8 @@ import XCTest
 ///
 /// Neden `/bin/cat`: cat (ve altındaki tty satır disiplini) PTY'ye yazılan her
 /// byte'ı geri echo eder. Böylece "PTY'ye istenmeyen byte gitti mi?" sorusu iki
-/// bağımsız yoldan ölçülür: (1) yazma hunisindeki `onPTYWrite` sayacı,
-/// (2) emülatör buffer'ında beliren echo. Login shell kullanılsaydı prompt
+/// bağımsız yoldan ölçülür: (1) enjekte edilen `PTYControlling` dekoratörünün
+/// (Faz 4.1) saydığı byte'lar, (2) emülatör buffer'ında beliren echo. Login shell kullanılsaydı prompt
 /// çıktısı ölçümü kirletirdi.
 @MainActor
 final class TerminalSessionReattachTests: XCTestCase {
@@ -21,29 +21,29 @@ final class TerminalSessionReattachTests: XCTestCase {
 
     private static let containerFrame = NSRect(x: 0, y: 0, width: 400, height: 300)
 
-    private func makeCatSession() throws -> TerminalSession {
+    /// Gerçek `/bin/cat` PTY'si (Ek A §A.2-12 "gerçek kanıt" şartı), yalnız
+    /// yazımları sayan bir `PTYControlling` dekoratörüyle sarılmış halde.
+    private func makeCatSession(recorder: PTYRecorder) throws -> TerminalSession {
         try TerminalSession(
             repoPath: FileManager.default.temporaryDirectory.path,
             name: "reattach-test",
             task: nil,
             font: .monospacedSystemFont(ofSize: 13, weight: .regular),
-            executable: "/bin/cat",
-            args: []
+            ptySpawner: RecordingPTYSpawner(executable: "/bin/cat", recorder: recorder)
         )
     }
 
     /// `TerminalSessionManager.spawn` ile birebir aynı registry kablolaması
-    /// (görünürlük → setHidden + requestRepaint, redraw → redrawFromBuffer).
+    /// (görünürlük → yüzey durumu + görünürken requestRepaint).
     private func makeRegistry(for session: TerminalSession) -> TerminalViewRegistry {
         let registry = TerminalViewRegistry()
         registry.register(
             view: session.terminalView,
             for: session.id,
             onVisibilityChange: { [weak session] visible in
-                session?.setHidden(!visible)
+                session?.setSurfaceState(visible ? .foreground : .background, isFocused: visible)
                 if visible { session?.requestRepaint() }
-            },
-            onRedraw: { [weak session] in session?.redrawFromBuffer() }
+            }
         )
         return registry
     }
@@ -81,10 +81,9 @@ final class TerminalSessionReattachTests: XCTestCase {
 
     func testAttachDetachReattachWritesNothingToPTY() async throws {
         // Arrange — gerçek PTY (/bin/cat) + kalıcı emülatör + registry
-        let session = try makeCatSession()
+        let writes = PTYRecorder()
+        let session = try makeCatSession(recorder: writes)
         defer { session.terminate() }
-        let writes = WriteRecorder()
-        session.onPTYWrite = { writes.append($0) }
         let registry = makeRegistry(for: session)
         let container = NSView(frame: Self.containerFrame)
         // Bug-40'ın gerçek koşulu: agent CLI'si focus reporting'i (mode 1004)
@@ -143,10 +142,9 @@ final class TerminalSessionReattachTests: XCTestCase {
     /// "sıfır byte" sonucu yazma yolunun ölü olmasından kaynaklanmıyor.
     func testFocusAutoResponsesAreFilteredWhileKeystrokesReachPTY() async throws {
         // Arrange
-        let session = try makeCatSession()
+        let writes = PTYRecorder()
+        let session = try makeCatSession(recorder: writes)
         defer { session.terminate() }
-        let writes = WriteRecorder()
-        session.onPTYWrite = { writes.append($0) }
         let registry = makeRegistry(for: session)
         let container = NSView(frame: Self.containerFrame)
         registry.attachView(for: session.id, into: container)
@@ -169,7 +167,7 @@ final class TerminalSessionReattachTests: XCTestCase {
             keystrokeReached,
             "gerçek tuş vuruşu PTY'ye ulaşmadı — 'sıfır byte' sonucu anlamsızlaşır"
         )
-        XCTAssertEqual(writes.joined, Data("lumi-key\r".utf8))
+        XCTAssertEqual(writes.written, Data("lumi-key\r".utf8))
         let echoArrived = await waitUntil { self.bufferText(session).contains("lumi-key") }
         XCTAssertTrue(echoArrived, "cat echo'su emülatöre ulaşmadı: \(bufferText(session))")
     }
@@ -179,7 +177,7 @@ final class TerminalSessionReattachTests: XCTestCase {
     /// Replay/snapshot yoktur (design/01 §1) — kanıtı budur.
     func testOutputArrivingWhileDetachedSurvivesReattach() async throws {
         // Arrange
-        let session = try makeCatSession()
+        let session = try makeCatSession(recorder: PTYRecorder())
         defer { session.terminate() }
         let registry = makeRegistry(for: session)
         let container = NSView(frame: Self.containerFrame)
@@ -212,33 +210,5 @@ final class TerminalSessionReattachTests: XCTestCase {
             bufferText(session).contains(marker),
             "reattach sonrası emülatör içeriği kayboldu (view yok edilmiş olmalı)"
         )
-    }
-}
-
-/// PTY'ye giden byte'ların thread-safe toplayıcısı (`onPTYWrite` io queue'da çağrılır).
-private final class WriteRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var buffer = Data()
-
-    func append(_ data: Data) {
-        lock.lock()
-        buffer.append(data)
-        lock.unlock()
-    }
-
-    var totalBytes: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return buffer.count
-    }
-
-    var joined: Data {
-        lock.lock()
-        defer { lock.unlock() }
-        return buffer
-    }
-
-    var debugDescription: String {
-        String(decoding: joined, as: UTF8.self).debugDescription
     }
 }

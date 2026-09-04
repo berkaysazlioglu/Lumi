@@ -16,18 +16,23 @@ final class OutputCoalescer {
     private let scheduler: OneShotScheduling
     private let visibleInterval: TimeInterval
     private let hiddenInterval: TimeInterval
-    private let sizeThreshold: Int
+    /// Boyut eşiği sabit değil: `FeedWatchdog` feed bütçesi aşıldığında bunu
+    /// yarıya indirir (design/00 Ek A §A.2-10). Chunk başına tek atomik okuma.
+    let budget: AdaptiveBatchBudget
+
+    private var sizeThreshold: Int { budget.threshold }
 
     init(
         scheduler: OneShotScheduling,
         visibleInterval: TimeInterval = OutputCoalescer.defaultVisibleInterval,
         hiddenInterval: TimeInterval = OutputCoalescer.defaultHiddenInterval,
-        sizeThreshold: Int = OutputCoalescer.defaultSizeThreshold
+        sizeThreshold: Int = OutputCoalescer.defaultSizeThreshold,
+        budget: AdaptiveBatchBudget? = nil
     ) {
         self.scheduler = scheduler
         self.visibleInterval = visibleInterval
         self.hiddenInterval = hiddenInterval
-        self.sizeThreshold = sizeThreshold
+        self.budget = budget ?? AdaptiveBatchBudget(defaultThreshold: sizeThreshold)
     }
 
     func ingest(_ data: Data) {

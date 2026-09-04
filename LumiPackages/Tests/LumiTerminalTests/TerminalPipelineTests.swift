@@ -320,6 +320,101 @@ final class TerminalPipelineTests: XCTestCase {
         XCTAssertFalse(silenceScheduler.isScheduled)
         XCTAssertEqual(decisions.values, [true, false])
     }
+
+    // MARK: - Faz 4.8: semantik katman enjeksiyonu (OCP)
+
+    /// Yeni bir OSC semantiği (burada OSC 7 = cwd) mevcut hiçbir tipe
+    /// dokunmadan pipeline'a takılabilmeli. Bugün OSC 7 hiçbir varsayılan
+    /// semantik tarafından tanınmıyor — eklendiğinde tanınıyor.
+    func testNewSemanticsCanBePluggedInWithoutTouchingExistingCode() {
+        // Arrange — önce varsayılan zincir: OSC 7 yok sayılır
+        let (defaultPipeline, _) = makePipeline()
+        let ignoredTitles = Recorder<String>()
+        defaultPipeline.onDisplayTitle = { ignoredTitles.append($0) }
+        _ = defaultPipeline.processOutput(Data("\u{1B}]7;file:///tmp/lumi\u{07}".utf8))
+        XCTAssertTrue(ignoredTitles.values.isEmpty, "OSC 7 varsayılan zincirde tanınmamalı")
+
+        // Act — aynı pipeline'a yeni semantik enjekte edilir
+        let queue = DispatchQueue(label: "lumi.test.pipeline.\(UUID().uuidString)")
+        let extended = TerminalPipeline(
+            queue: queue,
+            semantics: OSCSemanticsDefaults.all + [CwdSemantics()]
+        )
+        let titles = Recorder<String>()
+        extended.onDisplayTitle = { titles.append($0) }
+        _ = extended.processOutput(Data("\u{1B}]7;file:///tmp/lumi\u{07}".utf8))
+
+        // Assert — yeni kod yalnız EKLENDİ; mevcut semantikler bozulmadı
+        XCTAssertEqual(titles.values, ["file:///tmp/lumi"])
+        let claudeTitles = Recorder<String>()
+        extended.onDisplayTitle = { claudeTitles.append($0) }
+        _ = extended.processOutput(Data("\u{1B}]0;\u{2733} done\u{07}".utf8))
+        XCTAssertEqual(claudeTitles.values, ["done"])
+    }
+
+    // MARK: - Faz 4.2: donma gözetimi
+
+    /// In-flight byte var ve feed gelmiyorsa heartbeat donmayı yayınlar;
+    /// teslim (ack) gelince düzelme sinyali gider.
+    func testWatchdogStallSignalIsPublishedAndRecovered() {
+        // Arrange
+        let queue = DispatchQueue(label: "lumi.test.pipeline.\(UUID().uuidString)")
+        let clock = TestClock()
+        let heartbeat = TestHeartbeat()
+        let flow = FlowController()
+        let pipeline = TerminalPipeline(
+            queue: queue,
+            flow: flow,
+            coalescerScheduler: TestScheduler(),
+            silenceScheduler: TestScheduler(),
+            watchdogHeartbeat: heartbeat,
+            clock: clock
+        )
+        let stalls = Recorder<Bool>()
+        pipeline.onStallChange = { stalls.append($0) }
+
+        // Act — okundu (in-flight), ama emülatöre teslim edilmedi
+        _ = pipeline.processOutput(Data(repeating: 0x61, count: 4096))
+        clock.advance(by: FeedWatchdog.defaultStallThreshold + 0.5)
+        heartbeat.tick()
+        XCTAssertEqual(stalls.values, [true])
+
+        // Act — teslim gerçekleşti (ack) → düzelme
+        pipeline.watchdog.noteFeed(duration: 0.001)
+        flow.noteConsumed(4096)
+
+        XCTAssertEqual(stalls.values, [true, false])
+    }
+
+    func testPrepareForExitStopsWatchdogHeartbeat() {
+        let queue = DispatchQueue(label: "lumi.test.pipeline.\(UUID().uuidString)")
+        let heartbeat = TestHeartbeat()
+        let pipeline = TerminalPipeline(
+            queue: queue,
+            coalescerScheduler: TestScheduler(),
+            silenceScheduler: TestScheduler(),
+            watchdogHeartbeat: heartbeat
+        )
+        XCTAssertTrue(heartbeat.isRunning, "watchdog init'te başlamalı")
+
+        pipeline.prepareForExit()
+
+        XCTAssertFalse(heartbeat.isRunning, "exit'te heartbeat durmadı (timer sızıntısı)")
+    }
+}
+
+/// Test-only semantik: OSC 7 (cwd) → başlık olayı. Üretim kodunda karşılığı
+/// yoktur; amaç genişletilebilirliği kanıtlamaktır.
+private struct CwdSemantics: OSCSemantics {
+    func interpret(code: Int, payload: String, hint: AgentHint) -> [OSCEvent] {
+        guard code == 7, !payload.isEmpty else { return [] }
+        return [.title(OSCTitleEvent(
+            rawTitle: payload,
+            displayTitle: payload,
+            isWorking: nil,
+            providerHint: nil
+        ))]
+    }
 }
 
 /// Pipeline callback'leri `@Sendable`'dır; toplayıcı thread-safe olmalı.

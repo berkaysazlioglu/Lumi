@@ -29,7 +29,8 @@ final class TerminalHostContainer: NSView {
     /// Reparenting yarışına karşı kendini onarır: maximize↔grid round-trip'inde
     /// ölmekte olan host paylaşılan view'ı öksüz bırakabiliyor. Hayatta kalan
     /// (layout olan) container, her layout'ta terminalini yeniden claim eder —
-    /// attachView zaten bağlıysa no-op, öksüz/başka container'daysa geri çeker.
+    /// attachView zaten bağlıysa TAM no-op (refactor 4.5: reassert artık ne frame'e
+    /// ne de çizime dokunur), öksüz/başka container'daysa geri çeker.
     private func reassertAttachment() {
         guard let terminalID, let provider else { return }
         MainActor.assumeIsolated {
@@ -37,10 +38,12 @@ final class TerminalHostContainer: NSView {
         }
     }
 
-    /// Tek subview (terminal emülatörü) bounds'a oturtulur; gerçek delta varsa
-    /// redraw da işaretlenir (geçiş sonrası bayat/boş kart onarımı). Oturtma
-    /// `TerminalGridFit`'e devredilir: ızgara hücre boyutunun tam katı olduğundan
-    /// bounds'u doldurmaz ve artan boşluk ortalanır (yoksa hepsi alta/sağa düşer).
+    /// **Yerleşimin tek otoritesi** (design/03 §3, refactor 4.5): `TerminalGridFit`
+    /// yalnız buradan çağrılır — registry reparent eder, frame'i host oturtur.
+    /// Izgara hücre boyutunun tam katı olduğundan bounds'u doldurmaz ve artan boşluk
+    /// ortalanır (yoksa hepsi alta/sağa düşer). Gerçek delta varsa redraw işaretlenir;
+    /// buffer'dan TAM çizim (`updateFullScreen`) İSTENMEZ — her layout frame'inde tam
+    /// çizim, resize/animasyon boyunca N terminal × frame maliyeti doğuruyordu.
     private func pinTerminalView() {
         guard !bounds.isEmpty else { return } // layout öncesi 0×0'a pinleme
         guard let terminalView = subviews.first else { return }

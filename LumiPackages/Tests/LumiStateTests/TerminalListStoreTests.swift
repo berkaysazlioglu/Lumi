@@ -30,6 +30,49 @@ final class TerminalListStoreTests: XCTestCase {
         return meta
     }
 
+    // MARK: - Donma rozeti (design/00 Ek A §A.2-10)
+
+    func testStalledEventMarksAndClearsTerminal() {
+        // Arrange
+        let terminal = makeTerminal("t1")
+        XCTAssertFalse(store.isStalled(terminal.id))
+
+        // Act — feed watchdog donma bildirdi
+        store.apply(.stalled(terminal.id, true))
+
+        // Assert
+        XCTAssertTrue(store.isStalled(terminal.id))
+        XCTAssertEqual(store.stalledIDs, [terminal.id])
+
+        // Act — düzeldi
+        store.apply(.stalled(terminal.id, false))
+        XCTAssertFalse(store.isStalled(terminal.id))
+        XCTAssertTrue(store.stalledIDs.isEmpty)
+    }
+
+    /// Ephemeral sinyal: donma status'e ya da odağa dokunmaz.
+    func testStalledEventDoesNotTouchStatusOrFocus() {
+        let first = makeTerminal("t1")
+        let second = makeTerminal("t2")
+        store.focus(first.id)
+
+        store.apply(.stalled(second.id, true))
+
+        XCTAssertEqual(store.activeTerminalID, first.id)
+        XCTAssertEqual(store.meta(for: second.id)?.status, .idle)
+    }
+
+    /// Kapanan terminal donmuş listesinde kalmamalı (sızıntı).
+    func testExitClearsStalledFlag() {
+        let terminal = makeTerminal("t1")
+        store.apply(.stalled(terminal.id, true))
+
+        store.apply(.exited(terminal.id, code: 0))
+
+        XCTAssertTrue(store.stalledIDs.isEmpty)
+        XCTAssertFalse(store.isStalled(terminal.id))
+    }
+
     // MARK: - Komşu odaklama
 
     func testClosingActiveFocusesPreviousNeighbor() {

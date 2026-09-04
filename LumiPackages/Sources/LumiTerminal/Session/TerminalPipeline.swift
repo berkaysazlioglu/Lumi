@@ -13,10 +13,15 @@ final class TerminalPipeline: @unchecked Sendable {
 
     private var decoder = UTF8StreamDecoder()
     private let oscParser = OSCStreamParser()
+    /// Ham OSC olaylarını Lumi semantiğine çeviren zincir (Faz 4.8 / OCP):
+    /// yeni ajan ya da yeni OSC kodu, pipeline'a dokunmadan enjekte edilir.
+    private let semantics: OSCSemanticsChain
     private var inferencer = ProviderInferencer()
     private var inputFilter = PTYInputFilter()
     private let coalescer: OutputCoalescer
     private let silenceTimer: CodexSilenceTimer
+    /// Donma gözetimi + adaptif batching (design/00 Ek A §A.2-10).
+    let watchdog: FeedWatchdog
 
     // @Sendable: bu callback'ler io queue'da çağrılır; MainActor bağlamında atanan
     // closure'ların izolasyon miras almasını engeller (tüketici main'e kendisi sıçrar)
@@ -25,6 +30,8 @@ final class TerminalPipeline: @unchecked Sendable {
     var onAwaitingDecisionChange: (@Sendable (Bool) -> Void)?
     var onDisplayTitle: (@Sendable (String) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
+    /// Feed akışı durdu / düzeldi (Ek A §A.2-10). UI "stalled" rozeti gösterir.
+    var onStallChange: (@Sendable (Bool) -> Void)?
 
     /// Scheduler'lar enjekte edilebilir (varsayılan = io queue üzerinde gerçek
     /// dispatch timer'ı): orkestrasyon testleri 16 ms / 3 sn beklemeden,
@@ -33,14 +40,25 @@ final class TerminalPipeline: @unchecked Sendable {
         queue: DispatchQueue,
         flow: FlowController = FlowController(),
         coalescerScheduler: OneShotScheduling? = nil,
-        silenceScheduler: OneShotScheduling? = nil
+        silenceScheduler: OneShotScheduling? = nil,
+        semantics: [any OSCSemantics] = OSCSemanticsDefaults.all,
+        watchdogHeartbeat: (any HeartbeatScheduling)? = nil,
+        clock: any MonotonicClock = SystemMonotonicClock()
     ) {
         self.flow = flow
-        self.coalescer = OutputCoalescer(
+        self.semantics = OSCSemanticsChain(semantics)
+        let coalescer = OutputCoalescer(
             scheduler: coalescerScheduler ?? DispatchOneShotScheduler(queue: queue)
         )
+        self.coalescer = coalescer
         self.silenceTimer = CodexSilenceTimer(
             scheduler: silenceScheduler ?? DispatchOneShotScheduler(queue: queue)
+        )
+        self.watchdog = FeedWatchdog(
+            clock: clock,
+            heartbeat: watchdogHeartbeat ?? DispatchHeartbeatScheduler(queue: queue),
+            budget: coalescer.budget,
+            inFlight: { [flow] in flow.inFlight }
         )
 
         coalescer.onFlush = { [weak self] data in
@@ -55,6 +73,10 @@ final class TerminalPipeline: @unchecked Sendable {
         decisionTracker.onChange = { [weak self] awaiting in
             self?.onAwaitingDecisionChange?(awaiting)
         }
+        watchdog.onStallChange = { [weak self] stalled in
+            self?.onStallChange?(stalled)
+        }
+        watchdog.start()
     }
 
     // MARK: - Okuma yolu (chunk sırası)
@@ -65,8 +87,12 @@ final class TerminalPipeline: @unchecked Sendable {
         if !text.isEmpty {
             inferencer.observeOutput(text)
             var sawTurnComplete = false
-            for event in oscParser.feed(text) {
-                handle(event, sawTurnComplete: &sawTurnComplete)
+            for raw in oscParser.feed(text) {
+                let events = semantics.interpret(raw, hint: inferencer.hint)
+                OSCTracer.trace(raw: raw, events: events)
+                for event in events {
+                    handle(event, sawTurnComplete: &sawTurnComplete)
+                }
             }
             // Codex fallback: turn-complete görülen chunk'ta timer resetlenmez ve
             // aktivite işlenmez — aksi halde "bitti" sinyali anında geri alınırdı
@@ -103,8 +129,6 @@ final class TerminalPipeline: @unchecked Sendable {
             case .permissionRequest:
                 // "Karar bekliyor" — status'e dokunma; yalnız ayrı sinyali kaldır.
                 decisionTracker.onPermissionRequest()
-            case .generic:
-                break
             }
         }
     }
@@ -135,7 +159,7 @@ final class TerminalPipeline: @unchecked Sendable {
         return filtered
     }
 
-    // MARK: - Odak / görünürlük / yaşam döngüsü
+    // MARK: - Odak / yüzey / yaşam döngüsü
 
     func setTabFocused(_ focused: Bool) {
         focused ? statusMachine.onFocus() : statusMachine.onBlur()
@@ -145,14 +169,28 @@ final class TerminalPipeline: @unchecked Sendable {
         focused ? statusMachine.onWindowFocus() : statusMachine.onWindowBlur()
     }
 
-    func setHidden(_ hidden: Bool) {
-        coalescer.setHidden(hidden)
+    /// Faz 4.3 — yüzey geçişinin io tarafı: akış politikası (coalescer aralığı)
+    /// ve odak (status makinesi) TEK çağrıda, aynı serial queue adımında
+    /// uygulanır. İkisi ayrı çağrılardan aksaydı aradaki pencerede "görünmüyor
+    /// ama hâlâ odaklı" ara durumu gözlemlenebilirdi.
+    ///
+    /// `isFocused` otoritesi manager'dadır (`setFocused`): foreground olmak
+    /// tek başına odak kazandırmaz — grid'deki her kart foreground'dur, yalnız
+    /// biri odaklıdır.
+    func applySurfaceState(_ state: TerminalSurfaceState, isFocused: Bool) {
+        coalescer.setHidden(!state.isVisible)
+        if state.isVisible {
+            if isFocused { statusMachine.onFocus() }
+        } else {
+            statusMachine.onBlur()
+        }
     }
 
     /// Exit-cleanup'ın io tarafı (sıra-bağımlı): timer iptali + kalan
     /// buffer'ın boşaltılması. Status yayını yapılmaz — Electron paritesi:
     /// kayıttan düşmüş terminale stale status push edilmez.
     func prepareForExit() {
+        watchdog.stop()
         silenceTimer.cancel()
         decisionTracker.reset()
         coalescer.flushNow()
@@ -163,6 +201,7 @@ final class TerminalPipeline: @unchecked Sendable {
     /// çağrılır; buradan doğan status yayını tüketici tarafında (isTerminated)
     /// süzülür — bayat push Electron paritesinde de yoktur.
     func finishExit(code: Int32) {
+        watchdog.stop()
         silenceTimer.cancel()
         oscParser.reset()
         statusMachine.onExit(code: code)

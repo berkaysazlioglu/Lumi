@@ -17,6 +17,9 @@ public final class TerminalListStore: StoreLifecycle {
     /// "Karar bekliyor" (izin promptu) sinyali — ephemeral, persist edilmez.
     /// Prompt kuyruğu bunu görünce duraklar (status'ten ayrı sinyal).
     public private(set) var awaitingDecisionIDs: Set<TerminalID> = []
+    /// Feed akışı donmuş terminaller (design/00 Ek A §A.2-10) — ephemeral,
+    /// persist EDİLMEZ: `TerminalMeta` formatı değişmez (karar 9).
+    public private(set) var stalledIDs: Set<TerminalID> = []
 
     /// Karar 24: açıkken working'e geçen terminal otomatik minimize edilir ve
     /// turn bitince / girdi beklenince otomatik restore edilir. Config aynası —
@@ -27,6 +30,10 @@ public final class TerminalListStore: StoreLifecycle {
     @ObservationIgnored private var autoMinimizedIDs: Set<TerminalID> = []
 
     @ObservationIgnored private var lastActiveByRepo: [String: TerminalID] = [:]
+    /// Terminal yüzeyinin şu an hangi repo için önde olduğu (Faz 4.9). Tab/route
+    /// geçişinde eski repo'yu arkaya almanın tek kaynağıdır; `activeTerminalID`
+    /// bundan ayrıdır (yüzey gizliyken de korunur).
+    @ObservationIgnored private var surfaceRepoPath: String?
     /// Kullanıcının kapattığı terminaller: exit kodu ne olursa olsun toast
     /// gösterilmez (kendi kill'imiz hata değildir). Tek atımlıdır.
     @ObservationIgnored private var userClosedIDs: Set<TerminalID> = []
@@ -69,6 +76,12 @@ public final class TerminalListStore: StoreLifecycle {
 
     public func isMinimized(_ id: TerminalID) -> Bool {
         minimizedIDs.contains(id)
+    }
+
+    /// Terminal donmuş mu (feed watchdog sinyali). Kart header'ındaki rozet
+    /// bunu okur — siyah/boş kart yerine görünür durum.
+    public func isStalled(_ id: TerminalID) -> Bool {
+        stalledIDs.contains(id)
     }
 
     public var totalCount: Int {
@@ -119,10 +132,33 @@ public final class TerminalListStore: StoreLifecycle {
         service.setFocused(id)
     }
 
+    /// Orta alanın terminal yüzeyini gösteren/gizleyen TEK intent (Faz 4.9).
+    ///
+    /// Üç odak otoritesi (`activeTerminalID` / `statusMachine.focused` /
+    /// AppKit first responder) burada birleşir: yüzey gizlenince servise
+    /// `setFocused(nil)` gider — ekranda olmayan terminal "odaklı" sayılmaz,
+    /// `waitingUnseen` doğru yükselir ve karar 24 auto-minimize'ı bozulmaz —
+    /// ama `activeTerminalID` KORUNUR, böylece dönüşte aynı terminal geri
+    /// odaklanır. Route değişimi (Faz 6.3) ve tab geçişi aynı intent'i kullanır.
+    public func setTerminalSurfaceVisible(_ visible: Bool, in repoPath: String) {
+        service.setSurfaceState(visible ? .foreground : .background, in: repoPath)
+        guard visible else {
+            service.setFocused(nil)
+            return
+        }
+        guard let active = activeTerminalID,
+              meta(for: active)?.repoPath == repoPath,
+              !minimizedIDs.contains(active) else { return }
+        service.setFocused(active)
+    }
+
     /// Minimize: aktifse görünür komşuya proaktif odak kayar.
     public func minimize(_ id: TerminalID) {
         guard let repoPath = meta(for: id)?.repoPath else { return }
         minimizedIDs.insert(id)
+        // Karar 24 akışı dahil: gizlenen kart arka plan politikasına düşer
+        // (coalescer 100ms + onBlur) — "görünmüyor ama odaklı" hâli kalmaz.
+        service.setSurfaceState(.minimized, for: id)
         if activeTerminalID == id {
             let visibleBefore = terminals.filter {
                 $0.repoPath == repoPath && ($0.id == id || !minimizedIDs.contains($0.id))
@@ -135,21 +171,45 @@ public final class TerminalListStore: StoreLifecycle {
     }
 
     /// Restore odaklamaz — odaklı restore yalnız bildirim/bell tıklamasıyla.
+    /// Yüzey öne alınır ama odak verilmez (`setSurfaceState` odağı servisin
+    /// kendi otoritesinden okur). Arka plandaki tab'da restore edilen terminal
+    /// (karar 24 otomatik restore'u her repoda çalışır) ekrana dönmediği için
+    /// arka plan politikasında kalır; tab'a geçişte `activateRepo` öne alır.
     public func restore(_ id: TerminalID) {
         minimizedIDs.remove(id)
         autoMinimizedIDs.remove(id)
+        guard let repoPath = meta(for: id)?.repoPath, isSurfaceForeground(repoPath) else { return }
+        service.setSurfaceState(.foreground, for: id)
+    }
+
+    /// Terminal yüzeyi şu an bu repo için önde mi. Henüz hiçbir repo aktive
+    /// edilmediyse (bootstrap penceresi) kısıtlama uygulanmaz.
+    private func isSurfaceForeground(_ repoPath: String) -> Bool {
+        surfaceRepoPath == nil || surfaceRepoPath == repoPath
     }
 
     /// Bildirim tıklaması istisnası: önce restore, sonra odak.
     public func restoreAndFocus(_ id: TerminalID) {
-        minimizedIDs.remove(id)
-        autoMinimizedIDs.remove(id)
+        restore(id)
         focus(id)
     }
 
     /// Tab değişimi yan etkisi: repo'nun lastActive'i geçerli ve
     /// görünürse o, değilse ilk görünür, hiç yoksa nil.
+    ///
+    /// Faz 4.9 davranış düzeltmesi: eski reponun terminalleri artık gerçekten
+    /// arkaya alınır (`onBlur` + 100ms). Önceden yalnız SwiftUI detach'i
+    /// coalescer aralığını genişletiyor, odak bayrağı eski repoda takılı
+    /// kalıyordu. Yüzey geçişi odak seçiminden ÖNCE yapılır: o an
+    /// `activeTerminalID` hâlâ eski repoya aittir, dolayısıyla foreground
+    /// geçişi odağı yeniden yaymaz — odağı aşağıdaki tek `focus` çağrısı verir.
     public func activateRepo(_ repoPath: String) {
+        if let previous = surfaceRepoPath, previous != repoPath {
+            setTerminalSurfaceVisible(false, in: previous)
+        }
+        surfaceRepoPath = repoPath
+        setTerminalSurfaceVisible(true, in: repoPath)
+
         let visible = visibleTerminals(in: repoPath)
         if let last = lastActiveByRepo[repoPath], visible.contains(where: { $0.id == last }) {
             focus(last)
@@ -224,6 +284,13 @@ public final class TerminalListStore: StoreLifecycle {
                 title: meta(for: id)?.name ?? "Terminal",
                 message: "Write failed (errno \(errno))"
             )
+        case .stalled(let id, let stalled):
+            // Ephemeral donma sinyali: yalnız rozet; status/odak etkilenmez.
+            if stalled {
+                stalledIDs.insert(id)
+            } else {
+                stalledIDs.remove(id)
+            }
         case .viewFocused(let id):
             // Terminal NSView'ına tıklama: store odağı senkronlanır. `focus`
             // kuralları aynen geçerli (minimize edilmiş odak alamaz).
@@ -303,6 +370,7 @@ public final class TerminalListStore: StoreLifecycle {
         minimizedIDs.remove(id)
         autoMinimizedIDs.remove(id)
         awaitingDecisionIDs.remove(id)
+        stalledIDs.remove(id)
         terminals.remove(at: index)
     }
 

@@ -20,6 +20,8 @@ public final class FakeTerminalViewProvider: TerminalViewProviding {
     public private(set) var detachCalls: [Call] = []
     /// `refreshAttachedViews` çağrı sayacı (fullscreen onarım köprüsünün kanıtı).
     public private(set) var refreshCallCount = 0
+    /// `detachAll` çağrı sayacı (route geçişinin açık kapanışı — Faz 4.4).
+    public private(set) var detachAllCount = 0
 
     public init() {}
 
@@ -42,5 +44,18 @@ public final class FakeTerminalViewProvider: TerminalViewProviding {
 
     public func refreshAttachedViews() {
         refreshCallCount += 1
+    }
+
+    public func isAttached(_ id: TerminalID) -> Bool {
+        attachedIDs.contains(id)
+    }
+
+    /// Bağlı sayılan her terminal için detach kaydı düşer — gerçek registry'nin
+    /// "her biri için görünürlük sinyali" davranışının fake karşılığı.
+    public func detachAll() {
+        detachAllCount += 1
+        for call in attachCalls where !detachCalls.contains(call) {
+            detachCalls.append(call)
+        }
     }
 }

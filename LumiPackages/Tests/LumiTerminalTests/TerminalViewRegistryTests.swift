@@ -104,45 +104,98 @@ final class TerminalViewRegistryTests: XCTestCase {
         XCTAssertEqual(view.frame.size, NSSize(width: 800, height: 480))
     }
 
-    func testReassertWithRealBoundsFitsFrameAndRequestsRedraw() {
-        // Boş kart onarımı: 0×0 attach sonrası layout gerçek boyutu verince
-        // reassert (aynı container'a attachView) frame'i oturtup buffer'dan
-        // tam çizim (onRedraw) istemeli.
+    // MARK: - Yerleşim otoritesi (refactor 4.5)
+
+    /// Reassert (host'un her layout'ta yaptığı `attachView`) artık frame'e DOKUNMAZ:
+    /// yerleşimin tek otoritesi `TerminalHostContainer.pinTerminalView` →
+    /// `TerminalGridFit.fit`. Registry yalnız reparent + görünürlük/çizim sinyali verir.
+    func testReassertDoesNotTouchFrame() {
+        let id = TerminalID()
+        let (registry, view, _) = makeRegistry(id: id)
+        view.frame = NSRect(x: 0, y: 0, width: 800, height: 480)
+        let container = NSView()
+
+        registry.attachView(for: id, into: container) // 0×0 — frame korunur
+        container.setFrameSize(NSSize(width: 400, height: 300))
+        registry.attachView(for: id, into: container) // reassert: gerçek boyut
+
+        XCTAssertEqual(
+            view.frame.size, NSSize(width: 800, height: 480),
+            "registry frame'i oturttu — fit otoritesi host'ta olmalı"
+        )
+    }
+
+    /// 4.5'in asıl kazancı: `TerminalHostContainer.layout()/setFrameSize` her AppKit
+    /// layout geçişinde reassert eder. Eskiden frame deltası `onRedraw` →
+    /// `redrawFromBuffer` → `updateFullScreen()` (tüm hücreler dirty) tetikliyordu;
+    /// pencere resize/animasyonunda bu, N terminal × frame tam çizim demekti.
+    /// Artık tam çizim yalnız GERÇEK attach olayına bağlı.
+    func testFrameChangesAfterAttachDoNotTriggerFullRedraw() {
+        // Arrange — tam çizim sinyali artık görünürlük kanalından akar (Faz 4B):
+        // `onVisibilityChange(true)` = foreground yüzeyi + buffer'dan tam çizim.
         let id = TerminalID()
         let registry = TerminalViewRegistry()
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
         var redrawCount = 0
-        registry.register(view: view, for: id, onVisibilityChange: { _ in }) {
-            redrawCount += 1
+        registry.register(view: view, for: id) { visible in
+            if visible { redrawCount += 1 }
         }
-        let container = NSView()
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
 
-        registry.attachView(for: id, into: container) // 0×0 — frame korunur
-        XCTAssertEqual(redrawCount, 0)
+        // Act — attach + 20 layout geçişi (resize animasyonu benzetimi)
+        registry.attachView(for: id, into: container)
+        for step in 1 ... 20 {
+            container.setFrameSize(NSSize(width: 400 + step, height: 300 + step))
+            registry.attachView(for: id, into: container) // host reassert'i
+        }
 
-        container.setFrameSize(NSSize(width: 400, height: 300))
-        registry.attachView(for: id, into: container) // reassert: gerçek boyut
-
-        XCTAssertEqual(view.frame.size, NSSize(width: 400, height: 300))
-        XCTAssertEqual(redrawCount, 1)
+        // Assert
+        XCTAssertLessThanOrEqual(
+            redrawCount, 1,
+            "frame deltası hâlâ tam çizim tetikliyor (\(redrawCount) kez)"
+        )
     }
 
-    func testReassertWithoutFrameDeltaDoesNotRedraw() {
-        // Her layout'ta reassert çağrılır — delta yoksa redraw spam'i olmamalı.
+    /// Gerçek attach olayı (reparent) buffer'dan tam çizim ister — 0×0 host'a
+    /// bağlanıp boyut sonradan otursa bile `updateFullScreen`'in dirty işaretlemesi
+    /// model tarafında kalıcıdır (boş kart onarımı).
+    func testGenuineAttachRequestsRedrawOnce() {
         let id = TerminalID()
         let registry = TerminalViewRegistry()
         let view = NSView()
         var redrawCount = 0
-        registry.register(view: view, for: id, onVisibilityChange: { _ in }) {
-            redrawCount += 1
+        registry.register(view: view, for: id) { visible in
+            if visible { redrawCount += 1 }
         }
+        let first = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let second = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+
+        registry.attachView(for: id, into: first)
+        XCTAssertEqual(redrawCount, 1)
+
+        registry.attachView(for: id, into: first) // reassert — yeni olay değil
+        XCTAssertEqual(redrawCount, 1)
+
+        registry.attachView(for: id, into: second) // gerçek reparent
+        XCTAssertEqual(redrawCount, 2)
+    }
+
+    /// Fullscreen onarımı fit'i kendi yapmaz; host'tan yeni bir layout geçişi ister.
+    func testRefreshRequestsHostLayoutInsteadOfFitting() {
+        let id = TerminalID()
+        let (registry, view, _) = makeRegistry(id: id)
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        registry.attachView(for: id, into: container)
+        view.frame = NSRect(x: 0, y: 0, width: 800, height: 480) // bayat frame
+        container.needsLayout = false
 
-        registry.attachView(for: id, into: container)
-        registry.attachView(for: id, into: container)
-        registry.attachView(for: id, into: container)
+        registry.refreshAttachedViews()
 
-        XCTAssertEqual(redrawCount, 0)
+        XCTAssertTrue(container.needsLayout, "onarım host layout'unu istemedi")
+        XCTAssertEqual(
+            view.frame.size, NSSize(width: 800, height: 480),
+            "refresh frame'i kendi oturttu — fit otoritesi host'ta olmalı"
+        )
     }
 
     func testVisibilityTogglesAcrossDetachReattach() {
@@ -177,6 +230,84 @@ final class TerminalViewRegistryTests: XCTestCase {
 
         XCTAssertTrue(view.superview === container)
         XCTAssertEqual(log(), [false, true, true], "onarım görünürlük sinyalini yeniler")
+    }
+
+    // MARK: - Toplu ayırma (Faz 4.4)
+
+    /// Route değişiminde (Tasks'a geçiş) SwiftUI dismantle sırasına güvenmek
+    /// yerine tek açık çağrı: bağlı her view sökülür ve her biri için
+    /// `onVisibilityChange(false)` akar (gizli-terminal politikası).
+    func testDetachAllDetachesEveryAttachedView() {
+        let registry = TerminalViewRegistry()
+        var logs: [TerminalID: [Bool]] = [:]
+        var views: [TerminalID: NSView] = [:]
+        var ids: [TerminalID] = []
+        for _ in 0 ..< 3 {
+            let id = TerminalID()
+            ids.append(id)
+            let view = NSView()
+            views[id] = view
+            registry.register(view: view, for: id) { logs[id, default: []].append($0) }
+            registry.attachView(for: id, into: NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120)))
+        }
+        XCTAssertEqual(ids.filter { registry.isAttached($0) }.count, 3)
+
+        registry.detachAll()
+
+        for id in ids {
+            XCTAssertFalse(registry.isAttached(id), "detachAll bağlı view bıraktı")
+            XCTAssertNil(views[id]?.superview)
+            XCTAssertEqual(logs[id], [false, true, false], "görünürlük sinyali akmadı")
+        }
+    }
+
+    func testIsAttachedTracksAttachAndDetach() {
+        let id = TerminalID()
+        let (registry, _, _) = makeRegistry(id: id)
+        let container = NSView()
+        XCTAssertFalse(registry.isAttached(id), "register tek başına bağlamaz")
+
+        registry.attachView(for: id, into: container)
+        XCTAssertTrue(registry.isAttached(id))
+
+        registry.detachView(for: id, from: container)
+        pumpMainRunLoop()
+        XCTAssertFalse(registry.isAttached(id))
+    }
+
+    func testIsAttachedIsFalseForUnknownTerminal() {
+        let registry = TerminalViewRegistry()
+        XCTAssertFalse(registry.isAttached(TerminalID()))
+    }
+
+    func testDetachAllIsIdempotent() {
+        let id = TerminalID()
+        let (registry, _, log) = makeRegistry(id: id)
+        registry.attachView(for: id, into: NSView())
+
+        registry.detachAll()
+        registry.detachAll()
+
+        XCTAssertEqual(log(), [false, true, false], "ikinci detachAll bayat sinyal üretti")
+    }
+
+    func testFakeProviderSupportsDetachAllAndIsAttached() {
+        let fake = FakeTerminalViewProvider()
+        let first = TerminalID()
+        let second = TerminalID()
+        let container = NSView()
+        let provider: any TerminalViewProviding = fake
+        provider.attachView(for: first, into: container)
+        provider.attachView(for: second, into: container)
+        XCTAssertTrue(provider.isAttached(first))
+        XCTAssertTrue(provider.isAttached(second))
+
+        provider.detachAll()
+
+        XCTAssertFalse(provider.isAttached(first))
+        XCTAssertFalse(provider.isAttached(second))
+        XCTAssertEqual(fake.detachAllCount, 1)
+        XCTAssertEqual(fake.attachedIDs, [])
     }
 
     func testFakeProviderRecordsRefreshCalls() {
