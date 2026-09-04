@@ -27,6 +27,9 @@ final class ConfigSideEffectCoordinator {
     var onSessionTriggerChanged: ((SessionTrigger) -> Void)?
     /// Usage auto-refresh ayarı değişti — tazeleme döngüsü yeniden kurulur.
     var onUsageAutoRefreshChanged: ((UsageAutoRefresh) -> Void)?
+    /// Hangi sağlayıcı göstergelerinin açık olduğu değişti (karar 32) — kapananın
+    /// istekleri durur, açılanın ilk yüklemesi tetiklenir.
+    var onUsageIndicatorsChanged: ((UsageIndicators) -> Void)?
 
     init(
         config: any ConfigServicing,
@@ -81,6 +84,9 @@ final class ConfigSideEffectCoordinator {
                 }
                 if old.usageAutoRefresh != new.usageAutoRefresh {
                     self.onUsageAutoRefreshChanged?(new.usageAutoRefresh)
+                }
+                if old.usageIndicators != new.usageIndicators {
+                    self.onUsageIndicatorsChanged?(new.usageIndicators)
                 }
             }
         }

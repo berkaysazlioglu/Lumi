@@ -68,6 +68,13 @@ enum ConfigCodec {
                 intervalMinutes: intValue(nested["intervalMinutes"]) ?? defaults.intervalMinutes
             )
         }
+        if let nested = dict["usageIndicators"] as? [String: Any] {
+            let defaults = UsageIndicators.defaults
+            config.usageIndicators = UsageIndicators(
+                claude: boolValue(nested["claude"]) ?? defaults.claude,
+                codex: boolValue(nested["codex"]) ?? defaults.codex
+            )
+        }
         return config
     }
 
@@ -107,6 +114,10 @@ enum ConfigCodec {
             "usageAutoRefresh": [
                 "enabled": config.usageAutoRefresh.enabled,
                 "intervalMinutes": config.usageAutoRefresh.intervalMinutes,
+            ] as [String: Any],
+            "usageIndicators": [
+                "claude": config.usageIndicators.claude,
+                "codex": config.usageIndicators.codex,
             ] as [String: Any],
         ]
     }

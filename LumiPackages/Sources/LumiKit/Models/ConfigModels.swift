@@ -27,6 +27,9 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// Kullanım göstergesinin otomatik tazelenmesi (opt-in, karar 20). Additive
     /// (karar 9): yoksa kapalı default.
     public var usageAutoRefresh: UsageAutoRefresh
+    /// Topbar'da hangi sağlayıcıların kullanım göstergesinin görüneceği
+    /// (karar 32). Additive (karar 9): yoksa claude açık / codex kapalı.
+    public var usageIndicators: UsageIndicators
 
     public static let defaults = AppConfig(
         projectsRoot: "",
@@ -40,7 +43,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         notifications: .defaults,
         autoMinimizeOnSend: false,
         sessionTrigger: .defaults,
-        usageAutoRefresh: .defaults
+        usageAutoRefresh: .defaults,
+        usageIndicators: .defaults
     )
 
     public init(
@@ -55,7 +59,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         notifications: NotificationSettings,
         autoMinimizeOnSend: Bool = false,
         sessionTrigger: SessionTrigger = .defaults,
-        usageAutoRefresh: UsageAutoRefresh = .defaults
+        usageAutoRefresh: UsageAutoRefresh = .defaults,
+        usageIndicators: UsageIndicators = .defaults
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
@@ -69,6 +74,43 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.autoMinimizeOnSend = autoMinimizeOnSend
         self.sessionTrigger = sessionTrigger
         self.usageAutoRefresh = usageAutoRefresh
+        self.usageIndicators = usageIndicators
+    }
+}
+
+/// Topbar'daki sağlayıcı kullanım göstergelerinin açık/kapalı durumu
+/// (`~/.lumi/config.json` → `usageIndicators`, karar 32). Kapalı sağlayıcı için
+/// topbar'da buton çıkmaz ve HİÇBİR istek atılmaz — ne manuel ne otomatik.
+/// Default claude açık (mevcut davranışın korunması), codex kapalı.
+public struct UsageIndicators: Codable, Sendable, Equatable {
+    public var claude: Bool
+    public var codex: Bool
+
+    public static let defaults = UsageIndicators(claude: true, codex: false)
+
+    public init(claude: Bool, codex: Bool) {
+        self.claude = claude
+        self.codex = codex
+    }
+
+    public func isEnabled(_ provider: AgentProvider) -> Bool {
+        switch provider {
+        case .claude: return claude
+        case .codex: return codex
+        }
+    }
+
+    /// Immutable setter — mevcut değeri değiştirmez, yeni kopya döner.
+    public func setting(_ enabled: Bool, for provider: AgentProvider) -> UsageIndicators {
+        switch provider {
+        case .claude: return UsageIndicators(claude: enabled, codex: codex)
+        case .codex: return UsageIndicators(claude: claude, codex: enabled)
+        }
+    }
+
+    /// Topbar'ın çizeceği göstergeler — `AgentProvider.allCases` sırasında.
+    public var enabledProviders: [AgentProvider] {
+        AgentProvider.allCases.filter(isEnabled)
     }
 }
 

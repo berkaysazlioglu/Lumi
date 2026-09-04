@@ -43,6 +43,7 @@ let package = Package(
             ],
             resources: [
                 .copy("Resources/Fonts"),
+                .copy("Resources/Icons"),
                 .copy("Resources/logo.png"),
             ]
         ),

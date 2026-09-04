@@ -191,6 +191,14 @@ Kullanıcıya görünen etki: `Library` adlı gerçek kaynak klasörleri ağaçt
 - Kart header'ı: 20px butonlar, 11px başlık, 3px dikey padding (v1 24px/6px yerine) — top bar (karar 30) ile aynı yoğunluk.
 - Kayıtlı yerleşimi olmayan repo için grid default'u `auto/2/scroll` yerine **`columns/1/fit`**: tek terminal pencereyi doldurur, scroll yok. `ui-state.json`'daki mevcut repo yerleşimleri aynen korunur (karar 9).
 
+### 32. Claude + Codex kullanım göstergeleri, Orca'nın eriştiği yollardan (2026-09-04)
+- Topbar'da sağlayıcı başına **opt-in** kullanım butonu: Settings → Usage'daki iki toggle (`config.usageIndicators`). Default claude açık (mevcut davranış), codex kapalı. **Kapalı sağlayıcı için hiçbir istek atılmaz** — manuel refresh dahil; kapı `UsageStore.isEnabled`'dadır.
+- Butonlarda sağlayıcı marka ikonları (Orca'nın status-bar glyph'leri, SVG olarak taşındı: Claude sunburst, OpenAI knot).
+- **Veri kaynağı Orca ile aynı hâle getirildi** (design/05 §1.1):
+  - **Claude:** `GET api.anthropic.com/api/oauth/usage`, token macOS Keychain'den (`Claude Code-credentials`) ya da `~/.claude/.credentials.json`'dan. Eski `claude -p "/usage"` yolu **yedek** olarak korundu. Kazanç: anlık, process spawn'ı yok ve **abonelik kotasından düşmüyor**.
+  - **Codex:** `codex -c approval_policy=never -s read-only -a never app-server` üzerinden JSON-RPC `account/rateLimits/read`. `~/.codex/auth.json` yoksa `codex` hiç spawn edilmez.
+- design/05 §1'in "OAuth ToS gri alanı" gerekçesiyle ertelenen kararı bu kararla değişti: token kullanıcının kendi hesabınındır ve yalnız kendi kullanım verisini okumak için kullanılır.
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, personas + quick actions — karar 25).

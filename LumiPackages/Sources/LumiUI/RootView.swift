@@ -46,7 +46,7 @@ public struct RootView: View {
     private let fileViewer: FileViewerStore
     private let settings: SettingsStore
     private let sessionSchedule: SessionScheduleStore
-    private let usage: UsageStore
+    private let usageStores: [AgentProvider: UsageStore]
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
     private let highlighter: any SyntaxHighlighting
@@ -62,7 +62,7 @@ public struct RootView: View {
         fileViewer: FileViewerStore,
         settings: SettingsStore,
         sessionSchedule: SessionScheduleStore,
-        usage: UsageStore,
+        usageStores: [AgentProvider: UsageStore],
         toasts: ToastStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
@@ -77,7 +77,7 @@ public struct RootView: View {
         self.fileViewer = fileViewer
         self.settings = settings
         self.sessionSchedule = sessionSchedule
-        self.usage = usage
+        self.usageStores = usageStores
         self.toasts = toasts
         self.viewProvider = viewProvider
         self.highlighter = highlighter
@@ -137,7 +137,7 @@ public struct RootView: View {
                     settings: settings,
                     workspace: workspace,
                     sessionSchedule: sessionSchedule,
-                    usage: usage,
+                    usageStores: usageStores,
                     chooseFolder: shellActions.chooseFolder,
                     onClose: { workspace.isSettingsOpen = false }
                 )
@@ -210,7 +210,7 @@ public struct RootView: View {
             repoStore: repoStore,
             terminals: terminals,
             settings: settings,
-            usage: usage
+            usageStores: usageStores
         )
     }
 

@@ -240,6 +240,33 @@ final class ConfigServiceTests: XCTestCase {
         )
     }
 
+    func testUsageIndicatorsDefaultsWhenAbsent() async throws {
+        // Additive (karar 9): eski config'te alan yok → claude açık, codex kapalı.
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let config = await makeService().config()
+        XCTAssertEqual(config.usageIndicators, .defaults)
+        XCTAssertEqual(config.usageIndicators.enabledProviders, [.claude])
+    }
+
+    func testUsageIndicatorsRoundTrip() async throws {
+        try writeFixture(realConfigFixture, to: paths.configFile)
+        let service = makeService()
+
+        try await service.updateConfig {
+            $0.usageIndicators = UsageIndicators(claude: false, codex: true)
+        }
+
+        let written = try readJSONDict(paths.configFile)
+        let nested = try XCTUnwrap(written["usageIndicators"] as? [String: Any])
+        XCTAssertEqual(nested["claude"] as? Bool, false)
+        XCTAssertEqual(nested["codex"] as? Bool, true)
+        // Mevcut alanlar korunur (additive, karar 9)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
+
+        let reloaded = await ConfigService(paths: paths).config()
+        XCTAssertEqual(reloaded.usageIndicators, UsageIndicators(claude: false, codex: true))
+    }
+
     func testUsageAutoRefreshClampsInvalidIntervalOnDecode() async throws {
         try writeFixture(realConfigFixture, to: paths.configFile)
         let service = makeService()

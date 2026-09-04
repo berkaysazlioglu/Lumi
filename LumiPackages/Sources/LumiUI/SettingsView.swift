@@ -38,7 +38,7 @@ struct SettingsView: View {
     let settings: SettingsStore
     let workspace: WorkspaceStore
     let sessionSchedule: SessionScheduleStore
-    let usage: UsageStore
+    let usageStores: [AgentProvider: UsageStore]
     let chooseFolder: () async -> String?
     let onClose: () -> Void
 
@@ -606,13 +606,23 @@ struct SettingsView: View {
     private var usageTab: some View {
         VStack(alignment: .leading, spacing: 24) {
             SettingsSectionTitle(
-                title: "Usage Auto-Refresh",
-                description: "Refresh the Claude usage indicator automatically on an interval."
+                title: "Usage Indicators",
+                description: "Show a usage button in the top bar for each provider you use."
             )
-            infoCard("When enabled, Lumi re-checks your Claude limits every interval — but only "
-                + "while you're actively using your Mac (recent keyboard/mouse input). It never runs "
-                + "while the Mac is asleep, and each check counts against your subscription quota, "
-                + "just like the manual refresh.")
+            infoCard("A provider you turn off is not shown and is never queried — no requests "
+                + "are made for it, manual or automatic. Claude usage is read from your Claude "
+                + "subscription; Codex usage is read from your signed-in Codex CLI.")
+            ForEach(AgentProvider.allCases, id: \.self) { provider in
+                usageIndicatorToggle(for: provider)
+            }
+            Rectangle().fill(Theme.border).frame(height: 1)
+            SettingsSectionTitle(
+                title: "Usage Auto-Refresh",
+                description: "Refresh the enabled usage indicators automatically on an interval."
+            )
+            infoCard("When enabled, Lumi re-checks your limits every interval — but only while "
+                + "you're actively using your Mac (recent keyboard/mouse input). It never runs "
+                + "while the Mac is asleep.")
             SettingsToggleRow(
                 title: "Auto-Refresh",
                 hint: "Re-check usage automatically while you're active",
@@ -623,8 +633,27 @@ struct SettingsView: View {
             ) {
                 usageIntervalPicker
             }
-            usageStatusRow
+            ForEach(settings.current.usageIndicators.enabledProviders, id: \.self) { provider in
+                if let store = usageStores[provider] {
+                    usageStatusRow(for: store)
+                }
+            }
         }
+    }
+
+    private func usageIndicatorToggle(for provider: AgentProvider) -> some View {
+        SettingsToggleRow(
+            title: provider.displayName,
+            hint: "Show \(provider.displayName) usage in the top bar",
+            isOn: Binding(
+                get: { settings.current.usageIndicators.isEnabled(provider) },
+                set: { value in
+                    settings.setUsageIndicators(
+                        settings.current.usageIndicators.setting(value, for: provider)
+                    )
+                }
+            )
+        )
     }
 
     private var usageIntervalPicker: some View {
@@ -646,16 +675,15 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private var usageStatusRow: some View {
-        if usage.isLoading {
-            HStack(spacing: 6) {
+    private func usageStatusRow(for store: UsageStore) -> some View {
+        HStack(spacing: 5) {
+            ProviderIcon(provider: store.provider, size: 11)
+            if store.isLoading {
                 ProgressView().controlSize(.small)
                 Text("Checking…")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Theme.textMuted)
-            }
-        } else if let message = usage.errorMessage {
-            HStack(spacing: 5) {
+            } else if let message = store.errorMessage {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.accentPrimary)
@@ -664,9 +692,7 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.tail)
-            }
-        } else if let fetched = usage.snapshot?.fetchedAt {
-            HStack(spacing: 5) {
+            } else if let fetched = store.snapshot?.fetchedAt {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.accentCyan)

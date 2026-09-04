@@ -15,7 +15,8 @@ final class AppContainer {
     let repoService: any RepoServicing
     let gitService: any GitServicing
     let notifications: any NotificationServicing
-    let usageService: any UsageServicing
+    /// Sağlayıcı başına kullanım servisi (karar 32).
+    let usageServices: [AgentProvider: any UsageServicing]
     let activityMonitor: any ActivityMonitoring
     let sessionStarter: any SessionStarterServicing
     let terminal: TerminalSessionManager
@@ -27,7 +28,7 @@ final class AppContainer {
     let gitStore: GitStore
     let fileViewer: FileViewerStore
     let settings: SettingsStore
-    let usageStore: UsageStore
+    let usageStores: [AgentProvider: UsageStore]
     let usageAutoRefresh: UsageAutoRefreshStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
@@ -46,7 +47,10 @@ final class AppContainer {
         repoService = RepoService()
         gitService = GitService()
         notifications = NotificationService(presenter: notificationPresenter)
-        usageService = UsageService()
+        usageServices = [
+            .claude: ClaudeUsageService(),
+            .codex: CodexUsageService(),
+        ]
         activityMonitor = SystemActivityMonitor()
         sessionStarter = SessionStarterService()
         terminal = TerminalSessionManager()
@@ -58,8 +62,12 @@ final class AppContainer {
         gitStore = GitStore(git: gitService, toasts: toasts)
         fileViewer = FileViewerStore(git: gitService, toasts: toasts)
         settings = SettingsStore(config: config, toasts: toasts)
-        usageStore = UsageStore(service: usageService)
-        usageAutoRefresh = UsageAutoRefreshStore(usage: usageStore, activity: activityMonitor)
+        let stores = usageServices.mapValues { UsageStore(service: $0) }
+        usageStores = stores
+        usageAutoRefresh = UsageAutoRefreshStore(
+            stores: AgentProvider.allCases.compactMap { stores[$0] },
+            activity: activityMonitor
+        )
         workspace = WorkspaceStore(config: config, terminals: terminals)
         configCoordinator = ConfigSideEffectCoordinator(
             config: config,
@@ -98,6 +106,7 @@ final class AppContainer {
         terminals.autoMinimizeOnSend = appConfig.autoMinimizeOnSend
         sessionSchedule.update(appConfig.sessionTrigger)
         usageAutoRefresh.update(appConfig.usageAutoRefresh)
+        applyUsageIndicators(appConfig.usageIndicators)
         repoStore.additionalPaths = appConfig.additionalPaths
         await repoService.setRoots(
             projectsRoot: appConfig.projectsRoot,
@@ -143,13 +152,21 @@ final class AppContainer {
         configCoordinator.onUsageAutoRefreshChanged = { [weak self] settings in
             self?.usageAutoRefresh.update(settings)
         }
+        configCoordinator.onUsageIndicatorsChanged = { [weak self] indicators in
+            guard let self else { return }
+            self.applyUsageIndicators(indicators)
+            // Yeni açılan sağlayıcı boş kalmasın: kapı açıldıktan sonra ilk yükleme.
+            self.bridgeTasks.append(Task { @MainActor [weak self] in
+                await self?.loadEnabledUsageIndicators()
+            })
+        }
         configCoordinator.start()
         startBridges()
 
-        // Kullanım göstergesi ilk yükleme — arka planda, bootstrap'i bloklamaz
+        // Kullanım göstergeleri ilk yükleme — arka planda, bootstrap'i bloklamaz
         // (auto-refresh YOK; sonrası manuel, design/05 + kullanıcı kararı).
         bridgeTasks.append(Task { @MainActor [weak self] in
-            await self?.usageStore.loadInitialIfNeeded()
+            await self?.loadEnabledUsageIndicators()
         })
 
         terminal.onTerminalViewFocused = { [weak self] id in
@@ -238,6 +255,24 @@ final class AppContainer {
                 }
             }
         })
+    }
+
+    // MARK: - Kullanım göstergeleri (karar 32)
+
+    /// Config'teki açık/kapalı durumunu store'lara yansıtır. Kapı store'un
+    /// içindedir: kapalı store hiçbir istek atmaz (manuel refresh dahil).
+    private func applyUsageIndicators(_ indicators: UsageIndicators) {
+        for (provider, store) in usageStores {
+            store.setEnabled(indicators.isEnabled(provider))
+        }
+    }
+
+    /// Açık göstergelerin ilk yüklemesi. Kapalı store'da `loadInitialIfNeeded`
+    /// zaten no-op'tur; sıra `AgentProvider.allCases` ile deterministiktir.
+    private func loadEnabledUsageIndicators() async {
+        for provider in AgentProvider.allCases {
+            await usageStores[provider]?.loadInitialIfNeeded()
+        }
     }
 
     /// Karar 23: önceki graceful quit'te persist edilen claude oturumlarını

@@ -25,7 +25,7 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         let service = FakeUsageService(outcome: .success(snapshot(percent: 11)))
         let usage = UsageStore(service: service)
         let activity = FakeActivityMonitor(idleSeconds: 10)
-        let store = UsageAutoRefreshStore(usage: usage, activity: activity)
+        let store = UsageAutoRefreshStore(stores: [usage], activity: activity)
         store.update(UsageAutoRefresh(enabled: true, intervalMinutes: 5))
 
         // Act
@@ -44,7 +44,7 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         let service = FakeUsageService(outcome: .success(snapshot(percent: 11)))
         let usage = UsageStore(service: service)
         let activity = FakeActivityMonitor(idleSeconds: 10_000)
-        let store = UsageAutoRefreshStore(usage: usage, activity: activity)
+        let store = UsageAutoRefreshStore(stores: [usage], activity: activity)
         store.update(UsageAutoRefresh(enabled: true, intervalMinutes: 5))
 
         // Act

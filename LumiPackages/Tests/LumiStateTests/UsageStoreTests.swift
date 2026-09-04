@@ -72,3 +72,43 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertNotNil(store.errorMessage)
     }
 }
+
+// MARK: - Açık/kapalı kapısı (karar 32)
+
+extension UsageStoreTests {
+    func testDisabledStoreMakesNoRequestAtAll() async {
+        // Kapalı sağlayıcı için HİÇBİR istek atılmamalı — ne ilk yükleme ne manuel.
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 15)))
+        let store = UsageStore(service: service)
+        store.setEnabled(false)
+
+        await store.loadInitialIfNeeded()
+        await store.refresh()
+
+        let count = await service.fetchCount
+        XCTAssertEqual(count, 0)
+        XCTAssertNil(store.snapshot)
+        XCTAssertFalse(store.canRefresh)
+    }
+
+    func testReEnablingLoadsAgainSoIndicatorIsNotBlank() async {
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 15)))
+        let store = UsageStore(service: service)
+
+        await store.loadInitialIfNeeded()
+        store.setEnabled(false)
+        store.setEnabled(true)
+        await store.loadInitialIfNeeded()
+
+        let count = await service.fetchCount
+        XCTAssertEqual(count, 2)
+    }
+
+    func testProviderIsTakenFromService() {
+        let store = UsageStore(
+            service: FakeUsageService(provider: .codex, outcome: .success(makeSnapshot(percent: 1)))
+        )
+
+        XCTAssertEqual(store.provider, .codex)
+    }
+}

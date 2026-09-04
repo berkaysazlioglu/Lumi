@@ -2,10 +2,10 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Topbar'da grid kontrolünün solunda duran kompakt kullanım göstergesi
-/// (design/05): yalnız 5 saatlik oturum yüzdesini gösterir (örn. "15%").
-/// Tıklamada tüm limitleri progress bar + reset süreleriyle gösteren popover
-/// açılır; popover'da manuel refresh butonu vardır.
+/// Topbar'da duran kompakt kullanım göstergesi (design/05, karar 32): sağlayıcı
+/// marka ikonu + 5 saatlik oturum yüzdesi (örn. "15%"). Tıklamada tüm limitleri
+/// progress bar + reset süreleriyle gösteren popover açılır; popover'da manuel
+/// refresh butonu vardır. Her açık sağlayıcı için bir örnek çizilir.
 public struct UsageIndicatorView: View {
     private let store: UsageStore
     @State private var isPresented = false
@@ -21,17 +21,16 @@ public struct UsageIndicatorView: View {
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
                 UsagePopover(store: store)
             }
-            .help("Claude usage")
+            .help("\(store.provider.displayName) usage")
     }
 
     private var compact: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-                .font(.system(size: 11))
+        HStack(spacing: 5) {
+            ProviderIcon(provider: store.provider, size: 12)
             Text(label)
                 .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(tint)
         }
-        .foregroundStyle(tint)
         .padding(.horizontal, 8)
         .frame(height: TopBarMetrics.controlHeight)
         .background(Theme.bgElevated)
@@ -50,6 +49,26 @@ public struct UsageIndicatorView: View {
     private var tint: Color {
         guard let percent = store.fiveHourPercent else { return Theme.textSecondary }
         return UsageTint.color(for: percent)
+    }
+}
+
+/// Sağlayıcı marka ikonu (Orca glyph'leri, SVG). Kaynak yüklenemezse SF
+/// Symbol'e düşülür — gösterge ikonsuz kalmaz.
+struct ProviderIcon: View {
+    let provider: AgentProvider
+    var size: CGFloat = 12
+
+    var body: some View {
+        if let icon = LumiAssets.providerIcon(provider) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                .font(.system(size: size))
+                .foregroundStyle(Theme.textSecondary)
+        }
     }
 }
 
@@ -81,8 +100,9 @@ private struct UsagePopover: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("Claude Usage")
+        HStack(spacing: 6) {
+            ProviderIcon(provider: store.provider, size: 13)
+            Text("\(store.provider.displayName) Usage")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()

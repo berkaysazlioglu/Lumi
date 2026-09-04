@@ -36,7 +36,8 @@ struct HeaderBarView: View {
     let repoStore: RepoStore
     let terminals: TerminalListStore
     let settings: SettingsStore
-    let usage: UsageStore
+    /// Sağlayıcı başına kullanım store'u; topbar yalnız AÇIK olanları çizer (karar 32).
+    let usageStores: [AgentProvider: UsageStore]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -74,7 +75,11 @@ struct HeaderBarView: View {
             // Durum + global grup: ambient kullanım göstergesi + kalıcı panel/global
             // toggle'lar (sağdan sola: settings, git, fullscreen).
             HStack(spacing: 4) {
-                UsageIndicatorView(store: usage)
+                ForEach(settings.current.usageIndicators.enabledProviders, id: \.self) { provider in
+                    if let store = usageStores[provider] {
+                        UsageIndicatorView(store: store)
+                    }
+                }
                 HeaderIconButton(
                     icon: "arrow.up.left.and.arrow.down.right",
                     isActive: workspace.isFocusMode,

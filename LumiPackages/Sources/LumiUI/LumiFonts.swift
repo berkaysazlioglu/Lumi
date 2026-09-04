@@ -1,6 +1,7 @@
 import AppKit
 import CoreText
 import Foundation
+import LumiKit
 
 /// JetBrains Mono kaydı (karar 13; OFL lisansı bundle'da).
 /// Kayıt başarısızsa sistem monospace'ine sessizce düşülür.
@@ -82,5 +83,25 @@ public enum LumiAssets {
             return nil
         }
         return NSImage(contentsOf: url)
+    }()
+
+    /// Sağlayıcı marka ikonu (Orca'nın status-bar ikonlarıyla aynı glyph'ler).
+    /// SVG — macOS 14 `NSImage`'ı yerel olarak açar, vektör kaldığı için her
+    /// boyutta net çizilir. Kayıt başarısızsa nil (çağıran SF Symbol'e düşer).
+    public static func providerIcon(_ provider: AgentProvider) -> NSImage? {
+        providerIcons[provider] ?? nil
+    }
+
+    private static let providerIcons: [AgentProvider: NSImage?] = {
+        var icons: [AgentProvider: NSImage?] = [:]
+        for provider in AgentProvider.allCases {
+            let url = Bundle.module.url(
+                forResource: "provider-\(provider.rawValue)",
+                withExtension: "svg",
+                subdirectory: "Icons"
+            )
+            icons[provider] = url.flatMap(NSImage.init(contentsOf:))
+        }
+        return icons
     }()
 }

@@ -2,9 +2,10 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Kullanım göstergesinin opt-in otomatik tazelenmesi (karar 20). Açıkken her
-/// `intervalMinutes`'te bir, YALNIZCA kullanıcı aktifse `UsageStore.refresh()`
-/// çağırır. `SessionScheduleStore` ile aynı iskelet: config'i `update(_:)` ile
+/// Kullanım göstergelerinin opt-in otomatik tazelenmesi (karar 20). Açıkken her
+/// `intervalMinutes`'te bir, YALNIZCA kullanıcı aktifse AÇIK olan her sağlayıcı
+/// store'unun `refresh()`'ini çağırır (kapalı store kendi içinde no-op'tur —
+/// karar 32'de kapı `UsageStore`'dadır). `SessionScheduleStore` ile aynı iskelet: config'i `update(_:)` ile
 /// izler, bir `Task` döngüsünde uyur/tetikler; config değişince döngü iptal edilip
 /// yenisi kurulur.
 ///
@@ -18,13 +19,13 @@ import Observation
 @Observable
 @MainActor
 public final class UsageAutoRefreshStore {
-    @ObservationIgnored private let usage: UsageStore
+    @ObservationIgnored private let stores: [UsageStore]
     @ObservationIgnored private let activity: any ActivityMonitoring
     @ObservationIgnored private var settings: UsageAutoRefresh = .defaults
     @ObservationIgnored private var timerTask: Task<Void, Never>?
 
-    public init(usage: UsageStore, activity: any ActivityMonitoring) {
-        self.usage = usage
+    public init(stores: [UsageStore], activity: any ActivityMonitoring) {
+        self.stores = stores
         self.activity = activity
     }
 
@@ -44,13 +45,15 @@ public final class UsageAutoRefreshStore {
 
     // MARK: - Tetikleme (test edilebilir tek adım)
 
-    /// Kullanıcı son aralık içinde aktifse usage'ı tazeler. Tazelendiyse `true`.
-    /// Döngü ve testler ortak bu yolu kullanır (SessionScheduleStore.fireNow gibi).
+    /// Kullanıcı son aralık içinde aktifse tüm store'ları tazeler. Tazelendiyse
+    /// `true`. Döngü ve testler ortak bu yolu kullanır (SessionScheduleStore.fireNow gibi).
     @discardableResult
     func performTickIfActive() async -> Bool {
         let interval = TimeInterval(settings.intervalMinutes * 60)
         guard activity.secondsSinceUserInput() < interval else { return false }
-        await usage.refresh()
+        for store in stores {
+            await store.refresh()
+        }
         return true
     }
 

@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fileViewer: container.fileViewer,
             settings: container.settings,
             sessionSchedule: container.sessionSchedule,
-            usage: container.usageStore,
+            usageStores: container.usageStores,
             toasts: container.toasts,
             viewProvider: container.terminal.viewRegistry,
             highlighter: HighlightrEngine(),

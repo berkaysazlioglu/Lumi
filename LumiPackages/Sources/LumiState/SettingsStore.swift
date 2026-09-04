@@ -95,6 +95,10 @@ public final class SettingsStore {
         apply { $0.usageAutoRefresh = settings }
     }
 
+    public func setUsageIndicators(_ indicators: UsageIndicators) {
+        apply { $0.usageIndicators = indicators }
+    }
+
     public func addAdditionalPath(_ path: String, type: AdditionalPath.PathType) {
         let entry = AdditionalPath(id: UUID().uuidString, path: path, type: type)
         apply { $0.additionalPaths.append(entry) }
