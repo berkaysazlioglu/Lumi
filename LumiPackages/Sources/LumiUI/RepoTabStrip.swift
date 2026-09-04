@@ -4,57 +4,36 @@ import SwiftUI
 
 /// Header tab şeridi: repo tab'leri + (+) butonu tek HStack'te. (+) her zaman
 /// son tab'ın HEMEN ardında durur. Şerit kalan tüm genişliği alır; tab'lar
-/// sığmazsa metinleri kısalarak daralır (ikon + kapatma her zaman görünür).
+/// sığmazsa metinleri kısalarak daralır (ikon + kapatma her zaman görünür) —
+/// eski sabit 600px + ScrollView kesmesi yok.
 ///
-/// Bu view yalnız ÇİZER: chip frame'lerini (hosting koordinatı) modele yayınlar,
-/// sürükleme offset'ini ve hover'ı modelden okur. Seçme / reorder / hover
-/// etkileşimi `TabStripInteractionView`'da (AppKit, hosting dışı) — gerekçe
-/// `TabStripInteractionModel`. ScrollView bilinçli olarak yok.
+/// Sürükleyerek yeniden sıralama BİLİNÇLİ olarak yok (karar 27): pencerenin üst
+/// 28px titlebar bölgesinde SwiftUI hosting içindeki her sürükleme pencereyi de
+/// taşır; ölçülen hiçbir view/window düzeyi önlem bunu güvenilir biçimde
+/// engellemedi.
 struct RepoTabStrip: View {
     let workspace: WorkspaceStore
     let repoStore: RepoStore
-    let interaction: TabStripInteractionModel
 
     @State private var isAddRepoHovering = false
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(workspace.openTabs, id: \.self) { repoPath in
-                tabChip(repoPath)
+                RepoTabChip(
+                    name: repoStore.repo(at: repoPath)?.name
+                        ?? (repoPath as NSString).lastPathComponent,
+                    isActive: workspace.activeTab == repoPath,
+                    onSelect: { workspace.setActiveTab(repoPath) },
+                    onClose: { name in
+                        workspace.requestCloseTab(repoPath, repoName: name)
+                    }
+                )
             }
             addRepoButton
                 .fixedSize()
         }
-        .onPreferenceChange(TabChipFramesKey.self) { frames in
-            Task { @MainActor in interaction.chipFrames = frames }
-        }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func tabChip(_ repoPath: String) -> some View {
-        let drag = interaction.dragging
-        let isDragging = drag?.tab == repoPath
-        return RepoTabChip(
-            name: repoStore.repo(at: repoPath)?.name
-                ?? (repoPath as NSString).lastPathComponent,
-            isActive: workspace.activeTab == repoPath,
-            isHovering: interaction.hoveredTab == repoPath,
-            onClose: { name in
-                workspace.requestCloseTab(repoPath, repoName: name)
-            }
-        )
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: TabChipFramesKey.self,
-                    value: [repoPath: geo.frame(in: .global)]
-                )
-            }
-        )
-        .offset(x: isDragging ? (drag?.translation ?? 0) : 0)
-        .zIndex(isDragging ? 1 : 0)
-        .opacity(isDragging ? 0.85 : 1)
-        .animation(.easeInOut(duration: 0.15), value: workspace.openTabs)
     }
 
     private var addRepoButton: some View {
@@ -90,24 +69,15 @@ struct RepoTabStrip: View {
     }
 }
 
-/// Chip'lerin şerit koordinatındaki frame'leri (drop hedefi hesabı için).
-private struct TabChipFramesKey: PreferenceKey {
-    static let defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue()) { $1 }
-    }
-}
-
 /// Repo tab'i (v1 globals.css .repo-tab): pasif şeffaf, aktif elevated +
 /// accent kenarlık; kapatma butonu yalnız hover'da görünür, hover'ı kırmızı.
-/// Seçme/sürükleme/hover chip'te DEĞİL — `TabStripInteractionView` (AppKit).
 struct RepoTabChip: View {
     let name: String
     let isActive: Bool
-    /// Hover, AppKit etkileşim katmanından gelir (`TabStripInteractionModel`).
-    let isHovering: Bool
+    let onSelect: () -> Void
     let onClose: (String) -> Void
 
+    @State private var isHovering = false
     @State private var isCloseHovering = false
 
     var body: some View {
@@ -136,6 +106,8 @@ struct RepoTabChip: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
         .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
+        .onHover { isHovering = $0 }
     }
 
     private var closeButton: some View {

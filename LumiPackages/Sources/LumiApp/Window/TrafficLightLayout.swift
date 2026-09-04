@@ -15,7 +15,6 @@ enum TrafficLightLayout {
     static let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
 
     static func apply(to window: NSWindow, headerHeight: CGFloat = TopBarMetrics.height) {
-        if ProcessInfo.processInfo.environment["LUMI_NO_TLL"] != nil { return }
         let buttons = buttonTypes.compactMap { window.standardWindowButton($0) }
         guard let titlebarView = buttons.first?.superview,
               let container = titlebarView.superview else { return }

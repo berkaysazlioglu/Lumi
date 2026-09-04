@@ -158,10 +158,10 @@ Kullanıcı kararı: uygulama sadeleştirilirken sol sidebar'daki **Personas** v
 ### 26. Terminal renk teması seçimi kaldırıldı (2026-09-04)
 Sadeleştirme: Settings → Terminal'deki "Color Theme" picker'ı ve altyapısı (`TerminalThemeCatalog`/`TerminalThemeOption`, 7 preset, `AppConfig.terminalTheme`, `TerminalSessionManager.theme`, `ConfigSideEffectCoordinator.onTerminalThemeChanged`) kaldırıldı. `TerminalTheme` tek sabit palete (Lumi) indirildi; spawn'da `DropAwareTerminalView` uygular. `config.json`'daki eski `terminalTheme` key'i okunmaz, yeniden yazımda taşınmaz (bilinmeyen-key koruması diğer alanları korur).
 
-### 27. Header düzeltmeleri: traffic light hit-test, tab reorder, tab overflow (2026-09-04)
+### 27. Header düzeltmeleri: traffic light hit-test, tab overflow (2026-09-04)
 - **Traffic light tıklama alanı:** butonlar 28px titlebar container'ının dışına taşındığı için superview bounds'u hit-test'i kırpıyordu (yalnız üst şerit tıklanabiliyordu). Electron `RedrawTrafficLights` paritesi: `TrafficLightLayout` container'ı `TopBarMetrics.height`'a büyütür, butonları içinde ortalar; resize/fullscreen/focus-mode dönüşünde yeniden uygulanır.
-- **Tab reorder:** repo tab'leri sürükle-bırak ile yeniden sıralanır (canlı: üstünden geçilen tab'ın yerini alır). `WorkspaceStore.moveTab(_:to:)` sırayı `ui-state.json` `openTabs`'a persist eder; aktif tab değişmez.
-- **Tab overflow:** şerit artık sabit 600px değil, header'da kalan genişliğin tamamını alır; sığmayanlar scroll'lanır ve aktif tab otomatik görünür alana kaydırılır.
+- **Tab reorder — YAPILMADI (bilinçli):** sürükle-bırak yeniden sıralama denendi ve geri alındı. Ölçüm: pencerenin üst 28px titlebar bölgesinde SwiftUI hosting içindeki her sürükleme (jest, Button, hatta hosting-dışı kardeş AppKit view) pencereyi de taşıyor; `mouseDownCanMoveWindow`, `isMovable`, `performDrag` override'ı, responder-zinciri kesme ve tracking loop hiçbiri güvenilir biçimde engellemedi. Tab'lar tıklamayla seçilir; sıra açılış sırasıdır.
+- **Tab overflow:** şerit artık sabit 600px + ScrollView değil, header'da kalan genişliğin tamamını alır; sığmayan tab'ların metni kısalır (ikon + kapatma her zaman görünür).
 - **Modülerlik:** `HeaderBarView` yalnız kompozisyon; `RepoTabStrip`, `NewTerminalButton`, `HeaderControls` ayrı dosyalar.
 
 ### 28. File-tree tarama güvenliği: autoreleasepool, symlink takibi yok, tavan, FSEvents filtresi (2026-09-04)

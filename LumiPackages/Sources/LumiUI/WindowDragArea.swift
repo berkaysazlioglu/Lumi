@@ -9,14 +9,10 @@ import SwiftUI
 /// bu davranışı kendiliğinden vermez; v1'de (Electron) `-webkit-app-region:
 /// drag` CSS'i sağlıyordu. SwiftUI tarafında karşılığı bu temsilcidir.
 ///
-/// Header'ın arka katmanına yerleştirilir. Üstteki SwiftUI kontrolleri
-/// `ContentHostingView` (mouseDownCanMoveWindow = false) üzerinden event alır;
-/// AppKit onları pencere sürüklemesi saymaz — yalnız bu view'ın yakaladığı
-/// boş-alan basışları pencereyi taşır. Ölçülen iki tuzak: (1) `isMovable =
-/// false` → AppKit titlebar bölgesindeki (52px header) hiçbir mouseDown'u
-/// content'e iletmez, tab'lar/butonlar ölür. (2) Content'in işlemediği
-/// mouseDown responder zincirinden `NSThemeFrame`'e çıkar ve titlebar
-/// sürüklemesi başlar → LumiApp `EventSinkContentView` zinciri keser.
+/// Header'ın arka katmanına yerleştirilir; üstteki butonlar kendi
+/// tıklamalarını aldığından yalnızca boş alanlar pencereyi sürükler.
+/// NOT: `window.isMovable = false` KULLANILMAZ — AppKit o durumda titlebar
+/// bölgesindeki hiçbir mouseDown'u content'e iletmez (tab'lar/butonlar ölür).
 struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { DraggableView() }
 

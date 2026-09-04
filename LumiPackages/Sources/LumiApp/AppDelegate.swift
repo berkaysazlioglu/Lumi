@@ -70,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Pencere (spec/30: bounds ui-state.json'da, frameAutosave YOK — karar 9)
 
     private func buildWindow() async {
-        let window = DebugWindow(
+        let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
@@ -100,7 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
         }
 
-        let tabInteraction = TabStripInteractionModel()
         let root = RootView(
             workspace: container.workspace,
             repoStore: container.repoStore,
@@ -111,51 +110,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: container.settings,
             sessionSchedule: container.sessionSchedule,
             usage: container.usageStore,
-            tabInteraction: tabInteraction,
             toasts: container.toasts,
             viewProvider: container.terminal.viewRegistry,
             highlighter: HighlightrEngine(),
             fileActions: makeFileActions(),
             shellActions: makeShellActions()
         )
-        let hosting = ContentHostingView(rootView: root)
+        let hosting = NSHostingView(rootView: root)
         // İçerik titlebar safe-area'sı kadar AŞAĞI itilmesin — y0'dan başlasın
         // (v1 paritesi: header trafiğin hizasında, boşa giden üst bant yok).
         hosting.safeAreaRegions = []
-        // Responder zinciri NSThemeFrame'e çıkmasın (titlebar sürüklemesi) —
-        // bkz. EventSinkContentView.
-        let sink = EventSinkContentView(frame: window.contentLayoutRect)
-        hosting.frame = sink.bounds
-        hosting.autoresizingMask = [.width, .height]
-        sink.addSubview(hosting)
-        // Tab şeridi etkileşimi: hosting DIŞINDA kardeş AppKit katmanı (header
-        // yüksekliğinde, üstte sabit) — bkz. TabStripInteractionModel.
-        let interactionLayer = TabStripInteractionView(
-            frame: NSRect(
-                x: 0, y: sink.bounds.height - TopBarMetrics.height,
-                width: sink.bounds.width, height: TopBarMetrics.height
-            ),
-            model: tabInteraction,
-            onSelect: { [container] in container?.workspace.setActiveTab($0) },
-            onMove: { [container] tab, target in container?.workspace.moveTab(tab, to: target) }
-        )
-        interactionLayer.autoresizingMask = [.width, .minYMargin]
-        if ProcessInfo.processInfo.environment["LUMI_PROBE_MODE"] != nil {
-            interactionLayer.frame = NSRect(x: 190, y: sink.bounds.height - 52, width: 600, height: 52)
-            interactionLayer.autoresizingMask = [.minYMargin]
-        }
-        sink.addSubview(interactionLayer, positioned: .above, relativeTo: hosting)
-        // PROBE (geçici): hamburger Button'ının üstünde saf AppKit view
-        let probeA = ZoneProbeView(frame: NSRect(x: 80, y: sink.bounds.height - 52, width: 32, height: 52))
-        probeA.autoresizingMask = [.minYMargin]; probeA.isFlippedOverride = true; probeA.tag_ = "A-flipped"
-        sink.addSubview(probeA, positioned: .above, relativeTo: hosting)
-        let probeB = ZoneProbeView(frame: NSRect(x: 1000, y: sink.bounds.height - 52, width: 100, height: 52))
-        probeB.autoresizingMask = [.minYMargin]; probeB.useTracking = true; probeB.tag_ = "B-tracking"
-        sink.addSubview(probeB, positioned: .above, relativeTo: hosting)
-        let probeC = ZoneProbeView(frame: NSRect(x: 1150, y: sink.bounds.height - 52, width: 100, height: 52))
-        probeC.autoresizingMask = [.minYMargin]; probeC.customHit = true; probeC.tag_ = "C-hittest"
-        sink.addSubview(probeC, positioned: .above, relativeTo: hosting)
-        window.contentView = sink
+        window.contentView = hosting
 
         // Maximize flag'i show'dan ÖNCE uygulanır (flash önleme — spec/30)
         if uiState.windowMaximized == true, !window.isZoomed {
@@ -467,36 +432,5 @@ extension AppDelegate: NSWindowDelegate {
         if isShutdownComplete { return true }
         NSApp.terminate(nil)
         return false
-    }
-}
-
-
-final class ZoneProbeView: NSView {
-    var isFlippedOverride = false; var useTracking = false; var customHit = false; var tag_ = ""
-    override var isFlipped: Bool { isFlippedOverride }
-    override var mouseDownCanMoveWindow: Bool { dbg("mouseDownCanMoveWindow queried"); return false }
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        guard customHit else { return super.hitTest(point) }
-        let local = convert(point, from: superview)
-        return bounds.contains(local) ? self : nil
-    }
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        guard useTracking else { return }
-        trackingAreas.forEach { removeTrackingArea($0) }
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow], owner: self))
-    }
-    private func dbg(_ m: String) {
-        let line = "[probe] \(m)\n"
-        if let h = FileHandle(forWritingAtPath: "/tmp/lumi-overlay.log") { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); h.closeFile() }
-        else { try? line.write(toFile: "/tmp/lumi-overlay.log", atomically: true, encoding: .utf8) }
-    }
-    override func mouseDown(with event: NSEvent) {
-        guard let window else { return }
-        let ox = event.locationInWindow.x
-        dbg("[\(tag_)] mouseDown winX=\(window.frame.origin.x)")
-        while let e = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: .distantFuture, inMode: .eventTracking, dequeue: true) {
-            if e.type == .leftMouseUp { dbg("[\(tag_)] mouseUp dx=\(e.locationInWindow.x - ox) winX=\(window.frame.origin.x)"); return }
-        }
     }
 }
