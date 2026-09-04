@@ -1,11 +1,14 @@
 import AppKit
 import Foundation
 
-/// Terminal alt sisteminin servis sınırı (design/02 §1).
+/// Terminal oturum yaşam döngüsü + I/O sınırı (design/02 §1).
 /// Tek process'te UI-yüzlü servis @MainActor'da yaşar; PTY I/O implementasyonun
 /// içindeki background queue'lardadır — bu protokol o detayı sızdırmaz.
+///
+/// ISP (Faz 3.7): oturum kontrolü ile görünüm ayarı ayrı yüzlerdir. Store'lar
+/// yalnız bu yüzü alır; görünüm ayarını yalnız composition root uygular.
 @MainActor
-public protocol TerminalServicing: AnyObject, Sendable {
+public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Yeni login-shell PTY oturumu açar; `command` verilirse shell'e yazılır (PTY argv'si değil).
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta
@@ -24,7 +27,34 @@ public protocol TerminalServicing: AnyObject, Sendable {
     var terminals: [TerminalMeta] { get }
 
     func events() -> AsyncStream<TerminalEvent>
+
+    /// Kapanış simetrisi: global NSEvent monitörleri gibi process-ömürlü
+    /// kaynakları bırakır. Idempotent'tir; composition root `shutdown()`
+    /// yolunda çağırır (refactor 3.2 — somut tipe inmemek için protokolde).
+    func shutdown()
 }
+
+/// Terminal görünüm ayarlarının canlı uygulanması (Settings → font/cursor).
+/// Ayrı yüz: store'lar bunu görmez, yalnız config yan etkisini süren
+/// composition root çağırır.
+///
+/// Font `NSFont` olarak geçer (aile+boyut primitifleri değil): aile→font
+/// çözümlemesi (bundle'daki JetBrains Mono fallback'i dahil) `LumiFonts`'ta,
+/// yani kaynak bundle'ının sahibi olan LumiUI'da yaşar. Primitif imza,
+/// LumiTerminal'de o çözümlemenin ikinci bir kopyasını doğururdu (DRY).
+/// Cursor ise tersine primitiftir: `TerminalCursorShape` LumiKit'te,
+/// SwiftTerm `CursorStyle`'a çeviri implementasyonun içindedir.
+@MainActor
+public protocol TerminalAppearanceControlling: AnyObject, Sendable {
+    /// Font'u canlı tüm oturumlara uygular ve sonraki spawn'lara devreder.
+    func applyFont(_ font: NSFont)
+    /// Caret şekli + blink'i canlı tüm oturumlara uygular ve sonraki spawn'lara devreder.
+    func applyCursor(shape: TerminalCursorShape, blink: Bool)
+}
+
+/// Terminal servisinin tam yüzü. Geriye uyumluluk + "her ikisini de uygulayan"
+/// somut tipi adlandırmak için (design/00 §3 container şeması).
+public typealias TerminalServicing = TerminalSessionControlling & TerminalAppearanceControlling
 
 /// Canlı terminal NSView'larını UI'a köprüleyen sınır (design/00 §2).
 /// LumiKit'te yaşar ki LumiUI, LumiTerminal'i import etmeden host edebilsin.
@@ -38,4 +68,8 @@ public protocol TerminalViewProviding: AnyObject {
     /// devreye girer. `container` parametresi bayat-detach koruması içindir: view
     /// başka bir host'a taşınmışsa (SwiftUI reparenting yarışı) bu çağrı no-op olur.
     func detachView(for id: TerminalID, from container: NSView)
+    /// Bağlı tüm view'ları superview bounds'una yeniden oturtur ve redraw ister.
+    /// Fullscreen giriş/çıkışı gibi AppKit'in view hiyerarşisini taşıdığı
+    /// geçişlerin onarımı — çağıran somut registry tipini tanımak zorunda kalmaz.
+    func refreshAttachedViews()
 }

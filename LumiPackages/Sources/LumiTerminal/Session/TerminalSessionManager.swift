@@ -10,33 +10,22 @@ import SwiftTerm
 public final class TerminalSessionManager: TerminalServicing {
     public let viewRegistry = TerminalViewRegistry()
 
-    private var sessions: [TerminalSession] = []
+    /// Sıralı oturum kaydı (karar 11). `private(set)`: dışarıdan yalnız okunur —
+    /// testler canlı oturumlara uygulanan görünüm ayarlarını buradan doğrular.
+    private(set) var sessions: [TerminalSession] = []
     private var spawnCounter = 0
     private let broadcaster = EventBroadcaster<TerminalEvent>()
     /// Font (aile + boyut). Yeni spawn'lara uygulanır VE canlı olarak tüm açık
     /// terminallere yansır (SwiftTerm `terminalView.font` setter zinciri resize +
     /// SIGWINCH + redraw üretir — cursorStyle ile aynı canlı-uygulama deseni).
-    public var font: NSFont {
-        didSet {
-            guard font != oldValue else { return }
-            sessions.forEach { $0.setFont(font) }
-        }
-    }
+    private var font: NSFont
     /// Caret şekli + blink (SwiftTerm CursorStyle'a çözülmüş). Canlı uygulanır.
-    public var cursorStyle: CursorStyle = .blinkBlock {
-        didSet {
-            sessions.forEach { $0.setCursorStyle(cursorStyle) }
-        }
-    }
+    private var cursorStyle: CursorStyle = .blinkBlock
     /// Global NSEvent monitörleri: kurulduklarında AppKit tarafından tutulur ve
     /// yalnız `removeMonitor` ile bırakılırlar — token'lar kapanışta kaldırılmak
     /// üzere saklanır (Faz 1.22 sızıntı düzeltmesi).
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
-
-    /// Terminal NSView'ına tıklayınca store odağının senkronlanması için köprü
-    /// (Electron'daki karta-tıkla → setActiveTerminal paritesi).
-    public var onTerminalViewFocused: ((TerminalID) -> Void)?
 
     public init(font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)) {
         self.font = font
@@ -49,12 +38,39 @@ public final class TerminalSessionManager: TerminalServicing {
             // First responder tıklama dispatch'i SONRASI oluşur — bir tur ertele
             DispatchQueue.main.async { [weak self] in
                 guard let self,
-                      let view = event.window?.firstResponder as? DropAwareTerminalView,
-                      let id = self.viewRegistry.terminalID(for: view) else { return }
-                self.onTerminalViewFocused?(id)
+                      let view = event.window?.firstResponder as? DropAwareTerminalView
+                else { return }
+                self.noteViewFocused(view)
             }
             return event
         }
+    }
+
+    /// Terminal NSView'ı first responder oldu (karta tıklama; Electron'daki
+    /// karta-tıkla → setActiveTerminal paritesi). Kayıtlı olmayan view sessizce
+    /// yok sayılır — bayat first-responder koruması.
+    func noteViewFocused(_ view: NSView) {
+        guard let id = viewRegistry.terminalID(for: view) else { return }
+        broadcaster.send(.viewFocused(id))
+    }
+
+    // MARK: - TerminalAppearanceControlling
+
+    /// Font'u canlı tüm oturumlara uygular; sonraki spawn'lar devralır.
+    public func applyFont(_ font: NSFont) {
+        guard font != self.font else { return }
+        self.font = font
+        sessions.forEach { $0.setFont(font) }
+    }
+
+    /// Caret şekli + blink'i canlı tüm oturumlara uygular; sonraki spawn'lar devralır.
+    /// SwiftTerm `CursorStyle` çevirisi burada kalır — çağıran SwiftTerm tanımaz.
+    public func applyCursor(shape: TerminalCursorShape, blink: Bool) {
+        // Eşitlik kısa devresi YOK: TUI, DECSCUSR ile caret'i ezmiş olabilir —
+        // aynı değerin yeniden uygulanması kullanıcı ayarını geri getirir.
+        let style = TerminalCursorStyleMapper.swiftTermStyle(shape: shape, blink: blink)
+        cursorStyle = style
+        sessions.forEach { $0.setCursorStyle(style) }
     }
 
     /// SwiftTerm keyDown'ı sealed olduğundan doğal-düzenleme eşlemeleri

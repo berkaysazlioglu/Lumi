@@ -86,7 +86,7 @@ struct OnboardingView: View {
                     Spacer()
                     if check.status == .fail, check.isFixable {
                         Button("Fix") {
-                            shell.fixCheck(check.id)
+                            shell.fixCheck(check)
                         }
                         .buttonStyle(.bordered)
                     }

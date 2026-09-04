@@ -22,10 +22,12 @@ public final class GitStore {
     public private(set) var expandedBranches: [String: Set<String>] = [:]
     @ObservationIgnored private var userToggledRepos: Set<String> = []
 
-    @ObservationIgnored private let git: any GitServicing
+    /// ISP (refactor 3.8): store yalnız sessiz-liste okumaları + commit yazımı
+    /// yüzeyine bağlıdır; içerik/diff okumaları `FileViewerStore`'un işidir.
+    @ObservationIgnored private let git: any GitReading & GitWriting
     @ObservationIgnored private let toasts: ToastStore
 
-    public init(git: any GitServicing, toasts: ToastStore) {
+    public init(git: any GitReading & GitWriting, toasts: ToastStore) {
         self.git = git
         self.toasts = toasts
     }

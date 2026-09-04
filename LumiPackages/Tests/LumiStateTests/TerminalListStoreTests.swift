@@ -81,6 +81,36 @@ final class TerminalListStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTerminalID, third.id, "minimize edilmiş komşu aday olamaz")
     }
 
+    // MARK: - View odağı (Faz 3.7: callback yerine event)
+
+    func testViewFocusedEventFocusesTerminal() {
+        // Arrange
+        let first = makeTerminal("t1")
+        let second = makeTerminal("t2")
+        store.focus(first.id)
+
+        // Act — terminal NSView'ına tıklama servis event'i olarak gelir
+        store.apply(.viewFocused(second.id))
+
+        // Assert
+        XCTAssertEqual(store.activeTerminalID, second.id)
+        XCTAssertEqual(service.focusCalls.last, second.id)
+    }
+
+    func testViewFocusedEventCannotFocusMinimizedTerminal() {
+        // Arrange
+        let first = makeTerminal("t1")
+        let second = makeTerminal("t2")
+        store.minimize(first.id)
+        store.focus(second.id)
+
+        // Act
+        store.apply(.viewFocused(first.id))
+
+        // Assert — minimize kuralı event yolunda da geçerli
+        XCTAssertEqual(store.activeTerminalID, second.id)
+    }
+
     // MARK: - Minimize kuralları
 
     func testMinimizeActiveShiftsFocusToVisibleSibling() {

@@ -103,4 +103,8 @@ public enum TerminalEvent: Sendable, Equatable {
     /// PTY'ye yazım kalıcı olarak başarısız (EPIPE/EIO — child öldü).
     /// Karar 5: sessiz yutma yok; store toast gösterir.
     case writeFailed(TerminalID, errno: Int32)
+    /// Terminal NSView'ı first responder oldu (karta tıklama). Store odağı
+    /// buna göre senkronlar — composition root'ta callback köprüsü yerine
+    /// diğer tüm terminal sinyalleriyle aynı kanaldan akar (Faz 3.7).
+    case viewFocused(TerminalID)
 }

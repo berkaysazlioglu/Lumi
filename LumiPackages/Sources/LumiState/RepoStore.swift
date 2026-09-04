@@ -6,7 +6,7 @@ import Observation
 /// Event → tam yeniden çekme (pull-after-push korunur).
 @Observable
 @MainActor
-public final class RepoStore {
+public final class RepoStore: StoreLifecycle {
     public private(set) var repos: [Repo] = []
     /// Gruplamanın "boş root grupları da göster" kuralı için config sırasıyla tutulur.
     public var additionalPaths: [AdditionalPath] = []
@@ -18,29 +18,27 @@ public final class RepoStore {
     @ObservationIgnored private var autoExpandedRepos: Set<String> = []
 
     @ObservationIgnored private let service: any RepoServicing
-    @ObservationIgnored private var consumeTask: Task<Void, Never>?
+    @ObservationIgnored private let consumer = EventConsumer()
 
     public init(service: any RepoServicing) {
         self.service = service
     }
 
     public func start() {
-        guard consumeTask == nil else { return }
-        consumeTask = Task { @MainActor [weak self, service] in
-            let stream = await service.events()
+        // Stream Task'tan ÖNCE alınır: `events()` nonisolated olduğundan abonelik
+        // start() dönmeden kurulur, boot penceresinde event kaybolmaz (plan 5.6).
+        consumer.start(
+            service.events(),
+            prologue: { [weak self] in await self?.reload() }
+        ) { [weak self] event in
+            // Yalnız repo listesi event'i; fileTreeChanged repo assembly'sinin işi
+            guard event == .reposChanged else { return }
             await self?.reload()
-            // Yalnız repo listesi event'i; fileTreeChanged AppContainer köprüsünün işi
-            for await event in stream where event == .reposChanged {
-                // self yoksa döngü sonlanır (aksi halde stream ömrü boyunca yaşar)
-                guard let self else { return }
-                await self.reload()
-            }
         }
     }
 
     public func stop() {
-        consumeTask?.cancel()
-        consumeTask = nil
+        consumer.stop()
     }
 
     public func reload() async {

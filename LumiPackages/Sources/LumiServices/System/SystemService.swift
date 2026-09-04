@@ -3,141 +3,101 @@ import Foundation
 import LumiKit
 
 /// Sistem sağlığı + platform yardımcıları (design/02 §8).
+///
+/// Refactor 3.9: bu tip artık yalnız KOMPOZİSYONDUR — sağlık kontrolleri
+/// `[any SystemCheck]`, PATH düzeltmesi `PathEnvironmentFixer`, URL açma
+/// `ExternalURLOpener`, dosya işlemleri `FileSystemOperations`, klasör seçimi
+/// `FolderChooser` içindedir. `SystemServicing` yüzeyi değişmedi.
 public final class SystemService: SystemServicing {
-    static let commandTimeout: TimeInterval = 5
+    public static let commandTimeout: TimeInterval = 5
 
-    private let smokeTester: (any TerminalSmokeTesting)?
-    private let opener: @Sendable (URL) -> Void
-    // FileManager.default thread-safe'tir ama Sendable işaretli değil
-    private var fileManager: FileManager { .default }
+    private let checks: [any SystemCheck]
+    private let pathFixer: PathEnvironmentFixer
+    private let urlOpener: ExternalURLOpener
+    private let fileOperations: FileSystemOperations
+    private let folderChooser: FolderChooser
+
+    /// Varsayılan kontrol seti (design/02 §8 sırası korunur): shell → PTY
+    /// (yalnız smoke tester verilmişse) → claude CLI → codex CLI.
+    public static func defaultChecks(
+        smokeTester: (any TerminalSmokeTesting)? = nil,
+        locator: any BinaryLocating = SystemBinaryLocator()
+    ) -> [any SystemCheck] {
+        var checks: [any SystemCheck] = [ShellCheck()]
+        if let smokeTester {
+            checks.append(PTYSmokeCheck(smokeTester: smokeTester))
+        }
+        checks += AgentProvider.allCases.map {
+            AgentCLICheck(provider: $0, locator: locator, timeout: commandTimeout)
+        }
+        return checks
+    }
 
     public init(
-        smokeTester: (any TerminalSmokeTesting)? = nil,
-        opener: @escaping @Sendable (URL) -> Void = { NSWorkspace.shared.open($0) }
+        checks: [any SystemCheck],
+        pathFixer: PathEnvironmentFixer = PathEnvironmentFixer(),
+        urlOpener: ExternalURLOpener = ExternalURLOpener(),
+        fileOperations: FileSystemOperations = FileSystemOperations(),
+        folderChooser: FolderChooser = FolderChooser()
     ) {
-        self.smokeTester = smokeTester
-        self.opener = opener
+        self.checks = checks
+        self.pathFixer = pathFixer
+        self.urlOpener = urlOpener
+        self.fileOperations = fileOperations
+        self.folderChooser = folderChooser
     }
 
-    // MARK: - PATH düzeltmesi (Electron paritesi; birebir + async)
+    /// Composition root kısayolu: varsayılan kontrol seti + varsayılan
+    /// yardımcılar; yalnız gerçekten değişen bağımlılıklar verilir.
+    public convenience init(
+        smokeTester: (any TerminalSmokeTesting)? = nil,
+        runner: any ProcessRunning = SystemProcessRunner(),
+        locator: any BinaryLocating = SystemBinaryLocator(),
+        opener: @escaping @Sendable (URL) -> Void = { NSWorkspace.shared.open($0) },
+        allowedRoots: @escaping @Sendable () async -> [String] = { [NSHomeDirectory()] }
+    ) {
+        self.init(
+            checks: Self.defaultChecks(smokeTester: smokeTester, locator: locator),
+            pathFixer: PathEnvironmentFixer(runner: runner),
+            urlOpener: ExternalURLOpener(opener: opener),
+            fileOperations: FileSystemOperations(allowedRoots: allowedRoots)
+        )
+    }
+
+    // MARK: - SystemServicing
 
     public func fixProcessPath() async {
-        let environment = ProcessInfo.processInfo.environment
-        var entries: [String] = []
-
-        let shell = environment["SHELL"] ?? "/bin/zsh"
-        if let result = await ProcessRunner.run(
-            shell,
-            arguments: ["-ilc", "echo -n \"$PATH\""],
-            timeout: Self.commandTimeout
-        ), result.exitCode == 0 {
-            entries += result.stdout
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .split(separator: ":")
-                .map(String.init)
-        }
-        entries += (environment["PATH"] ?? "").split(separator: ":").map(String.init)
-
-        let home = NSHomeDirectory()
-        let knownDirectories = [
-            "\(home)/.local/bin",
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-            "/opt/homebrew/sbin",
-            "\(home)/.nvm/current/bin",
-            "\(home)/.volta/bin",
-        ]
-        entries += knownDirectories.filter { fileManager.fileExists(atPath: $0) }
-
-        var seen = Set<String>()
-        let merged = entries.filter { !$0.isEmpty && seen.insert($0).inserted }
-        setenv("PATH", merged.joined(separator: ":"), 1)
+        await pathFixer.fix()
     }
 
-    // MARK: - Sistem check'leri (Electron'a özgü check'ler düşürüldü)
-
     public func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] {
+        let context = SystemCheckContext(selectedProvider: selectedProvider)
         var results: [SystemCheckResult] = []
-
-        let shellCandidates = ["/bin/zsh", "/bin/bash", "/bin/sh"]
-        if let shell = shellCandidates.first(where: { fileManager.isExecutableFile(atPath: $0) }) {
-            results.append(SystemCheckResult(
-                id: "shell", label: "Login shell", status: .pass, message: shell
-            ))
-        } else {
-            results.append(SystemCheckResult(
-                id: "shell", label: "Login shell", status: .fail,
-                message: "No usable shell found (zsh/bash/sh)"
-            ))
+        results.reserveCapacity(checks.count)
+        for check in checks {
+            results.append(await check.run(context: context))
         }
-
-        if let smokeTester {
-            do {
-                try await smokeTester.runSmokeTest()
-                results.append(SystemCheckResult(
-                    id: "pty", label: "PTY", status: .pass, message: "PTY spawn OK"
-                ))
-            } catch {
-                results.append(SystemCheckResult(
-                    id: "pty", label: "PTY", status: .fail,
-                    message: "PTY smoke test failed: \(error.localizedDescription)"
-                ))
-            }
-        }
-
-        for provider in [AgentProvider.claude, AgentProvider.codex] {
-            let binary = provider.rawValue
-            if let found = await locateBinary(binary) {
-                results.append(SystemCheckResult(
-                    id: "\(binary)-cli", label: "\(binary) CLI", status: .pass, message: found
-                ))
-            } else if provider == selectedProvider {
-                results.append(SystemCheckResult(
-                    id: "\(binary)-cli", label: "\(binary) CLI", status: .fail,
-                    message: "\(binary) not found in PATH", isFixable: true
-                ))
-            } else {
-                results.append(SystemCheckResult(
-                    id: "\(binary)-cli", label: "\(binary) CLI", status: .warn,
-                    message: "\(binary) not found (not selected provider)"
-                ))
-            }
-        }
-
         return results
     }
 
-    private func locateBinary(_ name: String) async -> String? {
-        await BinaryLocator.locate(name, timeout: Self.commandTimeout)
-    }
-
-    // MARK: - Shell/dosya yardımcıları
-
     public func openExternal(_ url: URL) throws {
-        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
-            throw LumiError.externalURLBlocked(url)
-        }
-        opener(url)
+        try urlOpener.open(url)
     }
 
     public func trash(path: String) async throws {
-        do {
-            try fileManager.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
-        } catch {
-            throw LumiError.fileOperationFailed(path: path, detail: error.localizedDescription)
-        }
+        try await fileOperations.trash(path: path)
     }
 
+    /// Sözleşme senkron (`SystemServicing`); guard kök listesini async okuduğu
+    /// için gerçek iş ateşle-unut bir Task'te koşar (Finder aktivasyonu zaten
+    /// fire-and-forget'tir).
     public func revealInFinder(path: String) {
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        let operations = fileOperations
+        Task { await operations.revealInFinder(path: path) }
     }
 
     @MainActor
     public func chooseFolder() async -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        return panel.runModal() == .OK ? panel.url?.path : nil
+        await folderChooser.choose()
     }
 }

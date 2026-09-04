@@ -9,9 +9,9 @@ import Foundation
 /// 3. hedef isteğin id'li yanıtı okunur.
 ///
 /// **Kritik:** stdin yanıt gelene kadar AÇIK tutulmalıdır. Üç mesajı peş peşe
-/// yazıp stdin'i kapatmak (ör. `ProcessRunner`'ın standardInput'u) sunucunun
+/// yazıp stdin'i kapatmak (ör. `SystemProcessRunner`'ın standardInput'u) sunucunun
 /// ikinci isteği hiç yanıtlamamasına yol açıyor — EOF'u kapanma sinyali sayıyor.
-/// Bu yüzden burada `ProcessRunner` kullanılmaz, kendi pipe yaşam döngüsü vardır.
+/// Bu yüzden burada `ProcessRunning` kullanılmaz, kendi pipe yaşam döngüsü vardır.
 ///
 /// Stdout satır-akışıdır: id'siz satırlar (`remoteControl/status/changed` gibi
 /// bildirimler) atlanır.

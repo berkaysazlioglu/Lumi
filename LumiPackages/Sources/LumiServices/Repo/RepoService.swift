@@ -12,6 +12,7 @@ public actor RepoService: RepoServicing {
     public static let rootWatchDebounce: TimeInterval = 0.3
     public static let fileTreeWatchLatency: TimeInterval = 0.5
 
+    private let runner: any ProcessRunning
     private let broadcaster = EventBroadcaster<RepoEvent>()
     private let watchQueue = DispatchQueue(label: "lumi.repo.watch", qos: .utility)
     private let watchDebounce: TimeInterval
@@ -21,8 +22,12 @@ public actor RepoService: RepoServicing {
     private var rootWatchers: [String: DirectoryWatcher] = [:]
     private var fileTreeWatchers: [String: RecursiveDirectoryWatcher] = [:]
 
-    public init(watchDebounce: TimeInterval = RepoService.rootWatchDebounce) {
+    public init(
+        watchDebounce: TimeInterval = RepoService.rootWatchDebounce,
+        runner: any ProcessRunning = SystemProcessRunner()
+    ) {
         self.watchDebounce = watchDebounce
+        self.runner = runner
     }
 
     public func setRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) {
@@ -67,7 +72,7 @@ public actor RepoService: RepoServicing {
         return result
     }
 
-    public func events() -> AsyncStream<RepoEvent> {
+    public nonisolated func events() -> AsyncStream<RepoEvent> {
         broadcaster.stream()
     }
 
@@ -88,7 +93,7 @@ public actor RepoService: RepoServicing {
     /// dizinler `--directory` ile trailing-slash'li tek girdiye çöker — file
     /// tree o dizine inmez. Git olmayan dizinde sessizce boş döner.
     private func gitIgnoredPaths(_ repoPath: String) async -> Set<String> {
-        guard let output = await ProcessRunner.run(
+        guard let output = await runner.run(
             "/usr/bin/git",
             arguments: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
             currentDirectory: repoPath,

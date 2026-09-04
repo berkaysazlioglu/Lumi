@@ -76,15 +76,44 @@ final class StoreEventLifecycleTests: XCTestCase {
         store.start()
         store.stop()
         store.start()
-        // DİKKAT (bulgu, düzeltilmedi — Faz 3.4 `StoreLifecycle`): `stop()`
-        // eşzamanlı DEĞİL. Tüketici Task'ı henüz `for await`'a girmemişse iptal
-        // gecikir; broadcaster continuation'ı da termination'a kadar kayıtlı
-        // kalır. Bu pencerede emit edilen event ESKİ tüketici tarafından da
-        // uygulanabilir (aynı event iki kez). Test o pencereyi kapatıp yalnız
-        // "yeniden tüketim çalışıyor" sözleşmesini kilitler.
-        try await Task.sleep(for: .milliseconds(30))
         service.emit(.spawned(makeTerminal()))
         try await waitUntil("yeniden tüketim") { store.totalCount == 1 }
+    }
+
+    /// Faz 3.4 (`StoreLifecycle` + `EventConsumer`) düzeltmesi: eskiden
+    /// `stop()` yalnız `Task.cancel()` çağırıyordu; tüketici `for await`'te
+    /// askıdaysa iptal bir sonraki tura kadar görülmüyor, start-stop-start
+    /// penceresinde aynı event İKİ KEZ uygulanabiliyordu. Bu test o yarışı
+    /// bilerek açar: hiç uyku yok, üç çağrı arka arkaya, sonra event.
+    func testStopIsSynchronousSoRestartDoesNotDoubleApplyEvents() async throws {
+        let service = FakeTerminalService()
+        let store = TerminalListStore(service: service, toasts: ToastStore(autoDismissAfter: 60))
+        defer { store.stop() }
+        let meta = makeTerminal()
+
+        store.start()
+        store.stop()
+        store.start()
+        service.emit(.spawned(meta))
+
+        try await waitUntil("yeniden tüketim") { store.totalCount == 1 }
+        // Eski tüketici de uyanıp uygulasaydı sayaç 2 olurdu.
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(store.totalCount, 1, "iptal edilen tüketici event uygulayamaz")
+    }
+
+    /// `stop()` DÖNDÜĞÜ anda garanti yürürlüktedir: hemen ardından emit edilen
+    /// event hiçbir mutasyon doğurmaz (eskiden iptal gecikirdi).
+    func testEventEmittedImmediatelyAfterStopIsIgnored() async throws {
+        let service = FakeTerminalService()
+        let store = TerminalListStore(service: service, toasts: ToastStore(autoDismissAfter: 60))
+
+        store.start()
+        store.stop()
+        service.emit(.spawned(makeTerminal()))
+        try await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(store.totalCount, 0)
     }
 
     // MARK: - PromptQueueStore

@@ -25,12 +25,15 @@ public struct RootView: View {
     public struct ShellActions {
         public let chooseFolder: () async -> String?
         public let runChecks: () async -> [SystemCheckResult]
-        public let fixCheck: (String) -> Void
+        /// Düzeltme aksiyonu sonucun KENDİSİNİ alır: hedef bağlantı
+        /// `SystemCheckResult.fixURL`'dedir (refactor 3.6 — checkID → URL
+        /// `switch`'i app katmanından kalktı).
+        public let fixCheck: (SystemCheckResult) -> Void
 
         public init(
             chooseFolder: @escaping () async -> String?,
             runChecks: @escaping () async -> [SystemCheckResult],
-            fixCheck: @escaping (String) -> Void
+            fixCheck: @escaping (SystemCheckResult) -> Void
         ) {
             self.chooseFolder = chooseFolder
             self.runChecks = runChecks

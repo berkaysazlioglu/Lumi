@@ -1,5 +1,6 @@
 import AppKit
 import LumiKit
+import LumiTestSupport
 import XCTest
 @testable import LumiTerminal
 
@@ -158,6 +159,35 @@ final class TerminalViewRegistryTests: XCTestCase {
         registry.detachView(for: id, from: container)
         pumpMainRunLoop() // detach + visibility(false) ertelenmiş
         XCTAssertEqual(log(), [false, true, false])
+    }
+
+    // MARK: - Protokol yüzeyi (Faz 3.7)
+
+    /// `refreshAttachedViews` artık `TerminalViewProviding` sözleşmesinin parçası:
+    /// AppDelegate somut registry tipine inmeden fullscreen onarımını isteyebilir.
+    func testRefreshAttachedViewsIsReachableThroughProtocol() {
+        let id = TerminalID()
+        let (registry, view, log) = makeRegistry(id: id)
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+        registry.attachView(for: id, into: container)
+        XCTAssertEqual(log(), [false, true])
+
+        let provider: any TerminalViewProviding = registry
+        provider.refreshAttachedViews()
+
+        XCTAssertTrue(view.superview === container)
+        XCTAssertEqual(log(), [false, true, true], "onarım görünürlük sinyalini yeniler")
+    }
+
+    func testFakeProviderRecordsRefreshCalls() {
+        let fake = FakeTerminalViewProvider()
+        XCTAssertEqual(fake.refreshCallCount, 0)
+
+        let provider: any TerminalViewProviding = fake
+        provider.refreshAttachedViews()
+        provider.refreshAttachedViews()
+
+        XCTAssertEqual(fake.refreshCallCount, 2)
     }
 }
 

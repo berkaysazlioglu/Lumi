@@ -36,10 +36,12 @@ public final class FileViewerStore {
     /// Aktif dosyanın sunum sınıfı (uzantıdan).
     public var previewKind: FilePreviewKind { FilePreviewKind.of(path: filePath) }
 
-    @ObservationIgnored private let git: any GitServicing
+    /// ISP (refactor 3.8): fırlatan içerik okumaları + sessiz `commitFiles`/
+    /// `imagePreview`. Commit YAZIMI (`GitWriting`) bu store'un yüzeyinde yok.
+    @ObservationIgnored private let git: any GitContentReading & GitReading
     @ObservationIgnored private let toasts: ToastStore
 
-    public init(git: any GitServicing, toasts: ToastStore) {
+    public init(git: any GitContentReading & GitReading, toasts: ToastStore) {
         self.git = git
         self.toasts = toasts
     }

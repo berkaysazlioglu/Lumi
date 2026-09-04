@@ -10,7 +10,7 @@ import Observation
 /// (önce restore, sonra odak) akar.
 @Observable
 @MainActor
-public final class TerminalListStore {
+public final class TerminalListStore: StoreLifecycle {
     public private(set) var terminals: [TerminalMeta] = []
     public private(set) var activeTerminalID: TerminalID?
     public private(set) var minimizedIDs: Set<TerminalID> = []
@@ -30,28 +30,27 @@ public final class TerminalListStore {
     /// Kullanıcının kapattığı terminaller: exit kodu ne olursa olsun toast
     /// gösterilmez (kendi kill'imiz hata değildir). Tek atımlıdır.
     @ObservationIgnored private var userClosedIDs: Set<TerminalID> = []
-    @ObservationIgnored private let service: any TerminalServicing
+    @ObservationIgnored private let service: any TerminalSessionControlling
     @ObservationIgnored private let toasts: ToastStore
-    @ObservationIgnored private var consumeTask: Task<Void, Never>?
+    @ObservationIgnored private let consumer = EventConsumer()
 
-    public init(service: any TerminalServicing, toasts: ToastStore) {
+    public init(service: any TerminalSessionControlling, toasts: ToastStore) {
         self.service = service
         self.toasts = toasts
     }
 
+    /// Event tüketicisi canlı mı — `StoreLifecycle` sözleşmesinin
+    /// gözlemlenebilir yüzü (kapanış sırası testleri için).
+    public var isConsuming: Bool { consumer.isRunning }
+
     public func start() {
-        guard consumeTask == nil else { return }
-        let stream = service.events()
-        consumeTask = Task { @MainActor [weak self] in
-            for await event in stream {
-                self?.apply(event)
-            }
+        consumer.start(service.events()) { [weak self] event in
+            self?.apply(event)
         }
     }
 
     public func stop() {
-        consumeTask?.cancel()
-        consumeTask = nil
+        consumer.stop()
     }
 
     // MARK: - Selector'lar
@@ -225,6 +224,10 @@ public final class TerminalListStore {
                 title: meta(for: id)?.name ?? "Terminal",
                 message: "Write failed (errno \(errno))"
             )
+        case .viewFocused(let id):
+            // Terminal NSView'ına tıklama: store odağı senkronlanır. `focus`
+            // kuralları aynen geçerli (minimize edilmiş odak alamaz).
+            focus(id)
         case .bell(let id):
             // Emülatör BEL karakteri — status-güdümlü bell'ler ayrıca
             // NotificationService'ten gelir

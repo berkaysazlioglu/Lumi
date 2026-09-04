@@ -16,6 +16,22 @@ final class PromptQueueStoreTests: XCTestCase {
         return (store, service)
     }
 
+    // MARK: - İlgisiz event'ler
+
+    func testViewFocusedEventDoesNotDisturbQueue() {
+        // Arrange
+        let (store, _) = makeStore()
+        let id = TerminalID()
+        store.enqueue("a", for: id)
+
+        // Act — odak event'i kuyruk semantiğini etkilemez
+        store.apply(.viewFocused(id))
+
+        // Assert
+        XCTAssertEqual(store.prompts(for: id), ["a"])
+        XCTAssertFalse(store.isPaused(id))
+    }
+
     // MARK: - CRUD
 
     func testEnqueueTrimsAndIgnoresEmpty() {

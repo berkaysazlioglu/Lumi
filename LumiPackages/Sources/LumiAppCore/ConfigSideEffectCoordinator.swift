@@ -2,95 +2,47 @@ import Foundation
 import LumiKit
 import LumiState
 
-/// Config yan etki propagasyonu (design/02 §2, karar 3'ün altyapısı).
-/// Alanlar EŞİTLİKLE karşılaştırılır — Electron'un truthiness bug'ı (0/boş
-/// string yan etkiyi atlardı, karar 11) yapısal olarak imkânsız.
+/// Config yan etki dağıtıcısı (design/02 §2, karar 3'ün altyapısı).
+///
+/// Refactor 3.3: alan başına callback (7 closure + 8 `if` bloğu) yerine
+/// **gözlemci listesi**. Koordinatör artık hangi alanın ne yaptığını bilmez;
+/// `(old, new)` çiftini kayıtlı gözlemcilere sırayla dağıtır, diff'i her
+/// gözlemci kendi alanları için yapar.
+///
+/// Karar 11 korunur: karşılaştırma EŞİTLİKLE yapılır — Electron'un truthiness
+/// bug'ı (0/boş string yan etkiyi atlardı) yapısal olarak imkânsız.
 @MainActor
 final class ConfigSideEffectCoordinator {
     private let config: any ConfigServicing
-    private let repo: any RepoServicing
-    private let repoStore: RepoStore
-    private let notifications: any NotificationServicing
-    private var consumeTask: Task<Void, Never>?
+    private var observers: [any ConfigChangeObserving] = []
+    private let consumer = EventConsumer()
 
-    /// Font değişimi protokole sızdırılmaz — composition root somut manager'a bağlar.
-    var onTerminalFontSizeChanged: ((Int) -> Void)?
-    /// Font ailesi de aynı NSFont'a font size ile birlikte çözülür — boyutla
-    /// AYNI callback'i tetikler (composition root taze AppConfig'den font kurar).
-    var onTerminalFontFamilyChanged: (() -> Void)?
-    /// Cursor stil VE blink tek köprüden akar (ikisi birlikte bir CursorStyle olur).
-    var onTerminalCursorChanged: ((TerminalCursorShape, Bool) -> Void)?
-    /// Karar 24: gönderimde otomatik minimize toggle'ı değişti — store'a yansır.
-    var onAutoMinimizeOnSendChanged: ((Bool) -> Void)?
-    /// Zamanlanmış oturum tetikleyici ayarı değişti — scheduler yeniden kurulur.
-    var onSessionTriggerChanged: ((SessionTrigger) -> Void)?
-    /// Usage auto-refresh ayarı değişti — tazeleme döngüsü yeniden kurulur.
-    var onUsageAutoRefreshChanged: ((UsageAutoRefresh) -> Void)?
-    /// Hangi sağlayıcı göstergelerinin açık olduğu değişti (karar 32) — kapananın
-    /// istekleri durur, açılanın ilk yüklemesi tetiklenir.
-    var onUsageIndicatorsChanged: ((UsageIndicators) -> Void)?
-
-    init(
-        config: any ConfigServicing,
-        repo: any RepoServicing,
-        repoStore: RepoStore,
-        notifications: any NotificationServicing
-    ) {
+    init(config: any ConfigServicing) {
         self.config = config
-        self.repo = repo
-        self.repoStore = repoStore
-        self.notifications = notifications
+    }
+
+    /// Kayıt sırası dağıtım sırasıdır (deterministik yan etki sırası).
+    func register(_ observer: any ConfigChangeObserving) {
+        observers.append(observer)
     }
 
     func start() {
-        guard consumeTask == nil else { return }
-        consumeTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            let stream = await self.config.events()
-            for await event in stream {
-                guard case .configChanged(let old, let new) = event else { continue }
-                if old.projectsRoot != new.projectsRoot
-                    || old.additionalPaths != new.additionalPaths {
-                    self.repoStore.additionalPaths = new.additionalPaths
-                    await self.repo.setRoots(
-                        projectsRoot: new.projectsRoot,
-                        additionalPaths: new.additionalPaths
-                    )
-                }
-                if old.notifications != new.notifications {
-                    self.notifications.updateSettings(new.notifications)
-                }
-                if old.terminalFontSize != new.terminalFontSize {
-                    self.onTerminalFontSizeChanged?(new.terminalFontSize)
-                }
-                if old.terminalFontFamily != new.terminalFontFamily {
-                    self.onTerminalFontFamilyChanged?()
-                }
-                if old.terminalCursorStyle != new.terminalCursorStyle
-                    || old.terminalCursorBlink != new.terminalCursorBlink {
-                    self.onTerminalCursorChanged?(
-                        TerminalCursorShape.parse(new.terminalCursorStyle),
-                        new.terminalCursorBlink
-                    )
-                }
-                if old.autoMinimizeOnSend != new.autoMinimizeOnSend {
-                    self.onAutoMinimizeOnSendChanged?(new.autoMinimizeOnSend)
-                }
-                if old.sessionTrigger != new.sessionTrigger {
-                    self.onSessionTriggerChanged?(new.sessionTrigger)
-                }
-                if old.usageAutoRefresh != new.usageAutoRefresh {
-                    self.onUsageAutoRefreshChanged?(new.usageAutoRefresh)
-                }
-                if old.usageIndicators != new.usageIndicators {
-                    self.onUsageIndicatorsChanged?(new.usageIndicators)
-                }
-            }
+        // Stream Task'tan ÖNCE alınır (`events()` nonisolated): abonelik start()
+        // dönmeden kuruludur, kurulum penceresinde event kaybolmaz (plan 5.6).
+        consumer.start(config.events()) { [weak self] event in
+            guard case .configChanged(let old, let new) = event, let self else { return }
+            self.dispatch(old: old, new: new)
         }
     }
 
     func stop() {
-        consumeTask?.cancel()
-        consumeTask = nil
+        consumer.stop()
+    }
+
+    /// Test ve boot yolları için doğrudan dağıtım.
+    func dispatch(old: AppConfig, new: AppConfig) {
+        for observer in observers {
+            observer.configDidChange(old: old, new: new)
+        }
     }
 }

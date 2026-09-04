@@ -13,18 +13,26 @@ public actor SessionStarterService: SessionStarterServicing {
     static let startTimeout: TimeInterval = 120
 
     private let binaryName: String
+    private let runner: any ProcessRunning
+    private let locator: any BinaryLocating
 
-    public init(binaryName: String = "claude") {
+    public init(
+        binaryName: String = "claude",
+        runner: any ProcessRunning = SystemProcessRunner(),
+        locator: any BinaryLocating = SystemBinaryLocator()
+    ) {
         self.binaryName = binaryName
+        self.runner = runner
+        self.locator = locator
     }
 
     public func start(prompt: String) async throws {
-        guard let binary = await BinaryLocator.locate(binaryName) else {
+        guard let binary = await locator.locate(binaryName) else {
             throw LumiError.cliNotFound(binary: binaryName)
         }
 
         // arguments dizisi → shell yok, prompt tek argv olarak güvenle geçer.
-        guard let output = await ProcessRunner.run(
+        guard let output = await runner.run(
             binary, arguments: ["-p", prompt], timeout: Self.startTimeout
         ) else {
             throw LumiError.sessionStartFailed(

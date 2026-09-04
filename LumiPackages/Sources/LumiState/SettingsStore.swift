@@ -7,12 +7,12 @@ import Observation
 /// ConfigSideEffectCoordinator'ın equality-diff'inden akar.
 @Observable
 @MainActor
-public final class SettingsStore {
+public final class SettingsStore: StoreLifecycle {
     public private(set) var current: AppConfig = .defaults
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let toasts: ToastStore
-    @ObservationIgnored private var consumeTask: Task<Void, Never>?
+    @ObservationIgnored private let consumer = EventConsumer()
     /// Monoton yazım sürümü: geç dönen disk okuması daha yeni bir apply'ı ezmesin.
     @ObservationIgnored private var applyVersion = 0
 
@@ -22,22 +22,18 @@ public final class SettingsStore {
     }
 
     public func start() {
-        guard consumeTask == nil else { return }
-        consumeTask = Task { @MainActor [weak self, config] in
-            let stream = await config.events()
-            self?.current = await config.config()
-            for await event in stream {
-                // self yoksa döngü sonlanır (aksi halde stream ömrü boyunca yaşar)
-                guard let self else { return }
-                guard case .configChanged(_, let new) = event else { continue }
-                self.current = new
-            }
+        // Stream Task'tan ÖNCE (plan 5.6): abonelik start() dönmeden kurulur.
+        consumer.start(
+            config.events(),
+            prologue: { [weak self, config] in self?.current = await config.config() }
+        ) { [weak self] event in
+            guard case .configChanged(_, let new) = event else { return }
+            self?.current = new
         }
     }
 
     public func stop() {
-        consumeTask?.cancel()
-        consumeTask = nil
+        consumer.stop()
     }
 
     /// Modal her açılışta taze config çeker (mount'ta değil).

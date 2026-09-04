@@ -1,32 +1,29 @@
 import Foundation
 
-public struct SystemCheckResult: Sendable, Equatable, Identifiable {
-    public enum Status: String, Sendable {
-        case pass
-        case warn
-        case fail
-    }
-
-    public let id: String
-    public let label: String
-    public let status: Status
-    public let message: String
-    public let isFixable: Bool
-
-    public init(id: String, label: String, status: Status, message: String, isFixable: Bool = false) {
-        self.id = id
-        self.label = label
-        self.status = status
-        self.message = message
-        self.isFixable = isFixable
-    }
-}
-
 /// PTY smoke testinin dikiş yeri: SystemService LumiTerminal'i import edemez
 /// (bağımlılık yönü, design/00 §2) — implementasyon LumiTerminal'de yaşar,
 /// composition root enjekte eder.
 public protocol TerminalSmokeTesting: Sendable {
     func runSmokeTest() async throws
+}
+
+/// Tek bir sağlık kontrolünün sınırı (refactor 3.9). `SystemService` bunları
+/// bir dizi olarak alır ve sırayla koşturur; yeni kontrol eklemek yeni bir
+/// dosya + composition root'ta bir satırdır (OCP).
+public protocol SystemCheck: Sendable {
+    /// Ürettiği `SystemCheckResult.id` ile aynı — sonuçların kimliği tek yerden.
+    var id: String { get }
+    func run(context: SystemCheckContext) async -> SystemCheckResult
+}
+
+/// Kontrollerin koşum bağlamı. Bugün yalnız seçili sağlayıcıyı taşır
+/// (claude/codex CLI kontrolünün fail/warn ayrımı buna bağlıdır).
+public struct SystemCheckContext: Sendable, Equatable {
+    public let selectedProvider: AgentProvider
+
+    public init(selectedProvider: AgentProvider) {
+        self.selectedProvider = selectedProvider
+    }
 }
 
 /// Sistem sağlığı + platform yardımcıları sınırı (design/02 §8).

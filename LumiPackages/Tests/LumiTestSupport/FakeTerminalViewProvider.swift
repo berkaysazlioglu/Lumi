@@ -18,6 +18,8 @@ public final class FakeTerminalViewProvider: TerminalViewProviding {
 
     public private(set) var attachCalls: [Call] = []
     public private(set) var detachCalls: [Call] = []
+    /// `refreshAttachedViews` çağrı sayacı (fullscreen onarım köprüsünün kanıtı).
+    public private(set) var refreshCallCount = 0
 
     public init() {}
 
@@ -36,5 +38,9 @@ public final class FakeTerminalViewProvider: TerminalViewProviding {
 
     public func detachView(for id: TerminalID, from container: NSView) {
         detachCalls.append(Call(id: id, container: ObjectIdentifier(container)))
+    }
+
+    public func refreshAttachedViews() {
+        refreshCallCount += 1
     }
 }

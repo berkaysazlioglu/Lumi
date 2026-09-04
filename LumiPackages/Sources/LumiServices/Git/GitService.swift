@@ -5,50 +5,39 @@ import LumiKit
 /// CLI yaklaşımı bilinçli: kullanıcının git config/hook/credential dünyasıyla
 /// otomatik uyumlu (Electron notu 3). Worktree/checkout/pull/push/stash
 /// kapsam DIŞI (YAGNI).
+///
+/// Refactor 3.10: bu tip artık yalnız ORKESTRASYON yapar — komut koşumu
+/// `GitCommandRunner`, parse `GitPorcelainParser`, path doğrulaması
+/// `RepoPathGuard` içindedir.
 public struct GitService: GitServicing {
-    static let gitExecutable = "/usr/bin/git"
-    static let commandTimeout: TimeInterval = 20
+    static let gitExecutable = GitCommandRunner.gitExecutable
+    static let commandTimeout = GitCommandRunner.commandTimeout
 
-    public init() {}
+    private let commands: GitCommandRunner
+    private let guardian: RepoPathGuard
 
-    private func runGit(
-        _ arguments: [String],
-        in repoPath: String,
-        input: Data? = nil
-    ) async -> ProcessRunner.Output? {
-        await ProcessRunner.run(
-            Self.gitExecutable,
-            arguments: arguments,
-            currentDirectory: repoPath,
-            standardInput: input,
-            timeout: Self.commandTimeout
-        )
+    public init(
+        runner: any ProcessRunning = SystemProcessRunner(),
+        pathGuard: RepoPathGuard = RepoPathGuard()
+    ) {
+        self.commands = GitCommandRunner(runner: runner)
+        self.guardian = pathGuard
     }
 
-    private func logQuietFailure(_ operation: String, _ output: ProcessRunner.Output?) {
-        // Git olmayan dizin BEKLENEN durum (paneller boş ve sessiz) —
-        // her tab değişiminde log gürültüsü üretmez.
-        if let output, output.stderr.contains("not a git repository") { return }
-        // "Boş ve sessiz" parite: UI'ya hata sızdırılmaz ama iz bırakılır
-        let detail = output.map { "exit \($0.exitCode): \($0.stderr.prefix(200))" } ?? "timeout/launch failure"
-        fputs("[lumi-git] \(operation) başarısız (sessiz): \(detail)\n", stderr)
+    public init(commands: GitCommandRunner, pathGuard: RepoPathGuard = RepoPathGuard()) {
+        self.commands = commands
+        self.guardian = pathGuard
     }
 
     // MARK: - Branch / commit log
 
     public func branches(repoPath: String) async -> [GitBranch] {
-        let output = await runGit(["branch", "--list", "--no-color"], in: repoPath)
+        let output = await commands.run(["branch", "--list", "--no-color"], in: repoPath)
         guard let output, output.exitCode == 0 else {
-            logQuietFailure("branches", output)
+            commands.logQuietFailure("branches", output)
             return []
         }
-        return output.stdout.split(separator: "\n").compactMap { line in
-            guard line.count > 2 else { return nil }
-            let isCurrent = line.hasPrefix("* ")
-            let name = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty, !name.hasPrefix("(") else { return nil } // detached HEAD satırı
-            return GitBranch(name: name, isCurrent: isCurrent)
-        }
+        return GitPorcelainParser.parseBranches(output.stdout)
     }
 
     public func commits(repoPath: String, branch: String?) async -> [GitCommit] {
@@ -69,89 +58,34 @@ public struct GitService: GitServicing {
             }
         }
 
-        let output = await runGit(arguments, in: repoPath)
+        let output = await commands.run(arguments, in: repoPath)
         guard let output, output.exitCode == 0 else {
-            logQuietFailure("commits", output)
+            commands.logQuietFailure("commits", output)
             return []
         }
-        let dateParser = ISO8601DateFormatter()
-        return output.stdout.split(separator: "\n").compactMap { line in
-            let parts = line.split(separator: "\u{1f}", maxSplits: 4, omittingEmptySubsequences: false)
-            guard parts.count == 5 else { return nil }
-            return GitCommit(
-                hash: String(parts[0]),
-                shortHash: String(parts[1]),
-                message: String(parts[4]),
-                author: String(parts[2]),
-                date: dateParser.date(from: String(parts[3])) ?? Date(timeIntervalSince1970: 0)
-            )
-        }
+        return GitPorcelainParser.parseCommits(output.stdout)
     }
 
     /// Tek `for-each-ref` ile yalnız iki aday ref'i sorar — `branch --list`'in
     /// tüm branch'leri listeleyip parse etmesine gerek yok.
     private func defaultBranch(in repoPath: String) async -> String? {
-        let output = await runGit(
+        let output = await commands.run(
             ["for-each-ref", "--format=%(refname:short)", "refs/heads/main", "refs/heads/master"],
             in: repoPath
         )
         guard let output, output.exitCode == 0 else { return nil }
-        let names = Set(
-            output.stdout
-                .split(separator: "\n")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-        )
-        return Self.defaultBranch(from: names)
-    }
-
-    static func defaultBranch(from names: Set<String>) -> String? {
-        if names.contains("main") { return "main" }
-        if names.contains("master") { return "master" }
-        return nil
+        return GitPorcelainParser.defaultBranch(fromRefOutput: output.stdout)
     }
 
     // MARK: - Status / commit
 
     public func status(repoPath: String) async -> [GitFileChange] {
-        let output = await runGit(["status", "--porcelain"], in: repoPath)
+        let output = await commands.run(["status", "--porcelain"], in: repoPath)
         guard let output, output.exitCode == 0 else {
-            logQuietFailure("status", output)
+            commands.logQuietFailure("status", output)
             return []
         }
-        return output.stdout.split(separator: "\n").compactMap { line in
-            Self.parseStatusLine(String(line))
-        }
-    }
-
-    /// Porcelain v1 satırı → sadeleştirilmiş statü: index+worktree
-    /// kodları tek statüye iner; rename'de `to` path'i alınır.
-    static func parseStatusLine(_ line: String) -> GitFileChange? {
-        guard line.count >= 4 else { return nil }
-        let indexStatus = line[line.startIndex]
-        let worktreeStatus = line[line.index(after: line.startIndex)]
-        var path = String(line.dropFirst(3))
-        if let arrow = path.range(of: " -> ") {
-            path = String(path[arrow.upperBound...])
-        }
-        if path.hasPrefix("\""), path.hasSuffix("\""), path.count >= 2 {
-            path = String(path.dropFirst().dropLast())
-                .replacingOccurrences(of: "\\\"", with: "\"")
-                .replacingOccurrences(of: "\\\\", with: "\\")
-        }
-
-        let status: FileChangeStatus
-        if indexStatus == "?" {
-            status = .untracked
-        } else if indexStatus == "R" || worktreeStatus == "R" {
-            status = .renamed
-        } else if indexStatus == "D" || worktreeStatus == "D" {
-            status = .deleted
-        } else if indexStatus == "A" {
-            status = .added
-        } else {
-            status = .modified
-        }
-        return GitFileChange(path: path, status: status)
+        return GitPorcelainParser.parseStatus(output.stdout)
     }
 
     public func commit(repoPath: String, message: String, files: [String]) async throws {
@@ -164,14 +98,14 @@ public struct GitService: GitServicing {
 
         // Detay İLK koşunun stderr'inden gelir: hata yolunda `add`'i ikinci kez
         // çalıştırmak yan etkiyi tekrarlar ve gereksiz bir process daha açardı.
-        let addOutput = await runGit(["add", "--"] + files, in: repoPath)
+        let addOutput = await commands.run(["add", "--"] + files, in: repoPath)
         guard let addOutput, addOutput.exitCode == 0 else {
             throw LumiError.gitFailed(
                 operation: "add",
                 detail: addOutput.map { String($0.stderr.prefix(500)) } ?? "timeout"
             )
         }
-        guard let commitOutput = await runGit(
+        guard let commitOutput = await commands.run(
             ["commit", "-m", message, "--"] + files,
             in: repoPath
         ) else {
@@ -199,11 +133,11 @@ public struct GitService: GitServicing {
     public func fileDiff(repoPath: String, file: String) async throws -> UnifiedDiff {
         _ = try resolveInsideRepo(repoPath, file)
 
-        let tracked = await runGit(["ls-files", "--", file], in: repoPath)
+        let tracked = await commands.run(["ls-files", "--", file], in: repoPath)
         let isTracked = (tracked?.exitCode == 0) && !(tracked?.stdout.isEmpty ?? true)
 
         if isTracked {
-            guard let output = await runGit(["diff", "HEAD", "--", file], in: repoPath),
+            guard let output = await commands.run(["diff", "HEAD", "--", file], in: repoPath),
                   output.exitCode == 0 else {
                 throw LumiError.gitFailed(operation: "diff", detail: "git diff failed for \(file)")
             }
@@ -211,7 +145,7 @@ public struct GitService: GitServicing {
         }
 
         // Untracked: /dev/null'a karşı tamamı-ekleme diff'i (exit 1 = fark var, hata değil)
-        guard let output = await runGit(
+        guard let output = await commands.run(
             ["diff", "--no-index", "--", "/dev/null", file],
             in: repoPath
         ) else {
@@ -221,35 +155,21 @@ public struct GitService: GitServicing {
     }
 
     public func commitFiles(repoPath: String, sha: String) async -> [CommitFile] {
-        let output = await runGit(
+        let output = await commands.run(
             ["diff-tree", "--no-commit-id", "-r", "--name-status", "--root", sha],
             in: repoPath
         )
         guard let output, output.exitCode == 0 else {
-            logQuietFailure("commitFiles", output)
+            commands.logQuietFailure("commitFiles", output)
             return []
         }
-        return output.stdout.split(separator: "\n").compactMap { line in
-            let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
-            guard parts.count >= 2, let statusChar = parts[0].first else { return nil }
-            // Skorlu statüler normalize edilir (R100 → renamed)
-            let status: FileChangeStatus
-            switch statusChar {
-            case "A": status = .added
-            case "D": status = .deleted
-            case "R", "C": status = .renamed
-            default: status = .modified
-            }
-            // Rename'de son path (to) alınır
-            let path = String(parts[parts.count - 1])
-            return CommitFile(path: path, status: status)
-        }
+        return GitPorcelainParser.parseDiffTree(output.stdout)
     }
 
     public func commitFileDiff(repoPath: String, sha: String, file: String) async throws -> UnifiedDiff {
         _ = try resolveInsideRepo(repoPath, file)
         // `git show` ilk (root) commit'te de çalışır — `sha^` parent sorunu yok
-        guard let output = await runGit(
+        guard let output = await commands.run(
             ["show", "--pretty=format:", "--patch", sha, "--", file],
             in: repoPath
         ), output.exitCode == 0 else {
@@ -298,12 +218,7 @@ public struct GitService: GitServicing {
     /// Eksik taraf (root commit'in parent'ı, eklenen/silinen dosya) BEKLENEN
     /// durumdur: sessizce nil döner, log gürültüsü üretilmez.
     private func blob(repoPath: String, revision: String, file: String) async -> BlobResult {
-        let output = await ProcessRunner.runRaw(
-            Self.gitExecutable,
-            arguments: ["show", "\(revision):\(file)"],
-            currentDirectory: repoPath,
-            timeout: Self.commandTimeout
-        )
+        let output = await commands.runRaw(["show", "\(revision):\(file)"], in: repoPath)
         guard let output, output.exitCode == 0, !output.stdout.isEmpty else { return .missing }
         guard output.stdout.count <= Self.maxImagePreviewBytes else {
             return BlobResult(data: nil, isTooLarge: true)
@@ -325,21 +240,7 @@ public struct GitService: GitServicing {
 
     // MARK: - Path traversal guard (karar 11: TÜM path'lerde)
 
-    /// İki taraf da `resolvingSymlinksInPath()` ile canonicalize edilir: aksi
-    /// halde repo içindeki bir symlink repo DIŞINA işaret ettiğinde guard
-    /// geçiliyordu (ayrıca `/var` ↔ `/private/var` uyumsuzluğu çözülür).
     func resolveInsideRepo(_ repoPath: String, _ relativePath: String) throws -> String {
-        let root = URL(fileURLWithPath: repoPath)
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
-            .path
-        let resolved = URL(fileURLWithPath: relativePath, relativeTo: URL(fileURLWithPath: root))
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
-            .path
-        guard resolved == root || resolved.hasPrefix(root + "/") else {
-            throw LumiError.pathOutsideRepo(path: relativePath)
-        }
-        return resolved
+        try guardian.resolve(repoPath: repoPath, relativePath: relativePath)
     }
 }

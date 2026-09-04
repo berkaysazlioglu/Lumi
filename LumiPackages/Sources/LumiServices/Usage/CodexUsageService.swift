@@ -23,14 +23,17 @@ public actor CodexUsageService: UsageServicing {
 
     private let binaryName: String
     private let codexHome: String
+    private let locator: any BinaryLocating
 
     public init(
         binaryName: String = "codex",
         codexHome: String = ProcessInfo.processInfo.environment["CODEX_HOME"]
-            ?? (NSHomeDirectory() as NSString).appendingPathComponent(".codex")
+            ?? (NSHomeDirectory() as NSString).appendingPathComponent(".codex"),
+        locator: any BinaryLocating = SystemBinaryLocator()
     ) {
         self.binaryName = binaryName
         self.codexHome = codexHome
+        self.locator = locator
     }
 
     public func fetch() async throws -> UsageSnapshot {
@@ -38,7 +41,7 @@ public actor CodexUsageService: UsageServicing {
         guard FileManager.default.fileExists(atPath: authPath) else {
             throw LumiError.usageUnavailable(detail: "Codex not signed in")
         }
-        guard let binary = await BinaryLocator.locate(binaryName) else {
+        guard let binary = await locator.locate(binaryName) else {
             throw LumiError.cliNotFound(binary: binaryName)
         }
 

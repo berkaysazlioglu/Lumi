@@ -1,23 +1,29 @@
 import AppKit
 import LumiKit
 import LumiState
-import LumiTerminal
 import LumiUI
-import SwiftUI
 
-/// AppKit kabuğu (design/03 §1-2): pencere/bounds persistence, quit-onay
-/// akışı (.terminateLater — Cmd+Q dahil HER yol), menü (kısayolların tek
-/// kaynağı), sleep/wake, focus-mode traffic-light senkronu.
+/// AppKit kabuğu (design/03 §1-2). Refactor 3.6 sonrası yalnız **launch +
+/// quit** akışı: pencere `MainWindowController`'da, kök view `RootViewFactory`'de,
+/// menü aksiyonları `AppMenuCommands` + `MenuActionDispatcher`'da, bildirim
+/// abonelikleri `AppLifecycleBridges`'te, servis/store grafiği
+/// `AppComposition`'da.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    static let boundsPersistDebounce: TimeInterval = 0.5
-
-    private var window: NSWindow?
-    private var container: AppContainer!
+    private let pathsMode: LumiPaths.Mode
+    private var composition: AppComposition!
+    private var windowController: MainWindowController!
+    private let dispatcher = MenuActionDispatcher()
+    private let bridges = AppLifecycleBridges()
     private var harness: P1Harness?
-    private var pendingBoundsPersist: DispatchWorkItem?
-    private var isRestoringWindow = true
     private var isShutdownComplete = false
+
+    init(pathsMode: LumiPaths.Mode) {
+        self.pathsMode = pathsMode
+        super.init()
+    }
+
+    private var shared: SharedStores { composition.shared }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LumiFonts.registerBundledFonts()
@@ -26,134 +32,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Bundle'lıyken gerçek OS bildirimleri; swift run'da log presenter
         let unPresenter = UNNotificationPresenter.isAvailable ? UNNotificationPresenter() : nil
         let presenter: any NotificationPresenting = unPresenter ?? LogNotificationPresenter()
-        container = AppContainer(notificationPresenter: presenter)
+        composition = AppComposition.live(mode: pathsMode, notificationPresenter: presenter)
+        windowController = MainWindowController(config: composition.registry.config)
         unPresenter?.onClick = { [weak self] terminalID in
-            self?.container.terminals.restoreAndFocus(terminalID)
-            self?.window?.makeKeyAndOrderFront(nil)
+            self?.shared.terminals.restoreAndFocus(terminalID)
+            self?.windowController.window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
 
-        installMenu()
+        AppMenuCommands.register(in: dispatcher, shared: shared) { [weak self] in
+            self?.openSettings()
+        }
+        MainMenuBuilder.install(dispatcher: dispatcher)
 
         Task { @MainActor in
-            await container.start()
+            await composition.container.start()
             await buildWindow()
-            wireFocusMode()
-            observeWake()
-
-            if CommandLine.arguments.contains("--p1") {
-                let repoPath = await container.defaultRepoPath()
-                let harness = P1Harness(manager: container.terminal, store: container.terminals)
-                harness.run(repoPath: repoPath)
-                self.harness = harness
-            }
+            runP1HarnessIfRequested()
         }
     }
 
-    private func installMenu() {
-        MainMenuBuilder.install(actions: MainMenuBuilder.Actions(
-            target: self,
-            newTerminal: #selector(newTerminal(_:)),
-            closeTerminal: #selector(closeActiveTerminal(_:)),
-            openRepoSelector: #selector(openRepoSelector(_:)),
-            focusNext: #selector(focusNextTerminal(_:)),
-            focusPrevious: #selector(focusPreviousTerminal(_:)),
-            focusIndex: #selector(focusTerminalAtIndex(_:)),
-            toggleMaximize: #selector(toggleMaximizeTerminal(_:)),
-            toggleLeftSidebar: #selector(toggleLeftSidebar(_:)),
-            toggleRightSidebar: #selector(toggleRightSidebar(_:)),
-            openSettings: #selector(openSettings(_:)),
-            toggleFocusMode: #selector(toggleFocusMode(_:))
-        ))
+    private func openSettings() {
+        Task { @MainActor in
+            await shared.settings.refresh() // her açılışta taze
+            shared.workspace.isSettingsOpen = true
+        }
     }
 
-    // MARK: - Pencere (bounds ui-state.json'da, frameAutosave YOK — karar 9)
+    // MARK: - Pencere + köprüler
 
     private func buildWindow() async {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.delegate = self // windowShouldClose → quit-onay akışı (aşağıda)
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.minSize = NSSize(width: 1000, height: 600)
-        window.backgroundColor = NSColor(srgbRed: 0x0A / 255, green: 0x0A / 255, blue: 0x12 / 255, alpha: 1)
-        // Pencerenin color space'i açıkça pinlenmezse AppKit launch bağlamına göre
-        // farklı seçiyor: paketlenmiş .app yönetilen sRGB→ekran (soluk), `swift run`
-        // çıplak executable ise ekranın native gamut'una yakın (canlı) backing store
-        // alıyor. `dev`deki canlı görünümü her iki build'de de elde etmek için ekranın
-        // native color space'ini kullanıyoruz (P3 ekranlarda sRGB değerler daha doygun).
-        window.colorSpace = NSScreen.main?.colorSpace ?? .sRGB
-
-        let uiState = await container.config.uiState()
-        let screens = NSScreen.screens.map(\.visibleFrame)
-        if let saved = uiState.windowBounds,
-           let valid = WindowBoundsValidator.validated(saved, screens: screens) {
-            window.setFrame(
-                NSRect(x: valid.x, y: valid.y, width: valid.width, height: valid.height),
-                display: false
-            )
-        } else {
-            window.center()
+        let uiState = await composition.registry.config.uiState()
+        windowController.onWindowShouldClose = { [weak self] in
+            guard let self, !isShutdownComplete else { return true }
+            // Çarpı (X) Cmd+Q ile aynı quit-onay akışına yönlendirilir.
+            NSApp.terminate(nil)
+            return false
+        }
+        windowController.onFullScreenTransition = { [weak self] in
+            self?.refreshTerminalsAfterTransition()
         }
 
-        let root = RootView(
-            workspace: container.workspace,
-            repoStore: container.repoStore,
-            terminals: container.terminals,
-            promptQueue: container.promptQueue,
-            gitStore: container.gitStore,
-            fileViewer: container.fileViewer,
-            settings: container.settings,
-            sessionSchedule: container.sessionSchedule,
-            usageStores: container.usageStores,
-            toasts: container.toasts,
-            viewProvider: container.terminal.viewRegistry,
-            highlighter: HighlightrEngine(),
-            fileActions: makeFileActions(),
-            shellActions: makeShellActions()
-        )
-        let hosting = NSHostingView(rootView: root)
-        // İçerik titlebar safe-area'sı kadar AŞAĞI itilmesin — y0'dan başlasın
-        // (v1 paritesi: header trafiğin hizasında, boşa giden üst bant yok).
-        hosting.safeAreaRegions = []
-        window.contentView = hosting
+        let content = RootViewFactory(composition: composition).makeContentView()
+        let window = windowController.install(contentView: content, uiState: uiState)
 
-        // Maximize flag'i show'dan ÖNCE uygulanır (flash önleme)
-        if uiState.windowMaximized == true, !window.isZoomed {
-            window.zoom(nil)
+        bridges.observeWindowFocus(window) { [weak self] focused in
+            self?.composition.registry.terminal.setWindowFocused(focused)
+            self?.composition.registry.notifications.setWindowFocused(focused)
         }
-        window.makeKeyAndOrderFront(nil)
-        self.window = window
-
-        observeWindowFocus(window)
-        observeWindowBounds(window)
-        observeFullScreen(window)
-        applyTrafficLightLayout()
-        // İlk layout butonları sıfırlayabilir — bir sonraki runloop'ta tekrar uygula
-        DispatchQueue.main.async { [weak self] in self?.applyTrafficLightLayout() }
-        isRestoringWindow = false
-    }
-
-    /// Traffic light hizası — `TrafficLightLayout` (titlebar container'ı header
-    /// yüksekliğine büyütür; tıklama alanı kırpılmaz).
-    func applyTrafficLightLayout() {
-        guard let window else { return }
-        TrafficLightLayout.apply(to: window)
-    }
-
-    private func observeFullScreen(_ window: NSWindow) {
-        let center = NotificationCenter.default
-        for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
-            center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.applyTrafficLightLayout()
-                    self?.refreshTerminalsAfterTransition()
-                }
-            }
+        bridges.observeWake { [weak self] in
+            self?.refreshAfterWake()
+        }
+        // Focus mode → traffic light senkronu (design/03 §2)
+        shared.workspace.onFocusModeChanged = { [weak self] active in
+            self?.windowController.setTrafficLightsHidden(active)
         }
     }
 
@@ -161,152 +93,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (AppKit içerik view'ını space-window'a taşır). Layout bir tur sonra
     /// oturduğundan hem hemen hem de sonraki runloop'ta onarılır.
     private func refreshTerminalsAfterTransition() {
-        container.terminal.viewRegistry.refreshAttachedViews()
+        composition.registry.viewProvider.refreshAttachedViews()
         DispatchQueue.main.async { [weak self] in
-            self?.container.terminal.viewRegistry.refreshAttachedViews()
+            self?.composition.registry.viewProvider.refreshAttachedViews()
         }
     }
 
-    private func makeFileActions() -> RootView.FileActions {
-        RootView.FileActions(
-            reveal: { [container] repoPath, relativePath in
-                container?.system.revealInFinder(path: repoPath + "/" + relativePath)
-            },
-            trash: { [container] repoPath, relativePath in
-                guard let container else { return }
-                Task { @MainActor in
-                    await container.toasts.reporting {
-                        try await container.system.trash(path: repoPath + "/" + relativePath)
-                    }
-                    await container.repoStore.loadFileTree(repoPath)
-                }
-            }
-        )
-    }
-
-    private func makeShellActions() -> RootView.ShellActions {
-        RootView.ShellActions(
-            chooseFolder: { [container] in
-                await container?.system.chooseFolder()
-            },
-            runChecks: { [container] in
-                guard let container else { return [] }
-                let provider = await container.config.config().aiProvider
-                return await container.system.runChecks(selectedProvider: provider)
-            },
-            fixCheck: { [container] checkID in
-                guard let container else { return }
-                let url: URL?
-                switch checkID {
-                case "claude-cli":
-                    url = URL(string: "https://code.claude.com/docs/en/setup")
-                case "codex-cli":
-                    url = URL(string: "https://github.com/openai/codex")
-                default:
-                    url = nil
-                }
-                if let url {
-                    container.toasts.reporting {
-                        try container.system.openExternal(url)
-                    }
-                }
-            }
-        )
-    }
-
-    // MARK: - Bounds persistence (500ms debounce; zoom'dayken bounds yazılmaz)
-
-    private func observeWindowBounds(_ window: NSWindow) {
-        let center = NotificationCenter.default
-        for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
-            center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.scheduleBoundsPersist()
-                    self?.applyTrafficLightLayout() // resize titlebar layout'unu sıfırlar
-                }
-            }
-        }
-    }
-
-    private func scheduleBoundsPersist() {
-        guard !isRestoringWindow, let window else { return }
-        pendingBoundsPersist?.cancel()
-        let isZoomed = window.isZoomed
-        let frame = window.frame
-        let work = DispatchWorkItem { [weak self] in
+    private func refreshAfterWake() {
+        Task { @MainActor [weak self] in
             guard let self else { return }
-            Task { @MainActor in
-                await self.container.config.updateUIState { state in
-                    state.windowMaximized = isZoomed
-                    if !isZoomed {
-                        state.windowBounds = WindowBounds(
-                            x: frame.origin.x,
-                            y: frame.origin.y,
-                            width: frame.width,
-                            height: frame.height
-                        )
-                    }
-                }
-            }
-        }
-        pendingBoundsPersist = work
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.boundsPersistDebounce, execute: work
-        )
-    }
-
-    // MARK: - Odak ve uyanma köprüleri
-
-    private func observeWindowFocus(_ window: NSWindow) {
-        let center = NotificationCenter.default
-        center.addObserver(
-            forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.container.terminal.setWindowFocused(true)
-                self?.container.notifications.setWindowFocused(true)
-            }
-        }
-        center.addObserver(
-            forName: NSWindow.didResignKeyNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.container.terminal.setWindowFocused(false)
-                self?.container.notifications.setWindowFocused(false)
+            await composition.repo.repoStore.reload()
+            if let active = shared.workspace.activeTab {
+                await composition.repo.repoStore.loadFileTree(active)
+                await composition.repo.gitStore.refresh(active)
             }
         }
     }
 
-    /// Uyanmada watcher'lar kaçırmış olabilir → repo listesi + aktif repo verileri
-    /// tazelenir (Electron paritesi; terminal state'i tek process'te zaten kopmaz).
-    private func observeWake() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let container = self?.container else { return }
-                Task { @MainActor in
-                    await container.repoStore.reload()
-                    if let active = container.workspace.activeTab {
-                        await container.repoStore.loadFileTree(active)
-                        await container.gitStore.refresh(active)
-                    }
-                }
-            }
+    /// P1 prototipi (design/04) — yalnız `--p1`.
+    private func runP1HarnessIfRequested() {
+        guard CommandLine.arguments.contains("--p1") else { return }
+        Task { @MainActor in
+            let repoPath = await composition.container.defaultRepoPath()
+            let harness = composition.registry.makeP1Harness(store: shared.terminals)
+            harness.run(repoPath: repoPath)
+            self.harness = harness
         }
-    }
-
-    // MARK: - Focus mode → traffic light senkronu (design/03 §2)
-
-    private func wireFocusMode() {
-        container.workspace.onFocusModeChanged = { [weak self] active in
-            self?.setTrafficLightsHidden(active)
-        }
-    }
-
-    private func setTrafficLightsHidden(_ hidden: Bool) {
-        guard let window else { return }
-        TrafficLightLayout.setHidden(hidden, in: window)
     }
 
     /// Dock ikonu: bundle'lıyken Info.plist'teki .icns geçerlidir; `swift run`
@@ -320,117 +132,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.applicationIconImage = image
     }
 
-    // MARK: - Menü aksiyonları
-
-    @objc private func newTerminal(_ sender: Any?) {
-        guard let active = container.workspace.activeTab else { return }
-        // Spec/20 §6 paritesi: provider terminali = shell + launch komutu
-        container.terminals.spawn(
-            in: active,
-            command: container.settings.current.aiProvider.launchCommand
-        )
-    }
-
-    @objc private func closeActiveTerminal(_ sender: Any?) {
-        guard let activeID = container.terminals.activeTerminalID else { return }
-        container.terminals.close(activeID)
-    }
-
-    @objc private func openRepoSelector(_ sender: Any?) {
-        container.workspace.isRepoSelectorOpen = true
-    }
-
-    @objc private func focusNextTerminal(_ sender: Any?) {
-        guard let active = container.workspace.activeTab else { return }
-        container.terminals.focusNext(in: active)
-    }
-
-    @objc private func focusPreviousTerminal(_ sender: Any?) {
-        guard let active = container.workspace.activeTab else { return }
-        container.terminals.focusPrevious(in: active)
-    }
-
-    @objc private func focusTerminalAtIndex(_ sender: Any?) {
-        guard let item = sender as? NSMenuItem,
-              let active = container.workspace.activeTab else { return }
-        container.terminals.focusIndex(item.tag - 1, in: active)
-    }
-
-    @objc private func toggleMaximizeTerminal(_ sender: Any?) {
-        guard let active = container.workspace.activeTab,
-              let id = container.terminals.activeTerminalID else { return }
-        container.workspace.toggleMaximize(id, in: active)
-    }
-
-    @objc private func toggleLeftSidebar(_ sender: Any?) {
-        container.workspace.toggleLeftSidebar()
-    }
-
-    @objc private func toggleRightSidebar(_ sender: Any?) {
-        container.workspace.toggleRightSidebar()
-    }
-
-    @objc private func openSettings(_ sender: Any?) {
-        Task { @MainActor in
-            await container.settings.refresh() // her açılışta taze
-            container.workspace.isSettingsOpen = true
-        }
-    }
-
-    @objc private func toggleFocusMode(_ sender: Any?) {
-        container.workspace.toggleFocusMode()
-    }
-
-    // MARK: - Quit akışı (Cmd+Q dahil HER yol onaydan geçer)
+    // MARK: - Quit akışı (Cmd+Q, Dock, logout ve çarpı — HER yol onaydan geçer)
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if isShutdownComplete {
             return .terminateNow
         }
-        let liveCount = container.terminals.totalCount
+        let liveCount = shared.terminals.totalCount
         if liveCount == 0 {
-            Task { @MainActor in
-                await self.shutdownAndReply()
-            }
+            Task { @MainActor in await self.shutdownAndReply() }
             return .terminateLater
         }
-        container.workspace.onQuitResolved = { [weak self] shouldQuit in
+        shared.workspace.onQuitResolved = { [weak self] shouldQuit in
             if shouldQuit {
-                Task { @MainActor in
-                    await self?.shutdownAndReply()
-                }
+                Task { @MainActor in await self?.shutdownAndReply() }
             } else {
                 NSApp.reply(toApplicationShouldTerminate: false)
             }
         }
-        container.workspace.presentQuitDialog(terminalCount: liveCount)
+        shared.workspace.presentQuitDialog(terminalCount: liveCount)
         return .terminateLater
     }
 
     private func shutdownAndReply() async {
-        await container.shutdown()
+        windowController.stop()
+        bridges.stop()
+        await composition.container.shutdown()
         isShutdownComplete = true
         NSApp.reply(toApplicationShouldTerminate: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
-    }
-}
-
-// MARK: - NSWindowDelegate (çarpı butonu → quit-onay akışı)
-
-extension AppDelegate: NSWindowDelegate {
-    /// Çarpı (X) pencereyi DOĞRUDAN kapatmaz. Pencere önce kapansaydı quit-onay
-    /// dialogu (SwiftUI, pencere içeriğinde) görünmez kalır ve `.terminateLater`
-    /// cevapsız asılırdı — app penceresiz halde Dock'ta takılırdı. Kapatma isteği
-    /// Cmd+Q ile aynı `applicationShouldTerminate` akışına yönlendirilir (
-    /// §3 paritesi: v1 de `close` event'ini yakalayıp onaya çevirir). Pencere
-    /// yalnız uygulama gerçekten çıkarken (terminate) kapanır; onay iptalinde
-    /// açık kalır.
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if isShutdownComplete { return true }
-        NSApp.terminate(nil)
-        return false
     }
 }

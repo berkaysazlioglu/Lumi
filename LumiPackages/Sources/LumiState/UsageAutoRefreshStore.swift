@@ -18,7 +18,7 @@ import Observation
 /// bir sleep/wake bildirimi gerekmez — LumiState AppKit'ten bağımsız kalır.
 @Observable
 @MainActor
-public final class UsageAutoRefreshStore {
+public final class UsageAutoRefreshStore: StoreLifecycle {
     @ObservationIgnored private let stores: [UsageStore]
     @ObservationIgnored private let activity: any ActivityMonitoring
     @ObservationIgnored private var settings: UsageAutoRefresh = .defaults
@@ -29,12 +29,26 @@ public final class UsageAutoRefreshStore {
         self.activity = activity
     }
 
+    /// Döngü canlı mı — `StoreLifecycle` sözleşmesinin gözlemlenebilir yüzü
+    /// (ayarın gerçekten uygulandığını doğrulayan testler için).
+    public var isRunning: Bool { timerTask != nil }
+
     // MARK: - Yaşam döngüsü
 
-    /// Ayarı uygular ve döngüyü yeniden kurar. Boot'ta ve her config değişiminde
-    /// (ConfigSideEffectCoordinator köprüsü) çağrılır.
-    public func update(_ settings: UsageAutoRefresh) {
+    /// Yalnız ayarı saklar — döngüye dokunmaz. Bootstrap'te `start()`'tan ÖNCE
+    /// çağrılır (refactor 3.4).
+    public func configure(_ settings: UsageAutoRefresh) {
         self.settings = settings
+    }
+
+    /// `StoreLifecycle`: saklı ayarı döngüye çevirir. Idempotent.
+    public func start() {
+        reschedule()
+    }
+
+    /// Config değişimi yolu: ayarı uygular ve döngüyü yeniden kurar.
+    public func update(_ settings: UsageAutoRefresh) {
+        configure(settings)
         reschedule()
     }
 

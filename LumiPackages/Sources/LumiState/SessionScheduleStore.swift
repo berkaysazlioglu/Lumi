@@ -12,7 +12,7 @@ import Observation
 /// "bekleyen oturum" gating'i yok; tetikleme her zaman bağımsız bir istektir.
 @Observable
 @MainActor
-public final class SessionScheduleStore {
+public final class SessionScheduleStore: StoreLifecycle {
     /// Son tetiklemenin sonucu (UI durum satırı için).
     public enum LastRun: Sendable, Equatable {
         case success(Date)
@@ -44,10 +44,22 @@ public final class SessionScheduleStore {
 
     // MARK: - Yaşam döngüsü
 
-    /// Tetikleyici ayarını uygular ve zamanlamayı yeniden kurar. Boot'ta ve her
-    /// config değişiminde (ConfigSideEffectCoordinator köprüsü) çağrılır.
-    public func update(_ trigger: SessionTrigger) {
+    /// Yalnız ayarı saklar — zamanlamaya dokunmaz. Bootstrap'te `start()`'tan
+    /// ÖNCE çağrılır (refactor 3.4: `update(_:)`'in start + config yollarına
+    /// ayrılması).
+    public func configure(_ trigger: SessionTrigger) {
         self.trigger = trigger
+    }
+
+    /// `StoreLifecycle`: saklı ayarı zamanlamaya çevirir. Idempotent —
+    /// `reschedule()` önceki timer'ı iptal edip yenisini kurar.
+    public func start() {
+        reschedule()
+    }
+
+    /// Config değişimi yolu: ayarı uygular ve zamanlamayı yeniden kurar.
+    public func update(_ trigger: SessionTrigger) {
+        configure(trigger)
         reschedule()
     }
 

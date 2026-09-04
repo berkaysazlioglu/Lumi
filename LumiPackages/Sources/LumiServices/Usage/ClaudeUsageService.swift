@@ -35,17 +35,24 @@ public actor ClaudeUsageService: UsageServicing {
     private let binaryName: String
     private let session: URLSession
     private let retryDelay: Duration
+    private let runner: any ProcessRunning
+    private let locator: any BinaryLocating
     private let accessToken: @Sendable () async -> String?
 
     public init(
         binaryName: String = "claude",
         session: URLSession = .shared,
-        retryDelay: Duration = ClaudeUsageService.defaultRetryDelay
+        retryDelay: Duration = ClaudeUsageService.defaultRetryDelay,
+        runner: any ProcessRunning = SystemProcessRunner(),
+        locator: any BinaryLocating = SystemBinaryLocator()
     ) {
         self.binaryName = binaryName
         self.session = session
         self.retryDelay = retryDelay
-        self.accessToken = { await ClaudeOAuthCredentials.readAccessToken() }
+        self.runner = runner
+        self.locator = locator
+        let credentials = ClaudeOAuthCredentials(runner: runner)
+        self.accessToken = { await credentials.readAccessToken() }
     }
 
     /// Test enjeksiyonu: token kaynağı (keychain/dosya) ikame edilebilir.
@@ -53,11 +60,15 @@ public actor ClaudeUsageService: UsageServicing {
         binaryName: String,
         session: URLSession,
         retryDelay: Duration,
+        runner: any ProcessRunning = SystemProcessRunner(),
+        locator: any BinaryLocating = SystemBinaryLocator(),
         accessToken: @escaping @Sendable () async -> String?
     ) {
         self.binaryName = binaryName
         self.session = session
         self.retryDelay = retryDelay
+        self.runner = runner
+        self.locator = locator
         self.accessToken = accessToken
     }
 
@@ -169,11 +180,11 @@ public actor ClaudeUsageService: UsageServicing {
     // MARK: - Yedek: `claude -p "/usage"`
 
     private func fetchViaCLI() async throws -> UsageSnapshot {
-        guard let binary = await BinaryLocator.locate(binaryName) else {
+        guard let binary = await locator.locate(binaryName) else {
             throw LumiError.cliNotFound(binary: binaryName)
         }
 
-        guard let output = await ProcessRunner.run(
+        guard let output = await runner.run(
             binary, arguments: ["-p", "/usage"], timeout: Self.cliTimeout
         ) else {
             throw LumiError.usageUnavailable(

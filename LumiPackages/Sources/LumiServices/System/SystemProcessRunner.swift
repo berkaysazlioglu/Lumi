@@ -1,4 +1,5 @@
 import Foundation
+import LumiKit
 
 /// Timeout'lu async Process koşturucu. Electron'daki execSync kullanımlarının
 /// async karşılığı (karar 11: SystemChecker senkron koşmaz).
@@ -7,20 +8,8 @@ import Foundation
 /// child write'ta bloklanıp asla terminate olamazdı (klasik NSTask deadlock'u) —
 /// bu, büyük çıktı veren git komutlarında sahte "timeout" üretiyordu. Stdin de
 /// aynı sebepten `run()` SONRASI background'da yazılır.
-enum ProcessRunner {
-    struct Output: Sendable {
-        let exitCode: Int32
-        let stdout: String
-        let stderr: String
-    }
-
-    /// Binary-güvenli varyantın çıktısı: stdout UTF8'e çevrilmeden döner
-    /// (görsel blob'ları — `git show sha:file`, karar 21).
-    struct RawOutput: Sendable {
-        let exitCode: Int32
-        let stdout: Data
-        let stderr: Data
-    }
+public struct SystemProcessRunner: ProcessRunning {
+    public init() {}
 
     private final class OnceFlag: @unchecked Sendable {
         private let lock = NSLock()
@@ -80,13 +69,13 @@ enum ProcessRunner {
 
     /// Timeout veya başlatma hatasında nil döner; sessiz-fail sözleşmesi
     /// (fixProcessPath'in 5sn timeout semantiği).
-    static func run(
+    public func run(
         _ executable: String,
         arguments: [String],
-        currentDirectory: String? = nil,
-        standardInput: Data? = nil,
+        currentDirectory: String?,
+        standardInput: Data?,
         timeout: TimeInterval
-    ) async -> Output? {
+    ) async -> ProcessOutput? {
         guard let raw = await runRaw(
             executable,
             arguments: arguments,
@@ -94,7 +83,7 @@ enum ProcessRunner {
             standardInput: standardInput,
             timeout: timeout
         ) else { return nil }
-        return Output(
+        return ProcessOutput(
             exitCode: raw.exitCode,
             stdout: String(decoding: raw.stdout, as: UTF8.self),
             stderr: String(decoding: raw.stderr, as: UTF8.self)
@@ -103,13 +92,13 @@ enum ProcessRunner {
 
     /// `run` ile aynı semantik; stdout/stderr ham `Data` olarak döner (UTF8
     /// decode kaybı olmadan — görsel blob'ları için).
-    static func runRaw(
+    public func runRaw(
         _ executable: String,
         arguments: [String],
-        currentDirectory: String? = nil,
-        standardInput: Data? = nil,
+        currentDirectory: String?,
+        standardInput: Data?,
         timeout: TimeInterval
-    ) async -> RawOutput? {
+    ) async -> RawProcessOutput? {
         let box = ProcessBox()
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
@@ -182,7 +171,7 @@ enum ProcessRunner {
                     // `once` yanmışsa (timeout/launch failure) sonuç zaten
                     // verildi; `terminationStatus` okunmaz.
                     guard once.tryFire() else { return }
-                    continuation.resume(returning: RawOutput(
+                    continuation.resume(returning: RawProcessOutput(
                         exitCode: process.terminationStatus,
                         stdout: stdout.bytes,
                         stderr: stderr.bytes

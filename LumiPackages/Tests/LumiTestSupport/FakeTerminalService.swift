@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LumiKit
 
@@ -21,11 +22,14 @@ public final class FakeTerminalService: TerminalServicing {
     public private(set) var spawnAttempts = 0
     public private(set) var killedIDs: [TerminalID] = []
     public private(set) var killAllCount = 0
+    public private(set) var shutdownCount = 0
     public private(set) var focusCalls: [TerminalID?] = []
     public private(set) var windowFocusCalls: [Bool] = []
     public private(set) var resizeCalls: [(id: TerminalID, cols: Int, rows: Int)] = []
     public private(set) var writtenTexts: [(id: TerminalID, text: String)] = []
     public private(set) var writeAttempts = 0
+    public private(set) var appliedFonts: [NSFont] = []
+    public private(set) var appliedCursors: [(shape: TerminalCursorShape, blink: Bool)] = []
 
     public init() {}
 
@@ -62,6 +66,11 @@ public final class FakeTerminalService: TerminalServicing {
         killAllCount += 1
     }
 
+    /// Gerçek servis global NSEvent monitörlerini bırakır; fake yalnız sayar.
+    public func shutdown() {
+        shutdownCount += 1
+    }
+
     public func resize(id: TerminalID, cols: Int, rows: Int) {
         resizeCalls.append((id, cols, rows))
     }
@@ -72,6 +81,16 @@ public final class FakeTerminalService: TerminalServicing {
 
     public func setWindowFocused(_ focused: Bool) {
         windowFocusCalls.append(focused)
+    }
+
+    // MARK: TerminalAppearanceControlling
+
+    public func applyFont(_ font: NSFont) {
+        appliedFonts.append(font)
+    }
+
+    public func applyCursor(shape: TerminalCursorShape, blink: Bool) {
+        appliedCursors.append((shape, blink))
     }
 
     public func events() -> AsyncStream<TerminalEvent> {

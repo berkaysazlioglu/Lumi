@@ -22,5 +22,8 @@ public protocol ConfigServicing: Actor {
     func isFirstRun() async -> Bool
     /// Quit yolunda bekleyen debounce'lu yazımları hemen diske indirir.
     func flushPendingWrites() async
-    func events() -> AsyncStream<ConfigEvent>
+    /// `nonisolated`: tüketici Task'ı KURULMADAN ÖNCE senkron alınabilmeli
+    /// (refactor 3.4/5.6). Actor hop'u arkasında alınırsa boot penceresinde
+    /// gönderilen event'ler kaybolur.
+    nonisolated func events() -> AsyncStream<ConfigEvent>
 }

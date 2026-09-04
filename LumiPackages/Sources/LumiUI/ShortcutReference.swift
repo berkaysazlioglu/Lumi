@@ -1,8 +1,10 @@
+import LumiKit
+
 /// Settings → Shortcuts sekmesinin salt-okunur kısayol referansı.
 ///
-/// Kısayolların ÇALIŞAN tek kaynağı `MainMenuBuilder`'dır (LumiApp); bu liste
-/// onun görsel aynasıdır. LumiUI, LumiApp'i (executable) göremediğinden veri
-/// burada elle tutulur — menüye kısayol ekleyince bu tabloyu da güncelle.
+/// Refactor 3.5: liste artık ELLE tutulmuyor — kısayolların tek kaynağı olan
+/// `LumiKit.AppCommands.all` tablosundan türetilir. `MainMenuBuilder` de aynı
+/// tablodan menüyü kurduğu için iki taraf yapısal olarak ayrışamaz.
 public struct ShortcutReference: Sendable, Identifiable, Equatable {
     public let action: String
     /// Bir aksiyonun bir ya da daha çok kombosu (ör. "⌘1 – ⌘9" iki kombo).
@@ -15,19 +17,9 @@ public struct ShortcutReference: Sendable, Identifiable, Equatable {
         self.combos = combos
     }
 
-    /// Menüdeki gerçek kısayolların sırası (MainMenuBuilder ile birebir).
-    public static let all: [ShortcutReference] = [
-        ShortcutReference(action: "New Terminal", combos: [["⌘", "T"]]),
-        ShortcutReference(action: "Close Terminal", combos: [["⌘", "W"]]),
-        ShortcutReference(action: "Open Repository", combos: [["⌘", "O"]]),
-        ShortcutReference(action: "Switch to Tab N", combos: [["⌘", "1"], ["⌘", "9"]]),
-        ShortcutReference(action: "Previous Terminal", combos: [["⌘", "⇧", "←"]]),
-        ShortcutReference(action: "Next Terminal", combos: [["⌘", "⇧", "→"]]),
-        ShortcutReference(action: "Maximize Terminal", combos: [["⌘", "⌃", "M"]]),
-        ShortcutReference(action: "Toggle Left Sidebar", combos: [["⌘", "B"]]),
-        ShortcutReference(action: "Toggle Right Sidebar", combos: [["⌘", "⇧", "B"]]),
-        ShortcutReference(action: "Focus Mode", combos: [["⌘", "⇧", "F"]]),
-        ShortcutReference(action: "Settings", combos: [["⌘", ","]]),
-        ShortcutReference(action: "Quit", combos: [["⌘", "Q"]]),
-    ]
+    /// Kullanıcıya gösterilen kısayol tablosu (platform standardı Edit/Window
+    /// item'ları bilinçli olarak dışarıdadır — design/03 §2).
+    public static let all: [ShortcutReference] = AppCommands.reference.map {
+        ShortcutReference(action: $0.referenceTitle ?? $0.title, combos: $0.displayCombos)
+    }
 }

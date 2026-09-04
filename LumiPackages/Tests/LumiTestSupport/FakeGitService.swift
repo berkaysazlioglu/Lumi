@@ -1,9 +1,11 @@
 import Foundation
 import LumiKit
 
-/// `GitServicing` test ikamesi (design/00 §3 deseni). Dönüşler ayarlanabilir,
+/// Git yüzeyinin test ikamesi (design/00 §3 deseni): üç dar protokolü de
+/// (`GitReading`/`GitContentReading`/`GitWriting`) uygular, böylece hem tam
+/// `GitServicing` bekleyen hem de tek yüzey bekleyen tüketicilere verilebilir. Dönüşler ayarlanabilir,
 /// çağrılar kaydedilir; içerik operasyonları için hata enjeksiyonu vardır.
-public actor FakeGitService: GitServicing {
+public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     public struct ImagePreviewCall: Equatable, Sendable {
         public let file: String
         public let sha: String?

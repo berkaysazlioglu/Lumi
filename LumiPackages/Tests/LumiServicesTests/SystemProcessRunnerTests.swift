@@ -1,12 +1,14 @@
 import XCTest
 @testable import LumiServices
 
-/// ProcessRunner: pipe-deadlock regresyonları. Çıktı/girdi 64KB pipe buffer'ını
+/// SystemProcessRunner: pipe-deadlock regresyonları. Çıktı/girdi 64KB pipe buffer'ını
 /// aştığında eski implementasyon (terminationHandler içinde readDataToEndOfFile,
 /// run() öncesi senkron stdin yazımı) süresiz bloklanıp sahte timeout üretiyordu.
-final class ProcessRunnerTests: XCTestCase {
+final class SystemProcessRunnerTests: XCTestCase {
+    private let runner = SystemProcessRunner()
+
     func testBasicCommandCapturesStdoutAndExitCode() async {
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/bin/sh",
             arguments: ["-c", "printf hello; exit 3"],
             timeout: 5
@@ -17,7 +19,7 @@ final class ProcessRunnerTests: XCTestCase {
     }
 
     func testCapturesStderrSeparately() async {
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/bin/sh",
             arguments: ["-c", "printf out; printf err 1>&2"],
             timeout: 5
@@ -30,7 +32,7 @@ final class ProcessRunnerTests: XCTestCase {
     func testLargeOutputDoesNotDeadlock() async {
         // 512KB stdout — 64KB pipe buffer'ının 8 katı; akışta okunmazsa child
         // write'ta bloklanır ve test timeout'a düşerdi.
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/bin/sh",
             arguments: ["-c", "dd if=/dev/zero bs=1024 count=512 2>/dev/null | tr '\\0' 'x'"],
             timeout: 10
@@ -44,7 +46,7 @@ final class ProcessRunnerTests: XCTestCase {
         // 256KB stdin → cat → stdout: run() öncesi senkron stdin yazımı burada
         // çağıran thread'i süresiz bloklardı.
         let payload = Data(repeating: UInt8(ascii: "y"), count: 256 * 1024)
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/bin/cat",
             arguments: [],
             standardInput: payload,
@@ -57,7 +59,7 @@ final class ProcessRunnerTests: XCTestCase {
 
     func testTimeoutReturnsNil() async {
         let start = Date()
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/bin/sleep",
             arguments: ["30"],
             timeout: 0.5
@@ -68,7 +70,7 @@ final class ProcessRunnerTests: XCTestCase {
     }
 
     func testLaunchFailureReturnsNil() async {
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/yok/boyle/bir/binary",
             arguments: [],
             timeout: 5
@@ -84,12 +86,12 @@ final class ProcessRunnerTests: XCTestCase {
     /// Sızıntı açık kalan pipe fd'leriyle ölçülür.
     func testTimeoutDoesNotLeakPipeFileDescriptors() async throws {
         // Isınma: ilk koşu tembel global'leri kurar, fd sayımını kaydırmasın.
-        _ = await ProcessRunner.run("/bin/sleep", arguments: ["30"], timeout: 0.3)
+        _ = await runner.run("/bin/sleep", arguments: ["30"], timeout: 0.3)
         try await Task.sleep(for: .milliseconds(200))
 
         let before = Self.openFileDescriptorCount()
         for _ in 0 ..< 8 {
-            _ = await ProcessRunner.run("/bin/sleep", arguments: ["30"], timeout: 0.3)
+            _ = await runner.run("/bin/sleep", arguments: ["30"], timeout: 0.3)
         }
         try await Task.sleep(for: .milliseconds(300))
         let after = Self.openFileDescriptorCount()
@@ -106,8 +108,9 @@ final class ProcessRunnerTests: XCTestCase {
         let pidFile = Self.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: pidFile) }
 
+        let runner = runner
         let task = Task {
-            await ProcessRunner.run(
+            await runner.run(
                 "/bin/sh",
                 arguments: ["-c", "echo $$ > \(pidFile); exec sleep 30"],
                 timeout: 30
@@ -130,7 +133,7 @@ final class ProcessRunnerTests: XCTestCase {
         let pidFile = Self.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: pidFile) }
 
-        let output = await ProcessRunner.run(
+        let output = await runner.run(
             "/bin/sh",
             arguments: ["-c", "echo $$ > \(pidFile); exec sleep 30"],
             timeout: 0.5

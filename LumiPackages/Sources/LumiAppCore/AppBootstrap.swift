@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import LumiKit
 
 /// Executable'ın TEK giriş noktası (`Sources/LumiApp/main.swift` yalnız bunu
 /// çağırır). Uygulama kabuğu library target'ta (`LumiAppCore`) yaşar ki
@@ -9,6 +10,17 @@ public enum AppBootstrap {
     /// `NSApplication.delegate` weak'tir; delegate'i process ömrü boyunca
     /// burada tutuyoruz (eski main.swift'te top-level `let` bu işi görüyordu).
     @MainActor private static var retainedDelegate: AppDelegate?
+
+    /// `LumiPaths.Mode` seçimi refactor 3.2'de `AppContainer`'dan buraya taşındı:
+    /// composition root artık modu PARAMETRE olarak alır, `#if DEBUG` yalnız
+    /// executable'ın girişinde kalır (test edilebilir bir değer olur).
+    public static var defaultPathsMode: LumiPaths.Mode {
+        #if DEBUG
+        return .development
+        #else
+        return .production
+        #endif
+    }
 
     @MainActor
     public static func run() {
@@ -23,7 +35,7 @@ public enum AppBootstrap {
         UserDefaults.standard.set(true, forKey: "CGFontRenderingFontSmoothingDisabled")
 
         let app = NSApplication.shared
-        let delegate = AppDelegate()
+        let delegate = AppDelegate(pathsMode: defaultPathsMode)
         retainedDelegate = delegate
         app.delegate = delegate
         app.setActivationPolicy(.regular)

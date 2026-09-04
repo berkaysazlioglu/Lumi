@@ -14,7 +14,7 @@ import LumiKit
 /// `expiresAt` bilinçli olarak DEĞERLENDİRİLMEZ: alan otoriter değil, süresi
 /// dolmuş sayılan bir token'ı baştan elemek yerine sunucunun 401 dönmesine
 /// bırakılır (Orca'nın gerekçesi birebir).
-enum ClaudeOAuthCredentials {
+struct ClaudeOAuthCredentials: Sendable {
     /// Claude Code'un keychain servis adı.
     static let keychainService = "Claude Code-credentials"
     static let credentialsFileName = ".credentials.json"
@@ -22,9 +22,22 @@ enum ClaudeOAuthCredentials {
     /// `security` çağrısı asılı kalmaya karşı — keychain kilitliyse UI'ı bekletmez.
     static let keychainTimeout: TimeInterval = 5
 
+    private let runner: any ProcessRunning
+    private let readFile: @Sendable (String) -> Data?
+
+    init(
+        runner: any ProcessRunning = SystemProcessRunner(),
+        readFile: @escaping @Sendable (String) -> Data? = {
+            FileManager.default.contents(atPath: $0)
+        }
+    ) {
+        self.runner = runner
+        self.readFile = readFile
+    }
+
     /// Token bulunamazsa nil. Hata fırlatmaz: "token yok" bir arıza değil,
     /// CLI yoluna düşmek için normal bir durumdur.
-    static func readAccessToken(
+    func readAccessToken(
         homeDirectory: String = NSHomeDirectory(),
         user: String = ProcessInfo.processInfo.environment["USER"] ?? "user"
     ) async -> String? {
@@ -34,22 +47,22 @@ enum ClaudeOAuthCredentials {
 
     // MARK: - Kaynaklar
 
-    private static func readFromKeychain(user: String) async -> String? {
-        guard let result = await ProcessRunner.run(
+    private func readFromKeychain(user: String) async -> String? {
+        guard let result = await runner.run(
             "/usr/bin/security",
-            arguments: ["find-generic-password", "-s", keychainService, "-a", user, "-w"],
-            timeout: keychainTimeout
+            arguments: ["find-generic-password", "-s", Self.keychainService, "-a", user, "-w"],
+            timeout: Self.keychainTimeout
         ), result.exitCode == 0 else {
             return nil
         }
-        return accessToken(fromJSON: result.stdout)
+        return Self.accessToken(fromJSON: result.stdout)
     }
 
-    private static func readFromFile(homeDirectory: String) -> String? {
+    private func readFromFile(homeDirectory: String) -> String? {
         let path = (homeDirectory as NSString)
-            .appendingPathComponent(".claude/\(credentialsFileName)")
-        guard let data = FileManager.default.contents(atPath: path) else { return nil }
-        return accessToken(fromJSON: String(decoding: data, as: UTF8.self))
+            .appendingPathComponent(".claude/\(Self.credentialsFileName)")
+        guard let data = readFile(path) else { return nil }
+        return Self.accessToken(fromJSON: String(decoding: data, as: UTF8.self))
     }
 
     // MARK: - Parse (saf — test edilebilir)

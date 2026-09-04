@@ -72,7 +72,7 @@ public actor ConfigService: ConfigServicing {
         flushUIStateNow()
     }
 
-    public func events() -> AsyncStream<ConfigEvent> {
+    public nonisolated func events() -> AsyncStream<ConfigEvent> {
         broadcaster.stream()
     }
 

@@ -8,12 +8,12 @@ import Observation
 /// sıradaki prompt bracketed-paste ile enjekte edilir.
 ///
 /// Tasarım: status/izin sinyallerini servis event akışından kendi izler
-/// (self-contained), yazımı `TerminalServicing.write` hunisinden yapar.
+/// (self-contained), yazımı `TerminalSessionControlling.write` hunisinden yapar.
 /// "Bekliyor" ile "karar bekliyor"u ayırmak kritik — ikincisinde araya prompt
 /// sokmak, Claude'un sorusunu yanlış cevaplamak demektir.
 @Observable
 @MainActor
-public final class PromptQueueStore {
+public final class PromptQueueStore: StoreLifecycle {
     public private(set) var queues: [TerminalID: [String]] = [:]
     public private(set) var pausedIDs: Set<TerminalID> = []
 
@@ -21,19 +21,19 @@ public final class PromptQueueStore {
     /// sayılır, sonrası tekrar tekrar rahatsız etmez).
     public static let injectFailureToastThreshold = 3
 
-    @ObservationIgnored private let service: any TerminalServicing
+    @ObservationIgnored private let service: any TerminalSessionControlling
     @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private let settleDelay: Duration
     @ObservationIgnored private var injectFailures: [TerminalID: Int] = [:]
     @ObservationIgnored private var statuses: [TerminalID: TerminalStatus] = [:]
     @ObservationIgnored private var awaitingDecisionIDs: Set<TerminalID> = []
     @ObservationIgnored private var settleTasks: [TerminalID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var consumeTask: Task<Void, Never>?
+    @ObservationIgnored private let consumer = EventConsumer()
 
     /// Bekleme durumunun stabil sayılması için geçmesi gereken süre — anlık
     /// flicker'a ve kullanıcıya manuel müdahale aralığı tanımak için.
     public init(
-        service: any TerminalServicing,
+        service: any TerminalSessionControlling,
         toasts: ToastStore,
         settleDelay: Duration = .milliseconds(1500)
     ) {
@@ -43,20 +43,13 @@ public final class PromptQueueStore {
     }
 
     public func start() {
-        guard consumeTask == nil else { return }
-        let stream = service.events()
-        consumeTask = Task { @MainActor [weak self] in
-            for await event in stream {
-                // self yoksa döngü sonlanır (aksi halde stream ömrü boyunca yaşar)
-                guard let self else { return }
-                self.apply(event)
-            }
+        consumer.start(service.events()) { [weak self] event in
+            self?.apply(event)
         }
     }
 
     public func stop() {
-        consumeTask?.cancel()
-        consumeTask = nil
+        consumer.stop()
         for task in settleTasks.values { task.cancel() }
         settleTasks.removeAll()
     }
@@ -140,7 +133,7 @@ public final class PromptQueueStore {
             awaitingDecisionIDs.remove(id)
             injectFailures[id] = nil
             cancelSettle(id)
-        case .spawned, .titleChanged, .bell, .writeFailed:
+        case .spawned, .titleChanged, .bell, .writeFailed, .viewFocused:
             break
         }
     }

@@ -1,25 +1,15 @@
 import AppKit
+import LumiKit
 
-/// Ana menü — kısayolların TEK kaynağı (design/03 §2): Cmd+T/W/O/,/1-9/
-/// Shift+oklar/Shift+F. SwiftUI .keyboardShortcut hiçbir yerde kullanılmaz.
-/// Edit menüsü terminal copy-paste için zorunludur.
+/// Ana menü — kısayolların TEK kaynağı olan `AppCommands.all` tablosundan
+/// kurulur (design/03 §2, refactor 3.5). SwiftUI `.keyboardShortcut` ve
+/// `keyDown` handler'ı hiçbir yerde kullanılmaz.
+///
+/// Uygulamaya özgü item'lar `MenuActionDispatcher`'a, platform standardı
+/// item'lar (Edit ▸ Cut/Copy/Paste/Select All, Window ▸ Minimize, Quit)
+/// responder chain'e gider.
 @MainActor
 enum MainMenuBuilder {
-    struct Actions {
-        let target: AnyObject
-        let newTerminal: Selector
-        let closeTerminal: Selector
-        let openRepoSelector: Selector
-        let focusNext: Selector
-        let focusPrevious: Selector
-        let focusIndex: Selector // sender.tag = 1-9
-        let toggleMaximize: Selector
-        let toggleLeftSidebar: Selector
-        let toggleRightSidebar: Selector
-        let openSettings: Selector
-        let toggleFocusMode: Selector
-    }
-
     /// Kurulmuş menü ağacı — `install` bunu `NSApp`'e bağlar, testler doğrudan
     /// gezer (menü kurulumu NSApp'ten bağımsız kalır).
     struct Menus {
@@ -27,138 +17,97 @@ enum MainMenuBuilder {
         let windowMenu: NSMenu
     }
 
-    static func install(actions: Actions) {
-        let menus = build(actions: actions)
+    /// Responder chain'e giden standart selector'lar. Tablodaki komut kimliği
+    /// burada varsa item hedefsiz kurulur.
+    private static let standardSelectors: [CommandID: Selector] = [
+        .cut: #selector(NSText.cut(_:)),
+        .copy: #selector(NSText.copy(_:)),
+        .paste: #selector(NSText.paste(_:)),
+        .selectAll: #selector(NSText.selectAll(_:)),
+        .minimizeWindow: #selector(NSWindow.miniaturize(_:)),
+        .quit: #selector(NSApplication.terminate(_:)),
+    ]
+
+    static func install(dispatcher: MenuActionDispatcher) {
+        let menus = build(dispatcher: dispatcher)
         NSApp.mainMenu = menus.mainMenu
         NSApp.windowsMenu = menus.windowMenu
     }
 
-    static func build(actions: Actions) -> Menus {
+    static func build(dispatcher: MenuActionDispatcher) -> Menus {
         let mainMenu = NSMenu()
+        var windowMenu: NSMenu?
 
-        let appItem = NSMenuItem()
-        let appMenu = NSMenu()
-        appMenu.addItem(targeted(
-            title: "Settings…", action: actions.openSettings,
-            key: ",", target: actions.target
-        ))
-        appMenu.addItem(.separator())
-        appMenu.addItem(
-            withTitle: "Quit Lumi",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        )
-        appItem.submenu = appMenu
-        mainMenu.addItem(appItem)
-
-        let shellItem = NSMenuItem()
-        let shellMenu = NSMenu(title: "Shell")
-        shellMenu.addItem(targeted(
-            title: "New Terminal", action: actions.newTerminal,
-            key: "t", target: actions.target
-        ))
-        // Cmd+W terminali kapatır, pencereyi DEĞİL (design/03 §2)
-        shellMenu.addItem(targeted(
-            title: "Close Terminal", action: actions.closeTerminal,
-            key: "w", target: actions.target
-        ))
-        shellMenu.addItem(.separator())
-        shellMenu.addItem(targeted(
-            title: "Open Repo…", action: actions.openRepoSelector,
-            key: "o", target: actions.target
-        ))
-        shellItem.submenu = shellMenu
-        mainMenu.addItem(shellItem)
-
-        let editItem = NSMenuItem()
-        let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(
-            withTitle: "Select All",
-            action: #selector(NSText.selectAll(_:)),
-            keyEquivalent: "a"
-        )
-        editItem.submenu = editMenu
-        mainMenu.addItem(editItem)
-
-        let terminalItem = NSMenuItem()
-        let terminalMenu = NSMenu(title: "Terminal")
-        let nextItem = targeted(
-            title: "Next Terminal", action: actions.focusNext,
-            key: String(UnicodeScalar(NSRightArrowFunctionKey)!), target: actions.target
-        )
-        nextItem.keyEquivalentModifierMask = [.command, .shift]
-        terminalMenu.addItem(nextItem)
-        let previousItem = targeted(
-            title: "Previous Terminal", action: actions.focusPrevious,
-            key: String(UnicodeScalar(NSLeftArrowFunctionKey)!), target: actions.target
-        )
-        previousItem.keyEquivalentModifierMask = [.command, .shift]
-        terminalMenu.addItem(previousItem)
-        terminalMenu.addItem(.separator())
-        for index in 1...9 {
-            let item = targeted(
-                title: "Terminal \(index)", action: actions.focusIndex,
-                key: "\(index)", target: actions.target
-            )
-            item.tag = index
-            terminalMenu.addItem(item)
+        for section in MenuSection.allCases {
+            let commands = AppCommands.commands(in: section)
+            guard !commands.isEmpty else { continue }
+            let submenu = NSMenu(title: section.title)
+            for command in commands {
+                if command.separatorBefore {
+                    submenu.addItem(.separator())
+                }
+                for item in items(for: command, dispatcher: dispatcher) {
+                    submenu.addItem(item)
+                }
+            }
+            let item = NSMenuItem()
+            item.submenu = submenu
+            mainMenu.addItem(item)
+            if section == .window { windowMenu = submenu }
         }
-        terminalMenu.addItem(.separator())
-        let maximizeItem = targeted(
-            title: "Maximize Terminal", action: actions.toggleMaximize,
-            key: "m", target: actions.target
-        )
-        maximizeItem.keyEquivalentModifierMask = [.command, .control]
-        terminalMenu.addItem(maximizeItem)
-        terminalItem.submenu = terminalMenu
-        mainMenu.addItem(terminalItem)
 
-        let viewItem = NSMenuItem()
-        let viewMenu = NSMenu(title: "View")
-        viewMenu.addItem(targeted(
-            title: "Toggle Left Sidebar", action: actions.toggleLeftSidebar,
-            key: "b", target: actions.target
-        ))
-        let rightSidebarItem = targeted(
-            title: "Toggle Right Sidebar", action: actions.toggleRightSidebar,
-            key: "B", target: actions.target
-        )
-        rightSidebarItem.keyEquivalentModifierMask = [.command, .shift]
-        viewMenu.addItem(rightSidebarItem)
-        viewMenu.addItem(.separator())
-        let focusModeItem = targeted(
-            title: "Toggle Focus Mode", action: actions.toggleFocusMode,
-            key: "F", target: actions.target
-        )
-        focusModeItem.keyEquivalentModifierMask = [.command, .shift]
-        viewMenu.addItem(focusModeItem)
-        viewItem.submenu = viewMenu
-        mainMenu.addItem(viewItem)
-
-        let windowItem = NSMenuItem()
-        let windowMenu = NSMenu(title: "Window")
-        windowMenu.addItem(
-            withTitle: "Minimize",
-            action: #selector(NSWindow.miniaturize(_:)),
-            keyEquivalent: "m"
-        )
-        windowItem.submenu = windowMenu
-        mainMenu.addItem(windowItem)
-
-        return Menus(mainMenu: mainMenu, windowMenu: windowMenu)
+        return Menus(mainMenu: mainMenu, windowMenu: windowMenu ?? NSMenu(title: "Window"))
     }
 
-    private static func targeted(
+    // MARK: - Item üretimi
+
+    private static func items(
+        for command: AppCommand,
+        dispatcher: MenuActionDispatcher
+    ) -> [NSMenuItem] {
+        guard let range = command.indexRange else {
+            return [item(for: command, title: command.title, key: command.key ?? "",
+                         tag: 0, dispatcher: dispatcher)]
+        }
+        return range.map { index in
+            item(
+                for: command,
+                title: "\(command.title) \(index)",
+                key: String(index),
+                tag: index,
+                dispatcher: dispatcher
+            )
+        }
+    }
+
+    private static func item(
+        for command: AppCommand,
         title: String,
-        action: Selector,
         key: String,
-        target: AnyObject
+        tag: Int,
+        dispatcher: MenuActionDispatcher
     ) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
-        item.target = target
+        let selector = standardSelectors[command.id]
+        let item = NSMenuItem(
+            title: title,
+            action: selector ?? #selector(MenuActionDispatcher.performCommand(_:)),
+            keyEquivalent: key
+        )
+        item.keyEquivalentModifierMask = modifierFlags(command.modifiers)
+        item.tag = tag
+        if selector == nil {
+            item.target = dispatcher
+            item.representedObject = command.id.rawValue
+        }
         return item
+    }
+
+    private static func modifierFlags(_ modifiers: CommandModifiers) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if modifiers.contains(.command) { flags.insert(.command) }
+        if modifiers.contains(.shift) { flags.insert(.shift) }
+        if modifiers.contains(.option) { flags.insert(.option) }
+        if modifiers.contains(.control) { flags.insert(.control) }
+        return flags
     }
 }

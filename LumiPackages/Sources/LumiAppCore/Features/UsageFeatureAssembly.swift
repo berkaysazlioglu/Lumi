@@ -1,0 +1,76 @@
+import Foundation
+import LumiKit
+import LumiState
+
+/// Kullanım göstergeleri (karar 32) + otomatik tazeleme (karar 20).
+@MainActor
+final class UsageFeatureAssembly: FeatureAssembly {
+    let bootstrapPhase = BootstrapPhase.config
+
+    private(set) var usageStores: [AgentProvider: UsageStore] = [:]
+    private(set) var usageAutoRefresh: UsageAutoRefreshStore!
+    private var services: (any ServiceRegistry)!
+    /// Tek-atımlı ilk yükleme: her tetiklemede öncekinin yerini alır (dizide
+    /// biriktirilirse sınırsız büyürdü).
+    private var initialLoadTask: Task<Void, Never>?
+
+    func build(services: any ServiceRegistry, shared: SharedStores) {
+        self.services = services
+        var stores: [AgentProvider: UsageStore] = [:]
+        for provider in AgentProvider.allCases {
+            stores[provider] = UsageStore(service: services.usage(for: provider))
+        }
+        usageStores = stores
+        usageAutoRefresh = UsageAutoRefreshStore(
+            stores: AgentProvider.allCases.compactMap { stores[$0] },
+            activity: services.activityMonitor
+        )
+    }
+
+    func start() async {
+        let config = await services.config.config()
+        applyIndicators(config.usageIndicators)
+        usageAutoRefresh.configure(config.usageAutoRefresh)
+        usageAutoRefresh.start()
+        // İlk yükleme arka planda — bootstrap'i bloklamaz (design/05).
+        scheduleInitialLoad()
+    }
+
+    func configDidChange(old: AppConfig, new: AppConfig) {
+        if old.usageAutoRefresh != new.usageAutoRefresh {
+            usageAutoRefresh.update(new.usageAutoRefresh)
+        }
+        if old.usageIndicators != new.usageIndicators {
+            applyIndicators(new.usageIndicators)
+            // Yeni açılan sağlayıcı boş kalmasın: kapı açıldıktan sonra ilk yükleme.
+            scheduleInitialLoad()
+        }
+    }
+
+    func shutdown() async {
+        initialLoadTask?.cancel()
+        initialLoadTask = nil
+        usageAutoRefresh.stop()
+    }
+
+    // MARK: - Gösterge kapısı
+
+    /// Config'teki açık/kapalı durumunu store'lara yansıtır. Kapı store'un
+    /// içindedir: kapalı store hiçbir istek atmaz (manuel refresh dahil).
+    private func applyIndicators(_ indicators: UsageIndicators) {
+        for (provider, store) in usageStores {
+            store.setEnabled(indicators.isEnabled(provider))
+        }
+    }
+
+    private func scheduleInitialLoad() {
+        initialLoadTask?.cancel()
+        initialLoadTask = Task { @MainActor [weak self] in
+            // Sıra `AgentProvider.allCases` ile deterministik; kapalı store'da
+            // `loadInitialIfNeeded` zaten no-op'tur.
+            for provider in AgentProvider.allCases {
+                await self?.usageStores[provider]?.loadInitialIfNeeded()
+            }
+        }
+    }
+}
