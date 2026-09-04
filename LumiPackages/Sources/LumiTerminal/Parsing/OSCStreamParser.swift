@@ -22,7 +22,7 @@ enum OSCEvent: Equatable {
     case notification(OSCNotificationKind)
 }
 
-/// Lumi'ye özgü OSC 0/2/9 semantiğini decode edilmiş stream üzerinde çıkaran parser (spec/10 §4).
+/// Lumi'ye özgü OSC 0/2/9 semantiğini decode edilmiş stream üzerinde çıkaran parser.
 /// Emülatörden bilinçli olarak bağımsızdır: SwiftTerm aynı sequence'leri kendi işler,
 /// ama ✳-idle ve codex-turn-complete semantiği Lumi'nindir.
 final class OSCStreamParser {
@@ -103,7 +103,7 @@ final class OSCStreamParser {
         }
     }
 
-    // MARK: - Semantik yorumlama (spec/10 §4)
+    // MARK: - Semantik yorumlama
 
     static func interpretTitle(_ raw: String) -> OSCTitleEvent {
         let isIdleMark = raw.unicodeScalars.first == "\u{2733}"
@@ -137,7 +137,7 @@ final class OSCStreamParser {
     }
 
     /// `/^.\s*/` paritesi: ilk karakter körlemesine atılır (✳/spinner ikonu hedeflenir,
-    /// ikonsuz title'ın ilk harfi de gider — spec/10'da kayıtlı bilinen trade-off).
+    /// ikonsuz title'ın ilk harfi de gider — bilinen trade-off).
     static func stripLeadingIconAndWhitespace(_ string: String) -> String {
         guard !string.isEmpty else { return "" }
         var rest = string.dropFirst()

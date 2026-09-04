@@ -4,33 +4,22 @@ import LumiKit
 import SwiftTerm
 
 /// Terminal alt sisteminin servis yüzü: `TerminalServicing` implementasyonu
-/// (design/01 §7). Sıralı koleksiyon tutar (karar 11), limit yalnız burada
-/// uygulanır ve aşımı görünür hatadır (karar 5).
+/// (design/01 §7). Sıralı koleksiyon tutar (karar 11); spawn limiti yoktur
+/// (karar 29).
 @MainActor
 public final class TerminalSessionManager: TerminalServicing {
-    public static let defaultMaxTerminals = 12
-
     public let viewRegistry = TerminalViewRegistry()
 
     private var sessions: [TerminalSession] = []
-    private var maxTerminals = TerminalSessionManager.defaultMaxTerminals
     private var spawnCounter = 0
     private let broadcaster = EventBroadcaster<TerminalEvent>()
     /// Font (aile + boyut). Yeni spawn'lara uygulanır VE canlı olarak tüm açık
     /// terminallere yansır (SwiftTerm `terminalView.font` setter zinciri resize +
-    /// SIGWINCH + redraw üretir — fontSmoothing ile aynı canlı-uygulama deseni).
+    /// SIGWINCH + redraw üretir — cursorStyle ile aynı canlı-uygulama deseni).
     public var font: NSFont {
         didSet {
             guard font != oldValue else { return }
             sessions.forEach { $0.setFont(font) }
-        }
-    }
-    /// macOS stem-darkening. Font boyutunun aksine canlı uygulanır: CG draw
-    /// path'i her çizimde okur, redraw yeterli (Metal backend kullanılmıyor).
-    public var fontSmoothing = false {
-        didSet {
-            guard fontSmoothing != oldValue else { return }
-            sessions.forEach { $0.setFontSmoothing(fontSmoothing) }
         }
     }
     /// Caret şekli + blink (SwiftTerm CursorStyle'a çözülmüş). Canlı uygulanır.
@@ -43,7 +32,7 @@ public final class TerminalSessionManager: TerminalServicing {
     private var mouseMonitor: Any?
 
     /// Terminal NSView'ına tıklayınca store odağının senkronlanması için köprü
-    /// (Electron'daki karta-tıkla → setActiveTerminal paritesi, spec/20 §9).
+    /// (Electron'daki karta-tıkla → setActiveTerminal paritesi).
     public var onTerminalViewFocused: ((TerminalID) -> Void)?
 
     public init(font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)) {
@@ -85,9 +74,6 @@ public final class TerminalSessionManager: TerminalServicing {
 
     @discardableResult
     public func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
-        guard sessions.count < maxTerminals else {
-            throw LumiError.terminalLimitReached(max: maxTerminals)
-        }
         spawnCounter += 1
         // Karar 23: claude komutuna --session-id enjeksiyonu (veya mevcut
         // flag'ten çıkarım) — ID meta'da taşınır, quit'te resume için persist edilir.
@@ -100,7 +86,6 @@ public final class TerminalSessionManager: TerminalServicing {
             font: font
         )
         session.delegate = self
-        session.setFontSmoothing(fontSmoothing)
         // Spawn-time: manager'ın güncel cursor değerini uygula (palet sabit —
         // DropAwareTerminalView zaten TerminalTheme.lumi uygular).
         session.setCursorStyle(cursorStyle)
@@ -159,10 +144,6 @@ public final class TerminalSessionManager: TerminalServicing {
         sessions.forEach { $0.setWindowFocused(focused) }
     }
 
-    public func setMaxTerminals(_ n: Int) {
-        maxTerminals = max(1, n)
-    }
-
     public func events() -> AsyncStream<TerminalEvent> {
         broadcaster.stream()
     }
@@ -200,7 +181,7 @@ extension TerminalSessionManager: TerminalSessionDelegate {
     }
 
     func session(_ session: TerminalSession, didExitWithCode code: Int32) {
-        // Exit-cleanup sırası (spec/10 §9): önce kayıttan düş — stale push imkânsızlaşır —
+        // Exit-cleanup sırası: önce kayıttan düş — stale push imkânsızlaşır —
         // sonra exit yayınla
         sessions.removeAll { $0.id == session.id }
         viewRegistry.unregister(session.id)

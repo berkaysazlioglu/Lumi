@@ -60,7 +60,7 @@ public final class HighlightrEngine: SyntaxHighlighting {
         ])
     }
 
-    /// Uzantı → highlight.js dili (spec/22 FileViewer dil haritası).
+    /// Uzantı → highlight.js dili (FileViewer dil haritası).
     static func language(forFileName fileName: String) -> String? {
         let name = (fileName as NSString).lastPathComponent.lowercased()
         if name == "dockerfile" { return "dockerfile" }

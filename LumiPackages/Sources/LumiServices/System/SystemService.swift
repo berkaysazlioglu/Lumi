@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import LumiKit
 
-/// Sistem sağlığı + platform yardımcıları (design/02 §8, spec/13 §5-6).
+/// Sistem sağlığı + platform yardımcıları (design/02 §8).
 public final class SystemService: SystemServicing {
     static let commandTimeout: TimeInterval = 5
 
@@ -19,7 +19,7 @@ public final class SystemService: SystemServicing {
         self.opener = opener
     }
 
-    // MARK: - PATH düzeltmesi (spec/13 platform; birebir + async)
+    // MARK: - PATH düzeltmesi (Electron paritesi; birebir + async)
 
     public func fixProcessPath() async {
         let environment = ProcessInfo.processInfo.environment
@@ -54,7 +54,7 @@ public final class SystemService: SystemServicing {
         setenv("PATH", merged.joined(separator: ":"), 1)
     }
 
-    // MARK: - Sistem check'leri (spec/13 §5; Electron'a özgü check'ler düşürüldü)
+    // MARK: - Sistem check'leri (Electron'a özgü check'ler düşürüldü)
 
     public func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] {
         var results: [SystemCheckResult] = []

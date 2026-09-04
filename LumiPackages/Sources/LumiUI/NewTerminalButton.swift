@@ -24,30 +24,30 @@ struct NewTerminalButton: View {
             Button(action: onNewProvider) {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                     Text("New \(provider.displayName)")
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                 }
                 .foregroundStyle(.white)
-                .padding(.leading, 12)
-                .padding(.trailing, 8)
-                .padding(.vertical, 7)
+                .padding(.leading, 10)
+                .padding(.trailing, 7)
+                .frame(height: TopBarMetrics.controlHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1, height: 18)
+            Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1, height: 14)
 
             // Chevron yalnız görsel ipucu — açma/kapama hover'la sürülür.
             Image(systemName: "chevron.down")
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 7)
+                .padding(.horizontal, 7)
+                .frame(height: TopBarMetrics.controlHeight)
                 .contentShape(Rectangle())
         }
         .background(Theme.accentVivid)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .onHover { updateHover($0) }
         .popover(isPresented: $isOpen, arrowEdge: .bottom) {
             dropdown.onHover { updateHover($0) }

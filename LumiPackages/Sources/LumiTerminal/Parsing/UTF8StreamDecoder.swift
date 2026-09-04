@@ -1,7 +1,7 @@
 import Foundation
 
 /// PTY'den gelen ham byte chunk'larını, chunk sınırında bölünen çok-byte'lı
-/// UTF-8 karakterleri taşıyarak String'e çevirir (spec/10 "byte vs string sınırı").
+/// UTF-8 karakterleri taşıyarak String'e çevirir (byte vs string sınırı).
 /// ✳ (U+2733) 3 byte'tır; bölünmesi OSC parser ve idle tespitini bozar.
 struct UTF8StreamDecoder {
     private var carry: [UInt8] = []

@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// `~/.lumi` config + ui-state persistence servisi (design/02 §2, spec/13 §1).
+/// `~/.lumi` config + ui-state persistence servisi (design/02 §2).
 ///
 /// Davranış paritesi: config her okumada diskten taze okunur (dış düzenlemeler
 /// görünür); ui-state ilk dokunuştan sonra in-memory otoritedir ve disk yazımı

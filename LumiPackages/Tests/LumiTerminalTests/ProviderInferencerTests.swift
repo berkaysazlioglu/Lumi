@@ -41,7 +41,7 @@ final class ProviderInferencerTests: XCTestCase {
         fresh.observeOutput("Claude Code v2.0")
         XCTAssertEqual(fresh.hint, .claude)
 
-        // Asimetri: codex hint'i output'taki "claude code" ile DÜŞMEZ (spec/10 §6)
+        // Asimetri: codex hint'i output'taki "claude code" ile DÜŞMEZ
         var codexFirst = ProviderInferencer()
         codexFirst.observeInput("codex\r")
         codexFirst.observeOutput("mentions claude code somewhere")

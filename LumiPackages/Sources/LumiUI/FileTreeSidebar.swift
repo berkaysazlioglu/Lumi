@@ -3,8 +3,7 @@ import LumiState
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Sol sidebar "Project Context" bölümü (v1 ProjectContext paritesi; spec/12 §9,
-/// spec/22 §3.2). Başlık tıklaması bölümü collapse eder; büyüteç, başlığın
+/// Sol sidebar "Project Context" bölümü (v1 ProjectContext paritesi). Başlık tıklaması bölümü collapse eder; büyüteç, başlığın
 /// yerine geçen arama input'unu açar (auto-focus, ESC veya boşken blur kapatır).
 /// Ignored öğeler soluk; ignored klasör expand edilemez; context menü
 /// (Copy Path / Reveal / Delete); terminale path sürükleme.
@@ -45,7 +44,7 @@ struct FileTreeSidebar: View {
             scheduleFilter(query)
         }
         .onChange(of: repoPath) {
-            // Repo değişince arama sıfırlanır (v1 paritesi, spec/22 §3.2)
+            // Repo değişince arama sıfırlanır (v1 paritesi)
             closeSearch()
         }
         .onChange(of: repoStore.fileTrees[repoPath]) {
@@ -134,7 +133,7 @@ struct FileTreeSidebar: View {
             if row.type == .folder {
                 // Aramada görünüm zaten tam açık; toggle sürpriz state bırakır.
                 guard !isSearching else { return }
-                guard !row.isIgnored else { return } // ignored klasör no-op (spec/12 §9)
+                guard !row.isIgnored else { return } // ignored klasör no-op
                 repoStore.toggleNode(repoPath, path: row.path)
             } else {
                 onOpenFile(row.path)
@@ -164,7 +163,7 @@ struct FileTreeSidebar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(row.isIgnored ? 0.45 : 1) // ignored = soluk (spec/12 §9)
+        .opacity(row.isIgnored ? 0.45 : 1) // ignored = soluk
         .onDrag {
             // Terminale sürükleme: DropAwareTerminalView fileURL kabul eder
             NSItemProvider(object: URL(fileURLWithPath: repoPath + "/" + row.path) as NSURL)

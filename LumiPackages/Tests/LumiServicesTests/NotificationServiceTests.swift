@@ -58,7 +58,7 @@ private final class FakePresenter: NotificationPresenting, @unchecked Sendable {
     }
 }
 
-/// spec/13 §4 tablosunun birebir testleri — Faz 3 çıkış kriterleri
+/// Electron bildirim tablosunun birebir testleri — Faz 3 çıkış kriterleri
 /// (interval-sızıntı testi dahil).
 @MainActor
 final class NotificationServiceTests: XCTestCase {
@@ -124,7 +124,7 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(event, .bell(terminalID, repoName: "lumi"))
     }
 
-    /// Faz 3 çıkış kriteri: interval-sızıntı testi (spec/13 §4 cleanup sözleşmesi).
+    /// Faz 3 çıkış kriteri: interval-sızıntı testi (cleanup sözleşmesi).
     func testTerminalRemovedCancelsIntervalAndCleansDelivered() {
         service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
         XCTAssertEqual(scheduler.activeIDs, [terminalID.description])

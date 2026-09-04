@@ -1,7 +1,7 @@
 import LumiKit
 import XCTest
 
-/// Provider → UI etiketi / launch komutu eşlemesi (spec/20 §6: "New Claude"
+/// Provider → UI etiketi / launch komutu eşlemesi ("New Claude"
 /// butonu spawn sonrası `claude\r` enjekte eder).
 final class AgentProviderTests: XCTestCase {
     func testLaunchCommandMatchesCLIExecutableName() {

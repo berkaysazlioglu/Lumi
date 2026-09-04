@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Focus mode hover-reveal kontrol çubuğu (spec/22): mouse üst bölgeye gelince
+/// Focus mode hover-reveal kontrol çubuğu: mouse üst bölgeye gelince
 /// 500ms gecikmeyle belirir; içerik: terminal sayısı, grid menüsü, yeni
 /// terminal, çıkış.
 struct FocusModeBar: View {

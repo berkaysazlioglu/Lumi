@@ -1,6 +1,6 @@
 # Lumi Native — UI Kabuğu ve State Tasarımı
 
-> App target (AppKit kabuk) + `LumiState` + `LumiUI` modüllerinin bağlayıcı tasarımı. Davranış kaynağı: [spec/21](../spec/21-renderer-state.md), [spec/22](../spec/22-renderer-ui.md), [spec/23](../spec/23-design-system.md), [spec/30](../spec/30-app-shell.md).
+> App target (AppKit kabuk) + `LumiState` + `LumiUI` modüllerinin bağlayıcı tasarımı. 
 
 ---
 
@@ -20,11 +20,11 @@ App **pure AppKit lifecycle** kullanır (`@main` AppDelegate + `MainWindowContro
 
 ## 2. Pencere, menü, quit
 
-**Pencere:** `NSWindow(styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])`, `titlebarAppearsTransparent = true`, `titleVisibility = .hidden`; default 1400×900, min 1000×600; traffic light'lar titlebar-layout kancasında `standardWindowButton(_:)` frame'leriyle (x:15, y:19) konumlanır; `acceptFirstMouse` davranış paritesi.
+**Pencere:** `NSWindow(styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])`, `titlebarAppearsTransparent = true`, `titleVisibility = .hidden`; default 1400×900, min 1000×600; traffic light'lar titlebar-layout kancasında (`TrafficLightLayout`) `standardWindowButton(_:)` frame'leriyle doğal macOS konumuna (ilk buton x:16, 36px barın dikey ortası, 20pt adım — karar 30) yerleşir; `acceptFirstMouse` davranış paritesi.
 
 **Bounds persistence (karar 9):** `windowDidMove/windowDidResize` → 500ms debounce → `config.updateUIState { $0.windowBounds = ... }`; maximize anında. Restore'da tüm `NSScreen` workArea'larına karşı overlap doğrulaması; geçersizse default boyut. Maximize state show'dan önce uygulanır (flash önleme).
 
-**Focus köprüsü:** `windowDidBecomeKey/ResignKey` → `terminal.setWindowFocused(_:)` — bildirim semantiği buna bağlıdır ([spec/00 §5](../spec/00-overview.md): "aynı semantikle akmalı, yoksa bildirimler bozulur").
+**Focus köprüsü:** `windowDidBecomeKey/ResignKey` → `terminal.setWindowFocused(_:)` — bildirim semantiği buna bağlıdır (Electron sürümüyle aynı semantikle akmalı, yoksa bildirimler bozulur).
 
 **Menü = TEK kısayol kaynağı.** `MainMenuBuilder` tüm `NSMenu`'yu key equivalent'larla kurar: Cmd+T (yeni terminal), **Cmd+W (terminali kapatır, pencereyi DEĞİL — menü interception)**, Cmd+O (repo seçici), Cmd+B / Cmd+Shift+B (sidebar'lar), Cmd+, (settings), Cmd+Shift+F (focus mode), Cmd+1…9 (terminal N), Cmd+Shift+←/→ (önceki/sonraki terminal); standart Edit menüsü (terminal copy-paste için zorunlu), Window menüsü. Item'lar `MenuActionDispatcher`'a (@MainActor, app target) hedeflenir → store intent'leri çağrılır; `validateMenuItem` store state okur (örn. aktif terminal yokken Cmd+W disabled). **SwiftUI `.keyboardShortcut` ve `keyDown` handler'ı hiçbir yerde kullanılmaz** — Electron'un çift-kaynak bug sınıfı yapısal olarak silinir.
 
@@ -51,7 +51,7 @@ Hepsi `@Observable @MainActor final class`; Environment ile enjekte edilir; her 
 | Store | Tuttuğu (yalnız UI/metadata) | Beslendiği | Kritik kurallar |
 |---|---|---|---|
 | `TerminalListStore` | **Sıralı** `[TerminalMeta]`, `activeTerminalID`, `minimizedIDs: Set`, `lastActiveByRepo` | `TerminalEvent` stream | Kapanışta komşu-odak (silmeden önce hesap: önceki → sonraki → ilk, aynı repo); minimize-asla-otomatik-odak (tek istisna: bildirim tıklaması); minimize'da görünür kardeşe proaktif odak; repo'da görünür terminal kalmazsa `activeTerminalID = nil` |
-| `WorkspaceStore` | `openTabs: [String]` (**repo path** — ad-çakışması bug fix'i, karar 11), `activeTab`, sidebar görünürlükleri, repo başına grid layout (iki eksen: kolon `auto/columns` × yükseklik `fit/scroll` — karar 15; spec/20 §13 kolon matematiği), repo başına oturumluk `maximizedByRepo` (maximize/solo, persist edilmez), `isFocusMode`, dialog state'leri, `fileViewerPresentation` | UI intent'leri; açılışta `ui-state.json` (okurken tek seferlik ad→path migration; legacy `rows`→`fit` migrasyonu ConfigCodec'te) | Persist edilen her alan mutasyonu → `config.updateUIState` (servis 500ms debounce'lar). Tab kapatma: minimize guard'ı (`CloseTabDialog`) → repo terminallerini kill → persist |
+| `WorkspaceStore` | `openTabs: [String]` (**repo path** — ad-çakışması bug fix'i, karar 11), `activeTab`, sidebar görünürlükleri, repo başına grid layout (iki eksen: kolon `auto/columns` × yükseklik `fit/scroll` — karar 15), repo başına oturumluk `maximizedByRepo` (maximize/solo, persist edilmez), `isFocusMode`, dialog state'leri, `fileViewerPresentation` | UI intent'leri; açılışta `ui-state.json` (okurken tek seferlik ad→path migration; legacy `rows`→`fit` migrasyonu ConfigCodec'te) | Persist edilen her alan mutasyonu → `config.updateUIState` (servis 500ms debounce'lar). Tab kapatma: minimize guard'ı (`CloseTabDialog`) → repo terminallerini kill → persist |
 | `RepoStore` | `repos`, kaynak-gruplu görünüm, `fileTrees` cache (stale-while-revalidate, scroll-pozisyon korumalı yenileme) | `RepoEvent` stream | Event → tam yeniden çekme (pull-after-push). Aktif tab'ın reposunu watch eder, tab kapanınca unwatch |
 | `GitStore` | Repo başına commits/branches/status cache'leri; `selectedCommit`, `commitFiles`, `[FilePath: Loadable<UnifiedDiff>]` | `RepoEvent.fileTreeChanged` invalidation + intent'ler | Lazy commit-diff (karar 6): commit seçimi dosya listesini, dosya tıklaması tek diff'i yükler. Changes yüklenince tüm dosyalar seçili (parite) |
 | `ToastStore` | `[Toast]` (max 5, 5sn auto-dismiss `Task`'leri, `LumiError` eşitliği/mesajla dedupe) | diğer store'lar `reporting {}` ile | Uygulamanın tek hata lavabosu |
@@ -69,15 +69,15 @@ Hepsi `@Observable @MainActor final class`; Environment ile enjekte edilir; her 
 }
 ```
 
-**Bootstrap UI zinciri** ([spec/22](../spec/22-renderer-ui.md) sırası, native'e indirgenmiş): loading ekranı → `isFirstRun` → onboarding (4 adım: Welcome/SystemChecks/ProjectsRoot/Ready; fail bloklar, warn bloklamaz) **veya** `repos + additionalPaths` paralel yükle → `uiState` yükle (migration repo listesini okur) → ana UI. `syncFromMain` adımı yoktur.
+**Bootstrap UI zinciri** (native'e indirgenmiş): loading ekranı → `isFirstRun` → onboarding (4 adım: Welcome/SystemChecks/ProjectsRoot/Ready; fail bloklar, warn bloklamaz) **veya** `repos + additionalPaths` paralel yükle → `uiState` yükle (migration repo listesini okur) → ana UI. `syncFromMain` adımı yoktur.
 
 ---
 
 ## 5. Tasarım sistemi (karar 13: semantic uyarlama)
 
-- `Theme` namespace'i (`LumiUI`): [spec/23](../spec/23-design-system.md) token'ları semantic adlarla — zemin `#0a0a12 / #12121f / #1a1a2e`, metin `#e2e2f0 / #8888a8 / #4a4a6a`, accent `#a78bfa / #8b5cf6 / #7c3aed / #22d3ee / #4ade80 / #fbbf24 / #f87171`, border `#2a2a4a` + glow. macOS system look benimsenmez.
+- `Theme` namespace'i (`LumiUI`): tasarım sistemi token'ları semantic adlarla — zemin `#0a0a12 / #12121f / #1a1a2e`, metin `#e2e2f0 / #8888a8 / #4a4a6a`, accent `#a78bfa / #8b5cf6 / #7c3aed / #22d3ee / #4ade80 / #fbbf24 / #f87171`, border `#2a2a4a` + glow. macOS system look benimsenmez.
 - **Tanımsız-token bug'ları düzeltilerek** eşlenir; git-status renk paleti tek kaynağa konsolide edilir (ChangesSection/CommitDiffView tutarsızlığı taşınmaz — karar 11).
-- Tipografi: **JetBrains Mono** (Apache 2.0 — bundle edilebilir) launch'ta `CTFontManagerRegisterFontsForURL` ile kaydedilir; 13px taban, spec/23 ölçeği `Theme.Typography`'de.
+- Tipografi: **JetBrains Mono** (Apache 2.0 — bundle edilebilir) launch'ta `CTFontManagerRegisterFontsForURL` ile kaydedilir; 13px taban, tipografi ölçeği `Theme.Typography`'de.
 - Animasyonlar (fade/slide/height-collapse, 0.1–0.3s; spring'ler) SwiftUI `transition`/`withAnimation` ile; spec'teki parametreler `Theme.Motion` sabitlerine taşınır.
 - StatusDot durum renk sistemi (working=success+pulse, waiting-unseen=warning+pulse, …) birebir.
 
@@ -85,7 +85,7 @@ Hepsi `@Observable @MainActor final class`; Environment ile enjekte edilir; her 
 
 ## 6. FileViewer v1 metin stack'i
 
-- **Görüntüleme modu:** `NSTextView` (TextKit 2, non-editable) + **Highlightr** (highlight.js → `NSAttributedString`); Lumi violet paletinden üretilmiş custom highlight.js teması; JetBrains Mono 13. Highlight main-actor dışında; **~1MB üstü dosyada düz metne düşülür** (Highlightr'ın JSCore maliyeti nötralize edilir). Dil eşleme tablosu spec/22'deki uzantı→dil haritasından.
+- **Görüntüleme modu:** `NSTextView` (TextKit 2, non-editable) + **Highlightr** (highlight.js → `NSAttributedString`); Lumi violet paletinden üretilmiş custom highlight.js teması; JetBrains Mono 13. Highlight main-actor dışında; **~1MB üstü dosyada düz metne düşülür** (Highlightr'ın JSCore maliyeti nötralize edilir). Dil eşleme tablosu uzantı→dil haritasından.
 - **Side-by-side diff modu (karar 4 revize):** `GitServicing`'in tiplenmiş `UnifiedDiff` modeli → saf `SideBySideDiffBuilder` (hizalı sol/sağ hücre satırları: del[i]↔add[i], context iki tarafta, fazlalar filler) → `SideBySideDiffView` (SwiftUI `LazyVStack`, satır sarmalı, kolon başına gutter + arka plan renkleri Theme token'larından). Monaco portu değil; `UnifiedDiffParser` korunur (yalnız sunum değişti). Eski tek-kolon `DiffAttributedTextBuilder` kaldırıldı.
 - **Render'lı markdown modu (karar 21):** `.md` ailesi dosyalarda hem view hem diff modu **tek kolon (unified)** render'lı akışa düşer: saf `MarkdownDiffBuilder` (`UnifiedDiff` → blok stili çözülmüş satırlar; `buildDocument(_:)` ile tam metin → aynı model) + `MarkdownInlineStyler` (inline-only `AttributedString` parse'ı üzerine tema attribute'ları: kod monospace+cyan, link accent+altçizgi) → `MarkdownDiffView` (LazyVStack; başlık ölçekleri, bullet/ordered girinti kademeleri (2 boşluk = 1 kademe, max 4), alıntı çubuğu, fence'li kod bloğu zemini, tablo/ayraç). Fence durumu **hunk başına** sıfırlanır (hunk'lar süreksiz). Diff işaretleri korunur: gutter'da satır no + `+`/`−`, satır zemininde success/error opacity 0.13. Header'daki **Rendered ⇄ Raw** rozeti (`FileViewerStore.rendersMarkdown`, oturumluk) ham side-by-side görünüme döner.
 - **Görsel önizleme modu (karar 21):** görsel uzantılarında diff yerine `ImagePreviewView`: commit-diff/diff'te BEFORE ⇄ AFTER panelleri (`ImagePreview.before/after` → `NSImage(data:)`), view modunda tek görsel; her panelde `pixelsWide×pixelsHigh · ByteCountFormatter` başlığı, `bgDeep` zemin (saydam PNG sınırları görünür). Eksik taraf "(added)"/"(deleted)", 20MB üstü "(too large)", çözülemeyen kodek "(unsupported image format)".

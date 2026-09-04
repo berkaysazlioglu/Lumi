@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Sağ-alt toast yığını (spec/23: tip rengiyle sol stripe, max 5, 5sn).
+/// Sağ-alt toast yığını (tip rengiyle sol stripe, max 5, 5sn).
 /// Bell toast'una tıklama terminali (minimize ise restore edip) odaklar.
 /// Tam görsel parite (blur, progress bar, animasyon parametreleri) Faz 6'da.
 public struct ToastOverlay: View {

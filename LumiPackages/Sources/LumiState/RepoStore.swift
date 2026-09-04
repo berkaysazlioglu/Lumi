@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Repo listesi + kaynak bazlı gruplama (spec/21 §14-15).
+/// Repo listesi + kaynak bazlı gruplama.
 /// Event → tam yeniden çekme (pull-after-push korunur).
 @Observable
 @MainActor
@@ -11,7 +11,7 @@ public final class RepoStore {
     /// Gruplamanın "boş root grupları da göster" kuralı için config sırasıyla tutulur.
     public var additionalPaths: [AdditionalPath] = []
 
-    // File tree (spec/12 §9 UI davranışları): repo başına cache (stale-while-
+    // File tree (file tree UI davranışları): repo başına cache (stale-while-
     /// revalidate), expand state (oturum içi), ilk-yüklemede kök klasör expand'i.
     public private(set) var fileTrees: [String: [FileTreeNode]] = [:]
     public private(set) var expandedNodes: [String: Set<String>] = [:]
@@ -57,7 +57,7 @@ public final class RepoStore {
         fileTrees[repoPath] = tree
         if !autoExpandedRepos.contains(repoPath) {
             autoExpandedRepos.insert(repoPath)
-            // İlk yüklemede kök seviyesindeki klasörler otomatik expand (spec/12 §9)
+            // İlk yüklemede kök seviyesindeki klasörler otomatik expand
             let rootFolders = tree.filter { $0.type == .folder && !$0.isIgnored }.map(\.path)
             expandedNodes[repoPath, default: []].formUnion(rootFolders)
         }
@@ -77,7 +77,7 @@ public final class RepoStore {
         expandedNodes[repoPath]?.contains(path) ?? false
     }
 
-    // MARK: - Gruplama (spec/21 §15 — groupReposBySource paritesi)
+    // MARK: - Gruplama (groupReposBySource paritesi)
 
     public struct RepoGroup: Identifiable, Equatable {
         public let id: String

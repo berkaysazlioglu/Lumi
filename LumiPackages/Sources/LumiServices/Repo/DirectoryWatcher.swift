@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-/// Tek dizinlik, debounce'lu dosya sistemi izleyicisi (spec/12 §watcher).
+/// Tek dizinlik, debounce'lu dosya sistemi izleyicisi.
 /// Non-recursive: dizinin kendi girdi listesi değişince tetiklenir
 /// (kök dizin izleme için yeterli — repo ekleme/silme).
 final class DirectoryWatcher: @unchecked Sendable {

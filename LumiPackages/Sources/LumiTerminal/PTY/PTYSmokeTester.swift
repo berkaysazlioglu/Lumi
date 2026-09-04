@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 
 /// PTY smoke testi: forkpty + exit zincirinin çalıştığını doğrular
-/// (spec/13 §5'teki node-pty check'inin native karşılığı).
+/// (Electron'daki node-pty check'inin native karşılığı).
 /// SystemService'e composition root üzerinden enjekte edilir (design/00 §2).
 public struct PTYSmokeTester: TerminalSmokeTesting {
     public init() {}

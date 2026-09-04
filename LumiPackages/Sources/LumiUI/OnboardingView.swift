@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// 4 adımlı onboarding sihirbazı (spec/22): Welcome → System Checks →
+/// 4 adımlı onboarding sihirbazı: Welcome → System Checks →
 /// Projects Root → Ready. fail bloklar, warn bloklamaz; tamamlanınca config
 /// yazılır ve yan etkiler koordinatörden akar (repo taraması anında başlar).
 struct OnboardingView: View {
@@ -176,7 +176,7 @@ struct OnboardingView: View {
     private var canAdvance: Bool {
         switch step {
         case 1:
-            // fail bloklar, warn bloklamaz (spec/22)
+            // fail bloklar, warn bloklamaz
             return !isRunningChecks && !checks.contains { $0.status == .fail }
         case 2:
             return !projectsRoot.isEmpty

@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Sağ sidebar'ın git veri cache'leri + commit akışı (spec/21 §16, spec/12 §5).
+/// Sağ sidebar'ın git veri cache'leri + commit akışı.
 /// Tüm tazeleme fileTreeChanged event'i (container köprüsü) veya UI etkileşimiyle.
 @Observable
 @MainActor
@@ -15,7 +15,7 @@ public final class GitStore {
     public private(set) var isCommitting = false
 
     /// Branch accordion durumu: kullanıcı hiç toggle yapmadıysa current branch
-    /// otomatik expand (spec/12 §3); toggle sonrası kullanıcının seçimi kalır.
+    /// otomatik expand; toggle sonrası kullanıcının seçimi kalır.
     public private(set) var expandedBranches: [String: Set<String>] = [:]
     @ObservationIgnored private var userToggledRepos: Set<String> = []
 
@@ -60,11 +60,11 @@ public final class GitStore {
     public func loadChanges(_ repoPath: String) async {
         let list = await git.status(repoPath: repoPath)
         changes[repoPath] = list
-        // Select-all default (spec/12 §5): her status yüklemesinde sıfırlanır
+        // Select-all default: her status yüklemesinde sıfırlanır
         selectedFiles[repoPath] = Set(list.map(\.path))
     }
 
-    /// fileTreeChanged köprüsü — git panellerinin canlılığı (spec/12 §12).
+    /// fileTreeChanged köprüsü — git panellerinin canlılığı.
     public func refresh(_ repoPath: String) async {
         await loadAll(repoPath)
     }
@@ -106,7 +106,7 @@ public final class GitStore {
         expandedBranches[repoPath]?.contains(name) ?? false
     }
 
-    // MARK: - Commit (spec/12 §5)
+    // MARK: - Commit
 
     public var canCommit: Bool {
         !isCommitting

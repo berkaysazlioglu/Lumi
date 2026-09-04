@@ -8,7 +8,7 @@ import LumiKit
 /// ...partial}` merge'i bunları korur. Native yazım da bilinmeyen anahtarları
 /// AYNEN korumalıdır, yoksa Electron'la gidip-gelme bozulur.
 ///
-/// Decode lenient'tır (Electron migration kuralları, spec/13 §1.1): yanlış
+/// Decode lenient'tır (Electron migration kuralları): yanlış
 /// tipli alan default'a düşer, `additionalPaths` array değilse `[]` olur,
 /// geçersiz `aiProvider` claude'a döner.
 enum ConfigCodec {
@@ -26,17 +26,11 @@ enum ConfigCodec {
            let provider = AgentProvider(rawValue: raw) {
             config.aiProvider = provider
         }
-        if let value = intValue(dict["maxTerminals"]) {
-            config.maxTerminals = value
-        }
         if let value = dict["theme"] as? String {
             config.theme = value
         }
         if let value = intValue(dict["terminalFontSize"]) {
             config.terminalFontSize = value
-        }
-        if let value = boolValue(dict["terminalFontSmoothing"]) {
-            config.terminalFontSmoothing = value
         }
         if let value = dict["terminalFontFamily"] as? String {
             config.terminalFontFamily = value
@@ -92,10 +86,8 @@ enum ConfigCodec {
                 return entry
             },
             "aiProvider": config.aiProvider.rawValue,
-            "maxTerminals": config.maxTerminals,
             "theme": config.theme,
             "terminalFontSize": config.terminalFontSize,
-            "terminalFontSmoothing": config.terminalFontSmoothing,
             "terminalFontFamily": config.terminalFontFamily,
             "terminalCursorStyle": config.terminalCursorStyle,
             "terminalCursorBlink": config.terminalCursorBlink,
@@ -189,7 +181,7 @@ enum ConfigCodec {
                 return ResumeSession(repoPath: repoPath, sessionID: sessionID)
             }
         }
-        // Legacy global gridColumns: "auto" | number → migration girdisi (spec/21 §13)
+        // Legacy global gridColumns: "auto" | number → migration girdisi
         if let legacy = dict["gridColumns"] {
             if let text = legacy as? String, text == "auto" {
                 state.legacyGridColumns = GridLayout(mode: .auto, count: 2)

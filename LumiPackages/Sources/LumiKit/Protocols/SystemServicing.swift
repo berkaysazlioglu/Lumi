@@ -34,7 +34,7 @@ public protocol SystemServicing: Sendable {
     /// Check'ler async koşar (senkron SystemChecker taşınmaz — karar 11).
     func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult]
 
-    /// GUI app'in minimal PATH problemi (spec/10 §Electron-3): `$SHELL -ilc`
+    /// GUI app'in minimal PATH problemi ): `$SHELL -ilc`
     /// PATH'i + bilinen dizinler. Startup'ta bir kez, her spawn'dan ÖNCE.
     func fixProcessPath() async
 

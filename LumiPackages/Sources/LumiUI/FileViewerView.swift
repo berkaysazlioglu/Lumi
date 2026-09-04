@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// FileViewer modal'ı (spec/22): view / diff / commit-diff modları.
+/// FileViewer modal'ı: view / diff / commit-diff modları.
 /// Diff'ler side-by-side render (karar 4 revize); commit-diff dosya seçiminde
 /// lazy yüklenir (karar 6). Markdown dosyaları render'lı tek kolon, görseller
 /// before/after önizleme olarak gösterilir (karar 21).

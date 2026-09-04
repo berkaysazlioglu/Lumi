@@ -1,6 +1,6 @@
 import Foundation
 
-/// Commit log girdisi (spec/12 §2).
+/// Commit log girdisi.
 public struct GitCommit: Sendable, Equatable, Identifiable {
     public var id: String { hash }
     public let hash: String
@@ -29,7 +29,7 @@ public struct GitBranch: Sendable, Equatable, Identifiable {
     }
 }
 
-/// Sadeleştirilmiş working-tree statüsü (spec/12 §4): staged/unstaged ayrımı yok.
+/// Sadeleştirilmiş working-tree statüsü: staged/unstaged ayrımı yok.
 public enum FileChangeStatus: String, Sendable, Equatable {
     case modified
     case added
@@ -142,7 +142,7 @@ public struct ImagePreview: Sendable, Equatable {
     public var hasContent: Bool { before != nil || after != nil }
 }
 
-// MARK: - File tree (spec/12 §9)
+// MARK: - File tree
 
 public struct FileTreeNode: Sendable, Equatable, Identifiable {
     public enum NodeType: Sendable, Equatable {

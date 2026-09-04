@@ -83,7 +83,7 @@ final class TerminalSession {
         wirePipeline()
 
         pty.onExit = { [weak self, pipeline] code in
-            // io queue: önce timer iptal + kalan buffer flush (spec/10 §9),
+            // io queue: önce timer iptal + kalan buffer flush,
             // sonra main'e exit bildirimi — main FIFO teslim sırasını korur
             pipeline.prepareForExit()
             hopToMain { self?.handleExit(code: code) }
@@ -120,7 +120,7 @@ final class TerminalSession {
     }
 
     /// Ack noktası: SwiftTerm feed'i senkron parse eder; dönüş = tüketildi
-    /// (spec/00 §4.1-2). Ölü oturuma teslim sessizce atlanır (native safeSend) —
+    /// (design/00 Ek A §A.1-2). Ölü oturuma teslim sessizce atlanır (native safeSend) —
     /// PTY suspend'de kalır, veri kaybolmaz.
     private func deliver(_ batch: Data) {
         guard !isTerminated else { return }
@@ -244,13 +244,6 @@ final class TerminalSession {
         terminalView.setNeedsDisplay(terminalView.bounds)
     }
 
-    /// Stem-darkening toggle'ı (Settings → Font Smoothing). CG draw path'i
-    /// değeri her çizimde okur; tam dirty + redraw anında etki ettirir.
-    func setFontSmoothing(_ enabled: Bool) {
-        guard terminalView.fontSmoothing != enabled else { return }
-        terminalView.fontSmoothing = enabled
-        redrawFromBuffer()
-    }
 
     /// Caret şekli + blink canlı uygular (Settings → Cursor). SwiftTerm caret'i
     /// otomatik günceller; ek redraw gerekmez.
@@ -296,7 +289,7 @@ extension TerminalSession: @preconcurrency TerminalViewDelegate {
     func scrolled(source: TerminalView, position: Double) {}
 
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
-        // http/https whitelist paritesi (spec/00 §5)
+        // http/https whitelist paritesi (Electron paritesi)
         guard let url = URL(string: link),
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else { return }

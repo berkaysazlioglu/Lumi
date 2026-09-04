@@ -1,9 +1,9 @@
 import CoreServices
 import Foundation
 
-/// FSEvents tabanlı recursive dizin izleyicisi (spec/12 §12).
+/// FSEvents tabanlı recursive dizin izleyicisi.
 /// 500ms latency parametresi event fırtınalarını coalesce eder — Electron'daki
-/// debounce'un FSEvents-doğal karşılığı (spec/12 Electron notu 2).
+/// debounce'un FSEvents-doğal karşılığı (Electron notu 2).
 ///
 /// Path filtresi (karar 28): yalnız exclude'lu dizinlere (Unity `Library/`,
 /// `node_modules/` …) düşen event batch'leri `onChange` tetiklemez; `.git`

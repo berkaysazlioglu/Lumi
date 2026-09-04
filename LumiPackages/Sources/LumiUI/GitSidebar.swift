@@ -3,7 +3,7 @@ import LumiState
 import SwiftUI
 
 /// Sağ sidebar: Commits (branch + timeline) + Changes (status + commit akışı).
-/// Görünüm v1 git paneliyle birebir (spec/12 §2-5 davranışı, spec/21 §16).
+/// Görünüm v1 git paneliyle birebir (Electron git paneli davranışı).
 struct GitSidebar: View {
     let repoPath: String
     let gitStore: GitStore
@@ -225,7 +225,7 @@ struct GitSidebar: View {
             .padding(.vertical, 4)
     }
 
-    /// "5m ago / 3h ago / 2d ago" — relative format UI katmanında (spec/12 §2).
+    /// "5m ago / 3h ago / 2d ago" — relative format UI katmanında.
     static func relativeTime(_ date: Date) -> String {
         let seconds = max(0, Date().timeIntervalSince(date))
         let minutes = Int(seconds / 60)

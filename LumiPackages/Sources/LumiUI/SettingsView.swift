@@ -3,7 +3,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Settings modal'ı (v1 SettingsModal paritesi; spec/22 §5). Sol dikey ikonlu
+/// Settings modal'ı (v1 SettingsModal paritesi). Sol dikey ikonlu
 /// navigasyon + sağ scroll'lu içerik; 700×600. Beş sekme: General, Terminal,
 /// Appearance, Notifications, Shortcuts.
 ///
@@ -248,24 +248,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionTitle(
                 title: "Terminal",
-                description: "Limit, font, and cursor. Changes apply instantly."
+                description: "Font and cursor. Changes apply instantly."
             )
-            SettingsField(
-                title: "Max Terminals",
-                hint: "1–20; the limit only affects new spawns"
-            ) {
-                Stepper(
-                    "\(settings.current.maxTerminals)",
-                    value: Binding(
-                        get: { settings.current.maxTerminals },
-                        set: { settings.setMaxTerminals($0) }
-                    ),
-                    in: 1...20
-                )
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Theme.textPrimary)
-                .frame(width: 140, alignment: .leading)
-            }
             SettingsField(
                 title: "Font Family",
                 hint: "Monospace fonts installed on this Mac"
@@ -293,20 +277,6 @@ struct SettingsView: View {
                 hint: "Caret shape and blinking"
             ) {
                 cursorControls
-            }
-            SettingsField(
-                title: "Font Smoothing",
-                hint: "macOS stem darkening — bolder strokes when on. "
-                    + "Off matches the thinner v1 look. Applies instantly."
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.current.terminalFontSmoothing },
-                    set: { settings.setTerminalFontSmoothing($0) }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
-                .tint(Theme.accentPrimary)
             }
             SettingsField(
                 title: "Auto-Minimize on Send",
@@ -716,7 +686,7 @@ struct SettingsView: View {
         settings.setUsageAutoRefresh(copy)
     }
 
-    // MARK: - Shortcuts (salt-okunur referans, spec/22 §5.6)
+    // MARK: - Shortcuts (salt-okunur referans)
 
     private var shortcutsTab: some View {
         VStack(alignment: .leading, spacing: 0) {

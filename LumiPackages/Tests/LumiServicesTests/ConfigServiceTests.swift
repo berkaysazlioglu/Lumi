@@ -106,12 +106,10 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(config.additionalPaths.count, 1)
         XCTAssertEqual(config.additionalPaths.first?.type, .root)
         XCTAssertEqual(config.aiProvider, .claude)
-        XCTAssertEqual(config.maxTerminals, 12)
         XCTAssertEqual(config.theme, "dark")
         XCTAssertEqual(config.terminalFontSize, 13)
-        // Diskte olmayan alan default'tan tamamlanır (spec/13 §1.1)
+        // Diskte olmayan alan default'tan tamamlanır
         XCTAssertEqual(config.notifications, .defaults)
-        XCTAssertFalse(config.terminalFontSmoothing, "alan yokken default false (ince çizgi)")
         // Terminal customization alanları yokken default'a düşer (additive, karar 9)
         XCTAssertEqual(config.terminalFontFamily, "")
         XCTAssertEqual(config.terminalCursorStyle, "block")
@@ -253,21 +251,6 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(reloaded.usageAutoRefresh.intervalMinutes, UsageAutoRefresh.defaults.intervalMinutes)
     }
 
-    func testTerminalFontSmoothingRoundTrip() async throws {
-        try writeFixture(realConfigFixture, to: paths.configFile)
-        let service = makeService()
-
-        try await service.updateConfig { $0.terminalFontSmoothing = true }
-
-        let written = try readJSONDict(paths.configFile)
-        XCTAssertEqual(written["terminalFontSmoothing"] as? Bool, true)
-        // mevcut alanlar korunur (karar 9 — additive)
-        XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
-
-        let reloaded = await ConfigService(paths: paths).config()
-        XCTAssertTrue(reloaded.terminalFontSmoothing)
-    }
-
     func testMigrationRules() async throws {
         try writeFixture(
             #"{"projectsRoot": "/p", "additionalPaths": "garbage", "aiProvider": "gpt5"}"#,
@@ -277,7 +260,7 @@ final class ConfigServiceTests: XCTestCase {
         let config = await service.config()
         XCTAssertEqual(config.additionalPaths, [])
         XCTAssertEqual(config.aiProvider, .claude)
-        XCTAssertEqual(config.maxTerminals, 12)
+        XCTAssertEqual(config.terminalFontSize, 13)
     }
 
     func testCorruptConfigFallsBackToDefaults() async throws {
@@ -304,21 +287,21 @@ final class ConfigServiceTests: XCTestCase {
     // MARK: - Config yazma / event
 
     func testUpdateEmitsEqualityDiffEventIncludingZero() async throws {
-        // Electron truthiness bug'ı: maxTerminals=0 yan etkiyi atlar — bizde atlamaz
+        // Electron truthiness bug'ı: 0 değeri yan etkiyi atlar — bizde atlamaz
         try writeFixture(realConfigFixture, to: paths.configFile)
         let service = makeService()
         let stream = await service.events()
 
-        try await service.updateConfig { $0.maxTerminals = 0 }
+        try await service.updateConfig { $0.terminalFontSize = 0 }
 
         guard case .configChanged(let old, let new)? = await awaitFirstEvent(stream) else {
             return XCTFail("configChanged event'i gelmedi")
         }
-        XCTAssertEqual(old.maxTerminals, 12)
-        XCTAssertEqual(new.maxTerminals, 0)
+        XCTAssertEqual(old.terminalFontSize, 13)
+        XCTAssertEqual(new.terminalFontSize, 0)
 
         let written = try readJSONDict(paths.configFile)
-        XCTAssertEqual(written["maxTerminals"] as? Int, 0)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 0)
     }
 
     func testUpdatePreservesUnknownConfigKeys() async throws {
@@ -329,11 +312,13 @@ final class ConfigServiceTests: XCTestCase {
         try writeFixture(withFuture, to: paths.configFile)
         let service = makeService()
 
-        try await service.updateConfig { $0.maxTerminals = 8 }
+        try await service.updateConfig { $0.terminalFontSize = 8 }
 
         let written = try readJSONDict(paths.configFile)
         XCTAssertEqual(written["futureField"] as? String, "electron-wrote-this")
-        XCTAssertEqual(written["maxTerminals"] as? Int, 8)
+        XCTAssertEqual(written["terminalFontSize"] as? Int, 8)
+        // Karar 29: artık okunmayan legacy `maxTerminals` de diskte korunur
+        XCTAssertEqual(written["maxTerminals"] as? Int, 12)
     }
 
     func testNoopUpdateEmitsNoEvent() async throws {

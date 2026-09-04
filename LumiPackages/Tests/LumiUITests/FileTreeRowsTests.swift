@@ -59,7 +59,7 @@ final class FileTreeRowsTests: XCTestCase {
     }
 
     func testIgnoredFolderNeverShowsChildrenEvenIfExpanded() {
-        // ignored klasör expand edilemez (spec/12 §9) — expanded set'te olsa bile
+        // ignored klasör expand edilemez — expanded set'te olsa bile
         let rows = FileTreeRows.visibleRows(makeTree(), expanded: ["build"])
 
         XCTAssertFalse(rows.contains { $0.path == "build/out.bin" })
@@ -89,7 +89,7 @@ final class FileTreeRowsTests: XCTestCase {
     }
 
     func testSearchMatchingFolderNameKeepsAllChildren() {
-        // Klasör ADI eşleşirse tüm children korunur (spec/12 §9)
+        // Klasör ADI eşleşirse tüm children korunur
         let rows = FileTreeRows.searchRows(makeTree(), query: "src")
 
         XCTAssertEqual(

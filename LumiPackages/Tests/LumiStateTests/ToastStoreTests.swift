@@ -44,14 +44,14 @@ final class ToastStoreTests: XCTestCase {
     }
 
     func testReportingMapsLumiErrorToToast() {
-        // Karar 5: spawn-limit aşımı dahil her hata görünür
+        // Karar 5: spawn hatası dahil her hata görünür
         let store = ToastStore(autoDismissAfter: 60)
         store.reporting {
-            throw LumiError.terminalLimitReached(max: 3)
+            throw LumiError.spawnFailed(reason: "pty")
         }
         XCTAssertEqual(store.toasts.count, 1)
         XCTAssertEqual(store.toasts.first?.kind, .error)
-        XCTAssertTrue(store.toasts.first?.message.contains("3") == true)
+        XCTAssertTrue(store.toasts.first?.message.contains("pty") == true)
     }
 
     func testReportingPassesThroughSuccess() {

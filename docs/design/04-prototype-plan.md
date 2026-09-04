@@ -28,7 +28,7 @@ App target + `LumiPackages` iskeleti; AppKit pencere (fullSizeContentView, traff
 `AppContainer`; `ConfigService` — gerçek `~/.lumi` fixture'larına karşı **byte-format-parite golden testleri** (`~/.lumi-dev` ve `~/.pulpo` fallback dahil); `fixProcessPath`; `SystemService` check'leri; `LumiError` + `ToastStore` hattı uçtan uca.
 
 ### Faz 3 — Çoklu terminal UX
-`TerminalListStore` + status event'leri; grid layout matematiği (auto/columns/rows, [spec/20 §grid](../spec/20-renderer-terminal.md)); repo tab'ları (`RepoService` tarama + FSEvents watcher + debounce); tam `NSMenu` kısayol seti; minimize/komşu-odak kuralları; `NotificationService` (izin akışı, focus guard, interval timer'lar, `terminalRemoved` temizliği) — status makinesinden sürülür.
+`TerminalListStore` + status event'leri; grid layout matematiği (auto/columns/rows); repo tab'ları (`RepoService` tarama + FSEvents watcher + debounce); tam `NSMenu` kısayol seti; minimize/komşu-odak kuralları; `NotificationService` (izin akışı, focus guard, interval timer'lar, `terminalRemoved` temizliği) — status makinesinden sürülür.
 
 ### Faz 4 — Git paneli + FileViewer
 `GitService` porcelain parse; sağ sidebar (commits/changes); commit akışı; Highlightr viewer + unified-diff renderer; lazy commit-diff; `git check-ignore` file-tree bayrakları.
@@ -45,7 +45,7 @@ Faz 3–5, faz 2 bittikten sonra paralelleştirilebilir: her dikiş yeri fake'i 
 
 ## 3. Faz çıkış kriterleri (test)
 
-- **Faz 1:** P1–P5 geçer; "view yok edilir → PTY yaşar → reattach → PTY'ye sıfır istenmeyen byte" entegrasyon testi yeşil ([spec/00 §4.2-12](../spec/00-overview.md)).
+- **Faz 1:** P1–P5 geçer; "view yok edilir → PTY yaşar → reattach → PTY'ye sıfır istenmeyen byte" entegrasyon testi yeşil ([00-architecture.md Ek A](./00-architecture.md)).
 - **Faz 2:** Golden format-parite testleri yeşil (Electron ↔ native gidiş-geliş — karar 9); hata koridoru testi: fırlatılan her `LumiError` toast'a düşer.
 - **Faz 3:** `StatusStateMachine` + `OSCStreamParser` + `ProviderInferencer` + `PTYInputFilter` + `OutputCoalescer` + `FlowController` + `UTF8StreamDecoder` saf unit testleri (bölünmüş-✳ testi dahil); bildirim interval-sızıntısı testi; komşu-odak/minimize kural testleri.
 - **Faz 4:** `defaultBranch..branch` log semantiği, porcelain parse, path-traversal guard testleri.

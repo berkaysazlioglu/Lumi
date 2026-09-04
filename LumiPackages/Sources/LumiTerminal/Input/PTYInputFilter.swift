@@ -1,6 +1,6 @@
 import Foundation
 
-/// PTY'ye giden yolda protokol-bilinçli girdi filtresi (spec/00 §4.2-9, spec/10 §7).
+/// PTY'ye giden yolda protokol-bilinçli girdi filtresi (design/00 Ek A §A.2-9).
 ///
 /// Focus event'leri (`ESC[I` / `ESC[O`) KOŞULSUZ ayıklanır: agent CLI'leri mode 1004
 /// açtığında focus-out spinner/title güncellemesini durdurur; focus'u StatusStateMachine
@@ -10,7 +10,7 @@ import Foundation
 /// programatik write) tam sequence yazar; ESC'i sonraki chunk'ı bekletmek gerçek
 /// ESC tuşunu geciktirirdi (design/01 §4).
 struct PTYInputFilter {
-    /// Defense-in-depth kapısı (spec/00 §4.2-9): canlı-olmayan feed senaryoları için;
+    /// Defense-in-depth kapısı (design/00 Ek A §A.2-9): canlı-olmayan feed senaryoları için;
     /// normal akışta hiç açılmaz. Açıkken CPR/DA/DECRPM/mouse-report biçimli
     /// emülatör yanıtları da düşürülür.
     var suppressResponses = false

@@ -63,7 +63,7 @@ final class WorkspaceStoreTests: XCTestCase {
         }
     }
 
-    // MARK: - Migration (spec/21 §13 + karar 11 tab kimliği)
+    // MARK: - Migration (karar 11 tab kimliği)
 
     func testLoadMigratesTabNamesToPaths() async {
         await config.seed(UIState(
@@ -128,7 +128,7 @@ final class WorkspaceStoreTests: XCTestCase {
         XCTAssertEqual(store.gridLayout(for: "/r/alpha"), GridLayout(mode: .columns, count: 2, heightMode: .fit))
     }
 
-    // MARK: - Tab yönetimi (spec/21 §9)
+    // MARK: - Tab yönetimi
 
     func testOpenTabAppendsAndActivates() async throws {
         store.openTab("/r/alpha")
@@ -190,7 +190,7 @@ final class WorkspaceStoreTests: XCTestCase {
         XCTAssertTrue(terminalService.killedIDs.isEmpty)
     }
 
-    // MARK: - Grid layout (spec/21 §10)
+    // MARK: - Grid layout
 
     func testGridLayoutDefaultsAndPersistence() async throws {
         XCTAssertEqual(store.gridLayout(for: "/r/alpha"), WorkspaceStore.defaultGridLayout)

@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
     }
 
-    // MARK: - Pencere (spec/30: bounds ui-state.json'da, frameAutosave YOK — karar 9)
+    // MARK: - Pencere (bounds ui-state.json'da, frameAutosave YOK — karar 9)
 
     private func buildWindow() async {
         let window = NSWindow(
@@ -122,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hosting.safeAreaRegions = []
         window.contentView = hosting
 
-        // Maximize flag'i show'dan ÖNCE uygulanır (flash önleme — spec/30)
+        // Maximize flag'i show'dan ÖNCE uygulanır (flash önleme)
         if uiState.windowMaximized == true, !window.isZoomed {
             window.zoom(nil)
         }
@@ -278,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Uyanmada watcher'lar kaçırmış olabilir → repo listesi + aktif repo verileri
-    /// tazelenir (spec/00 §5; terminal state'i tek process'te zaten kopmaz).
+    /// tazelenir (Electron paritesi; terminal state'i tek process'te zaten kopmaz).
     private func observeWake() {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -372,7 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings(_ sender: Any?) {
         Task { @MainActor in
-            await container.settings.refresh() // her açılışta taze (spec/22)
+            await container.settings.refresh() // her açılışta taze
             container.workspace.isSettingsOpen = true
         }
     }
@@ -381,7 +381,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         container.workspace.toggleFocusMode()
     }
 
-    // MARK: - Quit akışı (spec/30: Cmd+Q dahil HER yol onaydan geçer)
+    // MARK: - Quit akışı (Cmd+Q dahil HER yol onaydan geçer)
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if isShutdownComplete {
@@ -424,7 +424,7 @@ extension AppDelegate: NSWindowDelegate {
     /// Çarpı (X) pencereyi DOĞRUDAN kapatmaz. Pencere önce kapansaydı quit-onay
     /// dialogu (SwiftUI, pencere içeriğinde) görünmez kalır ve `.terminateLater`
     /// cevapsız asılırdı — app penceresiz halde Dock'ta takılırdı. Kapatma isteği
-    /// Cmd+Q ile aynı `applicationShouldTerminate` akışına yönlendirilir (spec/30
+    /// Cmd+Q ile aynı `applicationShouldTerminate` akışına yönlendirilir (
     /// §3 paritesi: v1 de `close` event'ini yakalayıp onaya çevirir). Pencere
     /// yalnız uygulama gerçekten çıkarken (terminate) kapanır; onay iptalinde
     /// açık kalır.

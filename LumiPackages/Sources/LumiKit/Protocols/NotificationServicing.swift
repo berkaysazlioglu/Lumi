@@ -2,7 +2,7 @@ import Foundation
 
 public enum NotificationEvent: Sendable, Equatable {
     /// Kullanıcı OS bildirimine tıkladı → terminal odaklanmalı.
-    /// Minimize edilmiş terminalin otomatik odak alabildiği TEK yol (spec/21 §6).
+    /// Minimize edilmiş terminalin otomatik odak alabildiği TEK yol.
     case clicked(TerminalID)
     /// Status-güdümlü toast sinyali — pencere odağından bağımsız her zaman gönderilir
     /// (Electron'daki `terminal:bell(id, repoName)` kanalının karşılığı).
@@ -18,7 +18,7 @@ public protocol NotificationPresenting: Sendable {
     @MainActor func removeDelivered(id: String)
 }
 
-/// Status-makinesi-güdümlü bildirim servisi (design/02 §7, spec/13 §4).
+/// Status-makinesi-güdümlü bildirim servisi (design/02 §7).
 @MainActor
 public protocol NotificationServicing: AnyObject {
     func requestPermissionIfNeeded() async
@@ -26,7 +26,7 @@ public protocol NotificationServicing: AnyObject {
     /// Pencere odaklıyken native OS bildirimi gönderilmez (focus guard).
     func setWindowFocused(_ focused: Bool)
     func handleStatusChange(id: TerminalID, repoName: String, status: TerminalStatus)
-    /// Exit-cleanup sözleşmesi (spec/10 §9): interval timer'ı iptal eder —
+    /// Exit-cleanup sözleşmesi: interval timer'ı iptal eder —
     /// çağrılmazsa timer sızar.
     func terminalRemoved(_ id: TerminalID)
     func events() -> AsyncStream<NotificationEvent>

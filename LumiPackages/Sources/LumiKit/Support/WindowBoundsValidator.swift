@@ -1,6 +1,6 @@
 import Foundation
 
-/// Restore edilen pencere bounds'unun multi-monitör doğrulaması (spec/30):
+/// Restore edilen pencere bounds'unun multi-monitör doğrulaması:
 /// kaydedilmiş konum artık var olmayan bir ekrandaysa default boyuta düşülür.
 public enum WindowBoundsValidator {
     public static let minimumVisibleWidth: CGFloat = 100

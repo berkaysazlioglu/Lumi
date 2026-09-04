@@ -1,6 +1,6 @@
 # Lumi Native — Terminal Alt Sistemi Tasarımı
 
-> `LumiTerminal` modülünün bağlayıcı tasarımı. Davranış kaynağı: [spec/10](../spec/10-main-terminal-pty.md), [spec/20](../spec/20-renderer-terminal.md); zorunlu gereksinimler: [spec/00 §4](../spec/00-overview.md); kök neden analizleri: [spec/40](../spec/40-bug-black-screen.md), [spec/41](../spec/41-bug-stream-oom.md).
+> `LumiTerminal` modülünün bağlayıcı tasarımı. Zorunlu gereksinimler: [00-architecture.md Ek A](./00-architecture.md) (kök neden analizleri de orada özetlidir).
 
 ---
 
@@ -8,7 +8,7 @@
 
 **Karar:** Oturum başına, PTY ömrü boyunca yaşayan **tek bir SwiftTerm `TerminalView`**. View'ı `TerminalViewRegistry` (@MainActor) sahiplenir; SwiftUI asla sahip olmaz. Görünmediğinde hierarchy'den ayrılır/gizlenir ama **asla yok edilmez**. Emülatörün grid + scrollback + mod state'i, oturumun ekran durumunun otoriter kaynağıdır.
 
-**Sonuç:** Byte backlog, replay ve reconciliation protokolünün tamamı (**`syncFromMain` / `mergeSnapshotOutput` / `totalLength` / `epoch` / `preserveNewerLiveOutputs`**) silinir — [spec/21](../spec/21-renderer-state.md)'in iki-process yarışı telafisi tek process'te gereksizleşir ([spec/00 §5](../spec/00-overview.md) bunu öngörür).
+**Sonuç:** Byte backlog, replay ve reconciliation protokolünün tamamı (**`syncFromMain` / `mergeSnapshotOutput` / `totalLength` / `epoch` / `preserveNewerLiveOutputs`**) silinir — Electron'daki iki-process yarışı telafisi tek process'te gereksizleşir.
 
 **Reddedilen Seçenek B (headless `Terminal` + ayrı render view replikasyonu):** SwiftTerm'de `TerminalView` kendi gömülü `Terminal`'ını sahiplenir; harici bir `Terminal`'ın buffer'ını bir view'a çizdirmenin desteklenen yolu yoktur. B'yi seçmek şunlardan birini zorlar: (a) `TerminalView` renderer'ını fork'lamak, (b) emülatör state'ini byte'a geri serileştirip view tarafındaki ikinci emülatöre beslemek — ki bu, rewrite'ın yok etmek için var olduğu replay makinesini (ve bug 40'ın oto-yanıt tehlikesini) geri getirir, (c) özel renderer yazmak. Üçü de, artık var olmayan bir renderer/main process ayrımını çözmek için satın alınan en pahalı yollardır.
 
@@ -46,7 +46,7 @@ final class PTYProcess {
 
 - `forkpty` çağrısı için SwiftTerm `PseudoTerminalHelpers` referans alınabilir; bizim kattığımız değer dispatch-source yaşam döngüsüdür.
 - **Okuma:** master fd üzerinde `DispatchSourceRead`, terminal başına serial queue. Handler tek non-blocking `read()` (≤64 KB) yapar. `.suspend` dönerse source **kendini** suspend eder (eşzamanlı-suspend yarışı yok); `resumeReading()` lock altındaki `isSuspended` bayrağıyla dengeyi korur.
-- **Spawn paritesi ([spec/10](../spec/10-main-terminal-pty.md)):** shell seçim zinciri (macOS: `zsh → bash → sh`, `which` ile doğrulanır, process ömrü boyunca cache), her zaman `<shell> -l` (login); `claude`/`codex` PTY argv'si değil, sonradan `write()` ile enjekte edilir. `TERM=xterm-256color` + `COLORTERM=truecolor` (her ikisi de miras değeri ezer — Lumi'nin kendi yeteneğini deklare eder, karar 22), başlangıç 120×30, `cwd: repoPath`, env = `fixProcessPath` sonucu. Launch komutu `claude` ise `ClaudeSessionCommand.prepare` `--session-id <uuid>` enjekte eder ve ID `TerminalMeta.claudeSessionID`'de taşınır — quit'te persist edilip yeniden açılışta `claude --resume <id> || claude` ile aynı chat'ten devam edilir (karar 23).
+- **Spawn paritesi:** shell seçim zinciri (macOS: `zsh → bash → sh`, `which` ile doğrulanır, process ömrü boyunca cache), her zaman `<shell> -l` (login); `claude`/`codex` PTY argv'si değil, sonradan `write()` ile enjekte edilir. `TERM=xterm-256color` + `COLORTERM=truecolor` (her ikisi de miras değeri ezer — Lumi'nin kendi yeteneğini deklare eder, karar 22), başlangıç 120×30, `cwd: repoPath`, env = `fixProcessPath` sonucu. Launch komutu `claude` ise `ClaudeSessionCommand.prepare` `--session-id <uuid>` enjekte eder ve ID `TerminalMeta.claudeSessionID`'de taşınır — quit'te persist edilip yeniden açılışta `claude --resume <id> || claude` ile aynı chat'ten devam edilir (karar 23).
 - **Crash dayanıklılığı:** global, lock-korumalı child-pid registry + `atexit`/`SIGTERM` handler'ı `killpg` döngüsü (async-signal-safe) — yakalanmamış crash'te bile zombi `claude` ağacı kalmaz (§4.3).
 
 ---
@@ -126,7 +126,7 @@ drag-drop path (quote'lanmış — karar 11)                             ┘
 
 ## 5. Gereksinim → mekanizma haritası
 
-[spec/00 §4](../spec/00-overview.md)'ün tamamı:
+[00-architecture.md Ek A](./00-architecture.md)'ün tamamı:
 
 | # | Gereksinim | Bu tasarımdaki mekanizma |
 |---|---|---|
@@ -148,14 +148,14 @@ drag-drop path (quote'lanmış — karar 11)                             ┘
 
 ## 6. Davranış paritesi notları
 
-Aşağıdakiler [spec/10](../spec/10-main-terminal-pty.md)'dan **birebir** taşınır:
+Aşağıdakiler Electron sürümünden **birebir** taşınır:
 
 - **OSC parser semantiği:** `ESC ] cmd ; payload (BEL | ESC \)` (önce gelen sonlandırıcı); OSC 0/2 → title event (✳ U+2733 prefix = Claude idle/`isWorking=false`; `claude` kelime-sınırı → hint; boş title → karar yok; ilk karakter + boşluk strip paritesi); OSC 9 → `turn/task (complete|completed|done|finished)`, `waiting for input`, `all idle`, `idle state` regex'i → `codex-turn-complete`; diğer tüm OSC kodları sessizce düşer; 4096-char partial cap; terminal kapanışında buffer temizliği.
 - **StatusStateMachine:** 6 durum; `focused × windowFocused` etkin odak; geçiş tablosu (onTitleChange/onOutputActivity/onOutputSilence-3sn/onUserInput/onFocus/onBlur/onWindowFocus/onWindowBlur/onExit/reset) ve "codex hint'i output'la asla düşürülmez" asimetrisi dahil birebir.
 - **Provider inference:** input `^claude/^codex`, output `"openai codex"`/`"claude code"`, OSC kaynaklı hint'ler; codex silence heuristiği yalnız hint==codex iken aktif.
-- **Exit-cleanup sırası (spec/10 §9, bug'a duyarlı):** (1) timer iptal → (2) registry'den çıkar (**status machine exit'i işlemeden ÖNCE** — bayat status push'u engeller) → (3) `notifier.terminalRemoved` → (4) `statusMachine.onExit(code)` → (5) OSC buffer sil → (6) exit yayınla.
+- **Exit-cleanup sırası (bug'a duyarlı):** (1) timer iptal → (2) registry'den çıkar (**status machine exit'i işlemeden ÖNCE** — bayat status push'u engeller) → (3) `notifier.terminalRemoved` → (4) `statusMachine.onExit(code)` → (5) OSC buffer sil → (6) exit yayınla.
 - **Resize:** view tarafında 150ms debounce (`ResizeDebouncer`), cols/rows 0/undefined ise atla; gizliyken fit yapılmaz, attach'te fit zorunlu (TUI reflow paritesi).
-- **Spawn limiti:** yalnız `TerminalService` uygular (renderer'daki sabit-kullanan üç call-site bug'ı taşınmaz — karar 11); aşım `LumiError.terminalLimitReached` ile **görünür** hata (karar 5).
+- **Spawn limiti:** yok (karar 29) — v1'deki `maxTerminals` ayarı ve limit kontrolü native'e taşınmaz.
 
 ---
 
@@ -182,7 +182,7 @@ Aşağıdakiler [spec/10](../spec/10-main-terminal-pty.md)'dan **birebir** taş�
 |---|---|---|
 | `PTYProcess` | final class | §2. CI'da `/bin/cat`'e karşı test edilebilir |
 | `TerminalSession` | `@MainActor` final class | Bir `PTYProcess` + io queue + pipeline + `LumiTerminalView: TerminalView` sahibi; `TerminalViewDelegate` implementasyonu; `write`/`resize`/`setHidden`/`kill` + metadata |
-| `TerminalSessionManager` | `@MainActor`, `TerminalServicing` implementasyonu | **Sıralı array** registry (Map-insertion-order tuzağı yok); spawn (`maxTerminals` aşımında throw), kill/killAll, `setFocused(id?)`, `setWindowFocused(Bool)` |
+| `TerminalSessionManager` | `@MainActor`, `TerminalServicing` implementasyonu | **Sıralı array** registry (Map-insertion-order tuzağı yok); spawn (limitsiz, karar 29), kill/killAll, `setFocused(id?)`, `setWindowFocused(Bool)` |
 | `TerminalViewRegistry` | `@MainActor`, `TerminalViewProviding` | View sahipliği + attach/detach ([03 §3](./03-ui-shell.md)) |
 | `FeedWatchdog` | final class | §5 / 4.2-10 |
 

@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// File tree üretimi (spec/12 §9, f4467ac davranışı):
+/// File tree üretimi (f4467ac davranışı):
 /// ignored girdiler ÇIKARILMAZ, bayraklanır; istisna `.git` (her zaman gizli).
 /// Ignored klasörlerin içine girilmez (node_modules performansı).
 /// Sıralama: klasörler önce → ignored olmayanlar önce → localeCompare.
@@ -12,7 +12,7 @@ import LumiKit
 /// `lstat` ile tespit edilir ve TAKİP EDİLMEZ (döngü koruması + Electron dirent
 /// paritesi); toplam girdi ve derinlik `Limits` ile tavanlanır.
 enum FileTreeBuilder {
-    /// Hardcoded default exclude listesi (spec/12 §9 + karar 28 eklemeleri) —
+    /// Hardcoded default exclude listesi (Electron listesi + karar 28 eklemeleri) —
     /// git olmayan dizinler için tek filtre; git repolarında git semantiğinin
     /// üzerine eklenir. Unity (`Library`, `Temp`, `Logs`, `obj`) ve Xcode
     /// (`DerivedData`) çıktıları FSEvents gürültüsünün ana kaynağıdır.
@@ -24,7 +24,7 @@ enum FileTreeBuilder {
     ]
 
     /// FSEvents filtresi için: `.git` hariç (git panel canlılığı .git içi
-    /// değişimlere bağlı — spec/12 §12).
+    /// değişimlere bağlı).
     static let watchNoiseNames: Set<String> = excludedNames.subtracting([".git"])
 
     struct Limits: Sendable {
@@ -114,7 +114,7 @@ enum FileTreeBuilder {
         limits: Limits,
         remainingEntries: inout Int
     ) -> [FileTreeNode] {
-        // Okunamayan dizin sessizce boş geçilir (spec/12 §9)
+        // Okunamayan dizin sessizce boş geçilir
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: directory) else {
             return []
         }

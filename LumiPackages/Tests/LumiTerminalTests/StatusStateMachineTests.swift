@@ -79,7 +79,7 @@ final class StatusStateMachineTests: XCTestCase {
     }
 
     func testWindowBlurDropsFocusedToSeen() {
-        // App arka plana düşünce aktif tab bile waiting-seen'e iner → native bildirim yolu açılır (spec/10 §5)
+        // App arka plana düşünce aktif tab bile waiting-seen'e iner → native bildirim yolu açılır
         machine.onFocus()
         machine.onTitleChange(isWorking: true)
         machine.onTitleChange(isWorking: false)

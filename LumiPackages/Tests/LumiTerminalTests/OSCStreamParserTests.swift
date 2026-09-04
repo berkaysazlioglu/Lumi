@@ -30,7 +30,7 @@ final class OSCStreamParserTests: XCTestCase {
     func testTitleWithStTerminator() {
         let event = titleEvent(parser.feed(osc("2;hello", terminator: "\u{1B}\\")))
         XCTAssertEqual(event?.rawTitle, "hello")
-        // `/^.\s*/` paritesi: ikonsuz title'ın ilk harfi de gider (spec/10 bilinen trade-off)
+        // `/^.\s*/` paritesi: ikonsuz title'ın ilk harfi de gider (bilinen trade-off)
         XCTAssertEqual(event?.displayTitle, "ello")
     }
 

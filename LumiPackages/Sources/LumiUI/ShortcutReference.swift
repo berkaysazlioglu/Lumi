@@ -1,4 +1,4 @@
-/// Settings → Shortcuts sekmesinin salt-okunur kısayol referansı (spec/22 §5.6).
+/// Settings → Shortcuts sekmesinin salt-okunur kısayol referansı.
 ///
 /// Kısayolların ÇALIŞAN tek kaynağı `MainMenuBuilder`'dır (LumiApp); bu liste
 /// onun görsel aynasıdır. LumiUI, LumiApp'i (executable) göremediğinden veri

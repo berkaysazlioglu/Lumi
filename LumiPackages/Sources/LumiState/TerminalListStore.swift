@@ -2,10 +2,10 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Terminal listesinin UI-yüzlü metadata store'u (design/03 §4, spec/21 kuralları).
+/// Terminal listesinin UI-yüzlü metadata store'u (design/03 §4).
 /// Ham çıktı burada ASLA tutulmaz — yalnız TerminalMeta.
 ///
-/// Değişmez kural (spec/21 §6): minimize edilmiş terminal asla odak alamaz;
+/// Değişmez kural: minimize edilmiş terminal asla odak alamaz;
 /// tek istisna bildirim/bell tıklamasıdır ve `restoreAndFocus` üzerinden
 /// (önce restore, sonra odak) akar.
 @Observable
@@ -15,7 +15,7 @@ public final class TerminalListStore {
     public private(set) var activeTerminalID: TerminalID?
     public private(set) var minimizedIDs: Set<TerminalID> = []
     /// "Karar bekliyor" (izin promptu) sinyali — ephemeral, persist edilmez.
-    /// Prompt kuyruğu bunu görünce duraklar (spec/10: status'ten ayrı sinyal).
+    /// Prompt kuyruğu bunu görünce duraklar (status'ten ayrı sinyal).
     public private(set) var awaitingDecisionIDs: Set<TerminalID> = []
 
     /// Karar 24: açıkken working'e geçen terminal otomatik minimize edilir ve
@@ -97,7 +97,7 @@ public final class TerminalListStore {
         }
     }
 
-    /// setActiveTerminal paritesi (spec/21 §7): id map'te olmasa bile set edilir
+    /// setActiveTerminal paritesi: id map'te olmasa bile set edilir
     /// (yeni spawn henüz yansımamış olabilir); minimize edilmişe odak verilmez.
     public func focus(_ id: TerminalID?) {
         guard let id else {
@@ -113,7 +113,7 @@ public final class TerminalListStore {
         service.setFocused(id)
     }
 
-    /// Minimize: aktifse görünür komşuya proaktif odak kayar (spec/21 §6).
+    /// Minimize: aktifse görünür komşuya proaktif odak kayar.
     public func minimize(_ id: TerminalID) {
         guard let repoPath = meta(for: id)?.repoPath else { return }
         minimizedIDs.insert(id)
@@ -134,14 +134,14 @@ public final class TerminalListStore {
         autoMinimizedIDs.remove(id)
     }
 
-    /// Bildirim tıklaması istisnası: önce restore, sonra odak (spec/21 §6).
+    /// Bildirim tıklaması istisnası: önce restore, sonra odak.
     public func restoreAndFocus(_ id: TerminalID) {
         minimizedIDs.remove(id)
         autoMinimizedIDs.remove(id)
         focus(id)
     }
 
-    /// Tab değişimi yan etkisi (spec/21 §9): repo'nun lastActive'i geçerli ve
+    /// Tab değişimi yan etkisi: repo'nun lastActive'i geçerli ve
     /// görünürse o, değilse ilk görünür, hiç yoksa nil.
     public func activateRepo(_ repoPath: String) {
         let visible = visibleTerminals(in: repoPath)
@@ -186,7 +186,7 @@ public final class TerminalListStore {
         switch event {
         case .spawned(let meta):
             terminals.append(meta)
-            // Spawn eden path açıkça odaklar (spec/21 §3 sözleşmesi)
+            // Spawn eden path açıkça odaklar (store sözleşmesi)
             focus(meta.id)
         case .exited(let id, _):
             remove(id)
@@ -220,7 +220,7 @@ public final class TerminalListStore {
     /// bittiği ya da girdi beklendiği anlamına gelir → otomatik minimize edilen
     /// restore edilir. Restore branch'i toggle'a bakmaz — özellik kapatılsa bile
     /// önceden gizlenen terminal minimize'da mahsur kalmaz. Odak verilmez
-    /// (spec/21 §6: odaklı restore yalnız bildirim tıklamasıyla).
+    /// (odaklı restore yalnız bildirim tıklamasıyla).
     private func applyAutoMinimize(_ id: TerminalID, status: TerminalStatus) {
         if status == .working {
             guard autoMinimizeOnSend, !minimizedIDs.contains(id) else { return }
@@ -238,7 +238,7 @@ public final class TerminalListStore {
         terminals[index] = copy
     }
 
-    /// Kapanışta komşu odaklama (spec/21 §5 birebir): silmeden ÖNCE hesaplanır;
+    /// Kapanışta komşu odaklama (Electron paritesi): silmeden ÖNCE hesaplanır;
     /// adaylar aynı repo'nun görünür terminalleridir — odak başka repo'ya atlamaz.
     private func remove(_ id: TerminalID) {
         guard let index = terminals.firstIndex(where: { $0.id == id }) else { return }
@@ -275,7 +275,7 @@ public final class TerminalListStore {
         terminals.remove(at: index)
     }
 
-    /// Komşu kuralı (spec/21 §5): önceki; ilk kapanıyorsa sonraki; id listede
+    /// Komşu kuralı: önceki; ilk kapanıyorsa sonraki; id listede
     /// yoksa ilki; liste boşsa nil. `candidates` kapanan terminali İÇERİR.
     static func neighborID(closing id: TerminalID, among candidates: [TerminalMeta]) -> TerminalID? {
         let others = candidates.filter { $0.id != id }

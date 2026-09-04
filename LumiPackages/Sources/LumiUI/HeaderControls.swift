@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Header sağ ikon butonu (v1 Header.tsx: 32×32, hover'da elevated zemin).
+/// Header ikon butonu (ince bar: 26×26, hover'da elevated zemin).
 struct HeaderIconButton: View {
     let icon: String
     let isActive: Bool
@@ -13,11 +13,11 @@ struct HeaderIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(size: 12))
                 .foregroundStyle(foreground)
-                .frame(width: 32, height: 32)
+                .frame(width: TopBarMetrics.controlHeight, height: TopBarMetrics.controlHeight)
                 .background(isHovering || isActive ? Theme.bgElevated : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

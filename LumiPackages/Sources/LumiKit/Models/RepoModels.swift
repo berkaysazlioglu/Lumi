@@ -1,6 +1,6 @@
 import Foundation
 
-/// Diskte keşfedilen bir proje klasörü (spec/12, spec/21).
+/// Diskte keşfedilen bir proje klasörü.
 /// Git reposu olmayan dizinler de listelenir (`isGitRepo: false`) —
 /// terminal açılabilir, git panelleri boş kalır.
 public struct Repo: Sendable, Equatable, Identifiable, Hashable {
@@ -19,7 +19,7 @@ public struct Repo: Sendable, Equatable, Identifiable, Hashable {
 }
 
 /// Repo'nun hangi kaynaktan keşfedildiği — sidebar/seçici gruplaması bu alanla
-/// yapılır (spec/21 §15): projectsRoot grubu, her root-tipi additional path
+/// yapılır: projectsRoot grubu, her root-tipi additional path
 /// kendi grubu, repo-tipi olanlar tek "Standalone Repos" grubu.
 public enum RepoSource: Sendable, Equatable, Hashable {
     case projectsRoot
@@ -40,7 +40,7 @@ public protocol RepoServicing: Actor {
     /// Ignored bayrakları git'in kendi semantiğiyle (nested .gitignore + global +
     /// info/exclude — karar 7); git olmayan dizinde yalnız hardcoded excludes.
     func fileTree(repoPath: String) async -> [FileTreeNode]
-    /// Aktif repo recursive izlenir (FSEvents, 500ms coalescing — spec/12 §12);
+    /// Aktif repo recursive izlenir (FSEvents, 500ms coalescing);
     /// git panellerinin canlılığı da bu event'e bağlıdır (.git değişimleri dahil).
     func watchFileTree(repoPath: String) async
     func unwatchFileTree(repoPath: String) async

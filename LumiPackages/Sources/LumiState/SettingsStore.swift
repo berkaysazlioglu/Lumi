@@ -36,7 +36,7 @@ public final class SettingsStore {
         consumeTask = nil
     }
 
-    /// Modal her açılışta taze config çeker (spec/22 — mount'ta değil).
+    /// Modal her açılışta taze config çeker (mount'ta değil).
     public func refresh() async {
         current = await config.config()
     }
@@ -62,18 +62,9 @@ public final class SettingsStore {
         apply { $0.aiProvider = provider }
     }
 
-    public func setMaxTerminals(_ count: Int) {
-        let clamped = min(max(count, 1), 20)
-        apply { $0.maxTerminals = clamped }
-    }
-
     public func setTerminalFontSize(_ size: Int) {
         let clamped = min(max(size, 10), 24)
         apply { $0.terminalFontSize = clamped }
-    }
-
-    public func setTerminalFontSmoothing(_ enabled: Bool) {
-        apply { $0.terminalFontSmoothing = enabled }
     }
 
     public func setTerminalFontFamily(_ family: String) {

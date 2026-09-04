@@ -70,7 +70,7 @@ final class AppContainer {
         )
     }
 
-    /// Sıra-bağımlı bootstrap (design/00 §3 + spec/21 §13): dizinler →
+    /// Sıra-bağımlı bootstrap (design/00 §3): dizinler →
     /// fixProcessPath (spawn'dan ÖNCE) → config'in anlık değerleri → repo'lar →
     /// ui-state (migration repo listesini okur) → store/koordinatör/köprüler.
     func start() async {
@@ -86,12 +86,10 @@ final class AppContainer {
         await system.fixProcessPath()
 
         let appConfig = await config.config()
-        terminal.setMaxTerminals(appConfig.maxTerminals)
         terminal.font = LumiFonts.mono(
             family: appConfig.terminalFontFamily,
             size: CGFloat(appConfig.terminalFontSize)
         )
-        terminal.fontSmoothing = appConfig.terminalFontSmoothing
         terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
             shape: TerminalCursorShape.parse(appConfig.terminalCursorStyle),
             blink: appConfig.terminalCursorBlink
@@ -113,7 +111,7 @@ final class AppContainer {
         await repoStore.reload()
         await workspace.load(repos: repoStore.repos)
 
-        // First-run → onboarding sihirbazı (spec/13 §1.2, spec/22)
+        // First-run → onboarding sihirbazı
         workspace.isOnboardingActive = await config.isFirstRun()
         await notifications.requestPermissionIfNeeded()
 
@@ -131,9 +129,6 @@ final class AppContainer {
         }
         configCoordinator.onTerminalFontSizeChanged = { _ in rebuildFont() }
         configCoordinator.onTerminalFontFamilyChanged = { rebuildFont() }
-        configCoordinator.onTerminalFontSmoothingChanged = { [weak self] enabled in
-            self?.terminal.fontSmoothing = enabled
-        }
         configCoordinator.onTerminalCursorChanged = { [weak self] shape, blink in
             self?.terminal.cursorStyle = TerminalCursorStyleMapper.swiftTermStyle(
                 shape: shape, blink: blink
@@ -161,7 +156,7 @@ final class AppContainer {
             self?.terminals.focus(id)
         }
 
-        // Aktif repo değişimi: tek repo izlenir (spec/12 §12) + git/tree yüklenir
+        // Aktif repo değişimi: tek repo izlenir + git/tree yüklenir
         workspace.onActiveRepoChanged = { [weak self] previous, current in
             guard let self else { return }
             Task { @MainActor in
@@ -183,7 +178,7 @@ final class AppContainer {
     }
 
     private func startBridges() {
-        // fileTreeChanged → file tree tazeleme + git panelleri canlılığı (spec/12 §12)
+        // fileTreeChanged → file tree tazeleme + git panelleri canlılığı
         // Coalescing (karar 28): tarama uçuştayken gelen event'ler tek bir
         // follow-up'a çöker; for-await döngüsü asla taramayı beklemez.
         let refreshCoalescer = KeyedRefreshCoalescer { [weak self] repoPath in
@@ -205,7 +200,7 @@ final class AppContainer {
         }
         bridgeTasks.append(repoEventBridge)
 
-        // Terminal status event'leri → NotificationService (spec/10 §5 onChange köprüsü)
+        // Terminal status event'leri → NotificationService (onChange köprüsü)
         let terminalStream = terminal.events()
         bridgeTasks.append(Task { @MainActor [weak self] in
             for await event in terminalStream {
@@ -231,7 +226,7 @@ final class AppContainer {
                 guard let self else { return }
                 switch event {
                 case .clicked(let id):
-                    // Minimize istisnası: bildirim tıklaması restore + focus (spec/21 §6)
+                    // Minimize istisnası: bildirim tıklaması restore + focus
                     self.terminals.restoreAndFocus(id)
                 case .bell(let id, let repoName):
                     self.toasts.show(

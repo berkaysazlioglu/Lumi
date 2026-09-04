@@ -66,7 +66,7 @@ final class GitServiceTests: XCTestCase {
     }
 
     /// Faz 4 çıkış kriteri: feature branch yalnız KENDİNE ÖZGÜ commit'leri
-    /// gösterir (`defaultBranch..branch` — spec/12 §2).
+    /// gösterir (`defaultBranch..branch`).
     func testFeatureBranchShowsOnlyUniqueCommits() async throws {
         try write("a.txt", "v1")
         try commitAll("main first")
@@ -99,7 +99,7 @@ final class GitServiceTests: XCTestCase {
         XCTAssertTrue(status.isEmpty)
     }
 
-    // MARK: - Status (porcelain parse, spec/12 §4)
+    // MARK: - Status (porcelain parse)
 
     func testStatusMappingSimplified() async throws {
         try write("tracked.txt", "v1")

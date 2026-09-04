@@ -2,7 +2,7 @@ import AppKit
 import LumiKit
 import SwiftUI
 
-/// Lumi görsel kimliğinin token katmanı (karar 13, spec/23) — Faz 1 alt kümesi.
+/// Lumi görsel kimliğinin token katmanı (karar 13) — Faz 1 alt kümesi.
 /// Tam ölçek (tipografi, motion, component stilleri) Faz 6'da tamamlanır.
 public enum Theme {
     public static let bgDeep = Color(red: 0x0A / 255, green: 0x0A / 255, blue: 0x12 / 255)
@@ -48,7 +48,7 @@ public enum Theme {
         }
     }
 
-    /// StatusDot renk sistemi (spec/23): durum → renk eşlemesi birebir.
+    /// StatusDot renk sistemi: durum → renk eşlemesi birebir.
     public static func statusColor(for status: TerminalStatus) -> Color {
         switch status {
         case .idle: return textMuted

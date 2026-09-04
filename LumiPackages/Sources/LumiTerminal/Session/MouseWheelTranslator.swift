@@ -1,7 +1,7 @@
 import Foundation
 
 /// Fare/trackpad wheel delta'larını terminal scroll adımlarına çeviren saf yardımcılar
-/// (DropAwareTerminalView'ın alt-buffer scroll köprüsü için — spec/20 scroll davranışı).
+/// (DropAwareTerminalView'ın alt-buffer scroll köprüsü için).
 ///
 /// Trackpad'ler piksel-hassas delta + momentum event seli üretir; event başına sabit
 /// adım göndermek aşırı kaydırır. Birikimli çeviri: delta'lar toplanır, her `unit`

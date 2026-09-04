@@ -16,7 +16,6 @@ final class ConfigSideEffectCoordinator {
 
     /// Font değişimi protokole sızdırılmaz — composition root somut manager'a bağlar.
     var onTerminalFontSizeChanged: ((Int) -> Void)?
-    var onTerminalFontSmoothingChanged: ((Bool) -> Void)?
     /// Font ailesi de aynı NSFont'a font size ile birlikte çözülür — boyutla
     /// AYNI callback'i tetikler (composition root taze AppConfig'den font kurar).
     var onTerminalFontFamilyChanged: (() -> Void)?
@@ -50,9 +49,6 @@ final class ConfigSideEffectCoordinator {
             let stream = await self.config.events()
             for await event in stream {
                 guard case .configChanged(let old, let new) = event else { continue }
-                if old.maxTerminals != new.maxTerminals {
-                    self.terminal.setMaxTerminals(new.maxTerminals)
-                }
                 if old.projectsRoot != new.projectsRoot
                     || old.additionalPaths != new.additionalPaths {
                     self.repoStore.additionalPaths = new.additionalPaths
@@ -66,9 +62,6 @@ final class ConfigSideEffectCoordinator {
                 }
                 if old.terminalFontSize != new.terminalFontSize {
                     self.onTerminalFontSizeChanged?(new.terminalFontSize)
-                }
-                if old.terminalFontSmoothing != new.terminalFontSmoothing {
-                    self.onTerminalFontSmoothingChanged?(new.terminalFontSmoothing)
                 }
                 if old.terminalFontFamily != new.terminalFontFamily {
                     self.onTerminalFontFamilyChanged?()

@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Tab/layout/dialog state'i (design/03 §4, spec/21 §9-13).
+/// Tab/layout/dialog state'i (design/03 §4).
 /// Tab kimliği repo PATH'idir (ad-çakışması bug fix'i, karar 11); eski
 /// ad-tabanlı ui-state okunurken tek seferlik ad→path migration yapılır.
 @Observable
@@ -17,16 +17,16 @@ public final class WorkspaceStore {
     public private(set) var rightSidebarOpen = false
     public var isRepoSelectorOpen = false
     /// RepoSelector grup collapse durumu — session-local, persist edilmez
-    /// (spec/22 §2.3 collapsedGroups paritesi).
+    /// (collapsedGroups paritesi).
     public var collapsedRepoGroups: Set<String> = []
     public private(set) var closeTabDialog: CloseTabDialogState?
-    /// Oturumluk — persist edilmez (spec/21 §12).
+    /// Oturumluk — persist edilmez.
     public private(set) var isFocusMode = false
     public private(set) var quitDialogTerminalCount: Int?
     public var isOnboardingActive = false
     public var isSettingsOpen = false
     /// Oturumluk maximize/solo — repo başına en çok bir terminal tam alanı
-    /// kaplar; diğer görünürler alt şeride iner. Persist edilmez (spec/21 §12 ruhu).
+    /// kaplar; diğer görünürler alt şeride iner. Persist edilmez.
     public private(set) var maximizedByRepo: [String: TerminalID] = [:]
 
     /// Quit-onay çözümü app delegate'e köprülenir (.terminateLater akışı).
@@ -52,7 +52,7 @@ public final class WorkspaceStore {
         self.terminals = terminals
     }
 
-    /// Bootstrap sözleşmesi (spec/21 §13): repos yüklendikten SONRA çağrılır —
+    /// Bootstrap sözleşmesi: repos yüklendikten SONRA çağrılır —
     /// ad→path tab migration'ı ve legacy gridColumns migration'ı repo listesini okur.
     public func load(repos: [Repo]) async {
         let state = await config.uiState()
@@ -81,7 +81,7 @@ public final class WorkspaceStore {
 
         projectGridLayouts = state.projectGridLayouts
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
-            // Legacy global gridColumns → her açık tab'ın path'ine kopyalanır (spec/21 §13)
+            // Legacy global gridColumns → her açık tab'ın path'ine kopyalanır
             for tab in openTabs {
                 projectGridLayouts[tab] = legacy
             }
@@ -117,7 +117,7 @@ public final class WorkspaceStore {
         onQuitResolved?(shouldQuit)
     }
 
-    // MARK: - Sidebar'lar (spec/21 §12: her toggle persist)
+    // MARK: - Sidebar'lar (her toggle persist)
 
     public func toggleLeftSidebar() {
         leftSidebarOpen.toggle()
@@ -142,7 +142,7 @@ public final class WorkspaceStore {
         persist()
     }
 
-    // MARK: - Tab yönetimi (spec/21 §9)
+    // MARK: - Tab yönetimi
 
     public func openTab(_ repoPath: String) {
         if !openTabs.contains(repoPath) {
@@ -161,7 +161,7 @@ public final class WorkspaceStore {
         }
     }
 
-    /// Guard (spec/21 §9): minimize edilmiş terminali olan tab dialog'suz kapanmaz.
+    /// Guard: minimize edilmiş terminali olan tab dialog'suz kapanmaz.
     public func requestCloseTab(_ repoPath: String, repoName: String) {
         let minimizedCount = terminals.minimizedTerminals(in: repoPath).count
         if minimizedCount > 0 {
@@ -189,7 +189,7 @@ public final class WorkspaceStore {
         let wasActive = activeTab == repoPath
         openTabs.removeAll { $0 == repoPath }
         if wasActive {
-            // Kapanan aktifse listenin SON tab'ı aktif olur (spec/21 §9)
+            // Kapanan aktifse listenin SON tab'ı aktif olur
             activeTab = openTabs.last
             if let tab = activeTab {
                 terminals.activateRepo(tab)
@@ -206,7 +206,7 @@ public final class WorkspaceStore {
         }
     }
 
-    // MARK: - Grid layout (spec/21 §10)
+    // MARK: - Grid layout
 
     public func gridLayout(for repoPath: String?) -> GridLayout {
         guard let repoPath else { return Self.defaultGridLayout }
@@ -250,7 +250,7 @@ public final class WorkspaceStore {
         return id
     }
 
-    // MARK: - Persistence (spec/21 §13: yalnız bu alt küme)
+    // MARK: - Persistence (yalnız bu alt küme)
 
     private func persist() {
         let tabs = openTabs

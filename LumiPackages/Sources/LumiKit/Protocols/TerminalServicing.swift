@@ -7,7 +7,6 @@ import Foundation
 @MainActor
 public protocol TerminalServicing: AnyObject, Sendable {
     /// Yeni login-shell PTY oturumu açar; `command` verilirse shell'e yazılır (PTY argv'si değil).
-    /// Limit aşımında `LumiError.terminalLimitReached` fırlatır (karar 5 — sessiz null yok).
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta
 
@@ -16,15 +15,14 @@ public protocol TerminalServicing: AnyObject, Sendable {
     func killAll()
     func resize(id: TerminalID, cols: Int, rows: Int)
 
-    /// Tab seviyesi odak; eşleşen terminale onFocus, diğerlerine onBlur uygulanır (spec/10 §12).
+    /// Tab seviyesi odak; eşleşen terminale onFocus, diğerlerine onBlur uygulanır.
     func setFocused(_ id: TerminalID?)
-    /// Pencere seviyesi odak; tüm status makinelerine yayılır (spec/10 §12).
+    /// Pencere seviyesi odak; tüm status makinelerine yayılır.
     func setWindowFocused(_ focused: Bool)
 
     /// Sıralı koleksiyon — Map-insertion-order tuzağına karşı (karar 11).
     var terminals: [TerminalMeta] { get }
 
-    func setMaxTerminals(_ n: Int)
     func events() -> AsyncStream<TerminalEvent>
 
     /// Decode edilmiş çıktı chunk'ları — harici tüketiciler için fan-out

@@ -19,7 +19,7 @@ struct GridSettingsControl: View {
                 Image(systemName: "rectangle.split.3x1")
                     .font(.system(size: 11))
                 Text(columnLabel)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                 // Yükseklik ekseni: yalnız ikon (Sığdır/Kaydır metni yerine)
                 Image(systemName: heightIcon)
                     .font(.system(size: 11))
@@ -28,12 +28,12 @@ struct GridSettingsControl: View {
                     .foregroundStyle(Theme.textMuted)
             }
             .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
+            .padding(.horizontal, 8)
+            .frame(height: TopBarMetrics.controlHeight)
             .background(Theme.bgElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
-                RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }

@@ -5,7 +5,7 @@ import LumiKit
 /// forkpty tabanlı PTY wrapper'ı (design/01 §2).
 ///
 /// SwiftTerm `LocalProcess` yerine kendi katmanımız: watermark backpressure için
-/// fd okumasının suspend/resume kancası bizde olmalı (spec/00 §4.1-2). Tüm I/O
+/// fd okumasının suspend/resume kancası bizde olmalı (design/00 Ek A §A.1-2). Tüm I/O
 /// tek serial io queue üzerinde akar; `write`/`resize` o queue'dan çağrılır.
 public final class PTYProcess: @unchecked Sendable {
     public enum ReadDirective: Equatable {
@@ -131,7 +131,7 @@ public final class PTYProcess: @unchecked Sendable {
 
     /// Handler her readable event'te ≤64KB ham byte alır; `.suspend` dönerse
     /// kaynak kendini durdurur — kernel PTY buffer'ı dolunca yazan süreç bloklanır,
-    /// veri kaybı olmaz (spec/00 §4.1-2).
+    /// veri kaybı olmaz (design/00 Ek A §A.1-2).
     public func startReading(handler: @escaping @Sendable (Data) -> ReadDirective) {
         readHandler = handler
         let source = DispatchSource.makeReadSource(fileDescriptor: masterFD, queue: queue)

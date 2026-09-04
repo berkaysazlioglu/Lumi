@@ -1,7 +1,7 @@
 import XCTest
 @testable import LumiUI
 
-/// Shortcuts sekmesi salt-okunur referansının bütünlüğü (spec/22 §5.6).
+/// Shortcuts sekmesi salt-okunur referansının bütünlüğü.
 /// Liste MainMenuBuilder'ın görsel aynası — sapmaları erken yakalar.
 final class ShortcutReferenceTests: XCTestCase {
     func testCoversEveryMenuShortcutAction() {

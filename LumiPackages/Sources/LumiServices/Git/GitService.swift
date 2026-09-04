@@ -1,10 +1,10 @@
 import Foundation
 import LumiKit
 
-/// Git CLI + porcelain parse servisi (spec/12, design/02 §4).
+/// Git CLI + porcelain parse servisi (design/02 §4).
 /// CLI yaklaşımı bilinçli: kullanıcının git config/hook/credential dünyasıyla
-/// otomatik uyumlu (spec/12 Electron notu 3). Worktree/checkout/pull/push/stash
-/// kapsam DIŞI (YAGNI — spec/12).
+/// otomatik uyumlu (Electron notu 3). Worktree/checkout/pull/push/stash
+/// kapsam DIŞI (YAGNI).
 public struct GitService: GitServicing {
     static let gitExecutable = "/usr/bin/git"
     static let commandTimeout: TimeInterval = 20
@@ -26,10 +26,10 @@ public struct GitService: GitServicing {
     }
 
     private func logQuietFailure(_ operation: String, _ output: ProcessRunner.Output?) {
-        // Git olmayan dizin BEKLENEN durum (spec/12: paneller boş ve sessiz) —
+        // Git olmayan dizin BEKLENEN durum (paneller boş ve sessiz) —
         // her tab değişiminde log gürültüsü üretmez.
         if let output, output.stderr.contains("not a git repository") { return }
-        // "Boş ve sessiz" parite (spec/12): UI'ya hata sızdırılmaz ama iz bırakılır
+        // "Boş ve sessiz" parite: UI'ya hata sızdırılmaz ama iz bırakılır
         let detail = output.map { "exit \($0.exitCode): \($0.stderr.prefix(200))" } ?? "timeout/launch failure"
         fputs("[lumi-git] \(operation) başarısız (sessiz): \(detail)\n", stderr)
     }
@@ -61,7 +61,7 @@ public struct GitService: GitServicing {
         ]
         if let branch {
             if let defaultBranch, branch != defaultBranch {
-                // Kritik UX (spec/12 §2): yalnız branch'e özgü commit'ler
+                // Kritik UX: yalnız branch'e özgü commit'ler
                 arguments.append("\(defaultBranch)..\(branch)")
             } else {
                 arguments.append(branch)
@@ -106,7 +106,7 @@ public struct GitService: GitServicing {
         }
     }
 
-    /// Porcelain v1 satırı → sadeleştirilmiş statü (spec/12 §4): index+worktree
+    /// Porcelain v1 satırı → sadeleştirilmiş statü: index+worktree
     /// kodları tek statüye iner; rename'de `to` path'i alınır.
     static func parseStatusLine(_ line: String) -> GitFileChange? {
         guard line.count >= 4 else { return nil }
@@ -213,7 +213,7 @@ public struct GitService: GitServicing {
         return output.stdout.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
             guard parts.count >= 2, let statusChar = parts[0].first else { return nil }
-            // Skorlu statüler normalize edilir (R100 → renamed — spec/12 temizlik fırsatı)
+            // Skorlu statüler normalize edilir (R100 → renamed)
             let status: FileChangeStatus
             switch statusChar {
             case "A": status = .added

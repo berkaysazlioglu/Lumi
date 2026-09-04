@@ -27,17 +27,17 @@ public struct UsageIndicatorView: View {
     private var compact: some View {
         HStack(spacing: 6) {
             Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-                .font(.system(size: 12))
+                .font(.system(size: 11))
             Text(label)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
+        .padding(.horizontal, 8)
+        .frame(height: TopBarMetrics.controlHeight)
         .background(Theme.bgElevated)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(
-            RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1)
         )
     }
 

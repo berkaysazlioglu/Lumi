@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import UserNotifications
 
-/// Gerçek OS bildirimleri (spec/13 §4.3 + UN izin akışı — yeni gereksinim).
+/// Gerçek OS bildirimleri (UN izin akışı — yeni gereksinim).
 /// UNUserNotificationCenter bundle'lı app gerektirir; `swift run` ile koşan
 /// bundle'sız süreçte kullanılamaz — seçim composition root'ta yapılır.
 final class UNNotificationPresenter: NSObject, NotificationPresenting {
@@ -29,7 +29,7 @@ final class UNNotificationPresenter: NSObject, NotificationPresenting {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        // silent: true paritesi — ses yok (spec/13 §4.3)
+        // silent: true paritesi — ses yok
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }

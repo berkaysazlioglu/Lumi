@@ -8,7 +8,7 @@ final class UTF8StreamDecoderTests: XCTestCase {
     }
 
     func testSplitIdleMarkAcrossChunks() {
-        // ✳ U+2733 = E2 9C B3 — spec/10: bölünmesi OSC parser ve idle tespitini bozar
+        // ✳ U+2733 = E2 9C B3 — bölünmesi OSC parser ve idle tespitini bozar
         var decoder = UTF8StreamDecoder()
         XCTAssertEqual(decoder.decode(Data([0xE2])), "")
         XCTAssertEqual(decoder.decode(Data([0x9C])), "")

@@ -9,7 +9,6 @@ final class FakeTerminalService: TerminalServicing {
     private(set) var spawnedMetas: [TerminalMeta] = []
     private(set) var killedIDs: [TerminalID] = []
     private(set) var focusCalls: [TerminalID?] = []
-    private(set) var maxTerminalsValue = 12
     private(set) var writtenTexts: [(id: TerminalID, text: String)] = []
 
     var terminals: [TerminalMeta] { spawnedMetas }
@@ -44,10 +43,6 @@ final class FakeTerminalService: TerminalServicing {
     }
 
     func setWindowFocused(_ focused: Bool) {}
-
-    func setMaxTerminals(_ n: Int) {
-        maxTerminalsValue = n
-    }
 
     func events() -> AsyncStream<TerminalEvent> {
         broadcaster.stream()

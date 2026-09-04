@@ -61,7 +61,7 @@ struct TerminalGridView: View {
 }
 
 /// Terminal kartı: başlık çubuğu (dot + başlık + minimize/kapat) + canlı terminal.
-/// Başlık önceliği (spec/20 §10): oscTitle > task > name > "Terminal".
+/// Başlık önceliği: oscTitle > task > name > "Terminal".
 struct TerminalCardView: View {
     let meta: TerminalMeta
     let isActive: Bool
@@ -120,12 +120,12 @@ struct TerminalCardView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onFocus)
-        // Başlığa çift tık → maximize/solo (spec/20 — rahat çalışma)
+        // Başlığa çift tık → maximize/solo (rahat çalışma)
         .simultaneousGesture(TapGesture(count: 2).onEnded(onMaximize))
     }
 }
 
-/// Durum noktası (spec/23): working / waiting-unseen pulse'lı, gerisi sabit.
+/// Durum noktası: working / waiting-unseen pulse'lı, gerisi sabit.
 struct StatusDot: View {
     let status: TerminalStatus
 

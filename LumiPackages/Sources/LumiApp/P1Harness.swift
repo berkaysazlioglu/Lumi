@@ -23,7 +23,6 @@ final class P1Harness {
     }
 
     func run(repoPath: String) {
-        manager.setMaxTerminals(Self.terminalCount)
         print("P1: \(Self.terminalCount) terminal spawn ediliyor (1 görünür + \(Self.terminalCount - 1) gizli)…")
 
         for index in 0..<Self.terminalCount {

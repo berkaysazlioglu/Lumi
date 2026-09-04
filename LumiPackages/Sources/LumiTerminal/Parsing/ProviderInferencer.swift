@@ -1,6 +1,6 @@
 import Foundation
 
-/// Input/output/OSC ipuçlarından agent çıkarımı (spec/10 §6).
+/// Input/output/OSC ipuçlarından agent çıkarımı.
 /// Asimetri birebir korunur: "openai codex" hint'i her zaman codex'e çevirir;
 /// "claude code" yalnızca hint unknown iken claude'a çevirir (codex output ile düşmez).
 struct ProviderInferencer {

@@ -1,6 +1,6 @@
 # Lumi Native — Servis Katmanı Tasarımı
 
-> `LumiKit` protokolleri + `LumiServices`/`LumiTerminal` implementasyon sözleşmeleri. Davranış kaynağı: [spec/11](../spec/11-ipc-surface.md), [spec/12](../spec/12-git-vcs.md), [spec/13](../spec/13-main-services.md). IPC kanal haritası iç API sözleşmesi olarak kullanılır ([spec/00 §5](../spec/00-overview.md)).
+> `LumiKit` protokolleri + `LumiServices`/`LumiTerminal` implementasyon sözleşmeleri. Electron IPC kanal haritası iç API sözleşmesine dönüştürülmüştür (§1).
 
 Genel kurallar:
 - Tüm protokoller `LumiKit`'te; metodlar yalnız `LumiError` fırlatır; tüm event payload'ları `Sendable`.
@@ -59,7 +59,6 @@ public protocol ConfigServicing: Actor, Sendable {
 - `isFirstRun()` = config.json yok VEYA `projectsRoot` boş.
 
 **Yan etki propagasyonu — `ConfigSideEffectCoordinator` (app target):** `ConfigEvent.configChanged(old:new:)` tüketir, alanları **eşitlikle** karşılaştırır (Electron'un truthiness bug'ı yapısal olarak imkânsız — `0`/boş string de propagate olur, karar 11):
-- `maxTerminals` değişti → `terminal.setMaxTerminals(n)`
 - `projectsRoot`/`additionalPaths` değişti → `repo.setRoots(...)` (→ `reposChanged` yayını)
 - `notifications` değişti → `notifications.updateSettings(s)`
 
@@ -80,7 +79,7 @@ public protocol RepoServicing: Actor, Sendable {
 }
 ```
 
-- **Keşif paritesi ([spec/12](../spec/12-git-vcs.md)):** `projectsRoot` + `additionalPaths(root|repo)`; root'lar non-recursive ilk seviye taraması; `.`-prefix ve dizin-olmayan atlanır; `<dir>/.git` (dosya veya dizin) → `isGitRepo`; git-olmayan dizinler de listelenir; mutlak-path dedup, ilk kazanır; var olmayan path sessiz atlanır.
+- **Keşif paritesi:** `projectsRoot` + `additionalPaths(root|repo)`; root'lar non-recursive ilk seviye taraması; `.`-prefix ve dizin-olmayan atlanır; `<dir>/.git` (dosya veya dizin) → `isGitRepo`; git-olmayan dizinler de listelenir; mutlak-path dedup, ilk kazanır; var olmayan path sessiz atlanır.
 - **File tree:** Hardcoded exclude listesi (git-olmayan dizinler için **korunur**); ignored bayrakları **`git check-ignore`** ile (karar 7 — nested/global/`info/exclude` dahil, bilinçli sapma); `.git` daima gizli; ignored klasöre inilmez; sıralama: klasör→dosya, ignored sona, `localeCompare`. Path'ler repo-köküne göre `/` ayraçlı.
 - **Watcher:** Root'lar non-recursive **300ms** debounce; aktif repo recursive **500ms** debounce; FSEvents/DispatchSource; `.git` event fırtınalarına coalescing zorunlu. "Olay → tam reload" stratejisi korunur. Polling yok (parite).
 
@@ -102,7 +101,7 @@ public protocol GitServicing: Sendable {          // stateless; git CLI + porcel
 }
 ```
 
-- simple-git yerine **`git` CLI + porcelain parse** ([spec/00 §5](../spec/00-overview.md) önerisi). Async `Process`, timeout'lu.
+- simple-git yerine **`git` CLI + porcelain parse**. Async `Process`, timeout'lu.
 - **Commit log semantiği birebir:** default branch `main → master → nil`; `--max-count=50`; branch verilmişse ve default'tan farklıysa **`defaultBranch..branch`** aralığı; hata → boş array + log (görünür hataya çevrilmez — panel-boş davranış paritesi).
 - **Status sadeleşmesi korunur:** staged/unstaged ayrımı yok; `modified|added|deleted|renamed|untracked`; rename'de `to` path.
 - **Path-traversal guard'ı TÜM path alan metodlarda** (karar 11 — Electron'da yalnız `readFile` korumalıydı): repo köküne canonical-path kontrolü; ihlal → `LumiError.pathOutsideRepo`.
@@ -168,7 +167,6 @@ Tek app-geneli enum, `LumiKit`'te; her servis iç hatayı (Process, FileManager,
 
 ```swift
 public enum LumiError: Error, LocalizedError, Sendable, Equatable {
-    case terminalLimitReached(max: Int)        // sessiz null'dı — artık görünür
     case spawnFailed(reason: String)
     case terminalNotFound(TerminalID)
     case gitFailed(operation: String, detail: String)

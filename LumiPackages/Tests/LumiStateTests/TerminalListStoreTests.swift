@@ -3,7 +3,7 @@ import XCTest
 import LumiKit
 @testable import LumiState
 
-/// Komşu-odak / minimize / lastActiveByRepo kuralları (spec/21 §5-7 birebir) —
+/// Komşu-odak / minimize / lastActiveByRepo kuralları (Electron paritesi) —
 /// Faz 3 çıkış kriteri testleri. Event'ler deterministiklik için doğrudan
 /// `apply` ile sürülür.
 @MainActor
@@ -27,7 +27,7 @@ final class TerminalListStoreTests: XCTestCase {
         return meta
     }
 
-    // MARK: - Komşu odaklama (spec/21 §5)
+    // MARK: - Komşu odaklama
 
     func testClosingActiveFocusesPreviousNeighbor() {
         let first = makeTerminal("t1")
@@ -78,7 +78,7 @@ final class TerminalListStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTerminalID, third.id, "minimize edilmiş komşu aday olamaz")
     }
 
-    // MARK: - Minimize kuralları (spec/21 §6)
+    // MARK: - Minimize kuralları
 
     func testMinimizeActiveShiftsFocusToVisibleSibling() {
         let first = makeTerminal("t1")
@@ -143,7 +143,7 @@ final class TerminalListStoreTests: XCTestCase {
 
         store.apply(.statusChanged(second.id, .waitingUnseen))
         XCTAssertFalse(store.isMinimized(second.id))
-        XCTAssertEqual(store.activeTerminalID, first.id, "otomatik restore odak vermez (spec/21 §6)")
+        XCTAssertEqual(store.activeTerminalID, first.id, "otomatik restore odak vermez")
     }
 
     func testAutoMinimizedRestoresOnIdleAndError() {
@@ -210,7 +210,7 @@ final class TerminalListStoreTests: XCTestCase {
         XCTAssertFalse(store.isMinimized(only.id), "izin promptu da girdi bekliyor sayılır")
     }
 
-    // MARK: - lastActiveByRepo (spec/21 §9 yan etkisi)
+    // MARK: - lastActiveByRepo (yan etki)
 
     func testActivateRepoRestoresLastActive() {
         _ = makeTerminal("a1", repo: "/repo/a")

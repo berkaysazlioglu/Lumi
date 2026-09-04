@@ -100,7 +100,7 @@ public struct RootView: View {
 
     private var dashboard: some View {
         VStack(spacing: 0) {
-            // Focus mode: header gizlenir, hover-reveal bar devralır (spec/22)
+            // Focus mode: header gizlenir, hover-reveal bar devralır
             if !workspace.isFocusMode {
                 headerBar
                 Rectangle()
@@ -316,7 +316,7 @@ public struct RootView: View {
     }
 
     /// Minimize edilen terminaller şeridi — SessionList sidebar'ı Faz 4'e dek
-    /// restore yüzeyi. Tıklama yalnız restore eder; odak vermez (spec/21 §6).
+    /// restore yüzeyi. Tıklama yalnız restore eder; odak vermez.
     private func minimizedStrip(_ minimized: [TerminalMeta]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {

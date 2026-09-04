@@ -1,8 +1,9 @@
 import AppKit
 import LumiUI
 
-/// Traffic light'ları header'ın dikey ortasına taşır (v1 `trafficLightPosition`
-/// paritesi — Electron'un `RedrawTrafficLights` yaklaşımı).
+/// Traffic light'ları ince header'ın içine, diğer macOS uygulamalarındaki
+/// doğal konuma yerleştirir (karar 30 — Orca `hiddenInset` paritesi: ilk buton
+/// x=16, dikeyde bar ortası; butonlar arası standart 20pt adım).
 ///
 /// Yalnız butonları kaydırmak yetmez: AppKit'in titlebar container'ı 28px'tir ve
 /// butonlar onun dışına taşınca superview bounds'u hit-test'i kırpar — tıklama
@@ -13,6 +14,9 @@ import LumiUI
 @MainActor
 enum TrafficLightLayout {
     static let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+    /// İlk butonun sol kenarı ve butonlar arası adım (AppKit standardı 12px buton + 8px boşluk).
+    static let leadingInset: CGFloat = TopBarMetrics.trafficLightLeading
+    static let buttonStride: CGFloat = 20
 
     static func apply(to window: NSWindow, headerHeight: CGFloat = TopBarMetrics.height) {
         let buttons = buttonTypes.compactMap { window.standardWindowButton($0) }
@@ -29,9 +33,10 @@ enum TrafficLightLayout {
         )
         titlebarView.frame = container.bounds
 
-        for button in buttons {
+        for (index, button) in buttons.enumerated() {
+            let x = leadingInset + CGFloat(index) * buttonStride
             let y = (headerHeight - button.frame.height) / 2
-            button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: y))
+            button.setFrameOrigin(NSPoint(x: x, y: y))
         }
     }
 

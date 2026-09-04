@@ -1,6 +1,6 @@
 import LumiKit
 
-/// 6 durumlu, provider-agnostic terminal durum makinesi (spec/10 §5, birebir port).
+/// 6 durumlu, provider-agnostic terminal durum makinesi (birebir port).
 /// Saf mantıktır; io queue'ya confine edilerek kullanılır, kendi senkronizasyonu yoktur.
 final class StatusStateMachine {
     private(set) var status: TerminalStatus = .idle

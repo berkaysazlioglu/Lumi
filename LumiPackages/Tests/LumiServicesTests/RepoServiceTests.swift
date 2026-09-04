@@ -27,7 +27,7 @@ final class RepoServiceTests: XCTestCase {
     func testDiscoveryRules() async throws {
         // .git dizinli repo
         _ = try makeDir("projects", "repoA", ".git")
-        // .git DOSYALI repo (submodule/worktree biçimi de git sayılır — spec/12)
+        // .git DOSYALI repo (submodule/worktree biçimi de git sayılır)
         let repoB = try makeDir("projects", "repoB")
         FileManager.default.createFile(atPath: repoB + "/.git", contents: Data("gitdir: ../x".utf8))
         // git olmayan düz dizin — yine listelenir

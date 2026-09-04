@@ -1,6 +1,6 @@
 import Foundation
 
-/// Codex fallback status tespiti: 3 sn output sessizliği → onSilence (spec/10 §6).
+/// Codex fallback status tespiti: 3 sn output sessizliği → onSilence.
 /// Yalnızca hint==codex iken touch edilir; hint claude'a dönünce cancel edilir.
 final class CodexSilenceTimer {
     static let defaultInterval: TimeInterval = 3.0

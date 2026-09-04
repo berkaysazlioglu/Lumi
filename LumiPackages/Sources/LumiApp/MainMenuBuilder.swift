@@ -2,7 +2,7 @@ import AppKit
 
 /// Ana menü — kısayolların TEK kaynağı (design/03 §2): Cmd+T/W/O/,/1-9/
 /// Shift+oklar/Shift+F. SwiftUI .keyboardShortcut hiçbir yerde kullanılmaz.
-/// Edit menüsü terminal copy-paste için zorunludur (spec/30).
+/// Edit menüsü terminal copy-paste için zorunludur.
 @MainActor
 enum MainMenuBuilder {
     struct Actions {

@@ -15,7 +15,7 @@ public struct TerminalID: Hashable, Sendable, Codable, CustomStringConvertible {
     public var description: String { raw.uuidString }
 }
 
-/// 6 durumlu, provider-agnostic terminal durumu (spec/10 §5).
+/// 6 durumlu, provider-agnostic terminal durumu.
 /// Raw value'lar Electron'daki string'lerle birebir aynıdır (persistence/parite).
 public enum TerminalStatus: String, Sendable, Codable, CaseIterable, Equatable {
     case idle
@@ -35,12 +35,12 @@ public enum TerminalStatus: String, Sendable, Codable, CaseIterable, Equatable {
     }
 }
 
-/// AI sağlayıcısı (config seviyesi; spec/13).
+/// AI sağlayıcısı (config seviyesi).
 public enum AgentProvider: String, Sendable, Codable, Equatable, CaseIterable {
     case claude
     case codex
 
-    /// UI etiketi (spec/20 §6: buton "New Claude"/"New Codex").
+    /// UI etiketi (buton "New Claude"/"New Codex").
     public var displayName: String {
         switch self {
         case .claude: return "Claude"
@@ -49,12 +49,12 @@ public enum AgentProvider: String, Sendable, Codable, Equatable, CaseIterable {
     }
 
     /// Yeni provider terminalinde spawn sonrası enjekte edilen CLI komutu
-    /// (spec/20 §6: önce shell açılır, sonra komut yazılır).
+    /// (önce shell açılır, sonra komut yazılır).
     public var launchCommand: String { rawValue }
 }
 
 /// Terminal metadata'sı — UI/state katmanının gördüğü tek model.
-/// Ham çıktı ASLA burada taşınmaz (spec/00 §4.1-1); ekran modeli emülatörde yaşar.
+/// Ham çıktı ASLA burada taşınmaz (design/00 Ek A §A.1-1); ekran modeli emülatörde yaşar.
 public struct TerminalMeta: Sendable, Identifiable, Equatable {
     public let id: TerminalID
     public var name: String
@@ -96,7 +96,7 @@ public enum TerminalEvent: Sendable, Equatable {
     case exited(TerminalID, code: Int32)
     case statusChanged(TerminalID, TerminalStatus)
     case titleChanged(TerminalID, String)
-    /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı (spec/10).
+    /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)
     case bell(TerminalID)

@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 /// Uygulama hangi yoldan ölürse ölsün zombi `claude` ağacı bırakmamak için
-/// global child-pid kaydı (spec/00 §4.3, design/01 §2).
+/// global child-pid kaydı (design/00 Ek A §A.3, design/01 §2).
 /// atexit + SIGTERM süpürmesi yalnız async-signal-safe çağrılar kullanır:
 /// pid'ler sabit kapasiteli C dizisinde tutulur, handler killpg dışında bir şey yapmaz.
 

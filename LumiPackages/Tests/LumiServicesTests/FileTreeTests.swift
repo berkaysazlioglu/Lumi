@@ -3,7 +3,7 @@ import XCTest
 import LumiKit
 @testable import LumiServices
 
-/// File tree davranışları (spec/12 §9 + karar 7: gerçek git ignore semantiği —
+/// File tree davranışları (karar 7: gerçek git ignore semantiği —
 /// nested .gitignore dahil; bilinçli sapma).
 final class FileTreeTests: XCTestCase {
     private var repoDir: URL!
@@ -77,7 +77,7 @@ final class FileTreeTests: XCTestCase {
     }
 
     func testHardcodedExcludesApplyWithoutGit() async throws {
-        // Git OLMAYAN dizin: tek filtre hardcoded liste (spec/12 §9)
+        // Git OLMAYAN dizin: tek filtre hardcoded liste
         try makeFile("node_modules/pkg/index.js")
         try makeFile("app.log")
         try makeFile(".env.local")

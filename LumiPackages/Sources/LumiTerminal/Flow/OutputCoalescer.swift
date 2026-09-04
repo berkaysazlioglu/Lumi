@@ -1,6 +1,6 @@
 import Foundation
 
-/// Frame hızında chunk birleştirme (spec/00 §4.1-3, design/01 §3).
+/// Frame hızında chunk birleştirme (design/00 Ek A §A.1-3, design/01 §3).
 /// Görünür terminalde ~16ms, gizlide 100ms aralıkla ya da boyut eşiğinde flush eder.
 /// io queue'ya confine edilir; chunk başına maliyet O(chunk)'tır.
 final class OutputCoalescer {
@@ -49,7 +49,7 @@ final class OutputCoalescer {
         flushBuffer()
     }
 
-    /// Gizli terminal politikası (spec/00 §4.1-6): aralık genişler, akış durmaz.
+    /// Gizli terminal politikası (design/00 Ek A §A.1-6): aralık genişler, akış durmaz.
     func setHidden(_ hidden: Bool) {
         isHidden = hidden
     }

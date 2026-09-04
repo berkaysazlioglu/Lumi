@@ -1,6 +1,6 @@
 import Foundation
 
-/// Ack tabanlı uçtan uca flow control sayacı (spec/00 §4.1-2, design/01 §3).
+/// Ack tabanlı uçtan uca flow control sayacı (design/00 Ek A §A.1-2, design/01 §3).
 /// In-flight = fd'den okunmuş ama henüz emülatöre feed edilmemiş byte'lar.
 /// io queue'dan (produce) ve MainActor'dan (consume) dokunulur; lock korumalı.
 public final class FlowController: @unchecked Sendable {

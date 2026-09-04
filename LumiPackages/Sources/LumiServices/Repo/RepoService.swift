@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Repo keşfi + kök dizin izleme (spec/12 §1, design/02 §3).
+/// Repo keşfi + kök dizin izleme (design/02 §3).
 ///
 /// Keşif paritesi: kökler non-recursive ilk seviye taranır; `.`-prefix ve
 /// dizin-olmayanlar atlanır; `<dir>/.git` (dosya VEYA dizin — submodule sayılır)
@@ -71,7 +71,7 @@ public actor RepoService: RepoServicing {
         broadcaster.stream()
     }
 
-    // MARK: - File tree (spec/12 §9, karar 7)
+    // MARK: - File tree (karar 7)
 
     /// Tarama actor dışında, detached bir utility task'te koşar: devasa bir
     /// kökte dakikalar sürebilen senkron iş RepoService'i (repo listesi,
@@ -119,7 +119,7 @@ public actor RepoService: RepoServicing {
 
     private func scanRoot(_ root: String, source: RepoSource) -> [Repo] {
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root) else {
-            return [] // var olmayan kök sessizce atlanır (spec/12)
+            return [] // var olmayan kök sessizce atlanır
         }
         return entries.sorted().compactMap { name in
             guard !name.hasPrefix(".") else { return nil }
@@ -134,7 +134,7 @@ public actor RepoService: RepoServicing {
         }
     }
 
-    /// Yalnız baştaki `~` home'a açılır; `~user` desteklenmez (spec/12 paritesi).
+    /// Yalnız baştaki `~` home'a açılır; `~user` desteklenmez (Electron paritesi).
     private func expand(_ path: String) -> String {
         guard path == "~" || path.hasPrefix("~/") else { return path }
         return NSHomeDirectory() + String(path.dropFirst(1))

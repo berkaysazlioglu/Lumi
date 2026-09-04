@@ -1,18 +1,13 @@
 import Foundation
 
-/// `~/.lumi/config.json` şeması (spec/13 §1.1; gerçek dosyayla doğrulandı).
+/// `~/.lumi/config.json` şeması (gerçek dosyayla doğrulandı).
 /// Alan adları diskteki JSON anahtarlarıyla birebir aynıdır (karar 9).
 public struct AppConfig: Codable, Sendable, Equatable {
     public var projectsRoot: String
     public var additionalPaths: [AdditionalPath]
     public var aiProvider: AgentProvider
-    public var maxTerminals: Int
     public var theme: String
     public var terminalFontSize: Int
-    /// macOS stem-darkening (CG font smoothing). false = ince çizgiler
-    /// (v1/xterm.js `-webkit-font-smoothing: antialiased` paritesi).
-    /// Additive alan (karar 9): eski config'lerde yoksa false kabul edilir.
-    public var terminalFontSmoothing: Bool
     /// Terminal font ailesi. Boş = bundle'daki JetBrains Mono (default).
     /// Additive (karar 9): yoksa "".
     public var terminalFontFamily: String
@@ -37,10 +32,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         projectsRoot: "",
         additionalPaths: [],
         aiProvider: .claude,
-        maxTerminals: 12,
         theme: "dark",
         terminalFontSize: 13,
-        terminalFontSmoothing: false,
         terminalFontFamily: "",
         terminalCursorStyle: TerminalCursorShape.block.rawValue,
         terminalCursorBlink: true,
@@ -54,10 +47,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         projectsRoot: String,
         additionalPaths: [AdditionalPath],
         aiProvider: AgentProvider,
-        maxTerminals: Int,
         theme: String,
         terminalFontSize: Int,
-        terminalFontSmoothing: Bool,
         terminalFontFamily: String,
         terminalCursorStyle: String,
         terminalCursorBlink: Bool,
@@ -69,10 +60,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
         self.aiProvider = aiProvider
-        self.maxTerminals = maxTerminals
         self.theme = theme
         self.terminalFontSize = terminalFontSize
-        self.terminalFontSmoothing = terminalFontSmoothing
         self.terminalFontFamily = terminalFontFamily
         self.terminalCursorStyle = terminalCursorStyle
         self.terminalCursorBlink = terminalCursorBlink
@@ -188,7 +177,7 @@ public struct NotificationSettings: Codable, Sendable, Equatable {
     }
 }
 
-/// `~/.lumi/ui-state.json` şeması (spec/13 §1.3).
+/// `~/.lumi/ui-state.json` şeması.
 /// DİKKAT: Gerçek dosyalarda spec dışı legacy alanlar yaşar (`gridColumns`,
 /// `activeView`); bunlar tipli modele girmez ama yazımda KORUNUR — Electron'la
 /// gidip-gelme (karar 9) servis katmanındaki ham-dict merge'iyle sağlanır.
@@ -205,7 +194,7 @@ public struct UIState: Codable, Sendable, Equatable {
     /// ile aynı chat'ten devam edilir. Boş liste = devam edilecek oturum yok.
     public var resumeSessions: [ResumeSession]
     /// Legacy `gridColumns` alanının (number | "auto") çevirisi — yalnız OKUNUR
-    /// (spec/21 §13 migration'ı için); yazımda overlay'e girmez, ham anahtar
+    /// (migration için); yazımda overlay'e girmez, ham anahtar
     /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
     public var legacyGridColumns: GridLayout?
 

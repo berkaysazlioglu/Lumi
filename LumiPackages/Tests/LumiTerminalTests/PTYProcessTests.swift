@@ -105,7 +105,7 @@ final class PTYProcessTests: XCTestCase {
     func testSuspendStopsDeliveryUntilResume() throws {
         let queue = makeQueue()
         // Kendi başına 300KB üreten süreç: suspend'de kernel PTY buffer'ı dolar
-        // ve yazan süreç doğal bloklanır (spec/00 §4.1-2'nin birebir kanıtı).
+        // ve yazan süreç doğal bloklanır (design/00 Ek A §A.1-2'nin birebir kanıtı).
         let pty = try spawn("/bin/sh", args: ["-c", "yes | head -c 300000"], queue: queue)
 
         let firstChunk = expectation(description: "first chunk")

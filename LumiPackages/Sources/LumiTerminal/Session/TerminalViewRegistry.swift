@@ -67,7 +67,7 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         entry.view.autoresizingMask = [.width, .height]
         container.addSubview(entry.view)
         // "Görünür olunca fit" garantisi: frame ataması SwiftTerm'in cols/rows
-        // hesabını tetikler; sizeChanged delegate'i resize'ı PTY'ye iletir (spec/20).
+        // hesabını tetikler; sizeChanged delegate'i resize'ı PTY'ye iletir.
         // Buffer'dan tam yeniden çizim: re-attach sonrası (grid round-trip) emülatör
         // içeriği zaten elde; görünmesi için tüm bounds dirty işaretlenir.
         entry.view.needsDisplay = true

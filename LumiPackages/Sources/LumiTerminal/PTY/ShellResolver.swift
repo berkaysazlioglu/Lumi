@@ -1,6 +1,6 @@
 import Foundation
 
-/// Login shell seçimi (spec/10 §1): macOS zinciri zsh → bash → sh,
+/// Login shell seçimi: macOS zinciri zsh → bash → sh,
 /// process ömrü boyunca cache'lenir. Bilinen mutlak path'ler kullanılır —
 /// GUI app'in minimal PATH'inden etkilenmez.
 enum ShellResolver {

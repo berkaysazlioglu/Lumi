@@ -46,7 +46,7 @@ final class TerminalPipeline: @unchecked Sendable {
         }
     }
 
-    // MARK: - Okuma yolu (spec/10 §3 chunk sırası)
+    // MARK: - Okuma yolu (chunk sırası)
 
     func processOutput(_ data: Data) -> PTYProcess.ReadDirective {
         let directive = flow.noteProduced(data.count)
@@ -99,7 +99,7 @@ final class TerminalPipeline: @unchecked Sendable {
         }
     }
 
-    /// Hint claude'a dönerse codex silence timer'ı iptal edilir (spec/10 §4):
+    /// Hint claude'a dönerse codex silence timer'ı iptal edilir:
     /// Claude tamamen title-tabanlıdır, timer'a gerek yoktur.
     private func applyHint(_ hint: AgentHint) {
         inferencer.applyOSCHint(hint)
@@ -108,7 +108,7 @@ final class TerminalPipeline: @unchecked Sendable {
         }
     }
 
-    // MARK: - Yazma yolu (spec/10 §7)
+    // MARK: - Yazma yolu
 
     /// Filtre → inference → \r etkisi. Dönen veri PTY'ye yazılacak veridir;
     /// boşsa yazım atlanır (filtre her şeyi söktüyse).
@@ -139,7 +139,7 @@ final class TerminalPipeline: @unchecked Sendable {
         coalescer.setHidden(hidden)
     }
 
-    /// Exit-cleanup'ın io tarafı (spec/10 §9 sırası): timer iptali + kalan
+    /// Exit-cleanup'ın io tarafı (sıra-bağımlı): timer iptali + kalan
     /// buffer'ın boşaltılması. Status yayını yapılmaz — Electron paritesi:
     /// kayıttan düşmüş terminale stale status push edilmez.
     func prepareForExit() {

@@ -24,7 +24,7 @@ enum FileTreeRows {
     }
 
     /// Normal mod: expand durumuna göre görünür satırlar. Ignored klasör
-    /// expand edilemez (spec/12 §9) — set'te olsa bile children gizli kalır.
+    /// expand edilemez — set'te olsa bile children gizli kalır.
     nonisolated static func visibleRows(
         _ nodes: [FileTreeNode],
         expanded: Set<String>
@@ -34,7 +34,7 @@ enum FileTreeRows {
         }
     }
 
-    /// Arama modu (spec/12 §9): eşleşen dosyalar + altında eşleşme olan
+    /// Arama modu: eşleşen dosyalar + altında eşleşme olan
     /// klasörler; klasör ADI eşleşirse tüm children korunur. Sonuçta tüm
     /// klasörler açık gösterilir. `query` lowercase beklenmez — burada indirgenir.
     nonisolated static func searchRows(_ nodes: [FileTreeNode], query: String) -> [Row] {

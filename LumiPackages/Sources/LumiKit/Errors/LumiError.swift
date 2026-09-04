@@ -4,7 +4,6 @@ import Foundation
 /// Her servis iç hatasını kendi sınırında bu tipe map'ler; kullanıcıyı etkileyen
 /// her hata ToastStore üzerinden görünür şekilde sunulur.
 public enum LumiError: Error, LocalizedError, Sendable, Equatable {
-    case terminalLimitReached(max: Int)
     case spawnFailed(reason: String)
     case terminalNotFound(TerminalID)
     case gitFailed(operation: String, detail: String)
@@ -22,8 +21,6 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .terminalLimitReached(let max):
-            return "Terminal limit reached (\(max)). Close a terminal to open a new one."
         case .spawnFailed(let reason):
             return "Failed to start terminal: \(reason)"
         case .terminalNotFound(let id):

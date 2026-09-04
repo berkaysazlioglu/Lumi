@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Status-makinesi-güdümlü bildirim servisi (spec/13 §4 tablosu birebir):
+/// Status-makinesi-güdümlü bildirim servisi (Electron bildirim tablosu birebir):
 ///
 /// | Status           | Bildirim                  | Tekrar                  |
 /// |------------------|---------------------------|-------------------------|
@@ -12,7 +12,7 @@ import LumiKit
 ///
 /// Her geçiş önce mevcut interval'i temizler (terminal başına en fazla bir).
 /// Focus guard: native OS bildirimi yalnız pencere odaklı DEĞİLKEN.
-/// Bell toast sinyali ayara tabidir (spec/01 karar 17): unseenEnabled kapalıyken
+/// Bell toast sinyali ayara tabidir (karar 17): unseenEnabled kapalıyken
 /// waiting bell'i de gönderilmez; error bell'i ayardan bağımsız her zaman gider.
 public final class NotificationService: NotificationServicing {
     public static let waitingBody = "Assistant waiting for input"
@@ -107,7 +107,7 @@ public final class NotificationService: NotificationServicing {
     }
 
     private func deliver(id: TerminalID, title: String, body: String) {
-        // Focus guard: pencere odaklıyken OS bildirimi gönderilmez (spec/13 §4)
+        // Focus guard: pencere odaklıyken OS bildirimi gönderilmez
         guard !windowFocused else { return }
         presenter.present(id: id.description, title: title, body: body)
     }

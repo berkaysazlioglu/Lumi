@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Uygulamanın tek hata lavabosu + toast kuyruğu (design/03 §4, spec/21 kuralları:
+/// Uygulamanın tek hata lavabosu + toast kuyruğu (design/03 §4:
 /// max 5, 5sn auto-dismiss, dedupe). Karar 5: kullanıcıyı etkileyen her hata
 /// `reporting {}` koridorundan buraya düşer — hiçbir hata yalnız console'a gitmez.
 @Observable
@@ -43,7 +43,7 @@ public final class ToastStore {
         terminalID: TerminalID? = nil
     ) {
         // Dedupe: aynı içerik aktifken eklenmez; bell için terminal başına bir aktif
-        // toast kuralı (spec/21 §17)
+        // toast kuralı
         let isDuplicate = toasts.contains { existing in
             if kind == .bell, existing.kind == .bell, let terminalID {
                 return existing.terminalID == terminalID

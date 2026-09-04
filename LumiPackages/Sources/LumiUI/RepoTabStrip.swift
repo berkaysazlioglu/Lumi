@@ -41,11 +41,11 @@ struct RepoTabStrip: View {
             workspace.isRepoSelectorOpen.toggle()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(isAddRepoHovering ? Theme.textPrimary : Theme.textSecondary)
-                .frame(width: 32, height: 32)
+                .frame(width: TopBarMetrics.controlHeight, height: TopBarMetrics.controlHeight)
                 .background(isAddRepoHovering ? Theme.bgElevated : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -81,29 +81,29 @@ struct RepoTabChip: View {
     @State private var isCloseHovering = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Image(systemName: "folder")
-                .font(.system(size: 11))
+                .font(.system(size: 10))
             Text(name)
-                .font(.system(size: 13, design: .monospaced))
+                .font(.system(size: 12, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: 120, alignment: .leading)
             closeButton
                 .opacity(isHovering || isActive ? 1 : 0)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 6)
-        .padding(.vertical, 8)
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .frame(height: TopBarMetrics.controlHeight)
         .background(isActive ? Theme.bgElevated : Color.clear)
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 5)
                 .stroke(
                     isActive ? Theme.accentVivid.opacity(0.25) : Color.clear,
                     lineWidth: 1
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
         .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
@@ -115,9 +115,9 @@ struct RepoTabChip: View {
             onClose(name)
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(isCloseHovering ? Theme.error : Theme.textMuted)
-                .frame(width: 18, height: 18)
+                .frame(width: 16, height: 16)
                 .background(isCloseHovering ? Theme.error.opacity(0.2) : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .contentShape(Rectangle())

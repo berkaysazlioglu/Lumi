@@ -54,7 +54,7 @@ enum ProcessRunner {
     }
 
     /// Timeout veya başlatma hatasında nil döner; sessiz-fail sözleşmesi
-    /// (fixProcessPath'in 5sn timeout semantiği, spec/13).
+    /// (fixProcessPath'in 5sn timeout semantiği).
     static func run(
         _ executable: String,
         arguments: [String],

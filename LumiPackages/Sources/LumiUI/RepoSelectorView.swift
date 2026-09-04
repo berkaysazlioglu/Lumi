@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Repo açma dropdown'u (v1 repo-dropdown paritesi; spec/22 §2.3).
+/// Repo açma dropdown'u (v1 repo-dropdown paritesi).
 /// Arama input'u (auto-focus, case-insensitive substring), açık tab'lar
 /// gizlenir, çoklu grupta collapse/expand (session-local), ↑/↓/Enter klavye
 /// navigasyonu (yalnız açık grupların düz listesi), git badge'i, boş durumlar.

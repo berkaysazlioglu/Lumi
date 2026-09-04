@@ -12,7 +12,7 @@ final class WindowBoundsValidatorTests: XCTestCase {
     }
 
     func testBoundsOnDisconnectedScreenInvalid() {
-        // İkinci monitörde kaydedilmiş, artık yalnız ana ekran var (spec/30 senaryosu)
+        // İkinci monitörde kaydedilmiş, artık yalnız ana ekran var 
         let bounds = WindowBounds(x: 2200, y: 200, width: 1400, height: 900)
         XCTAssertNotNil(
             WindowBoundsValidator.validated(bounds, screens: [mainScreen, secondScreen])

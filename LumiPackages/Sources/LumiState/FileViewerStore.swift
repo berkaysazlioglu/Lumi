@@ -2,8 +2,8 @@ import Foundation
 import LumiKit
 import Observation
 
-/// FileViewer modal state'i (spec/22 FileViewer; karar 4 unified diff,
-/// karar 6 lazy commit-diff). Persist edilmez (spec/21 §11).
+/// FileViewer modal state'i (karar 4 unified diff,
+/// karar 6 lazy commit-diff). Persist edilmez.
 @Observable
 @MainActor
 public final class FileViewerStore {
@@ -30,7 +30,7 @@ public final class FileViewerStore {
     public private(set) var commitContext: CommitContext?
     public private(set) var isLoading = false
     /// Markdown dosyalarında render'lı sunum (kapatılınca ham metin/diff).
-    /// Oturumluk — persist edilmez (spec/21 §11).
+    /// Oturumluk — persist edilmez.
     public var rendersMarkdown = true
 
     /// Aktif dosyanın sunum sınıfı (uzantıdan).

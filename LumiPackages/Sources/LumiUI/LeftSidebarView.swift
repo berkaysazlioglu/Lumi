@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Sol sidebar (v1 LeftSidebar paritesi; spec/22 §3). Dikey düzen v1 ile aynı:
+/// Sol sidebar (v1 LeftSidebar paritesi). Dikey düzen v1 ile aynı:
 /// Sessions (aktif repo'nun terminalleri) → Project Context (file tree, kalan
 /// alan). Bölümler 1px border ile ayrılır.
 struct LeftSidebarView: View {
@@ -33,7 +33,7 @@ struct LeftSidebarView: View {
         Rectangle().fill(Theme.border).frame(height: 1)
     }
 
-    // MARK: - Sessions (spec/22 §3.1: aktif repo'nun terminalleri)
+    // MARK: - Sessions (aktif repo'nun terminalleri)
 
     private var sessionsSection: some View {
         let repoTerminals = terminals.terminals(in: repoPath)
@@ -59,7 +59,7 @@ struct LeftSidebarView: View {
                                 isActive: terminals.activeTerminalID == meta.id,
                                 isMinimized: terminals.isMinimized(meta.id)
                             ) {
-                                // Minimize ise önce restore, sonra odak (spec/22 §3.1)
+                                // Minimize ise önce restore, sonra odak
                                 if terminals.isMinimized(meta.id) {
                                     terminals.restoreAndFocus(meta.id)
                                 } else {

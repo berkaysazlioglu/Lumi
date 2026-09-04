@@ -1,6 +1,6 @@
 import Foundation
 
-/// Platform path çözümlemesi (spec/13 §Platform, karar 9).
+/// Platform path çözümlemesi (karar 9).
 /// Prod: `~/.lumi`; dev: `~/.lumi-dev`. Prod'da yeni dizin yoksa legacy
 /// `~/.pulpo` → `~/.ai-orchestrator` yerinde kullanılır (migration değil).
 public struct LumiPaths: Sendable {
@@ -42,7 +42,7 @@ public struct LumiPaths: Sendable {
         }
     }
 
-    /// Constructor'daki `mkdir -p` semantiğinin karşılığı (spec/13).
+    /// Constructor'daki `mkdir -p` semantiğinin karşılığı.
     public func ensureDirectoriesExist(fileManager: FileManager = .default) throws {
         for directory in [configDir, tempDir] {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)

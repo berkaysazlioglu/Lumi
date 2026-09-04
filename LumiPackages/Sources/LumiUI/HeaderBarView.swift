@@ -2,8 +2,8 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Üst header çubuğu (v1 paritesi, globals.css; spec/22). 52px, traffic
-/// light hizasında. Yalnız kompozisyon — parçalar kendi dosyalarında:
+/// Üst header çubuğu (ince yerleşim karar 30 — Orca paritesi). 36px,
+/// traffic light'lar doğal macOS konumunda. Yalnız kompozisyon — parçalar kendi dosyalarında:
 /// `RepoTabStrip` (tab'ler + reorder + (+)), `NewTerminalButton` (birincil
 /// CTA + dropdown), `HeaderControls` (ikon butonları), `GridSettingsControl`,
 /// `UsageIndicatorView`, `WindowDragArea` (boş alan = pencere sürükleme).
@@ -11,7 +11,13 @@ import SwiftUI
 /// grid ayarı + New <Provider>, ardından ayraç. Sağ grup: usage + fullscreen ·
 /// git · settings. Topbar ölçüleri LumiApp (titlebar büyütme) ile paylaşılır.
 public enum TopBarMetrics {
-    public static let height: CGFloat = 52
+    public static let height: CGFloat = 36
+    /// Traffic light ilk butonunun sol kenarı (Orca `TRAFFIC_LIGHT_X`).
+    public static let trafficLightLeading: CGFloat = 16
+    /// İçeriğin başladığı x: 3 buton (16 + 2×20 + 12 = 68) + nefes payı.
+    public static let contentLeading: CGFloat = 80
+    /// Bar içi kontrol yüksekliği (ikon buton, chip, usage, grid).
+    public static let controlHeight: CGFloat = 26
 }
 
 struct HeaderBarView: View {
@@ -34,8 +40,8 @@ struct HeaderBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Sol grup (v1 header-left, gap 12): hamburger → logo → tab'ler + (+)
-            HStack(spacing: 12) {
+            // Sol grup: hamburger → logo → tab'ler + (+)
+            HStack(spacing: 8) {
                 HeaderIconButton(
                     icon: "line.3.horizontal",
                     isActive: workspace.leftSidebarOpen,
@@ -44,11 +50,11 @@ struct HeaderBarView: View {
                 logoView
                 tabStrip
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
             // Üretim bölgesi: grid ayarı + birincil CTA (New <Provider>).
             // Birincil eylem en sağda — göz yapılacak eylemde durur.
             if let active = workspace.activeTab {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     gridLayoutMenu(for: active)
                     NewTerminalButton(
                         provider: settings.current.aiProvider,
@@ -58,16 +64,16 @@ struct HeaderBarView: View {
                         onNewBash: { terminals.spawn(in: active, task: "Bash") }
                     )
                 }
-                .padding(.trailing, 12)
+                .padding(.trailing, 10)
                 // Üretim ↔ durum/global ayracı (Gestalt ayrımı)
                 Rectangle()
                     .fill(Theme.border)
-                    .frame(width: 1, height: 22)
-                    .padding(.trailing, 12)
+                    .frame(width: 1, height: 16)
+                    .padding(.trailing, 10)
             }
             // Durum + global grup: ambient kullanım göstergesi + kalıcı panel/global
             // toggle'lar (sağdan sola: settings, git, fullscreen).
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 UsageIndicatorView(store: usage)
                 HeaderIconButton(
                     icon: "arrow.up.left.and.arrow.down.right",
@@ -86,9 +92,9 @@ struct HeaderBarView: View {
                 )
             }
         }
-        // Sol 80px: traffic light alanı — içerik trafiğin hizasında (v1 paritesi)
-        .padding(.leading, 80)
-        .padding(.trailing, 16)
+        // Sol: traffic light alanı — içerik butonların sağından başlar
+        .padding(.leading, TopBarMetrics.contentLeading)
+        .padding(.trailing, 10)
         .frame(height: Self.height)
         // Renk hit-test'i kapalı: boş alanlardaki tıklamalar arkadaki
         // WindowDragArea'ya geçsin (pencere sürükleme + çift-tık zoom).
@@ -99,18 +105,18 @@ struct HeaderBarView: View {
         }
     }
 
-    // MARK: - Logo + ad (v1: 26×26 mascot + "Lumi" 14/600)
+    // MARK: - Logo + ad (ince bar: 18×18 mascot + ad 12/600)
 
     private var logoView: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             if let logo = LumiAssets.logo {
                 Image(nsImage: logo)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 18, height: 18)
             }
             Text(Self.appName)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.textPrimary)
         }
     }

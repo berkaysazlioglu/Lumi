@@ -1,8 +1,8 @@
 import Foundation
 
-/// Git operasyonları sınırı (design/02 §4, spec/12).
+/// Git operasyonları sınırı (design/02 §4).
 ///
-/// Hata stratejisi paritesi (spec/12): read-only liste operasyonları
+/// Hata stratejisi paritesi: read-only liste operasyonları
 /// (commits/branches/status) hata durumunda BOŞ koleksiyon döner (git
 /// olmayan dizinler rutin olarak açılır) ama loglar; içerik operasyonları
 /// (readFile/diff'ler) ve commit `LumiError` fırlatır (karar 5).
@@ -12,7 +12,7 @@ public protocol GitServicing: Sendable {
     func branches(repoPath: String) async -> [GitBranch]
     /// `branch` verilmiş, default branch (main→master) mevcut ve farklıysa
     /// aralık `defaultBranch..branch`tır — yalnız branch'e özgü commit'ler
-    /// (spec/12 §2, en kolay gözden kaçan davranış). Her zaman max 50.
+    /// (en kolay gözden kaçan davranış). Her zaman max 50.
     func commits(repoPath: String, branch: String?) async -> [GitCommit]
     func status(repoPath: String) async -> [GitFileChange]
     func commit(repoPath: String, message: String, files: [String]) async throws

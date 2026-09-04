@@ -3,7 +3,7 @@ import LumiState
 import XCTest
 @testable import LumiUI
 
-/// RepoSelector dropdown filtre mantığı (spec/22 §2.3): açık tab'lar gizlenir,
+/// RepoSelector dropdown filtre mantığı: açık tab'lar gizlenir,
 /// isimde case-insensitive substring, grup yapısı korunur; klavye navigasyonu
 /// collapsed grupları atlayan düz liste üzerinde çalışır.
 @MainActor
