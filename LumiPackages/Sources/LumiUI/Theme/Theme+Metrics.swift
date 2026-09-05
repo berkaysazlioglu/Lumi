@@ -7,6 +7,8 @@ import CoreGraphics
 /// "hangi köşe hangi bağlama ait" sorusunu tek kaynağa bağlar.
 public extension Theme {
     enum Radius {
+        /// 0pt — tam genişlik liste satırı (hover zemini kenara dayanır).
+        public static let none: CGFloat = 0
         /// 4pt — rozet, keycap, chip, minik ikon butonu (eski 3/4/5).
         public static let sm: CGFloat = 4
         /// 6pt — input, buton, satır, açılır menü (eski 6/7); modülün varsayılanı.

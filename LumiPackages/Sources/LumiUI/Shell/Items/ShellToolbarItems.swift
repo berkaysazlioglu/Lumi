@@ -25,6 +25,11 @@ public enum ShellToolbarItems {
         public static let panelToggleBottom = 105
         public static let panelToggleRight = 110
         public static let settings = 120
+
+        /// Alt bar (karar 43): sol grup settings; sağ grup keep awake → resource manager.
+        public static let statusSettings = 0
+        public static let keepAwake = 0
+        public static let resourceManager = 10
     }
 
     /// Bir panel yuvasının top bar'daki temsili.
@@ -104,10 +109,11 @@ public enum ShellToolbarItems {
                 order: Order.focusMode,
                 makeView: { AnyView(FocusModeToolbarItem()) }
             ),
+            // Karar 43: settings top bar'dan alt barın soluna taşındı (Orca paritesi).
             ToolbarItemDescriptor(
                 id: .settings,
-                region: .trailing,
-                order: Order.settings,
+                region: .statusLeading,
+                order: Order.statusSettings,
                 makeView: { AnyView(SettingsToolbarItem()) }
             ),
         ]
@@ -194,7 +200,7 @@ struct FocusModeToolbarItem: View {
     }
 }
 
-/// Ayarlar overlay'ini açar.
+/// Ayarlar overlay'ini açar (alt bar, sol grup — karar 43).
 struct SettingsToolbarItem: View {
     @Shell private var shell
 
@@ -202,9 +208,9 @@ struct SettingsToolbarItem: View {
         IconButton(
             systemName: "gearshape",
             label: "Settings",
-            size: .body,
+            size: .label,
             weight: .regular,
-            side: TopBarMetrics.controlHeight,
+            side: StatusBarMetrics.controlHeight,
             role: .toggle,
             isActive: shell.dialogs.isSettingsOpen,
             action: { shell.dialogs.isSettingsOpen = true }

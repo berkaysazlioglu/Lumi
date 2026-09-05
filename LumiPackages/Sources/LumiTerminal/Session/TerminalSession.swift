@@ -252,6 +252,9 @@ final class TerminalSession {
         }
     }
 
+    /// PTY çocuk sürecinin pid'i; sonlanmış oturumda `nil`.
+    var processID: Int32? { isTerminated ? nil : pty.processID }
+
     func terminate() {
         pty.terminate()
     }

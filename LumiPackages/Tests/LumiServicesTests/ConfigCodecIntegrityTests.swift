@@ -155,7 +155,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         autoMinimizeOnSend: true,
         sessionTrigger: SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go"),
         usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 15),
-        usageIndicators: UsageIndicators(claude: false, codex: true)
+        usageIndicators: UsageIndicators(claude: false, codex: true),
+        computerAwakeMode: .auto
     )
 
     private static let fullyPopulatedUIState = UIState(

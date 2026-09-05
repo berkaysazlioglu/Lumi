@@ -23,7 +23,9 @@ final class ShellToolbarCompositionTests: XCTestCase {
         fixture = await ShellFixture.make()
         // `AppComposition.live` ile AYNI katkıcı listesi.
         registries = ShellComposition.makeRegistries(
-            contributors: [TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly()]
+            contributors: [
+                TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(), StatusBarFeatureAssembly(),
+            ]
         )
     }
 
@@ -39,16 +41,29 @@ final class ShellToolbarCompositionTests: XCTestCase {
 
     // MARK: - Bölge karakterizasyonu
 
-    /// Durum + global grup (sağdan sola: settings · git · focus · usage).
-    /// Codex göstergesi default kapalı (karar 32), bu yüzden listede yok.
+    /// Durum + global grup (sağdan sola: git · focus · usage). Settings karar
+    /// 43'te alt bara taşındı. Codex göstergesi default kapalı (karar 32).
     func testTrailingRegionOrder() {
         fixture.openRepo()
         XCTAssertEqual(ids(.trailing), [
             .usageIndicator(.claude),
             .focusMode,
             .panelToggle(.right),
-            .settings,
         ])
+        XCTAssertFalse(ids(.trailing).contains(.settings), "settings alt barda (karar 43)")
+    }
+
+    // MARK: - Alt bar (karar 43)
+
+    func testStatusBarRegions() {
+        XCTAssertEqual(ids(.statusLeading), [.settings])
+        XCTAssertEqual(ids(.statusTrailing), [.keepAwake, .resourceManager])
+    }
+
+    func testStatusBarItemsAreRouteIndependent() {
+        fixture.context.navigation.setRoute(.content(ContentRouteID("placeholder")))
+        XCTAssertEqual(ids(.statusLeading), [.settings])
+        XCTAssertEqual(ids(.statusTrailing), [.keepAwake, .resourceManager])
     }
 
     func testTrailingRegionIncludesCodexOnlyWhenEnabled() {
@@ -98,7 +113,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
     func testShellItemsSurviveANonRepoRoute() {
         fixture.context.navigation.setRoute(.content(ContentRouteID("placeholder")))
         XCTAssertEqual(ids(.leading), [.panelToggle(.left), .logo, .repoTabs])
-        XCTAssertTrue(ids(.trailing).contains(.settings))
+        XCTAssertTrue(ids(.trailing).contains(.focusMode))
     }
 }
 
@@ -142,6 +157,12 @@ private struct ShellFixture {
                 onComplete: {}
             ),
             usage: [:],
+            computerAwake: ComputerAwakeStore(
+                terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
+            ),
+            resourceUsage: ResourceUsageStore(
+                terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()
+            ),
             viewProvider: FakeTerminalViewProvider(),
             highlighter: NoopHighlighter(),
             actions: ShellActions(chooseFolder: { nil }, reveal: { _, _ in }, trash: { _, _ in })

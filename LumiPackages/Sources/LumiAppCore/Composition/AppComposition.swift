@@ -40,10 +40,11 @@ struct AppComposition {
         let usage = UsageFeatureAssembly()
         let repo = RepoFeatureAssembly()
         let workspaceBoot = WorkspaceBootAssembly()
+        let statusBar = StatusBarFeatureAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
-            assemblies: [terminal, notifications, sessionSchedule, usage, repo, workspaceBoot]
+            assemblies: [terminal, notifications, sessionSchedule, usage, repo, workspaceBoot, statusBar]
         )
         let shell = ShellComposition.make(
             registry: registry,
@@ -53,7 +54,8 @@ struct AppComposition {
             usage: usage,
             sessionSchedule: sessionSchedule,
             workspaceBoot: workspaceBoot,
-            contributors: [terminal, repo, usage]
+            statusBar: statusBar,
+            contributors: [terminal, repo, usage, statusBar]
         )
         return AppComposition(
             registry: registry,

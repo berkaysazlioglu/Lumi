@@ -129,6 +129,10 @@ public final class TerminalSessionManager: TerminalServicing {
         sessions.forEach { $0.terminate() }
     }
 
+    public func processID(for id: TerminalID) -> Int32? {
+        session(for: id)?.processID
+    }
+
     public func resize(id: TerminalID, cols: Int, rows: Int) {
         session(for: id)?.requestResize(cols: cols, rows: rows)
     }

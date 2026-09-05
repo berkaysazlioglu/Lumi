@@ -21,6 +21,8 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var notifications: any NotificationServicing
     public var sessionStarter: any SessionStarterServicing
     public var activityMonitor: any ActivityMonitoring
+    public var processSampler: any ProcessSampling
+    public var sleepAssertion: any SleepAsserting
     public var usageServices: [AgentProvider: any UsageServicing]
 
     /// Somut fake'lere tipli erişim (kayıt okumak için).
@@ -30,6 +32,8 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public let fakeTerminal: FakeTerminalService
     public let fakeViewProvider: FakeTerminalViewProvider
     public let fakeNotifications: FakeNotificationService
+    public let fakeProcessSampler: FakeProcessSampler
+    public let fakeSleepAssertion: FakeSleepAssertion
 
     public init(
         paths: LumiPaths = FakeServiceRegistry.temporaryPaths(),
@@ -58,6 +62,12 @@ public final class FakeServiceRegistry: ServiceRegistry {
         self.highlighter = FakeSyntaxHighlighter()
         self.sessionStarter = FakeSessionStarterService()
         self.activityMonitor = FakeActivityMonitor(idleSeconds: 0)
+        let sampler = FakeProcessSampler()
+        let sleep = FakeSleepAssertion()
+        fakeProcessSampler = sampler
+        fakeSleepAssertion = sleep
+        self.processSampler = sampler
+        self.sleepAssertion = sleep
         var usage: [AgentProvider: any UsageServicing] = [:]
         for provider in AgentProvider.allCases {
             usage[provider] = FakeUsageService(provider: provider, outcome: usageOutcome)

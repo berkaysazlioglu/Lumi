@@ -36,6 +36,9 @@ public struct AppConfig: Sendable, Equatable {
     /// Topbar'da hangi sağlayıcıların kullanım göstergesinin görüneceği
     /// (karar 32). Additive (karar 9): yoksa claude açık / codex kapalı.
     public var usageIndicators: UsageIndicators
+    /// Alt bardaki "Keep computer awake" modu (karar 43). Additive (karar 9):
+    /// yoksa/geçersizse `off`.
+    public var computerAwakeMode: ComputerAwakeMode
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -61,7 +64,8 @@ public struct AppConfig: Sendable, Equatable {
         autoMinimizeOnSend: false,
         sessionTrigger: .defaults,
         usageAutoRefresh: .defaults,
-        usageIndicators: .defaults
+        usageIndicators: .defaults,
+        computerAwakeMode: .default
     )
 
     public init(
@@ -77,7 +81,8 @@ public struct AppConfig: Sendable, Equatable {
         autoMinimizeOnSend: Bool = false,
         sessionTrigger: SessionTrigger = .defaults,
         usageAutoRefresh: UsageAutoRefresh = .defaults,
-        usageIndicators: UsageIndicators = .defaults
+        usageIndicators: UsageIndicators = .defaults,
+        computerAwakeMode: ComputerAwakeMode = .default
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
@@ -92,5 +97,6 @@ public struct AppConfig: Sendable, Equatable {
         self.sessionTrigger = sessionTrigger
         self.usageAutoRefresh = usageAutoRefresh
         self.usageIndicators = usageIndicators
+        self.computerAwakeMode = computerAwakeMode
     }
 }

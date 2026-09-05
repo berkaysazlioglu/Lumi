@@ -33,7 +33,7 @@ public struct RootView: View {
     }
 }
 
-/// Kabuğun iskeleti: header + (sol panel · route · sağ panel) + overlay host.
+/// Kabuğun iskeleti: header + (sol panel · route · sağ panel) + alt bar + overlay host.
 ///
 /// Hiçbir özel görünüm adı geçmez — panel öğeleri, orta alan ve overlay'ler
 /// registry'den gelir (Faz 6.2/6.3/6.5).
@@ -58,6 +58,10 @@ struct AppShellView: View {
                 PanelHostView(slot: .right, registry: registries.panels)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Alt bar (karar 43): focus mode'da header gibi gizlenir.
+            if !shell.layout.isFocusMode {
+                StatusBarView(registry: registries.toolbar)
+            }
         }
         .background(Theme.bgDeep)
         .overlay {

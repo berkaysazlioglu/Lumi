@@ -46,6 +46,12 @@ public extension ShellContext {
                 onComplete: {}
             ),
             usage: [:],
+            computerAwake: ComputerAwakeStore(
+                terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
+            ),
+            resourceUsage: ResourceUsageStore(
+                terminals: shared.terminals, terminalService: terminal, sampler: PreviewProcessSampler()
+            ),
             viewProvider: viewProvider,
             highlighter: PreviewHighlighter(),
             actions: ShellActions(
@@ -124,6 +130,7 @@ private final class PreviewTerminalService: TerminalServicing {
 
     func write(id: TerminalID, text: String) throws {}
     func kill(id: TerminalID) throws {}
+    func processID(for id: TerminalID) -> Int32? { nil }
     func killAll() {}
     func resize(id: TerminalID, cols: Int, rows: Int) {}
     func setFocused(_ id: TerminalID?) {}
@@ -134,6 +141,19 @@ private final class PreviewTerminalService: TerminalServicing {
     func shutdown() {}
     func applyFont(_ font: NSFont) {}
     func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+}
+
+@MainActor
+private final class PreviewSleepAssertion: SleepAsserting {
+    private(set) var isPreventingSleep = false
+    func setPreventingSleep(_ prevent: Bool, reason: String) -> Bool {
+        isPreventingSleep = prevent
+        return true
+    }
+}
+
+private struct PreviewProcessSampler: ProcessSampling {
+    func sampleProcessTable() async -> ProcessTable? { .empty }
 }
 
 @MainActor

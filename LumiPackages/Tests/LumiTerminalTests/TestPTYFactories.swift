@@ -127,6 +127,8 @@ final class RecordingPTY: PTYControlling, @unchecked Sendable {
     func terminate() {
         wrapped.terminate()
     }
+
+    var processID: Int32? { wrapped.processID }
 }
 
 /// Süreç açmayan tamamen sahte PTY: `TerminalSession`'ı gerçek fork/exec
@@ -183,6 +185,8 @@ final class FakePTY: PTYControlling, @unchecked Sendable {
         terminateCount += 1
         lock.unlock()
     }
+
+    var processID: Int32? { nil }
 
     var resumes: Int { counted { resumeCount } }
     var pokes: Int { counted { pokeCount } }

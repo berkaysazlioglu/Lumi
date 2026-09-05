@@ -16,6 +16,8 @@ public final class FakeTerminalService: TerminalServicing {
     public var failWrites = false
     /// Açıkken `kill` `.terminalNotFound` fırlatır.
     public var failKills = false
+    /// `processID(for:)` yanıtları (Resource Manager testleri).
+    public var processIDs: [TerminalID: Int32] = [:]
 
     // MARK: Çağrı kaydı
     public private(set) var spawnedMetas: [TerminalMeta] = []
@@ -89,6 +91,10 @@ public final class FakeTerminalService: TerminalServicing {
     public func kill(id: TerminalID) throws {
         if failKills { throw LumiError.terminalNotFound(id) }
         killedIDs.append(id)
+    }
+
+    public func processID(for id: TerminalID) -> Int32? {
+        processIDs[id]
     }
 
     public func killAll() {

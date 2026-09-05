@@ -274,7 +274,7 @@ PTY hiçbir adımda durmaz, view'lar yok edilmez: detach yalnız reparent eder (
 
 ### 7.4 Toolbar kompozisyonu
 
-`ToolbarRegion` = `leading` / `center` / `trailing`. **Bölge konum değil Gestalt grubudur:** leading = gezinme (panel toggle, logo, tab'lar), center = üretim (grid ayarı, New \<Provider>), trailing = durum ve global kontroller (usage, focus, panel toggle'ları, settings). Grup içi boşluk bölgeye gömülüdür (`spacing`: 8 / 6 / 4 — karar 30 ince bar). `HeaderBarView` üç bölgeyi `ForEach` ile dizer.
+`ToolbarRegion` = `leading` / `center` / `trailing` + alt bar için `statusLeading` / `statusTrailing` (karar 43). **Bölge konum değil Gestalt grubudur:** leading = gezinme (panel toggle, logo, tab'lar), center = üretim (grid ayarı, New \<Provider>), trailing = durum ve global kontroller (usage, focus, panel toggle'ları), statusLeading = alt barın sol grubu (settings), statusTrailing = alt barın sağ durum segmentleri (keep awake, resource manager). Grup içi boşluk bölgeye gömülüdür (`spacing`: 8 / 6 / 4 / 8 / 12). `HeaderBarView` ilk üç bölgeyi, `StatusBarView` (24px, `StatusBarMetrics`) son ikisini `ForEach` ile dizer; `isStatusBar` hangi barın çizdiğini söyler.
 
 ```swift
 struct ToolbarItemDescriptor: Identifiable {
@@ -303,7 +303,9 @@ Mevcut descriptor'lar:
 | `focusMode` | trailing | 100 | daima | kabuk |
 | `panelToggle(.bottom)` | trailing | 105 | yuvada kayıtlı öğe varsa | kabuk |
 | `panelToggle(.right)` | trailing | 110 | yuvada kayıtlı öğe varsa | kabuk |
-| `settings` | trailing | 120 | daima | kabuk |
+| `settings` | statusLeading | 0 | daima | kabuk (karar 43: top bar'dan alt bara) |
+| `keepAwake` | statusTrailing | 0 | daima | status bar assembly |
+| `resourceManager` | statusTrailing | 10 | daima | status bar assembly |
 
 ### 7.5 Overlay host
 
@@ -316,7 +318,7 @@ struct OverlayDescriptor: Identifiable {
 }
 ```
 
-`OverlayRegistry.presented(in:)` saftır; `OverlayHost` açık olanları kayıt sırasıyla `ZStack`'te üst üste çizer. `confirmationDialog`'lar da birer descriptor'dır: `makeView` sıfır boyutlu bir **`DialogAnchor`**'a modifier'ı takar. Böylece "şu an bir overlay açık mı?" sorusunun elle `||` listesi kalkar — cevap `DialogRouter.active` (`ActiveDialog.isInputBlockingOverlay`) ile descriptor'ların `isPresented` predikatlarından türer. Kayıtlı overlay'ler: `focusModeBar`, `fileViewer`, `settings`, `toasts`, `closeTabDialog`, `quitDialog`.
+`OverlayRegistry.presented(in:)` saftır; `OverlayHost` açık olanları kayıt sırasıyla `ZStack`'te üst üste çizer. `confirmationDialog`'lar da birer descriptor'dır: `makeView` sıfır boyutlu bir **`DialogAnchor`**'a modifier'ı takar. Böylece "şu an bir overlay açık mı?" sorusunun elle `||` listesi kalkar — cevap `DialogRouter.active` (`ActiveDialog.isInputBlockingOverlay`) ile descriptor'ların `isPresented` predikatlarından türer. Kayıtlı overlay'ler: `focusModeBar`, `fileViewer`, `settings`, `toasts`, `closeTabDialog`, `quitDialog`. Alt bar segmentlerinin menüleri overlay değil, segmentin kendi `.popover`ıdır (Resource Manager'ın kill onayı da popover içinde satır içi karttır — native dialog yok).
 
 ### 7.6 Kayıt yeri
 

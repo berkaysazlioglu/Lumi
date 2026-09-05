@@ -13,9 +13,13 @@ protocol PTYControlling: AnyObject, Sendable {
     func resize(cols: UInt16, rows: UInt16)
     func pokeRepaint()
     func terminate()
+    /// Çocuk sürecin pid'i (Resource Manager). Sahte PTY'de `nil`.
+    var processID: Int32? { get }
 }
 
-extension PTYProcess: PTYControlling {}
+extension PTYProcess: PTYControlling {
+    public var processID: Int32? { pid }
+}
 
 /// PTY üretimi (Faz 4.1): oturum, PTY'yi kendi `new`'lemez.
 protocol PTYSpawning: Sendable {

@@ -74,6 +74,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.sessionTrigger = SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go")
             config.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 5)
             config.usageIndicators = UsageIndicators(claude: false, codex: true)
+            config.computerAwakeMode = .auto
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -127,6 +128,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
       ],
       "aiProvider" : "codex",
       "autoMinimizeOnSend" : true,
+      "computerAwakeMode" : "auto",
       "maxTerminals" : 12,
       "notifications" : {
         "seenEnabled" : false,

@@ -57,6 +57,9 @@ public final class ShellContext {
     public let onboarding: OnboardingStore
     /// Sağlayıcı başına kullanım store'u (karar 32).
     public let usage: [AgentProvider: UsageStore]
+    /// Alt bar store'ları (karar 43).
+    public let computerAwake: ComputerAwakeStore
+    public let resourceUsage: ResourceUsageStore
 
     // MARK: - Köprüler
 
@@ -79,6 +82,8 @@ public final class ShellContext {
         toasts: ToastStore,
         onboarding: OnboardingStore,
         usage: [AgentProvider: UsageStore],
+        computerAwake: ComputerAwakeStore,
+        resourceUsage: ResourceUsageStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
         actions: ShellActions
@@ -97,6 +102,8 @@ public final class ShellContext {
         self.toasts = toasts
         self.onboarding = onboarding
         self.usage = usage
+        self.computerAwake = computerAwake
+        self.resourceUsage = resourceUsage
         self.viewProvider = viewProvider
         self.highlighter = highlighter
         self.actions = actions

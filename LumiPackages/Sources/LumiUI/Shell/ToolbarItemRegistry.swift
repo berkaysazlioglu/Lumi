@@ -13,6 +13,10 @@ public enum ToolbarRegion: String, Hashable, Sendable, CaseIterable {
     case leading
     case center
     case trailing
+    /// Alt bar (karar 43): sola yaslı global kontroller (settings).
+    case statusLeading
+    /// Alt bar: sağa yaslı durum segmentleri (keep awake, resource manager).
+    case statusTrailing
 
     /// Grup içi boşluk — bölgenin görsel yoğunluğu (karar 30 ince bar):
     /// gezinme geniş (8), üretim orta (6), durum sık (4).
@@ -21,6 +25,16 @@ public enum ToolbarRegion: String, Hashable, Sendable, CaseIterable {
         case .leading: return 8
         case .center: return 6
         case .trailing: return 4
+        case .statusLeading: return 8
+        case .statusTrailing: return 12
+        }
+    }
+
+    /// Bölge hangi barda çizilir? `HeaderBarView` üst üçü, `StatusBarView` alt ikiyi dizer.
+    public var isStatusBar: Bool {
+        switch self {
+        case .leading, .center, .trailing: return false
+        case .statusLeading, .statusTrailing: return true
         }
     }
 }
@@ -52,6 +66,9 @@ public extension ToolbarItemID {
     static let newTerminal = ToolbarItemID("newTerminal")
     static let focusMode = ToolbarItemID("focusMode")
     static let settings = ToolbarItemID("settings")
+    /// Alt bar segmentleri (karar 43).
+    static let keepAwake = ToolbarItemID("keepAwake")
+    static let resourceManager = ToolbarItemID("resourceManager")
 }
 
 /// Top bar'daki bir öğenin tanımı (K33, Faz 6.4).

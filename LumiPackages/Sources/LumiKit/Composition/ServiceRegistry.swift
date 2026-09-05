@@ -32,6 +32,9 @@ public protocol ServiceRegistry: AnyObject {
     var notifications: any NotificationServicing { get }
     var sessionStarter: any SessionStarterServicing { get }
     var activityMonitor: any ActivityMonitoring { get }
+    /// Karar 43: alt bar Resource Manager örnekleyicisi ve uyku engeli.
+    var processSampler: any ProcessSampling { get }
+    var sleepAssertion: any SleepAsserting { get }
 
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.

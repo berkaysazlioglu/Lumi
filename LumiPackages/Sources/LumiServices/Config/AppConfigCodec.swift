@@ -39,6 +39,7 @@ enum AppConfigCodec {
         config.sessionTrigger = SessionTriggerCodec.decode(nested(dict, "sessionTrigger"))
         config.usageAutoRefresh = UsageAutoRefreshCodec.decode(nested(dict, "usageAutoRefresh"))
         config.usageIndicators = UsageIndicatorsCodec.decode(nested(dict, "usageIndicators"))
+        config.computerAwakeMode = ComputerAwakeMode.normalized(dict["computerAwakeMode"] as? String)
         return config
     }
 
@@ -57,6 +58,7 @@ enum AppConfigCodec {
             "sessionTrigger": SessionTriggerCodec.overlay(config.sessionTrigger),
             "usageAutoRefresh": UsageAutoRefreshCodec.overlay(config.usageAutoRefresh),
             "usageIndicators": UsageIndicatorsCodec.overlay(config.usageIndicators),
+            "computerAwakeMode": config.computerAwakeMode.rawValue,
         ]
     }
 

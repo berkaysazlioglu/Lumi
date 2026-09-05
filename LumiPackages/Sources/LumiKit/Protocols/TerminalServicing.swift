@@ -15,6 +15,9 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
 
     func write(id: TerminalID, text: String) throws
     func kill(id: TerminalID) throws
+    /// PTY çocuk sürecinin pid'i (Resource Manager alt ağaç toplamı için);
+    /// oturum yoksa ya da süreç bitmişse `nil`.
+    func processID(for id: TerminalID) -> Int32?
     func killAll()
     func resize(id: TerminalID, cols: Int, rows: Int)
 

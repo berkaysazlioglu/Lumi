@@ -51,6 +51,12 @@ struct ShellContextFixture {
                 onComplete: {}
             ),
             usage: [:],
+            computerAwake: ComputerAwakeStore(
+                terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
+            ),
+            resourceUsage: ResourceUsageStore(
+                terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()
+            ),
             viewProvider: viewProvider,
             highlighter: StubHighlighter(),
             actions: ShellActions(

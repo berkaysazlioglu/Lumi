@@ -24,6 +24,8 @@ final class LiveServiceRegistry: ServiceRegistry {
     let notifications: any NotificationServicing
     let sessionStarter: any SessionStarterServicing
     let activityMonitor: any ActivityMonitoring
+    let processSampler: any ProcessSampling
+    let sleepAssertion: any SleepAsserting
 
     private let usageServices: [AgentProvider: any UsageServicing]
     /// P1 ölçüm harness'ı somut manager'a bağlıdır (debug-only araç, design/04).
@@ -70,6 +72,8 @@ final class LiveServiceRegistry: ServiceRegistry {
             .codex: Self.cached(CodexUsageService()),
         ]
         activityMonitor = SystemActivityMonitor()
+        processSampler = PSProcessSampler()
+        sleepAssertion = IOKitSleepAssertion()
         sessionStarter = SessionStarterService()
         let manager = TerminalSessionManager()
         terminalManager = manager

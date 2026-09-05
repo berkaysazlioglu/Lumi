@@ -35,6 +35,7 @@ struct ShellComposition {
         usage: UsageFeatureAssembly,
         sessionSchedule: SessionScheduleAssembly,
         workspaceBoot: WorkspaceBootAssembly,
+        statusBar: StatusBarFeatureAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
         let registries = makeRegistries(contributors: contributors)
@@ -54,6 +55,8 @@ struct ShellComposition {
             toasts: shared.toasts,
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
+            computerAwake: statusBar.computerAwake,
+            resourceUsage: statusBar.resourceUsage,
             viewProvider: registry.viewProvider,
             highlighter: registry.highlighter,
             actions: makeActions(registry: registry, shared: shared, repo: repo)
