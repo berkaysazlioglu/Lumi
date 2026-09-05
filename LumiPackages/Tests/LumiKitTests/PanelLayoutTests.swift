@@ -13,9 +13,9 @@ final class PanelLayoutTests: XCTestCase {
         XCTAssertEqual(layout.items(in: .right), [.projectTools])
         XCTAssertEqual(layout.items(in: .bottom), [])
         XCTAssertEqual(layout.visibleSlots, [.left], "sol açık, sağ kapalı (bugünkü default)")
-        for slot in PanelSlot.allCases {
-            XCTAssertEqual(layout.width(for: slot), 280)
-        }
+        XCTAssertEqual(layout.width(for: .left), 280)
+        XCTAssertEqual(layout.width(for: .bottom), 280)
+        XCTAssertEqual(layout.width(for: .right), 340, "sağ proje paneli daha geniş açılır (K42)")
     }
 
     func testMigratingDerivesVisibilityFromLegacyBooleans() {

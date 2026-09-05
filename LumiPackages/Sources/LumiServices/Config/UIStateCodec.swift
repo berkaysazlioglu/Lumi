@@ -114,6 +114,8 @@ enum PanelLayoutCodec {
         if let raw = dict["widths"] as? [String: Any] {
             for slot in PanelSlot.allCases {
                 guard let value = JSONValue.double(raw[slot.rawValue]) else { continue }
+                // K42: sağ yuvadaki eski sabit default yeni default'a taşınır.
+                if slot == .right, value == PanelLayout.legacyProjectPanelWidth { continue }
                 widths[slot] = value
             }
         }

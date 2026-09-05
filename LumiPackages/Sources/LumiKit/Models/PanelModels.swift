@@ -49,8 +49,19 @@ public extension PanelItemID {
 /// tek alanı değiştirip persist eder. "Bir öğeyi soldan sağa taşımak" tek bir
 /// `moving(_:to:index:)` çağrısıdır.
 public struct PanelLayout: Equatable, Sendable {
-    /// Yuva varsayılan genişliği (bugünkü sabit 280px sidebar'lar).
+    /// Sol/alt yuva varsayılan genişliği (bugünkü sabit 280px sidebar).
     public static let defaultWidth: Double = 280
+    /// Sağ proje paneli daha geniş açılır (karar 42): Explorer içerik araması,
+    /// commit graph'ı ve Agent History kartı 280'de sıkışıyordu.
+    public static let projectPanelWidth: Double = 340
+    /// K42 migration için: kabuk hiç resize sunmadığından kalıcı dosyadaki
+    /// eski 280 değeri daima eski default'tur, yeni default'a taşınır.
+    public static let legacyProjectPanelWidth: Double = 280
+
+    /// Yuvaya göre varsayılan genişlik.
+    public static func defaultWidth(for slot: PanelSlot) -> Double {
+        slot == .right ? projectPanelWidth : defaultWidth
+    }
     public static let minWidth: Double = 180
     public static let maxWidth: Double = 640
 
@@ -77,9 +88,9 @@ public struct PanelLayout: Equatable, Sendable {
         ],
         visibleSlots: [.left],
         widths: [
-            .left: defaultWidth,
-            .right: defaultWidth,
-            .bottom: defaultWidth,
+            .left: defaultWidth(for: .left),
+            .right: defaultWidth(for: .right),
+            .bottom: defaultWidth(for: .bottom),
         ]
     )
 
@@ -107,7 +118,7 @@ public struct PanelLayout: Equatable, Sendable {
     }
 
     public func width(for slot: PanelSlot) -> Double {
-        widths[slot] ?? Self.defaultWidth
+        widths[slot] ?? Self.defaultWidth(for: slot)
     }
 
     /// Öğenin bulunduğu yuva (hiçbir yuvada değilse `nil`).

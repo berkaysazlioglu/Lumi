@@ -17,6 +17,17 @@ final class PanelLayoutPersistenceTests: XCTestCase {
 
     // MARK: - Migration (yeni anahtar yok)
 
+    /// K42: sağ yuvada kalıcı 280 eski default'tur (resize UI'ı hiç olmadı),
+    /// yeni proje paneli genişliğine taşınır; diğer değerler aynen kalır.
+    func testLegacyRightWidthMigratesToProjectPanelWidth() {
+        let legacy = decode(["panelLayout": ["widths": ["left": 280, "right": 280]], "visibleSlots": ["left"]])
+        XCTAssertEqual(legacy.panelLayout?.width(for: .left), 280)
+        XCTAssertEqual(legacy.panelLayout?.width(for: .right), PanelLayout.projectPanelWidth)
+
+        let custom = decode(["panelLayout": ["widths": ["right": 320]], "visibleSlots": ["left"]])
+        XCTAssertEqual(custom.panelLayout?.width(for: .right), 320, "280 dışındaki değerler korunur")
+    }
+
     func testMissingPanelLayoutKeyDecodesAsNil() {
         let state = decode(["leftSidebarOpen": false, "rightSidebarOpen": true])
         XCTAssertNil(state.panelLayout, "yeni anahtar yoksa nil — migration LayoutStore'da")

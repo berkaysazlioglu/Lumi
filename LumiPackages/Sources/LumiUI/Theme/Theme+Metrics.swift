@@ -61,6 +61,8 @@ public extension Theme {
         /// lane çizgilerinin satırlar arasında kesintisiz akması için canvas
         /// yüksekliği satır yüksekliğine eşit olmak zorunda.
         public static let commit: CGFloat = 40
+        /// 28pt — tam genişlik buton/bölünmüş buton yüksekliği (Commit ▾).
+        public static let control: CGFloat = 28
     }
 
     /// Çizgi kalınlığı — tüm kenarlıklar ve ayraçlar 1pt (hairline).

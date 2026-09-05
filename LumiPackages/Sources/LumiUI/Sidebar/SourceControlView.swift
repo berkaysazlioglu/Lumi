@@ -104,6 +104,8 @@ struct SourceControlView: View {
 
     /// Bölünmüş buton (Orca "Stage All ▾"): sol yarı commit, sağ ok seçim
     /// eylemleri. İki yarı aynı zemini paylaşır, aralarında hairline ayraç var.
+    /// Yükseklik sabittir (`Row.control`); esnek `maxHeight` bırakılırsa buton
+    /// gövdenin boş alanını yutup devasa görünür.
     private var commitButton: some View {
         let canCommit = shell.git.canCommit(repoPath)
         return HStack(spacing: 0) {
@@ -116,17 +118,16 @@ struct SourceControlView: View {
                 )
                 .font(Theme.Typography.ui(.body, weight: .medium))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, Theme.Spacing.sm)
+                .frame(height: Theme.Row.control)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!canCommit)
-            Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
+            Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline, height: Theme.Row.control)
             Button { showsCommitMenu.toggle() } label: {
                 Image(systemName: "chevron.down")
                     .font(Theme.Typography.ui(.caption, weight: .bold))
-                    .frame(width: Theme.Spacing.xxxl)
-                    .frame(maxHeight: .infinity)
+                    .frame(width: Theme.Spacing.xxxl, height: Theme.Row.control)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
