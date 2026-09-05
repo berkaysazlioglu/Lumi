@@ -153,26 +153,26 @@ final class LayoutStoreTests: XCTestCase {
     // MARK: - Panel yerleşimi (Faz 6.2)
 
     func testDefaultLayoutPlacesSessionsLeftAndGitRight() {
-        XCTAssertEqual(store.items(in: .left), [.sessions, .fileTree])
-        XCTAssertEqual(store.items(in: .right), [.gitCommits, .gitChanges])
+        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .right), [.projectTools])
         XCTAssertEqual(store.width(for: .left), PanelLayout.defaultWidth)
         XCTAssertEqual(store.visibleSlots, [.left], "sağ panel default kapalı")
     }
 
     /// **Ana hedef:** bir öğeyi soldan sağa taşımak TEK mutasyondur.
     func testMovingItemFromLeftToRightIsASingleMutation() async throws {
-        store.move(item: .fileTree, to: .right, index: 0)
+        store.move(item: .sessions, to: .right, index: 0)
 
-        XCTAssertEqual(store.items(in: .left), [.sessions])
-        XCTAssertEqual(store.items(in: .right), [.fileTree, .gitCommits, .gitChanges])
+        XCTAssertEqual(store.items(in: .left), [])
+        XCTAssertEqual(store.items(in: .right), [.sessions, .projectTools])
         try await waitForPersist()
         let persisted = await config.uiState()
-        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .fileTree)
+        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .sessions)
     }
 
     func testMovingWithoutIndexAppends() {
         store.move(item: .sessions, to: .right)
-        XCTAssertEqual(store.items(in: .right), [.gitCommits, .gitChanges, .sessions])
+        XCTAssertEqual(store.items(in: .right), [.projectTools, .sessions])
     }
 
     func testMoveToSamePositionDoesNotPersist() async throws {
@@ -201,7 +201,7 @@ final class LayoutStoreTests: XCTestCase {
             openTabs: []
         )
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .fileTree], "yerleşim default'tan gelir")
+        XCTAssertEqual(store.items(in: .left), [.sessions], "yerleşim default'tan gelir")
     }
 
     /// Yeni anahtar VARSA otoritedir (eski bool'lar yok sayılır).
@@ -215,7 +215,7 @@ final class LayoutStoreTests: XCTestCase {
 
         XCTAssertEqual(store.visibleSlots, [.right])
         XCTAssertEqual(store.items(in: .left), [.sessions])
-        XCTAssertEqual(store.items(in: .right), [.fileTree, .gitCommits, .gitChanges])
+        XCTAssertEqual(store.items(in: .right), [.fileTree, .projectTools])
     }
 
     // MARK: - Eviction (5.5)

@@ -36,7 +36,7 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
             title: "Sessions",
             icon: "square.stack.3d.up",
             defaultSlot: .left,
-            sizing: .fit,
+            sizing: .fill,
             isAvailable: { $0.activeRepoPath != nil },
             makeView: { AnyView(SessionsPanelItem()) }
         ))

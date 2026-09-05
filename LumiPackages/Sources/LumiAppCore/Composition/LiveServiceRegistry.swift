@@ -16,6 +16,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let config: any ConfigServicing
     let system: any SystemServicing
     let repo: any RepoServicing
+    let agentHistory: any AgentHistoryReading
     let git: any GitServicing
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
@@ -54,6 +55,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         )
         repo = RepoService()
         git = GitService()
+        agentHistory = AgentHistoryService()
         highlighter = HighlightrEngine(style: HighlightrStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }

@@ -220,9 +220,9 @@ Enjeksiyon tek noktadadır: `EnvironmentValues.shell` (opsiyonel) + `@Shell` pro
 
 ### 7.2 Panel yuvaları (K33/K34)
 
-**Yuva sayısı kapalı, öğe kümesi açık.** `LumiKit.PanelSlot` = `left` / `right` / `bottom` (bir pencere kabuğunun coğrafyası); `PanelItemID` string id'dir ve kayıtlı öğeler bugün `sessions`, `fileTree`, `gitCommits`, `gitChanges`'tir.
+**Yuva sayısı kapalı, öğe kümesi açık.** `LumiKit.PanelSlot` = `left` / `right` / `bottom` (bir pencere kabuğunun coğrafyası); `PanelItemID` string id'dir ve kayıtlı öğeler bugün `sessions` ve `projectTools`'tur (karar 39). Eski `fileTree`, `gitCommits`, `gitChanges` kimlikleri kayıtlı değildir; eski yerleşimlerden sessizce atlanırlar.
 
-`PanelLayout` **değişmezdir** — `slots: [PanelSlot: [PanelItemID]]`, `visibleSlots: Set<PanelSlot>`, `widths: [PanelSlot: Double]`; her mutasyon (`settingVisible`, `togglingVisible`, `settingWidth`, `moving(_:to:index:)`) **yeni bir değer** döndürür. Genişlik `minWidth 180 … maxWidth 640` aralığına kırpılır, `defaultWidth = 280`. Varsayılan yerleşim: sol = `sessions` + `fileTree` (açık), sağ = `gitCommits` + `gitChanges` (kapalı).
+`PanelLayout` **değişmezdir** — `slots: [PanelSlot: [PanelItemID]]`, `visibleSlots: Set<PanelSlot>`, `widths: [PanelSlot: Double]`; her mutasyon (`settingVisible`, `togglingVisible`, `settingWidth`, `moving(_:to:index:)`) **yeni bir değer** döndürür. Genişlik `minWidth 180 … maxWidth 640` aralığına kırpılır, `defaultWidth = 280`. Varsayılan yerleşim: sol = `sessions` (açık), sağ = `projectTools` (kapalı). `projectTools` üstte Explorer / Agent History / yalnız Git projesinde Source Control sekmeleri sunar. Unity projelerinde Explorer isteğe bağlı yalnız Assets içeriğini gösterir ve `.meta` dosyalarını gizler.
 
 `LayoutStore` intent'leri bu mutasyonlara iner: `toggleSlot(_:)`, `setSlotVisible(_:_:)`, `move(item:to:index:)`, `setWidth(_:for:)`. **Bir öğeyi soldan sağa taşımak tek `move` çağrısıdır.** Değişmediyse yazılmaz (idempotent). Focus mode kalıcı görünürlüğü ezmez: `visibleSlots` kalıcı hâli, `isSlotVisible(_:)` çizim kararını (`!isFocusMode && …`) verir.
 

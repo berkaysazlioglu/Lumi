@@ -76,6 +76,27 @@ public actor RepoService: RepoServicing {
         broadcaster.stream()
     }
 
+    public func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult {
+        try await ExplorerContentSearcher.search(repoPath: repoPath, paths: paths, query: query)
+    }
+
+    public func editFile(repoPath: String, edit: ExplorerFileEdit) async throws {
+        try ExplorerFileEditor().apply(edit, repoPath: repoPath)
+        broadcaster.send(.fileTreeChanged(repoPath: repoPath))
+    }
+
+    public func capabilities(repoPath: String) async -> ProjectCapabilities {
+        let git = await runner.run(
+            "/usr/bin/git", arguments: ["rev-parse", "--is-inside-work-tree"],
+            currentDirectory: repoPath, timeout: 5
+        )
+        return ProjectCapabilities(
+            isGitRepo: git?.exitCode == 0 && git?.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "true",
+            isUnityProject: isDirectory(repoPath + "/Assets")
+                && FileManager.default.fileExists(atPath: repoPath + "/ProjectSettings/ProjectVersion.txt")
+        )
+    }
+
     // MARK: - File tree (karar 7)
 
     /// Tarama actor dışında, detached bir utility task'te koşar: devasa bir

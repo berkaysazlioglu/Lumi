@@ -40,12 +40,12 @@ public enum ShellToolbarItems {
 
     public static let slotPresentations: [PanelSlot: SlotPresentation] = [
         .left: SlotPresentation(
-            icon: "line.3.horizontal",
+            icon: "sidebar.left",
             region: .leading,
             order: Order.panelToggleLeading
         ),
         .right: SlotPresentation(
-            icon: "arrow.triangle.branch",
+            icon: "sidebar.right",
             region: .trailing,
             order: Order.panelToggleRight
         ),

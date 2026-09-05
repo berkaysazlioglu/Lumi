@@ -64,8 +64,9 @@ final class PanelItemRegistryTests: XCTestCase {
             descriptor(.gitCommits, slot: .right),
             descriptor(.gitChanges, slot: .right),
         ])
-        XCTAssertEqual(ids(registry, .left, .defaults), [.sessions, .fileTree])
-        XCTAssertEqual(ids(registry, .right, .defaults), [.gitCommits, .gitChanges])
+        let legacyLayout = PanelLayout(slots: [.left: [.sessions, .fileTree], .right: [.gitCommits, .gitChanges]], visibleSlots: [.left, .right], widths: [:])
+        XCTAssertEqual(ids(registry, .left, legacyLayout), [.sessions, .fileTree])
+        XCTAssertEqual(ids(registry, .right, legacyLayout), [.gitCommits, .gitChanges])
         XCTAssertEqual(ids(registry, .bottom, .defaults), [])
     }
 
@@ -97,6 +98,18 @@ final class PanelItemRegistryTests: XCTestCase {
             [.sessions],
             "ui-state'te kalmış bilinmeyen id kabuğu bozmaz"
         )
+    }
+
+    func testLegacyLayoutFallsBackToProjectToolsRegistration() {
+        let registry = registry([
+            descriptor(.sessions),
+            descriptor(.projectTools, slot: .right)
+        ])
+        let legacy = PanelLayout(
+            slots: [.left: [.sessions], .right: [.fileTree, .gitCommits, .gitChanges]],
+            visibleSlots: [.left, .right], widths: [:]
+        )
+        XCTAssertEqual(ids(registry, .right, legacy), [.projectTools])
     }
 
     func testDuplicateLayoutEntriesAreCollapsed() {

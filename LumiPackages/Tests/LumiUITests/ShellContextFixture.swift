@@ -19,7 +19,7 @@ struct ShellContextFixture {
 
     /// Terminal event stream'i tüketen store başlatılır: fixture gerçek
     /// `spawn` yolundan terminal üretebilsin diye (`apply` LumiState-internal).
-    static func make() async -> ShellContextFixture {
+    static func make(repo: FakeRepoService = FakeRepoService(), git: FakeGitService = FakeGitService()) async -> ShellContextFixture {
         let config = FakeConfigService()
         let terminalService = FakeTerminalService()
         let viewProvider = FakeTerminalViewProvider()
@@ -29,7 +29,6 @@ struct ShellContextFixture {
             viewProvider: viewProvider,
             toastAutoDismissAfter: 60
         )
-        let git = FakeGitService()
         let system = FakeSystemService()
         let toasts = shared.toasts
         let context = ShellContext(
@@ -37,8 +36,9 @@ struct ShellContextFixture {
             layout: shared.layout,
             dialogs: shared.dialogs,
             terminals: shared.terminals,
-            repos: RepoStore(service: FakeRepoService()),
+            repos: RepoStore(service: repo),
             git: GitStore(git: git, toasts: toasts),
+            agentHistory: AgentHistoryStore(service: FakeAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: toasts),
             settings: shared.settings,
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),

@@ -46,6 +46,7 @@ struct ShellComposition {
             terminals: shared.terminals,
             repos: repo.repoStore,
             git: repo.gitStore,
+            agentHistory: repo.agentHistory,
             fileViewer: repo.fileViewer,
             settings: shared.settings,
             sessionSchedule: sessionSchedule.sessionSchedule,

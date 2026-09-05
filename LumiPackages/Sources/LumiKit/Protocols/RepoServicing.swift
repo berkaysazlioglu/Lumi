@@ -7,6 +7,9 @@ public protocol RepoServicing: Actor {
 
     /// Ignored bayrakları git'in kendi semantiğiyle (nested .gitignore + global +
     /// info/exclude — karar 7); git olmayan dizinde yalnız hardcoded excludes.
+    func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult
+    func editFile(repoPath: String, edit: ExplorerFileEdit) async throws
+    func capabilities(repoPath: String) async -> ProjectCapabilities
     func fileTree(repoPath: String) async -> [FileTreeNode]
     /// Aktif repo recursive izlenir (FSEvents, 500ms coalescing);
     /// git panellerinin canlılığı da bu event'e bağlıdır (.git değişimleri dahil).

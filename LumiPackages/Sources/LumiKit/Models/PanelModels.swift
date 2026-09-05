@@ -30,6 +30,8 @@ public struct PanelItemID: RawRepresentable, Hashable, Sendable, Codable {
 }
 
 public extension PanelItemID {
+    static let projectTools = PanelItemID("projectTools")
+
     /// Aktif repo'nun terminal oturumları listesi.
     static let sessions = PanelItemID("sessions")
     /// Aktif repo'nun dosya ağacı ("Project Context").
@@ -66,12 +68,11 @@ public struct PanelLayout: Equatable, Sendable {
         self.widths = widths
     }
 
-    /// Bugünkü kabuğun yerleşimi: sol = Sessions + Project Context,
-    /// sağ = Commits + Changes; sol açık, sağ kapalı (mevcut default'lar).
+    /// Sol = Sessions, sağ = sekmeli Project Tools; sol açık, sağ kapalı.
     public static let defaults = PanelLayout(
         slots: [
-            .left: [.sessions, .fileTree],
-            .right: [.gitCommits, .gitChanges],
+            .left: [.sessions],
+            .right: [.projectTools],
             .bottom: [],
         ],
         visibleSlots: [.left],

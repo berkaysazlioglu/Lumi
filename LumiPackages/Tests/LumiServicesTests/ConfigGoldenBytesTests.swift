@@ -99,7 +99,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
             // Eski `leftSidebarOpen`/`rightSidebarOpen` PROJEKSİYON olarak
             // yazılmaya devam eder (yukarıda set edildi).
             state.panelLayout = PanelLayout.defaults
-                .moving(.fileTree, to: .right, index: 0)
+                .moving(.projectTools, to: .right, index: 0)
                 .settingVisible(.left, false)
                 .settingVisible(.right, true)
                 .settingWidth(320, for: .right)
@@ -176,9 +176,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
             "sessions"
           ],
           "right" : [
-            "fileTree",
-            "gitCommits",
-            "gitChanges"
+            "projectTools"
           ]
         },
         "widths" : {

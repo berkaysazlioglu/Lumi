@@ -17,6 +17,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
 
     private(set) var repoStore: RepoStore!
     private(set) var gitStore: GitStore!
+    private(set) var agentHistory: AgentHistoryStore!
     private(set) var fileViewer: FileViewerStore!
 
     private var services: (any ServiceRegistry)!
@@ -30,6 +31,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         self.services = services
         self.shared = shared
         repoStore = RepoStore(service: services.repo)
+        agentHistory = AgentHistoryStore(service: services.agentHistory)
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
         fileViewer = FileViewerStore(git: services.git, toasts: shared.toasts)
     }
@@ -37,28 +39,12 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     /// Faz 6.6: repo'ya bağlı panel öğeleri BU assembly'nin katkısıdır.
     func registerShellItems(into registries: ShellRegistries) {
         registries.panels.register(PanelItemDescriptor(
-            id: .fileTree,
-            title: "Project Context",
-            icon: "list.bullet.indent",
-            defaultSlot: .left,
-            isAvailable: { $0.activeRepoPath != nil },
-            makeView: { AnyView(FileTreePanelItem()) }
-        ))
-        registries.panels.register(PanelItemDescriptor(
-            id: .gitCommits,
-            title: "Commits",
-            icon: "arrow.triangle.branch",
+            id: .projectTools,
+            title: "Project Tools",
+            icon: "sidebar.right",
             defaultSlot: .right,
             isAvailable: { $0.activeRepoPath != nil },
-            makeView: { AnyView(GitCommitsPanelItem()) }
-        ))
-        registries.panels.register(PanelItemDescriptor(
-            id: .gitChanges,
-            title: "Changes",
-            icon: "doc.on.doc",
-            defaultSlot: .right,
-            isAvailable: { $0.activeRepoPath != nil },
-            makeView: { AnyView(GitChangesPanelItem()) }
+            makeView: { AnyView(ProjectToolsPanel()) }
         ))
     }
 
@@ -136,6 +122,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         shared.navigation.onTabClosed = { [weak self] repoPath in
             guard let self else { return }
             gitStore.evict(repoPath)
+            agentHistory.evict(repoPath)
             repoStore.evict(repoPath)
         }
     }

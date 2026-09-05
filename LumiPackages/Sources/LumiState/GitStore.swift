@@ -13,6 +13,7 @@ public final class GitStore {
     public private(set) var branches: [String: [GitBranch]] = [:]
     public private(set) var commitsByBranch: [String: [String: [GitCommit]]] = [:]
     public private(set) var changes: [String: [GitFileChange]] = [:]
+    public private(set) var explorerStatuses: [String: [String: FileChangeStatus]] = [:]
     public private(set) var selectedFiles = KeyedToggleSet<String, String>()
     /// Commit mesajı taslakları (refactor 5.4 kapsülleme borcu kapandı):
     /// yazım YALNIZ `setCommitMessage(_:for:)` intent'inden geçer; view
@@ -96,6 +97,7 @@ public final class GitStore {
     public func loadChanges(_ repoPath: String) async {
         let list = await git.status(repoPath: repoPath)
         changes[repoPath] = list
+        explorerStatuses[repoPath] = ExplorerGitDecoration.statuses(list)
         let present = Set(list.map(\.path))
         if reposWithUserSelection.contains(repoPath) {
             selectedFiles.replace((selectedFiles[repoPath] ?? []).intersection(present), in: repoPath)
@@ -145,6 +147,7 @@ public final class GitStore {
         branches.removeValue(forKey: repoPath)
         commitsByBranch.removeValue(forKey: repoPath)
         changes.removeValue(forKey: repoPath)
+        explorerStatuses.removeValue(forKey: repoPath)
         commitMessages.removeValue(forKey: repoPath)
         selectedFiles.evict(repoPath)
         expandedBranches.evict(repoPath)

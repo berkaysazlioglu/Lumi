@@ -54,6 +54,29 @@ public enum GitPorcelainParser {
         raw.split(separator: "\n").compactMap { parseStatusLine(String($0)) }
     }
 
+    /// NUL framing preserves Unicode, newlines, quotes and literal " -> " in paths.
+    public static func parseStatusZeroTerminated(_ raw: String) -> [GitFileChange] {
+        let entries = raw.split(separator: "\0", omittingEmptySubsequences: false)
+        var index = 0
+        var result: [GitFileChange] = []
+        while index < entries.count {
+            let entry = entries[index]
+            index += 1
+            guard entry.count >= 4 else { continue }
+            let codes = Array(entry.prefix(2))
+            let path = String(entry.dropFirst(3))
+            let status: FileChangeStatus
+            if codes.contains("?") { status = .untracked }
+            else if codes.contains("R") || codes.contains("C") { status = .renamed }
+            else if codes.contains("D") { status = .deleted }
+            else if codes.contains("A") { status = .added }
+            else { status = .modified }
+            result.append(GitFileChange(path: path, status: status))
+            if codes.contains("R") || codes.contains("C") { index += 1 }
+        }
+        return result
+    }
+
     /// Porcelain v1 satırı → sadeleştirilmiş statü: index+worktree
     /// kodları tek statüye iner; rename'de `to` path'i alınır.
     public static func parseStatusLine(_ line: String) -> GitFileChange? {

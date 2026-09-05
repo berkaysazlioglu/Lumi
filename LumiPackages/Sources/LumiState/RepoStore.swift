@@ -16,6 +16,10 @@ public final class RepoStore: StoreLifecycle {
     // File tree (file tree UI davranışları): repo başına cache (stale-while-
     /// revalidate), expand state (oturum içi), ilk-yüklemede kök klasör expand'i.
     public private(set) var fileTrees: [String: [FileTreeNode]] = [:]
+    public private(set) var fileTreeRevisions: [String: Int] = [:]
+    public private(set) var capabilities: [String: ProjectCapabilities] = [:]
+    public private(set) var explorerOptions: [String: ExplorerOptions] = [:]
+    public private(set) var explorerTrees: [String: [FileTreeNode]] = [:]
     public private(set) var expandedNodes = KeyedToggleSet<String, String>()
     @ObservationIgnored private var autoExpandedRepos: Set<String> = []
 
@@ -61,13 +65,50 @@ public final class RepoStore: StoreLifecycle {
     /// Stale-while-revalidate: eski ağaç ekranda kalır, yenisi gelince değişir.
     public func loadFileTree(_ repoPath: String) async {
         let tree = await service.fileTree(repoPath: repoPath)
+        capabilities[repoPath] = await service.capabilities(repoPath: repoPath)
         fileTrees[repoPath] = tree
+        rebuildExplorer(repoPath)
+        fileTreeRevisions[repoPath, default: 0] += 1
         if !autoExpandedRepos.contains(repoPath) {
             autoExpandedRepos.insert(repoPath)
             // İlk yüklemede kök seviyesindeki klasörler otomatik expand
             let rootFolders = tree.filter { $0.type == .folder && !$0.isIgnored }.map(\.path)
             expandedNodes.formUnion(rootFolders, in: repoPath)
         }
+    }
+
+    public func setExplorerOptions(_ options: ExplorerOptions, for repoPath: String) {
+        var value = options
+        if capabilities[repoPath]?.isUnityProject != true { value.unityAssetsOnly = false }
+        explorerOptions[repoPath] = value
+        rebuildExplorer(repoPath)
+    }
+
+    private func rebuildExplorer(_ repoPath: String) {
+        if capabilities[repoPath]?.isUnityProject != true, explorerOptions[repoPath]?.unityAssetsOnly == true {
+            explorerOptions[repoPath]?.unityAssetsOnly = false
+        }
+        explorerTrees[repoPath] = (explorerOptions[repoPath] ?? ExplorerOptions()).project(
+            fileTrees[repoPath] ?? [], isUnityProject: capabilities[repoPath]?.isUnityProject == true
+        )
+    }
+
+    public func searchContents(_ query: String, in repoPath: String) async throws -> ExplorerContentResult {
+        func paths(_ nodes: [FileTreeNode]) -> [String] {
+            nodes.flatMap { $0.type == .file ? [$0.path] : paths($0.children) }
+        }
+        return try await service.searchContents(
+            repoPath: repoPath, paths: paths(explorerTrees[repoPath] ?? []), query: query
+        )
+    }
+
+    public func editFile(_ edit: ExplorerFileEdit, in repoPath: String) async throws {
+        try await service.editFile(repoPath: repoPath, edit: edit)
+        await loadFileTree(repoPath)
+    }
+
+    public func collapseAll(_ repoPath: String) {
+        expandedNodes.replace([], in: repoPath)
     }
 
     public func toggleNode(_ repoPath: String, path: String) {
@@ -79,6 +120,10 @@ public final class RepoStore: StoreLifecycle {
     /// klasör auto-expand'i yeniden koşar.
     public func evict(_ repoPath: String) {
         fileTrees.removeValue(forKey: repoPath)
+        capabilities.removeValue(forKey: repoPath)
+        fileTreeRevisions.removeValue(forKey: repoPath)
+        explorerTrees.removeValue(forKey: repoPath)
+        explorerOptions.removeValue(forKey: repoPath)
         expandedNodes.evict(repoPath)
         autoExpandedRepos.remove(repoPath)
     }

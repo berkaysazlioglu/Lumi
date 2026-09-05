@@ -115,6 +115,13 @@ final class GitPorcelainParserTests: XCTestCase {
         XCTAssertNil(GitPorcelainParser.parseStatusLine(" M "))
     }
 
+    func testZeroTerminatedStatusPreservesSpecialPathsAndConsumesRenameSource() {
+        let raw = "?? quote\\\"é.txt\0R  new → name\0old\nname\0"
+        let changes = GitPorcelainParser.parseStatusZeroTerminated(raw)
+        XCTAssertEqual(changes.map(\.path), ["quote\\\"é.txt", "new → name"])
+        XCTAssertEqual(changes.map(\.status), [.untracked, .renamed])
+    }
+
     // MARK: - diff-tree --name-status
 
     func testDiffTreeNormalizesScoredStatuses() {

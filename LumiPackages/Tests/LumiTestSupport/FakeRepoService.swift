@@ -20,6 +20,7 @@ public actor FakeRepoService: RepoServicing {
     // MARK: Ayarlanabilir dönüşler
     private var reposToReturn: [Repo] = []
     private var fileTrees: [String: [FileTreeNode]] = [:]
+    private var projectCapabilities: [String: ProjectCapabilities] = [:]
     private var defaultFileTree: [FileTreeNode] = []
 
     // MARK: Çağrı kaydı
@@ -30,6 +31,19 @@ public actor FakeRepoService: RepoServicing {
     public private(set) var unwatchCalls: [String] = []
 
     public init() {}
+
+    public func setCapabilities(_ value: ProjectCapabilities, for path: String) {
+        projectCapabilities[path] = value
+    }
+
+    public func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult { ExplorerContentResult() }
+    public func editFile(repoPath: String, edit: ExplorerFileEdit) async throws {}
+
+    public func capabilities(repoPath: String) async -> ProjectCapabilities {
+        projectCapabilities[repoPath] ?? ProjectCapabilities(
+            isGitRepo: reposToReturn.first { $0.path == repoPath }?.isGitRepo ?? false
+        )
+    }
 
     public func setRepos(_ repos: [Repo]) {
         reposToReturn = repos

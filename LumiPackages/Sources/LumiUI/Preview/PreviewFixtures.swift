@@ -33,6 +33,7 @@ public extension ShellContext {
             terminals: shared.terminals,
             repos: RepoStore(service: PreviewRepoService()),
             git: GitStore(git: git, toasts: shared.toasts),
+            agentHistory: AgentHistoryStore(service: PreviewAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
             settings: shared.settings,
             sessionSchedule: SessionScheduleStore(starter: PreviewSessionStarterService()),
@@ -144,7 +145,14 @@ private final class PreviewTerminalViewProvider: TerminalViewProviding {
     func refreshAttachedViews() {}
 }
 
+private struct PreviewAgentHistoryService: AgentHistoryReading {
+    func entries(projectPath: String) async throws -> [AgentHistoryEntry] { [] }
+}
+
 private actor PreviewRepoService: RepoServicing {
+    func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult { ExplorerContentResult() }
+    func editFile(repoPath: String, edit: ExplorerFileEdit) async throws {}
+    func capabilities(repoPath: String) async -> ProjectCapabilities { ProjectCapabilities(isGitRepo: true) }
     func repos() -> [Repo] { [] }
     func setRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) {}
     func fileTree(repoPath: String) -> [FileTreeNode] { [] }

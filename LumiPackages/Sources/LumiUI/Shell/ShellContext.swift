@@ -47,6 +47,7 @@ public final class ShellContext {
     public let dialogs: DialogRouter
     public let terminals: TerminalListStore
     public let repos: RepoStore
+    public let agentHistory: AgentHistoryStore
     public let git: GitStore
     public let fileViewer: FileViewerStore
     public let settings: SettingsStore
@@ -70,6 +71,7 @@ public final class ShellContext {
         terminals: TerminalListStore,
         repos: RepoStore,
         git: GitStore,
+        agentHistory: AgentHistoryStore,
         fileViewer: FileViewerStore,
         settings: SettingsStore,
         sessionSchedule: SessionScheduleStore,
@@ -87,6 +89,7 @@ public final class ShellContext {
         self.terminals = terminals
         self.repos = repos
         self.git = git
+        self.agentHistory = agentHistory
         self.fileViewer = fileViewer
         self.settings = settings
         self.sessionSchedule = sessionSchedule

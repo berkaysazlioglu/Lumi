@@ -9,8 +9,8 @@ final class PanelLayoutTests: XCTestCase {
 
     func testDefaultsMatchTodaysShell() {
         let layout = PanelLayout.defaults
-        XCTAssertEqual(layout.items(in: .left), [.sessions, .fileTree])
-        XCTAssertEqual(layout.items(in: .right), [.gitCommits, .gitChanges])
+        XCTAssertEqual(layout.items(in: .left), [.sessions])
+        XCTAssertEqual(layout.items(in: .right), [.projectTools])
         XCTAssertEqual(layout.items(in: .bottom), [])
         XCTAssertEqual(layout.visibleSlots, [.left], "sol açık, sağ kapalı (bugünkü default)")
         for slot in PanelSlot.allCases {
@@ -33,35 +33,36 @@ final class PanelLayoutTests: XCTestCase {
     // MARK: - Taşıma (ana hedef)
 
     func testMovingItemLeftToRightRemovesItFromSource() {
-        let moved = PanelLayout.defaults.moving(.fileTree, to: .right, index: 0)
-        XCTAssertEqual(moved.items(in: .left), [.sessions])
-        XCTAssertEqual(moved.items(in: .right), [.fileTree, .gitCommits, .gitChanges])
-        XCTAssertEqual(moved.slot(of: .fileTree), .right)
+        let moved = PanelLayout.defaults.moving(.sessions, to: .right, index: 0)
+        XCTAssertEqual(moved.items(in: .left), [])
+        XCTAssertEqual(moved.items(in: .right), [.sessions, .projectTools])
+        XCTAssertEqual(moved.slot(of: .sessions), .right)
     }
 
     func testMovingWithoutIndexAppendsToEnd() {
         let moved = PanelLayout.defaults.moving(.sessions, to: .right)
-        XCTAssertEqual(moved.items(in: .right), [.gitCommits, .gitChanges, .sessions])
+        XCTAssertEqual(moved.items(in: .right), [.projectTools, .sessions])
     }
 
     func testMovingClampsOutOfRangeIndex() {
         let high = PanelLayout.defaults.moving(.sessions, to: .right, index: 99)
-        XCTAssertEqual(high.items(in: .right), [.gitCommits, .gitChanges, .sessions])
+        XCTAssertEqual(high.items(in: .right), [.projectTools, .sessions])
         let low = PanelLayout.defaults.moving(.sessions, to: .right, index: -5)
-        XCTAssertEqual(low.items(in: .right), [.sessions, .gitCommits, .gitChanges])
+        XCTAssertEqual(low.items(in: .right), [.sessions, .projectTools])
     }
 
     func testMovingWithinSameSlotReorders() {
-        let moved = PanelLayout.defaults.moving(.fileTree, to: .left, index: 0)
-        XCTAssertEqual(moved.items(in: .left), [.fileTree, .sessions])
+        let layout = PanelLayout.defaults.moving(.projectTools, to: .left)
+        let moved = layout.moving(.projectTools, to: .left, index: 0)
+        XCTAssertEqual(moved.items(in: .left), [.projectTools, .sessions])
     }
 
     func testMovingNeverDuplicatesAcrossSlots() {
         let moved = PanelLayout.defaults
             .moving(.sessions, to: .right)
             .moving(.sessions, to: .bottom)
-        XCTAssertEqual(moved.items(in: .left), [.fileTree])
-        XCTAssertEqual(moved.items(in: .right), [.gitCommits, .gitChanges])
+        XCTAssertEqual(moved.items(in: .left), [])
+        XCTAssertEqual(moved.items(in: .right), [.projectTools])
         XCTAssertEqual(moved.items(in: .bottom), [.sessions])
     }
 

@@ -80,12 +80,12 @@ public struct GitService: GitServicing {
     // MARK: - Status / commit
 
     public func status(repoPath: String) async -> [GitFileChange] {
-        let output = await commands.run(["status", "--porcelain"], in: repoPath)
+        let output = await commands.run(["status", "--porcelain", "--untracked-files=all", "-z"], in: repoPath)
         guard let output, output.exitCode == 0 else {
             commands.logQuietFailure("status", output)
             return []
         }
-        return GitPorcelainParser.parseStatus(output.stdout)
+        return GitPorcelainParser.parseStatusZeroTerminated(output.stdout)
     }
 
     public func commit(repoPath: String, message: String, files: [String]) async throws {

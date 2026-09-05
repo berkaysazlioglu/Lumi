@@ -23,6 +23,12 @@ public enum Theme {
     public static let error = Color(red: 0xF8 / 255, green: 0x71 / 255, blue: 0x71 / 255)
     public static let border = Color(red: 0x2A / 255, green: 0x2A / 255, blue: 0x4A / 255)
 
+    /// Git decoration paleti (VS Code SCM renkleri; Explorer badge + Source Control).
+    public static let gitModified = Color(hex: 0xE2C08D)
+    public static let gitAdded = Color(hex: 0x81B88B)
+    public static let gitDeleted = Color(hex: 0xC74E39)
+    public static let gitUntracked = Color(hex: 0x73C991)
+
     /// NSAttributedString tabanlı görünümler (FileViewer/diff) için AppKit renkleri.
     public enum NS {
         public static let bgDeep = NSColor(srgbRed: 0x0A / 255, green: 0x0A / 255, blue: 0x12 / 255, alpha: 1)
@@ -35,15 +41,14 @@ public enum Theme {
         // Diff zeminleri `Theme+Diff.swift`'te (refactor 7.9: tek kaynak).
     }
 
-    /// Git status rozet rengi — tek kaynak (ChangesSection/CommitDiffView
-    /// palet tutarsızlığı taşınmaz, karar 11).
+    /// Git status rozet rengi — tek kaynak (Explorer/SourceControl palet
+    /// tutarsızlığı taşınmaz, karar 11). VS Code SCM decoration renkleri.
     public static func fileChangeColor(for status: FileChangeStatus) -> Color {
         switch status {
-        case .modified: return warning
-        case .added: return success
-        case .deleted: return error
-        case .renamed: return accentCyan
-        case .untracked: return accentPrimary
+        case .modified: return gitModified
+        case .added: return gitAdded
+        case .deleted: return gitDeleted
+        case .renamed, .untracked: return gitUntracked
         }
     }
 

@@ -31,3 +31,13 @@ public enum RepoEvent: Sendable, Equatable {
     case reposChanged
     case fileTreeChanged(repoPath: String)
 }
+
+public struct ProjectCapabilities: Sendable, Equatable {
+    public let isGitRepo: Bool
+    public let isUnityProject: Bool
+
+    public init(isGitRepo: Bool = false, isUnityProject: Bool = false) {
+        self.isGitRepo = isGitRepo
+        self.isUnityProject = isUnityProject
+    }
+}

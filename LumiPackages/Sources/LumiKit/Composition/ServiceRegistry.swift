@@ -16,6 +16,7 @@ public protocol ServiceRegistry: AnyObject {
     var system: any SystemServicing { get }
     var repo: any RepoServicing { get }
     var git: any GitServicing { get }
+    var agentHistory: any AgentHistoryReading { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

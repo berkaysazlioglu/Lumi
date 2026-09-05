@@ -37,7 +37,7 @@ final class PanelLayoutPersistenceTests: XCTestCase {
         XCTAssertEqual(state.panelLayout?.width(for: .left), 300)
         XCTAssertEqual(
             state.panelLayout?.items(in: .right),
-            [.gitCommits, .gitChanges],
+            [.projectTools],
             "yazılmamış yuva default'undan gelir"
         )
     }
