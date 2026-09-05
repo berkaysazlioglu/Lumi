@@ -8,6 +8,10 @@ public actor AgentHistoryService: AgentHistoryReading {
     private let maxEntries = 200
     private let maxEnumeratedItems = 20_000
     private let sampleBytes = 256 * 1024
+    private let maxRecentTurns = 3
+    private let maxTurnPreviewLength = 400
+    private let maxTitleLength = 160
+    private let maxFirstPromptLength = 2_000
 
     public init(
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -72,7 +76,38 @@ public actor AgentHistoryService: AgentHistoryReading {
     }
 
     private func read(_ candidate: Candidate, project: String) -> AgentHistoryEntry? {
-        guard let handle = try? FileHandle(forReadingFrom: candidate.url) else { return nil }
+        guard let sampled = sample(candidate.url) else { return nil }
+        let transcript = AgentTranscriptParser(provider: candidate.provider).parse(sampled)
+        guard let cwd = transcript.cwd,
+              URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path == project else { return nil }
+        let sessionID = transcript.sessionID ?? candidate.url.deletingPathExtension().lastPathComponent
+        let recent = transcript.turns.suffix(maxRecentTurns).map { $0.truncated(to: maxTurnPreviewLength) }
+        return AgentHistoryEntry(
+            provider: candidate.provider,
+            sessionID: sessionID,
+            title: String(title(transcript).prefix(maxTitleLength)),
+            preview: recent.last.map(\.text),
+            updatedAt: candidate.date,
+            cwd: cwd,
+            logPath: candidate.url.path,
+            gitBranch: transcript.gitBranch,
+            model: transcript.model,
+            messageCount: transcript.messageCount,
+            firstPrompt: transcript.firstPrompt.map { String($0.prefix(maxFirstPromptLength)) },
+            recentTurns: Array(recent)
+        )
+    }
+
+    /// Başlık ilk kullanıcı istemidir; transkriptin başı örnekleme dışında
+    /// kaldıysa (çok büyük dosya) ilk konuşma turuna düşer.
+    private func title(_ transcript: AgentTranscriptParser.Transcript) -> String {
+        transcript.firstPrompt ?? transcript.turns.first?.text ?? "Untitled session"
+    }
+
+    /// Dosyanın baş ve son `sampleBytes`'ını okuyup JSON satırlarına ayırır.
+    /// Kesilmiş ilk/son satır atılır — yarım JSON ayrıştırılamaz zaten.
+    private func sample(_ url: URL) -> [[String: Any]]? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         guard let size = try? handle.seekToEnd(), (try? handle.seek(toOffset: 0)) != nil,
               let head = try? handle.read(upToCount: sampleBytes) else { return nil }
@@ -83,23 +118,7 @@ public actor AgentHistoryService: AgentHistoryReading {
            let tail = try? handle.read(upToCount: sampleBytes) {
             tailRecords = records(tail, dropFirst: true, dropLast: false)
         }
-        let sampled = headRecords + tailRecords
-        let metadata = sampled.first { record in
-            candidate.provider == .claude ? record["cwd"] is String : record["type"] as? String == "session_meta"
-        }
-        let fields = candidate.provider == .claude ? metadata : metadata?["payload"] as? [String: Any]
-        guard let cwd = fields?["cwd"] as? String,
-              URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path == project else { return nil }
-        let sessionID = fields?[candidate.provider == .claude ? "sessionId" : "id"] as? String
-            ?? candidate.url.deletingPathExtension().lastPathComponent
-        let title = sampled.compactMap { text($0, userOnly: true) }.first ?? "Untitled session"
-        let preview = sampled.reversed()
-            .compactMap { text($0, userOnly: false) }.first
-        return AgentHistoryEntry(
-            provider: candidate.provider, sessionID: sessionID,
-            title: String(title.prefix(160)), preview: preview.map { String($0.prefix(2_000)) },
-            updatedAt: candidate.date, cwd: cwd, logPath: candidate.url.path
-        )
+        return headRecords + tailRecords
     }
 
     private func records(_ data: Data, dropFirst: Bool, dropLast: Bool) -> [[String: Any]] {
@@ -107,32 +126,5 @@ public actor AgentHistoryService: AgentHistoryReading {
         if dropFirst && !lines.isEmpty { lines.removeFirst() }
         if dropLast && !lines.isEmpty { lines.removeLast() }
         return lines.compactMap { try? JSONSerialization.jsonObject(with: Data($0)) as? [String: Any] }
-    }
-
-    private func text(_ record: [String: Any], userOnly: Bool) -> String? {
-        let kind = record["type"] as? String
-        let message = record["message"] as? [String: Any]
-        let payload = record["payload"] as? [String: Any]
-        let content: Any?
-        if kind == "user" || (!userOnly && kind == "assistant") {
-            content = message?["content"]
-        } else if kind == "event_msg", payload?["type"] as? String == "user_message" {
-            content = payload?["message"]
-        } else if kind == "response_item", payload?["type"] as? String == "message",
-                  !userOnly || payload?["role"] as? String == "user" {
-            content = payload?["content"]
-        } else { return nil }
-        let text: String
-        if let string = content as? String { text = string }
-        else if let blocks = content as? [[String: Any]] {
-            text = blocks.compactMap { block -> String? in
-                guard let type = block["type"] as? String, ["text", "input_text", "output_text"].contains(type) else { return nil }
-                return block["text"] as? String
-            }.joined(separator: "\n")
-        } else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("<environment_context>"),
-              !trimmed.hasPrefix("# AGENTS.md instructions"), !trimmed.hasPrefix("<system-reminder>") else { return nil }
-        return trimmed
     }
 }

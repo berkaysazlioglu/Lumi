@@ -45,6 +45,18 @@ public extension Theme {
         public static let scale: [CGFloat] = [xxxs, xxs, xs, sm, md, lg, xl, xxl, xxxl]
     }
 
+    /// Liste satırı yükseklikleri.
+    ///
+    /// Explorer satırı önce dolgudan türeyen değişken bir yüksekliğe sahipti;
+    /// sabit yükseklik hem tarama ritmini düzeltir hem de klavye ile gezinirken
+    /// satırların yerinde durmasını sağlar.
+    enum Row {
+        /// 22pt — file-tree / arama sonucu satırı (yoğun liste).
+        public static let compact: CGFloat = 22
+        /// 16pt — satır ikonunun sabit kolon genişliği; adlar aynı x'te hizalanır.
+        public static let iconColumn: CGFloat = 16
+    }
+
     /// Çizgi kalınlığı — tüm kenarlıklar ve ayraçlar 1pt (hairline).
     enum Stroke {
         public static let hairline: CGFloat = 1

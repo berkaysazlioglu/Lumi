@@ -92,6 +92,35 @@ public enum LumiAssets {
         providerIcons[provider] ?? nil
     }
 
+    /// Unity asset ikonu (Explorer dosya türü ikonları). Unity'nin kendi
+    /// glyph'leri SF Symbol'de yok; dört tür (Prefab / ScriptableObject /
+    /// SceneAsset / Material) bundle PNG'siyle çizilir. Yüklenemezse nil —
+    /// çağıran SF Symbol'e düşer, satır ikonsuz kalmaz.
+    public static func unityIcon(_ name: UnityIconName) -> NSImage? {
+        unityIcons[name] ?? nil
+    }
+
+    /// Bundle'daki Unity ikon dosyalarının adları (Resources/Icons/unity-*.png).
+    public enum UnityIconName: String, CaseIterable, Sendable {
+        case prefab = "Prefab"
+        case scriptableObject = "ScriptableObject"
+        case sceneAsset = "SceneAsset"
+        case material = "Material"
+    }
+
+    private static let unityIcons: [UnityIconName: NSImage?] = {
+        var icons: [UnityIconName: NSImage?] = [:]
+        for name in UnityIconName.allCases {
+            let url = Bundle.module.url(
+                forResource: "unity-\(name.rawValue)",
+                withExtension: "png",
+                subdirectory: "Icons"
+            )
+            icons[name] = url.flatMap(NSImage.init(contentsOf:))
+        }
+        return icons
+    }()
+
     private static let providerIcons: [AgentProvider: NSImage?] = {
         var icons: [AgentProvider: NSImage?] = [:]
         for provider in AgentProvider.allCases {

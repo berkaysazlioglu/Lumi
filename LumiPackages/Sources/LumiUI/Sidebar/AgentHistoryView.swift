@@ -78,38 +78,21 @@ struct AgentHistoryView: View {
     }
 
     private func sessionRow(_ entry: AgentHistoryEntry) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        let isExpanded = expanded.contains(entry.id)
+        return VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Button {
                 if !expanded.insert(entry.id).inserted { expanded.remove(entry.id) }
             } label: {
-                HStack(alignment: .top, spacing: Theme.Spacing.md) {
-                    ProviderIcon(provider: entry.provider)
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text(entry.title).foregroundStyle(Theme.textPrimary)
-                            .font(Theme.Typography.ui(.body, weight: .medium)).lineLimit(2)
-                        if let preview = entry.preview {
-                            Text(preview).font(Theme.Typography.ui(.body))
-                                .foregroundStyle(Theme.textSecondary).lineLimit(2)
-                        }
-                        Text(entry.updatedAt, style: .relative)
-                            .font(Theme.Typography.ui(.caption)).foregroundStyle(Theme.textMuted)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: expanded.contains(entry.id) ? "chevron.down" : "chevron.right")
-                        .font(Theme.Typography.ui(.caption)).foregroundStyle(Theme.textMuted)
-                }
-                .contentShape(Rectangle())
+                summary(entry, isExpanded: isExpanded)
             }
             .buttonStyle(.plain)
-            if expanded.contains(entry.id) {
-                Text(entry.sessionID).textSelection(.enabled)
-                    .font(Theme.Typography.mono(.caption)).foregroundStyle(Theme.textSecondary)
-                if let preview = entry.preview {
-                    Text(preview).font(Theme.Typography.ui(.body)).textSelection(.enabled)
-                }
-                Button("Resume Session") { resume(entry) }
-                    .disabled(entry.resumeCommand == nil)
-                    .font(Theme.Typography.ui(.body, weight: .medium))
+            if isExpanded {
+                AgentHistoryDetailCard(
+                    entry: entry,
+                    onResume: { resume(entry) },
+                    onCopyCommand: { if let command = entry.resumeCommand { copy(command) } },
+                    onRevealLog: { revealLog(entry) }
+                )
             }
         }
         .padding(Theme.Spacing.md)
@@ -122,6 +105,57 @@ struct AgentHistoryView: View {
                 .disabled(entry.resumeCommand == nil)
         }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline) }
+    }
+
+    /// Kapalı/açık ortak üst satır: ikon + başlık + preview + metadata.
+    private func summary(_ entry: AgentHistoryEntry, isExpanded: Bool) -> some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.md) {
+            ProviderIcon(provider: entry.provider)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Text(entry.title).foregroundStyle(Theme.textPrimary)
+                    .font(Theme.Typography.ui(.body, weight: .medium))
+                    .lineLimit(isExpanded ? 2 : 1)
+                if let preview = entry.preview, !isExpanded {
+                    Text(preview).font(Theme.Typography.ui(.body))
+                        .foregroundStyle(Theme.textSecondary).lineLimit(2)
+                }
+                metadata(entry)
+                if let branch = entry.gitBranch { AgentHistoryBranchBadge(branch: branch) }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(Theme.Typography.ui(.caption)).foregroundStyle(Theme.textMuted)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// "Claude · 12 msgs · 3 saat · opus-4-1" satırı.
+    private func metadata(_ entry: AgentHistoryEntry) -> some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            Text(entry.provider.rawValue.capitalized)
+            if entry.messageCount > 0 {
+                separator
+                Text("\(entry.messageCount) msgs").monospacedDigit()
+            }
+            separator
+            Text(entry.updatedAt, style: .relative)
+            if let model = entry.modelLabel {
+                separator
+                Text(model).lineLimit(1)
+            }
+        }
+        .font(Theme.Typography.ui(.caption))
+        .foregroundStyle(Theme.textMuted)
+        .lineLimit(1)
+    }
+
+    private var separator: some View {
+        Text("·").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
+    }
+
+    /// Log dosyasını Finder'da seçili açar (Orca'nın "View Log" eylemi).
+    private func revealLog(_ entry: AgentHistoryEntry) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.logPath)])
     }
 
     private func resume(_ entry: AgentHistoryEntry) {

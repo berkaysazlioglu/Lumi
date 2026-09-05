@@ -41,6 +41,61 @@ public enum Theme {
         // Diff zeminleri `Theme+Diff.swift`'te (refactor 7.9: tek kaynak).
     }
 
+    /// Dosya türü ikon paleti (Explorer). Tonlar VS Code / GitHub Linguist
+    /// dil renklerinden alınır, ama koyu zeminde (bgSurface #12121F) okunur
+    /// kalacak biçimde seçilir: C# ve YAML'ın kendi tonları bu zeminde
+    /// kararıyordu, bu yüzden daha açık mora çekildi.
+    ///
+    /// Renkler YALNIZ burada tanımlanır; `fileColor(for:)` dışında hiçbir
+    /// görünüm tür rengini kendisi kurmaz.
+    public enum FileColor {
+        public static let swift = Color(hex: 0xF05138)
+        public static let csharp = Color(hex: 0x6FCF97)
+        public static let typescript = Color(hex: 0x3178C6)
+        public static let javascript = Color(hex: 0xF1E05A)
+        public static let json = Color(hex: 0xCBCB41)
+        public static let yaml = Color(hex: 0xA074C4)
+        public static let markdown = Color(hex: 0x5B9BD5)
+        public static let shell = Color(hex: 0x89E051)
+        public static let python = Color(hex: 0x3572A5)
+        public static let image = Color(hex: 0xA074C4)
+        public static let shader = Color(hex: 0x4EC9B0)
+        /// Nötr-soğuk klasör tonu: VS Code'un sarısı Lumi'nin mor/lacivert
+        /// paletinde yabancı duruyordu.
+        public static let folder = Color(hex: 0x9AA7C7)
+        /// Unity ikonları PNG olarak gelir; bu ton yalnız SF Symbol fallback'i.
+        public static let unity = Color(hex: 0x7FC8E8)
+        public static let git = Color(hex: 0xE86A33)
+        public static let lock = Color(hex: 0xD9A441)
+        public static let media = Color(hex: 0x6FB3B8)
+    }
+
+    /// Dosya sınıfı → ikon rengi. Sınıflandırma LumiKit'te (`FileKind`),
+    /// renklendirme burada: model renk bilmez.
+    public static func fileColor(for kind: FileKind) -> Color {
+        switch kind {
+        case .folder, .folderOpen: return FileColor.folder
+        case .swift: return FileColor.swift
+        case .csharp: return FileColor.csharp
+        case .typescript: return FileColor.typescript
+        case .javascript: return FileColor.javascript
+        case .json: return FileColor.json
+        case .yaml: return FileColor.yaml
+        case .markdown: return FileColor.markdown
+        case .shell: return FileColor.shell
+        case .python: return FileColor.python
+        case .image: return FileColor.image
+        case .shader: return FileColor.shader
+        case .unityScene, .unityPrefab, .unityScriptableObject, .unityMaterial:
+            return FileColor.unity
+        case .git: return FileColor.git
+        case .lock: return FileColor.lock
+        case .audio, .video: return FileColor.media
+        case .unityMeta: return textMuted
+        case .config, .text, .archive, .font, .generic: return textSecondary
+        }
+    }
+
     /// Git status rozet rengi — tek kaynak (Explorer/SourceControl palet
     /// tutarsızlığı taşınmaz, karar 11). VS Code SCM decoration renkleri.
     public static func fileChangeColor(for status: FileChangeStatus) -> Color {
