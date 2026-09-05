@@ -64,14 +64,14 @@ struct TerminalGridView: View {
     }
 }
 
-/// Terminal kartı: başlık çubuğu (dot + başlık + minimize/kapat) + canlı terminal.
-/// Başlık önceliği: oscTitle > task > name > "Terminal".
+/// Terminal kartı: ortak kart çerçevesi (`TerminalCardChrome`) + ortak header
+/// (`TerminalCardHeader`) + canlı terminal. Başlık `TerminalMeta.displayTitle`.
 struct TerminalCardView: View {
     let meta: TerminalMeta
     let isActive: Bool
     var isStalled = false
     let viewProvider: any TerminalViewProviding
-    @Bindable var promptQueue: PromptQueueStore
+    let promptQueue: PromptQueueStore
     let onFocus: () -> Void
     let onMinimize: () -> Void
     let onMaximize: () -> Void
@@ -80,131 +80,29 @@ struct TerminalCardView: View {
     @State private var isQueueOpen = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        TerminalCardChrome(
+            isActive: isActive,
+            terminalID: meta.id,
+            promptQueue: promptQueue,
+            isQueueOpen: $isQueueOpen
+        ) {
+            TerminalCardHeader(
+                meta: meta,
+                isActive: isActive,
+                isStalled: isStalled,
+                style: .grid,
+                promptQueue: promptQueue,
+                isQueueOpen: $isQueueOpen,
+                zoomIcon: "arrow.up.left.and.arrow.down.right",
+                onZoom: onMaximize,
+                onMinimize: onMinimize,
+                onClose: onClose,
+                onTap: onFocus
+            )
+        } content: {
             TerminalHostView(terminalID: meta.id, provider: viewProvider)
                 .id(meta.id)
                 .padding(8)
         }
-        .background(Theme.bgSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isActive ? Theme.accentPrimary : Theme.border, lineWidth: 1)
-        )
-        // v1 odak halkası: 1px ring + mor glow (globals.css .terminal-card.active)
-        .shadow(
-            color: isActive ? Theme.accentVivid.opacity(0.2) : .clear,
-            radius: isActive ? 15 : 0
-        )
-        .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: meta.id, store: promptQueue)
-    }
-
-    /// Kart header'ı: ince (karar 31) — 20px butonlar, 3px dikey padding.
-    private var header: some View {
-        HStack(spacing: 6) {
-            StatusDot(status: meta.status)
-            if isStalled { StalledBadge() }
-            Text(meta.oscTitle ?? meta.task ?? meta.name)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
-                .lineLimit(1)
-            Spacer()
-            PromptQueueToggleButton(
-                count: promptQueue.count(for: meta.id),
-                isPaused: promptQueue.isPaused(meta.id),
-                isOpen: $isQueueOpen
-            )
-            CardHeaderButton(systemName: "arrow.up.left.and.arrow.down.right", action: onMaximize)
-            CardHeaderButton(systemName: "minus", action: onMinimize)
-            CardHeaderButton(systemName: "xmark", isDestructive: true, action: onClose)
-        }
-        .padding(.leading, 10)
-        .padding(.trailing, 6)
-        .padding(.vertical, 3)
-        .background(Theme.bgElevated)
-        .overlay(alignment: .bottom) {
-            Theme.border.frame(height: 1)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onFocus)
-        // Başlığa çift tık → maximize/solo (rahat çalışma)
-        .simultaneousGesture(TapGesture(count: 2).onEnded(onMaximize))
-    }
-}
-
-/// Feed akışı donduğunda (Ek A §A.2-10) header'da beliren küçük uyarı rozeti.
-/// Siyah/boş kart yerine görünür durum: "veri geliyor ama ekrana çizilemiyor".
-struct StalledBadge: View {
-    var body: some View {
-        Text("stalled")
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-            .foregroundStyle(Theme.warning)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(Theme.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
-            .accessibilityLabel("Terminal stalled")
-    }
-}
-
-/// Durum noktası: working / waiting-unseen pulse'lı, gerisi sabit.
-struct StatusDot: View {
-    let status: TerminalStatus
-
-    @State private var isPulsing = false
-
-    private var shouldPulse: Bool {
-        status == .working || status == .waitingUnseen
-    }
-
-    var body: some View {
-        let color = Theme.statusColor(for: status)
-        Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
-            .shadow(color: shouldPulse ? color.opacity(0.8) : .clear, radius: 3)
-            .opacity(shouldPulse && isPulsing ? 0.4 : 1)
-            .animation(
-                shouldPulse
-                    ? .easeInOut(duration: 1).repeatForever(autoreverses: true)
-                    : .default,
-                value: isPulsing
-            )
-            .onAppear { isPulsing = true }
-            .onChange(of: shouldPulse) { _, pulse in
-                isPulsing = pulse
-            }
-    }
-}
-
-/// Kart header butonu (ince: 20×20, hover'da kapatma kırmızıya döner).
-struct CardHeaderButton: View {
-    let systemName: String
-    var isDestructive = false
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(hoverColor)
-                .frame(width: 20, height: 20)
-                .background(isHovering ? hoverBackground : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-    }
-
-    private var hoverColor: Color {
-        guard isHovering else { return Theme.textMuted }
-        return isDestructive ? Theme.error : Theme.textPrimary
-    }
-
-    private var hoverBackground: Color {
-        isDestructive ? Theme.error.opacity(0.2) : Theme.bgSurface
     }
 }

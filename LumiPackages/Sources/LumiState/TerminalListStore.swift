@@ -34,6 +34,10 @@ public final class TerminalListStore: StoreLifecycle {
     /// geçişinde eski repo'yu arkaya almanın tek kaynağıdır; `activeTerminalID`
     /// bundan ayrıdır (yüzey gizliyken de korunur).
     @ObservationIgnored private var surfaceRepoPath: String?
+    /// Faz 6.3: orta alan terminals route'unda DEĞİL. `surfaceRepoPath` bilerek
+    /// korunur (dönüşte aynı repoya foreground uygulanabilsin diye), ama yüzey
+    /// arka plandadır — bu aradaki restore/spawn'lar terminali öne almaz.
+    @ObservationIgnored private var isSurfaceDeactivated = false
     /// Kullanıcının kapattığı terminaller: exit kodu ne olursa olsun toast
     /// gösterilmez (kendi kill'imiz hata değildir). Tek atımlıdır.
     @ObservationIgnored private var userClosedIDs: Set<TerminalID> = []
@@ -158,6 +162,15 @@ public final class TerminalListStore: StoreLifecycle {
         service.setFocused(active)
     }
 
+    /// Faz 6.3 route geçişi: aktif repo yüzeyi arka plana alınır. Hangi
+    /// reponun önde olduğu KORUNUR — aynı repoya dönüşte `activateRepo`
+    /// foreground'u yeniden uygular (idempotent tur).
+    public func deactivateSurface() {
+        guard let repoPath = surfaceRepoPath, !isSurfaceDeactivated else { return }
+        isSurfaceDeactivated = true
+        setTerminalSurfaceVisible(false, in: repoPath)
+    }
+
     /// Minimize: aktifse görünür komşuya proaktif odak kayar.
     public func minimize(_ id: TerminalID) {
         guard let repoPath = meta(for: id)?.repoPath else { return }
@@ -191,7 +204,8 @@ public final class TerminalListStore: StoreLifecycle {
     /// Terminal yüzeyi şu an bu repo için önde mi. Henüz hiçbir repo aktive
     /// edilmediyse (bootstrap penceresi) kısıtlama uygulanmaz.
     private func isSurfaceForeground(_ repoPath: String) -> Bool {
-        surfaceRepoPath == nil || surfaceRepoPath == repoPath
+        guard !isSurfaceDeactivated else { return false }
+        return surfaceRepoPath == nil || surfaceRepoPath == repoPath
     }
 
     /// Bildirim tıklaması istisnası: önce restore, sonra odak.
@@ -210,9 +224,10 @@ public final class TerminalListStore: StoreLifecycle {
     /// `activeTerminalID` hâlâ eski repoya aittir, dolayısıyla foreground
     /// geçişi odağı yeniden yaymaz — odağı aşağıdaki tek `focus` çağrısı verir.
     public func activateRepo(_ repoPath: String) {
-        if let previous = surfaceRepoPath, previous != repoPath {
+        if let previous = surfaceRepoPath, previous != repoPath, !isSurfaceDeactivated {
             setTerminalSurfaceVisible(false, in: previous)
         }
+        isSurfaceDeactivated = false
         surfaceRepoPath = repoPath
         setTerminalSurfaceVisible(true, in: repoPath)
 

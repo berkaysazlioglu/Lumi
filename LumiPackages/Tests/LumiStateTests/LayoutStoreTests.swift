@@ -39,8 +39,8 @@ final class LayoutStoreTests: XCTestCase {
             ),
             openTabs: ["/r/alpha"]
         )
-        XCTAssertFalse(store.leftSidebarOpen)
-        XCTAssertTrue(store.rightSidebarOpen)
+        XCTAssertFalse(store.isSlotVisible(.left), "eski bool'dan türetilen görünürlük (K34)")
+        XCTAssertTrue(store.isSlotVisible(.right))
         XCTAssertEqual(store.gridLayout(for: "/r/alpha"), GridLayout(mode: .columns, count: 4))
     }
 
@@ -65,23 +65,24 @@ final class LayoutStoreTests: XCTestCase {
     // MARK: - Snapshot / persist
 
     func testSnapshotCarriesOnlyPersistedFields() {
-        store.setLeftSidebarOpen(false)
+        store.setSlotVisible(.left, false)
         store.setGridLayout(GridLayout(mode: .auto, count: 2), for: "/r/alpha")
         XCTAssertEqual(
             store.snapshot,
             LayoutSnapshot(
-                leftSidebarOpen: false,
-                rightSidebarOpen: false,
+                panelLayout: PanelLayout.defaults.settingVisible(.left, false),
                 projectGridLayouts: ["/r/alpha": GridLayout(mode: .auto, count: 2)]
             )
         )
+        XCTAssertFalse(store.snapshot.leftSidebarOpen, "karar 9 projeksiyonu")
+        XCTAssertFalse(store.snapshot.rightSidebarOpen)
     }
 
     func testPersistsAreSerializedSoLatestSnapshotLands() async throws {
         await config.setFirstUIStateWriteDelay(.milliseconds(50))
 
-        store.setLeftSidebarOpen(false)
-        store.setRightSidebarOpen(true)
+        store.setSlotVisible(.left, false)
+        store.setSlotVisible(.right, true)
 
         try await waitForPersist(minimumCount: 2)
         let persisted = await config.uiState()
@@ -91,7 +92,7 @@ final class LayoutStoreTests: XCTestCase {
 
     func testLayoutPersistDoesNotTouchNavigationFields() async throws {
         await config.seed(WorkspaceFixtures.uiState(openTabs: ["/r/alpha"], activeTab: "/r/alpha"))
-        store.toggleLeftSidebar()
+        store.toggleSlot(.left)
         try await waitForPersist()
 
         let persisted = await config.uiState()
@@ -147,6 +148,74 @@ final class LayoutStoreTests: XCTestCase {
         store.maximize(a, in: "/r/alpha")
         XCTAssertEqual(store.maximizedTerminal(in: "/r/alpha"), a)
         XCTAssertNil(store.maximizedTerminal(in: "/r/beta"))
+    }
+
+    // MARK: - Panel yerleşimi (Faz 6.2)
+
+    func testDefaultLayoutPlacesSessionsLeftAndGitRight() {
+        XCTAssertEqual(store.items(in: .left), [.sessions, .fileTree])
+        XCTAssertEqual(store.items(in: .right), [.gitCommits, .gitChanges])
+        XCTAssertEqual(store.width(for: .left), PanelLayout.defaultWidth)
+        XCTAssertEqual(store.visibleSlots, [.left], "sağ panel default kapalı")
+    }
+
+    /// **Ana hedef:** bir öğeyi soldan sağa taşımak TEK mutasyondur.
+    func testMovingItemFromLeftToRightIsASingleMutation() async throws {
+        store.move(item: .fileTree, to: .right, index: 0)
+
+        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .right), [.fileTree, .gitCommits, .gitChanges])
+        try await waitForPersist()
+        let persisted = await config.uiState()
+        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .fileTree)
+    }
+
+    func testMovingWithoutIndexAppends() {
+        store.move(item: .sessions, to: .right)
+        XCTAssertEqual(store.items(in: .right), [.gitCommits, .gitChanges, .sessions])
+    }
+
+    func testMoveToSamePositionDoesNotPersist() async throws {
+        store.move(item: .sessions, to: .left, index: 0)
+        try await Task.sleep(for: .milliseconds(50))
+        let writes = await config.uiStateUpdateCount
+        XCTAssertEqual(writes, 0, "değişmeyen yerleşim yazım doğurmaz")
+    }
+
+    func testWidthIsClampedAndPersisted() async throws {
+        store.setWidth(10_000, for: .left)
+        XCTAssertEqual(store.width(for: .left), PanelLayout.maxWidth)
+        store.setWidth(1, for: .left)
+        XCTAssertEqual(store.width(for: .left), PanelLayout.minWidth)
+
+        try await waitForPersist(minimumCount: 2)
+        let persisted = await config.uiState()
+        XCTAssertEqual(persisted.panelLayout?.width(for: .left), PanelLayout.minWidth)
+    }
+
+    /// K34 migration: yeni anahtar yoksa görünürlük eski bool'lardan türer,
+    /// yerleşim default kalır.
+    func testMigratesVisibilityFromLegacySidebarBooleans() {
+        store.load(
+            state: WorkspaceFixtures.uiState(leftSidebarOpen: false, rightSidebarOpen: true),
+            openTabs: []
+        )
+        XCTAssertEqual(store.visibleSlots, [.right])
+        XCTAssertEqual(store.items(in: .left), [.sessions, .fileTree], "yerleşim default'tan gelir")
+    }
+
+    /// Yeni anahtar VARSA otoritedir (eski bool'lar yok sayılır).
+    func testStoredPanelLayoutWinsOverLegacyBooleans() {
+        var state = WorkspaceFixtures.uiState(leftSidebarOpen: true, rightSidebarOpen: false)
+        state.panelLayout = PanelLayout.defaults
+            .moving(.fileTree, to: .right, index: 0)
+            .settingVisible(.left, false)
+            .settingVisible(.right, true)
+        store.load(state: state, openTabs: [])
+
+        XCTAssertEqual(store.visibleSlots, [.right])
+        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .right), [.fileTree, .gitCommits, .gitChanges])
     }
 
     // MARK: - Eviction (5.5)

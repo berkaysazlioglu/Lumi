@@ -36,11 +36,12 @@ struct SettingsView: View {
     }
 
     let settings: SettingsStore
-    let workspace: WorkspaceStore
     let sessionSchedule: SessionScheduleStore
     let usageStores: [AgentProvider: UsageStore]
     let chooseFolder: () async -> String?
     let onClose: () -> Void
+
+    @Shell private var shell
 
     @State private var selectedTab: Tab = .general
 
@@ -350,16 +351,16 @@ struct SettingsView: View {
                 title: "Left Sidebar",
                 hint: "Sessions · Project Context panel",
                 isOn: Binding(
-                    get: { workspace.leftSidebarOpen },
-                    set: { workspace.setLeftSidebarOpen($0) }
+                    get: { shell.layout.visibleSlots.contains(.left) },
+                    set: { shell.layout.setSlotVisible(.left, $0) }
                 )
             )
             SettingsToggleRow(
                 title: "Right Sidebar",
                 hint: "Git panel (Commits · Changes)",
                 isOn: Binding(
-                    get: { workspace.rightSidebarOpen },
-                    set: { workspace.setRightSidebarOpen($0) }
+                    get: { shell.layout.visibleSlots.contains(.right) },
+                    set: { shell.layout.setSlotVisible(.right, $0) }
                 )
             )
         }

@@ -2,41 +2,24 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Sol sidebar (v1 LeftSidebar paritesi). Dikey düzen v1 ile aynı:
-/// Sessions (aktif repo'nun terminalleri) → Project Context (file tree, kalan
-/// alan). Bölümler 1px border ile ayrılır.
-struct LeftSidebarView: View {
-    let repoPath: String
-    let repoStore: RepoStore
-    let terminals: TerminalListStore
-    let onOpenFile: (String) -> Void
-    let onReveal: (String) -> Void
-    let onTrash: (String) -> Void
+/// `.sessions` panel öğesi (Faz 6.2 — eski `LeftSidebarView`'ın üst bölümü):
+/// aktif repo'nun terminalleri.
+///
+/// Parent closure'ı YOK: bağlamını `@Environment(\.shell)`'den okur, tıklamayı
+/// doğrudan `TerminalListStore` intent'ine çevirir.
+public struct SessionsPanelItem: View {
+    @Shell private var shell
 
-    var body: some View {
-        VStack(spacing: 0) {
-            sessionsSection
-            divider
-            FileTreeSidebar(
-                repoPath: repoPath,
-                repoStore: repoStore,
-                onOpenFile: onOpenFile,
-                onReveal: onReveal,
-                onTrash: onTrash
-            )
-            .frame(maxHeight: .infinity)
+    public init() {}
+
+    public var body: some View {
+        if let repoPath = shell.activeRepoPath {
+            content(repoPath)
         }
-        .background(Theme.bgSurface)
     }
 
-    private var divider: some View {
-        Rectangle().fill(Theme.border).frame(height: 1)
-    }
-
-    // MARK: - Sessions (aktif repo'nun terminalleri)
-
-    private var sessionsSection: some View {
-        let repoTerminals = terminals.terminals(in: repoPath)
+    private func content(_ repoPath: String) -> some View {
+        let repoTerminals = shell.terminals.terminals(in: repoPath)
         return VStack(alignment: .leading, spacing: 0) {
             SidebarSectionHeader(
                 icon: "square.stack.3d.up",
@@ -56,14 +39,14 @@ struct LeftSidebarView: View {
                         ForEach(repoTerminals) { meta in
                             SessionRow(
                                 meta: meta,
-                                isActive: terminals.activeTerminalID == meta.id,
-                                isMinimized: terminals.isMinimized(meta.id)
+                                isActive: shell.terminals.activeTerminalID == meta.id,
+                                isMinimized: shell.terminals.isMinimized(meta.id)
                             ) {
                                 // Minimize ise önce restore, sonra odak
-                                if terminals.isMinimized(meta.id) {
-                                    terminals.restoreAndFocus(meta.id)
+                                if shell.terminals.isMinimized(meta.id) {
+                                    shell.terminals.restoreAndFocus(meta.id)
                                 } else {
-                                    terminals.focus(meta.id)
+                                    shell.terminals.focus(meta.id)
                                 }
                             }
                         }
@@ -75,7 +58,6 @@ struct LeftSidebarView: View {
         }
         .padding(12)
     }
-
 }
 
 /// v1 .section-header: accent ikon + 11px uppercase başlık + opsiyonel sayaç
@@ -138,7 +120,7 @@ struct SessionRow: View {
                 Circle()
                     .fill(Theme.statusColor(for: meta.status))
                     .frame(width: 8, height: 8)
-                Text(meta.oscTitle ?? meta.task ?? meta.name)
+                Text(meta.displayTitle)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(nameColor)
                     .lineLimit(1)

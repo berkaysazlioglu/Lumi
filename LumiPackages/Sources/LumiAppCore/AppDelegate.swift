@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openSettings() {
         Task { @MainActor in
             await shared.settings.refresh() // her açılışta taze
-            shared.workspace.isSettingsOpen = true
+            shared.dialogs.isSettingsOpen = true
         }
     }
 
@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshAfterWake()
         }
         // Focus mode → traffic light senkronu (design/03 §2)
-        shared.workspace.onFocusModeChanged = { [weak self] active in
+        shared.layout.onFocusModeChanged = { [weak self] active in
             self?.windowController.setTrafficLightsHidden(active)
         }
     }
@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await composition.repo.repoStore.reload()
-            if let active = shared.workspace.activeTab {
+            if let active = shared.navigation.activeRepoPath {
                 await composition.repo.repoStore.loadFileTree(active)
                 await composition.repo.gitStore.refresh(active)
             }
@@ -143,14 +143,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in await self.shutdownAndReply() }
             return .terminateLater
         }
-        shared.workspace.onQuitResolved = { [weak self] shouldQuit in
+        shared.dialogs.onQuitResolved = { [weak self] shouldQuit in
             if shouldQuit {
                 Task { @MainActor in await self?.shutdownAndReply() }
             } else {
                 NSApp.reply(toApplicationShouldTerminate: false)
             }
         }
-        shared.workspace.presentQuitDialog(terminalCount: liveCount)
+        shared.dialogs.presentQuitDialog(terminalCount: liveCount)
         return .terminateLater
     }
 

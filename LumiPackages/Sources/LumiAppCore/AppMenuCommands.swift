@@ -16,7 +16,7 @@ enum AppMenuCommands {
         openSettings: @escaping () -> Void
     ) {
         dispatcher.register(.newTerminal) {
-            guard let active = shared.workspace.activeTab else { return }
+            guard let active = shared.navigation.activeRepoPath else { return }
             // Provider terminali = shell + launch komutu
             shared.terminals.spawn(
                 in: active,
@@ -28,28 +28,28 @@ enum AppMenuCommands {
             shared.terminals.close(activeID)
         }
         dispatcher.register(.openRepoSelector) {
-            shared.workspace.isRepoSelectorOpen = true
+            shared.dialogs.isRepoSelectorOpen = true
         }
         dispatcher.register(.focusNextTerminal) {
-            guard let active = shared.workspace.activeTab else { return }
+            guard let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusNext(in: active)
         }
         dispatcher.register(.focusPreviousTerminal) {
-            guard let active = shared.workspace.activeTab else { return }
+            guard let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusPrevious(in: active)
         }
         dispatcher.register(.focusTerminalAtIndex) { index in
-            guard let index, let active = shared.workspace.activeTab else { return }
+            guard let index, let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusIndex(index - 1, in: active)
         }
         dispatcher.register(.toggleMaximizeTerminal) {
-            guard let active = shared.workspace.activeTab,
+            guard let active = shared.navigation.activeRepoPath,
                   let id = shared.terminals.activeTerminalID else { return }
-            shared.workspace.toggleMaximize(id, in: active)
+            shared.layout.toggleMaximize(id, in: active)
         }
-        dispatcher.register(.toggleLeftSidebar) { shared.workspace.toggleLeftSidebar() }
-        dispatcher.register(.toggleRightSidebar) { shared.workspace.toggleRightSidebar() }
-        dispatcher.register(.toggleFocusMode) { shared.workspace.toggleFocusMode() }
+        dispatcher.register(.toggleLeftSidebar) { shared.layout.toggleSlot(.left) }
+        dispatcher.register(.toggleRightSidebar) { shared.layout.toggleSlot(.right) }
+        dispatcher.register(.toggleFocusMode) { shared.layout.toggleFocusMode() }
         dispatcher.register(.openSettings, openSettings)
     }
 }

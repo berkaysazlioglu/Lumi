@@ -9,6 +9,7 @@ import LumiKit
 final class SpyTerminalFocusCoordinator: TerminalFocusCoordinating {
     enum Call: Equatable {
         case activateRepo(String)
+        case deactivateSurface
         case focus(TerminalID?)
         case closeAll(String)
     }
@@ -18,6 +19,7 @@ final class SpyTerminalFocusCoordinator: TerminalFocusCoordinating {
     var visibleByRepo: [String: [TerminalMeta]] = [:]
 
     func activateRepo(_ repoPath: String) { calls.append(.activateRepo(repoPath)) }
+    func deactivateSurface() { calls.append(.deactivateSurface) }
     func focus(_ id: TerminalID?) { calls.append(.focus(id)) }
     func closeAll(in repoPath: String) { calls.append(.closeAll(repoPath)) }
 

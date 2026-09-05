@@ -14,10 +14,10 @@ public final class GitStore {
     public private(set) var commitsByBranch: [String: [String: [GitCommit]]] = [:]
     public private(set) var changes: [String: [GitFileChange]] = [:]
     public private(set) var selectedFiles = KeyedToggleSet<String, String>()
-    /// Commit mesajı taslakları. **Faz 7 borcu:** `GitSidebar` bu sözlüğe
-    /// `Binding` üzerinden DOĞRUDAN yazdığı için henüz `private(set)` olamadı;
-    /// yeni çağrı yerleri `setCommitMessage(_:for:)` intent'ini kullanmalı.
-    public var commitMessages: [String: String] = [:]
+    /// Commit mesajı taslakları (refactor 5.4 kapsülleme borcu kapandı):
+    /// yazım YALNIZ `setCommitMessage(_:for:)` intent'inden geçer; view
+    /// `commitMessage(for:)` ile okur.
+    public private(set) var commitMessages: [String: String] = [:]
     public private(set) var isCommitting = false
 
     /// Branch accordion durumu: kullanıcı hiç toggle yapmadıysa current branch
@@ -154,8 +154,16 @@ public final class GitStore {
 
     // MARK: - Commit
 
-    public var canCommit: Bool {
-        !isCommitting
+    /// Commit butonunun kapısı (refactor 6.7): eskiden `GitChangesPanelItem`
+    /// içinde view kuralıydı. En az bir dosya seçili, mesaj boşluk-dışı dolu ve
+    /// uçuşta commit yok. `commit(_:)` aynı üç koşulu guard'lar — buton görünürde
+    /// kapalıyken bile (Enter tuşu) sözleşme bozulmaz.
+    public func canCommit(_ repoPath: String) -> Bool {
+        guard !isCommitting else { return false }
+        guard !(selectedFiles[repoPath] ?? []).isEmpty else { return false }
+        return !commitMessage(for: repoPath)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
     }
 
     // MARK: - Commit mesajı (kapsülleme, refactor 5.4)
@@ -169,9 +177,9 @@ public final class GitStore {
     }
 
     public func commit(_ repoPath: String) async {
+        guard canCommit(repoPath) else { return }
         let files = Array(selectedFiles[repoPath] ?? []).sorted()
         let message = commitMessage(for: repoPath).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !files.isEmpty, !message.isEmpty, !isCommitting else { return }
 
         isCommitting = true
         defer { isCommitting = false }

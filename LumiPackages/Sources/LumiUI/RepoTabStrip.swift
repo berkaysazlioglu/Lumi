@@ -12,21 +12,20 @@ import SwiftUI
 /// taşır; ölçülen hiçbir view/window düzeyi önlem bunu güvenilir biçimde
 /// engellemedi.
 struct RepoTabStrip: View {
-    let workspace: WorkspaceStore
-    let repoStore: RepoStore
+    @Shell private var shell
 
     @State private var isAddRepoHovering = false
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(workspace.openTabs, id: \.self) { repoPath in
+            ForEach(shell.navigation.openTabs, id: \.self) { repoPath in
                 RepoTabChip(
-                    name: repoStore.repo(at: repoPath)?.name
+                    name: shell.repos.repo(at: repoPath)?.name
                         ?? (repoPath as NSString).lastPathComponent,
-                    isActive: workspace.activeTab == repoPath,
-                    onSelect: { workspace.setActiveTab(repoPath) },
+                    isActive: shell.navigation.activeRepoPath == repoPath,
+                    onSelect: { shell.navigation.setRoute(.repo(repoPath)) },
                     onClose: { name in
-                        workspace.requestCloseTab(repoPath, repoName: name)
+                        shell.requestCloseTab(repoPath, repoName: name)
                     }
                 )
             }
@@ -38,7 +37,7 @@ struct RepoTabStrip: View {
 
     private var addRepoButton: some View {
         Button {
-            workspace.isRepoSelectorOpen.toggle()
+            shell.dialogs.isRepoSelectorOpen.toggle()
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 12, weight: .medium))
@@ -51,19 +50,19 @@ struct RepoTabStrip: View {
         .buttonStyle(.plain)
         .onHover { isAddRepoHovering = $0 }
         .popover(isPresented: Binding(
-            get: { workspace.isRepoSelectorOpen },
-            set: { workspace.isRepoSelectorOpen = $0 }
+            get: { shell.dialogs.isRepoSelectorOpen },
+            set: { shell.dialogs.isRepoSelectorOpen = $0 }
         )) {
             RepoSelectorView(
-                groups: repoStore.groupedRepos,
-                openTabPaths: Set(workspace.openTabs),
+                groups: shell.repos.groupedRepos,
+                openTabPaths: Set(shell.navigation.openTabs),
                 collapsedGroups: Binding(
-                    get: { workspace.collapsedRepoGroups },
-                    set: { workspace.collapsedRepoGroups = $0 }
+                    get: { shell.dialogs.collapsedRepoGroups },
+                    set: { shell.dialogs.collapsedRepoGroups = $0 }
                 )
             ) { repo in
-                workspace.isRepoSelectorOpen = false
-                workspace.openTab(repo.path)
+                shell.dialogs.isRepoSelectorOpen = false
+                shell.navigation.openTab(repo.path)
             }
         }
     }

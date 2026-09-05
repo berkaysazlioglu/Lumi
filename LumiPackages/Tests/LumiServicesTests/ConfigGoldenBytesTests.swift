@@ -95,6 +95,14 @@ final class ConfigGoldenBytesTests: XCTestCase {
             state.windowMaximized = true
             state.resumeSessions = [ResumeSession(repoPath: "/r/alpha", sessionID: "s-1")]
             state.activeRoute = "tasks"
+            // K34 (additive): iki yeni anahtar — `panelLayout` + `visibleSlots`.
+            // Eski `leftSidebarOpen`/`rightSidebarOpen` PROJEKSİYON olarak
+            // yazılmaya devam eder (yukarıda set edildi).
+            state.panelLayout = PanelLayout.defaults
+                .moving(.fileTree, to: .right, index: 0)
+                .settingVisible(.left, false)
+                .settingVisible(.right, true)
+                .settingWidth(320, for: .right)
         }
         await service.flushPendingWrites()
 
@@ -159,6 +167,26 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "/r/alpha",
         "/r/beta"
       ],
+      "panelLayout" : {
+        "slots" : {
+          "bottom" : [
+
+          ],
+          "left" : [
+            "sessions"
+          ],
+          "right" : [
+            "fileTree",
+            "gitCommits",
+            "gitChanges"
+          ]
+        },
+        "widths" : {
+          "bottom" : 280,
+          "left" : 280,
+          "right" : 320
+        }
+      },
       "projectGridLayouts" : {
         "/r/alpha" : {
           "count" : 3,
@@ -174,6 +202,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
         }
       ],
       "rightSidebarOpen" : true,
+      "visibleSlots" : [
+        "right"
+      ],
       "windowBounds" : {
         "height" : 900,
         "width" : 1400,

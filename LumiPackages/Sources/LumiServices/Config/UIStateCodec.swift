@@ -39,6 +39,14 @@ enum UIStateCodec {
         if let value = dict["activeRoute"] as? String {
             state.activeRoute = value
         }
+        // K34 (additive): panel yerleşimi iki anahtardan okunur. `panelLayout`
+        // yoksa nil kalır → LayoutStore eski bool'lardan migrate eder.
+        state.panelLayout = PanelLayoutCodec.decode(
+            dict["panelLayout"] as? [String: Any],
+            visibleSlots: dict["visibleSlots"],
+            fallbackLeftOpen: state.leftSidebarOpen,
+            fallbackRightOpen: state.rightSidebarOpen
+        )
         state.legacyGridColumns = GridLayoutCodec.decodeLegacyColumns(dict["gridColumns"])
         return state
     }
@@ -67,9 +75,80 @@ enum UIStateCodec {
         if let maximized = state.windowMaximized {
             overlay["windowMaximized"] = maximized
         }
+        // K34 (additive): iki yeni anahtar birlikte yazılır. `leftSidebarOpen`/
+        // `rightSidebarOpen` yukarıda ZATEN `visibleSlots`'un projeksiyonu olarak
+        // yazıldı (karar 9) — eski Electron sürümü aynı dosyayı okumaya devam eder.
+        if let layout = state.panelLayout {
+            overlay["panelLayout"] = PanelLayoutCodec.overlay(layout)
+            overlay["visibleSlots"] = PanelLayoutCodec.visibleSlotsOverlay(layout)
+        }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.
         return overlay
+    }
+}
+
+/// `ui-state.json` → `panelLayout` + `visibleSlots` ↔ `PanelLayout` (K34).
+///
+/// İki ayrı anahtar kullanılır çünkü görünürlük eski `leftSidebarOpen`/
+/// `rightSidebarOpen` bool'larıyla AYNI bilgidir ve tek başına okunabilir
+/// kalmalıdır; yerleşim (slot içerikleri + genişlikler) ise yalnız Lumi
+/// native'in bildiği additive bir yapıdır.
+enum PanelLayoutCodec {
+    static func decode(
+        _ dict: [String: Any]?,
+        visibleSlots: Any?,
+        fallbackLeftOpen: Bool,
+        fallbackRightOpen: Bool
+    ) -> PanelLayout? {
+        guard let dict else { return nil }
+        let defaults = PanelLayout.defaults
+        var slots = defaults.slots
+        if let raw = dict["slots"] as? [String: Any] {
+            for slot in PanelSlot.allCases {
+                guard let ids = raw[slot.rawValue] as? [Any] else { continue }
+                slots[slot] = ids.compactMap { ($0 as? String).map(PanelItemID.init(rawValue:)) }
+            }
+        }
+        var widths = defaults.widths
+        if let raw = dict["widths"] as? [String: Any] {
+            for slot in PanelSlot.allCases {
+                guard let value = JSONValue.double(raw[slot.rawValue]) else { continue }
+                widths[slot] = value
+            }
+        }
+        let visible: Set<PanelSlot>
+        if let names = visibleSlots as? [Any] {
+            visible = Set(names.compactMap { ($0 as? String).flatMap(PanelSlot.init(rawValue:)) })
+        } else {
+            // Yerleşim var ama görünürlük anahtarı yok → eski bool'lar otoritedir.
+            visible = PanelLayout
+                .migrating(leftOpen: fallbackLeftOpen, rightOpen: fallbackRightOpen)
+                .visibleSlots
+        }
+        return PanelLayout(slots: slots, visibleSlots: visible, widths: widths)
+    }
+
+    static func overlay(_ layout: PanelLayout) -> [String: Any] {
+        var slots: [String: Any] = [:]
+        var widths: [String: Any] = [:]
+        for slot in PanelSlot.allCases {
+            slots[slot.rawValue] = layout.items(in: slot).map(\.rawValue)
+            widths[slot.rawValue] = JSONNumber.integral(layout.width(for: slot))
+        }
+        return ["slots": slots, "widths": widths]
+    }
+
+    /// Deterministik sıra: `.sortedKeys` yalnız sözlükleri sıralar, diziyi değil.
+    static func visibleSlotsOverlay(_ layout: PanelLayout) -> [String] {
+        PanelSlot.allCases.filter(layout.isVisible).map(\.rawValue)
+    }
+}
+
+/// Tam sayı değerler Electron gibi "580" yazılsın, "580.0" değil (karar 9).
+enum JSONNumber {
+    static func integral(_ value: Double) -> Any {
+        value.truncatingRemainder(dividingBy: 1) == 0 ? Int(value) : value
     }
 }
 
@@ -131,16 +210,11 @@ enum WindowBoundsCodec {
 
     static func overlay(_ bounds: WindowBounds) -> [String: Any] {
         [
-            "x": integralNumber(bounds.x),
-            "y": integralNumber(bounds.y),
-            "width": integralNumber(bounds.width),
-            "height": integralNumber(bounds.height),
+            "x": JSONNumber.integral(bounds.x),
+            "y": JSONNumber.integral(bounds.y),
+            "width": JSONNumber.integral(bounds.width),
+            "height": JSONNumber.integral(bounds.height),
         ]
-    }
-
-    /// Tam sayı değerler Electron gibi "580" yazılsın, "580.0" değil.
-    private static func integralNumber(_ value: Double) -> Any {
-        value.truncatingRemainder(dividingBy: 1) == 0 ? Int(value) : value
     }
 }
 

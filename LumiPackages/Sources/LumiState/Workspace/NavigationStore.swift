@@ -32,12 +32,21 @@ public final class NavigationStore {
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let terminals: any TerminalFocusCoordinating
+    /// Faz 6.3 route geçiş sözleşmesinin AppKit yüzü. Opsiyonel: view köprüsü
+    /// olmayan bir kompozisyonda (birim testleri, headless) navigasyon aynen
+    /// çalışır.
+    @ObservationIgnored private let viewProvider: (any TerminalViewProviding)?
     /// Persist zincirinin kuyruğu (sıra garantisi için önceki yazım beklenir).
     @ObservationIgnored private var pendingPersistTask: Task<Void, Never>?
 
-    public init(config: any ConfigServicing, terminals: any TerminalFocusCoordinating) {
+    public init(
+        config: any ConfigServicing,
+        terminals: any TerminalFocusCoordinating,
+        viewProvider: (any TerminalViewProviding)? = nil
+    ) {
         self.config = config
         self.terminals = terminals
+        self.viewProvider = viewProvider
     }
 
     // MARK: - Yükleme / migration
@@ -96,11 +105,34 @@ public final class NavigationStore {
     public func setRoute(_ route: WorkspaceRoute) {
         let previous = activeRoute
         activeRoute = route
-        if let repoPath = route.repoPath {
-            terminals.activateRepo(repoPath) // cross-store yan etki
-        }
+        applySurfaceTransition(from: previous, to: route)
         persist()
         announceRepoChange(from: previous, to: route)
+    }
+
+    /// **Faz 6.3 route geçiş sözleşmesi** (view'da DEĞİL, burada):
+    ///
+    /// | Geçiş | Terminal yüzeyi | View köprüsü |
+    /// |---|---|---|
+    /// | terminals → başka route | `deactivateSurface()` (arka plan + odak yok) | `detachAll()` |
+    /// | başka route → terminals | `activateRepo()` (foreground + odak) | `refreshAttachedViews()` |
+    /// | repo → repo | `activateRepo()` (eskiyi arkaya, yeniyi öne) | — (host'lar yerinde) |
+    /// | route-dışı → route-dışı | — | — |
+    ///
+    /// PTY hiçbir adımda durmaz, view'lar yok edilmez: detach yalnız reparent
+    /// eder (design/03 §3).
+    private func applySurfaceTransition(from previous: WorkspaceRoute, to route: WorkspaceRoute) {
+        if let repoPath = route.repoPath {
+            terminals.activateRepo(repoPath) // cross-store yan etki
+            if previous.contentRouteID != nil {
+                // Terminaller detach edilmişti: canlı view'lar yeniden oturtulur.
+                viewProvider?.refreshAttachedViews()
+            }
+            return
+        }
+        guard previous.isRepo else { return }
+        terminals.deactivateSurface()
+        viewProvider?.detachAll()
     }
 
     /// Guard: minimize edilmiş terminali olan tab dialog'suz kapanmaz —

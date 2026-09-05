@@ -37,12 +37,12 @@ final class RepoFeatureAssemblyEvictionTests: XCTestCase {
         assembly.build(services: registry, shared: shared)
         await assembly.start()
 
-        shared.workspace.openTab(repoPath)
+        shared.navigation.openTab(repoPath)
         await assembly.repoStore.loadFileTree(repoPath)
         await assembly.gitStore.loadAll(repoPath)
         XCTAssertNotNil(assembly.repoStore.fileTrees[repoPath])
 
-        shared.workspace.navigation.closeTab(repoPath)
+        shared.navigation.closeTab(repoPath)
 
         XCTAssertNil(assembly.repoStore.fileTrees[repoPath])
         XCTAssertNil(assembly.gitStore.changes[repoPath])

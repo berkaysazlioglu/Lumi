@@ -27,12 +27,12 @@ final class WorkspaceBootAssembly: FeatureAssembly {
             system: services.system,
             settings: shared.settings,
             toasts: shared.toasts,
-            onComplete: { [weak shared] in shared?.workspace.isOnboardingActive = false }
+            onComplete: { [weak shared] in shared?.dialogs.isOnboardingActive = false }
         )
     }
 
     func start() async {
-        shared.workspace.isOnboardingActive = await services.config.isFirstRun()
+        shared.dialogs.isOnboardingActive = await services.config.isFirstRun()
         await resumeClaudeSessions()
     }
 
@@ -54,7 +54,7 @@ final class WorkspaceBootAssembly: FeatureAssembly {
         let entries = await services.config.uiState().resumeSessions
         guard !entries.isEmpty else { return }
         await services.config.updateUIState { $0.resumeSessions = [] }
-        for entry in entries where shared.workspace.openTabs.contains(entry.repoPath) {
+        for entry in entries where shared.navigation.openTabs.contains(entry.repoPath) {
             shared.terminals.spawn(
                 in: entry.repoPath,
                 command: ClaudeSessionCommand.resumeCommand(sessionID: entry.sessionID)

@@ -1,10 +1,12 @@
 import Foundation
 import LumiKit
 import LumiState
+import LumiUI
+import SwiftUI
 
 /// Kullanım göstergeleri (karar 32) + otomatik tazeleme (karar 20).
 @MainActor
-final class UsageFeatureAssembly: FeatureAssembly {
+final class UsageFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.config
 
     private(set) var usageStores: [AgentProvider: UsageStore] = [:]
@@ -32,6 +34,22 @@ final class UsageFeatureAssembly: FeatureAssembly {
             stores: AgentProvider.allCases.compactMap { stores[$0] },
             activity: services.activityMonitor
         )
+    }
+
+    /// Sağlayıcı BAŞINA bir toolbar öğesi (Faz 6.4): eski
+    /// `ForEach(enabledProviders)` döngüsünün yerine geçer. Ayarın açık/kapalı
+    /// durumu descriptor'ın `isVisible` kapısında okunur, sıra
+    /// `AgentProvider.allCases` sırasıdır (eski `enabledProviders` sırası).
+    func registerShellItems(into registries: ShellRegistries) {
+        for (index, provider) in AgentProvider.allCases.enumerated() {
+            registries.toolbar.register(ToolbarItemDescriptor(
+                id: .usageIndicator(provider),
+                region: .trailing,
+                order: index * ShellToolbarItems.Order.usageStep,
+                isVisible: { $0.settings.current.usageIndicators.isEnabled(provider) },
+                makeView: { AnyView(UsageToolbarItem(provider: provider)) }
+            ))
+        }
     }
 
     func start() async {

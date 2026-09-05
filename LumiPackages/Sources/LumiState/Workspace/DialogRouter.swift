@@ -73,6 +73,32 @@ public final class DialogRouter {
 
     public func isPresenting(_ dialog: ActiveDialog) -> Bool { active == dialog }
 
+    /// Parametresiz dialog'lar için okuma+yazma adaptörleri. Kapatma YALNIZ o
+    /// dialog açıkken etkilidir (`dismiss(_:)`) — bayrak set'i başka bir modalı
+    /// kazara kapatmaz.
+    public var isRepoSelectorOpen: Bool {
+        get { isPresenting(.repoSelector) }
+        set { setPresented(.repoSelector, newValue) }
+    }
+
+    public var isSettingsOpen: Bool {
+        get { isPresenting(.settings) }
+        set { setPresented(.settings, newValue) }
+    }
+
+    public var isOnboardingActive: Bool {
+        get { isPresenting(.onboarding) }
+        set { setPresented(.onboarding, newValue) }
+    }
+
+    public func setPresented(_ dialog: ActiveDialog, _ presented: Bool) {
+        if presented {
+            present(dialog)
+        } else {
+            dismiss(dialog)
+        }
+    }
+
     // MARK: - Sunum
 
     public func present(_ dialog: ActiveDialog) {

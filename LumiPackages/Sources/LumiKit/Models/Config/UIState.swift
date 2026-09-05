@@ -22,6 +22,12 @@ public struct UIState: Sendable, Equatable {
     /// rawValue'su). nil = route bir repo tab'ı ya da yok; o durumda
     /// `activeTab` otoritedir (karar 9).
     public var activeRoute: String?
+    /// K34 (additive): panel yerleşimi (`panelLayout` + `visibleSlots` JSON
+    /// anahtarları). nil = dosyada yok → `LayoutStore` eski
+    /// `leftSidebarOpen`/`rightSidebarOpen` bool'larından türetir (tek seferlik
+    /// migration). Eski bool'lar YAZILMAYA devam eder: `visibleSlots`'un
+    /// projeksiyonudur (karar 9 — Electron'la gidip gelme korunur).
+    public var panelLayout: PanelLayout?
     /// Legacy `gridColumns` alanının (number | "auto") çevirisi — yalnız OKUNUR
     /// (migration için); yazımda overlay'e girmez, ham anahtar
     /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
@@ -47,6 +53,7 @@ public struct UIState: Sendable, Equatable {
         windowMaximized: Bool?,
         resumeSessions: [ResumeSession] = [],
         activeRoute: String? = nil,
+        panelLayout: PanelLayout? = nil,
         legacyGridColumns: GridLayout? = nil
     ) {
         self.openTabs = openTabs
@@ -58,6 +65,7 @@ public struct UIState: Sendable, Equatable {
         self.windowMaximized = windowMaximized
         self.resumeSessions = resumeSessions
         self.activeRoute = activeRoute
+        self.panelLayout = panelLayout
         self.legacyGridColumns = legacyGridColumns
     }
 }

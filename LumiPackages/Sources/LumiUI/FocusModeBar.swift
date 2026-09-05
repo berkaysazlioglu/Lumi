@@ -8,10 +8,9 @@ import SwiftUI
 struct FocusModeBar: View {
     static let revealDelay: Duration = .milliseconds(500)
 
-    let workspace: WorkspaceStore
-    let terminals: TerminalListStore
     let repoPath: String
-    let provider: AgentProvider
+
+    @Shell private var shell
 
     @State private var isRevealed = false
     @State private var revealTask: Task<Void, Never>?
@@ -50,14 +49,14 @@ struct FocusModeBar: View {
 
     private var bar: some View {
         HStack(spacing: 12) {
-            Text("\(terminals.visibleTerminals(in: repoPath).count) terminal")
+            Text("\(shell.terminals.visibleTerminals(in: repoPath).count) terminal")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Theme.textSecondary)
 
             gridLayoutMenu
 
             Button("New \(provider.displayName)") {
-                terminals.spawn(in: repoPath, command: provider.launchCommand)
+                shell.terminals.spawn(in: repoPath, command: provider.launchCommand)
             }
             .buttonStyle(.bordered)
             .tint(Theme.accentVivid)
@@ -65,7 +64,7 @@ struct FocusModeBar: View {
             Spacer()
 
             Button("Exit Focus Mode") {
-                workspace.exitFocusMode()
+                shell.layout.exitFocusMode()
             }
             .buttonStyle(.borderedProminent)
             .tint(Theme.accentVivid)
@@ -83,10 +82,12 @@ struct FocusModeBar: View {
         }
     }
 
+    private var provider: AgentProvider { shell.settings.current.aiProvider }
+
     private var gridLayoutMenu: some View {
         GridSettingsControl(
-            layout: workspace.gridLayout(for: repoPath),
-            onChange: { workspace.setGridLayout($0, for: repoPath) }
+            layout: shell.layout.gridLayout(for: repoPath),
+            onChange: { shell.layout.setGridLayout($0, for: repoPath) }
         )
     }
 }

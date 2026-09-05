@@ -57,6 +57,11 @@ public final class FakeTerminalService: TerminalServicing {
         focusCalls = []
     }
 
+    /// Aynı gerekçe yüzey geçişleri için (Faz 6.3 route turları).
+    public func resetSurfaceStateCalls() {
+        surfaceStateCalls = []
+    }
+
     public var terminals: [TerminalMeta] { spawnedMetas }
 
     @discardableResult

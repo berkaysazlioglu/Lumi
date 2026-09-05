@@ -1,16 +1,18 @@
 import Foundation
 import LumiKit
 import LumiState
+import LumiUI
+import SwiftUI
 
 /// Repo keşfi, dosya ağacı ve git verileri (refactor 3.3).
 ///
 /// Bootstrap sırasının iki sözleşmesi buradadır ve `AppContainerBootstrapTests`
 /// bunları doğrular:
 /// - `repoStore.additionalPaths` **`repoStore.start()`'tan ÖNCE** yazılır,
-/// - `workspace.load(repos:)` **`repoStore.reload()`'dan SONRA** çağrılır
+/// - `shared.loadWorkspace(state:repos:)` **`repoStore.reload()`'dan SONRA** çağrılır
 ///   (ui-state migration'ı repo listesini okur).
 @MainActor
-final class RepoFeatureAssembly: FeatureAssembly {
+final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.repo
 
     private(set) var repoStore: RepoStore!
@@ -32,6 +34,34 @@ final class RepoFeatureAssembly: FeatureAssembly {
         fileViewer = FileViewerStore(git: services.git, toasts: shared.toasts)
     }
 
+    /// Faz 6.6: repo'ya bağlı panel öğeleri BU assembly'nin katkısıdır.
+    func registerShellItems(into registries: ShellRegistries) {
+        registries.panels.register(PanelItemDescriptor(
+            id: .fileTree,
+            title: "Project Context",
+            icon: "list.bullet.indent",
+            defaultSlot: .left,
+            isAvailable: { $0.activeRepoPath != nil },
+            makeView: { AnyView(FileTreePanelItem()) }
+        ))
+        registries.panels.register(PanelItemDescriptor(
+            id: .gitCommits,
+            title: "Commits",
+            icon: "arrow.triangle.branch",
+            defaultSlot: .right,
+            isAvailable: { $0.activeRepoPath != nil },
+            makeView: { AnyView(GitCommitsPanelItem()) }
+        ))
+        registries.panels.register(PanelItemDescriptor(
+            id: .gitChanges,
+            title: "Changes",
+            icon: "doc.on.doc",
+            defaultSlot: .right,
+            isAvailable: { $0.activeRepoPath != nil },
+            makeView: { AnyView(GitChangesPanelItem()) }
+        ))
+    }
+
     func start() async {
         let config = await services.config.config()
         // SIRA: additionalPaths start()'tan önce (aksi halde ilk reload eksik grup üretir)
@@ -43,8 +73,10 @@ final class RepoFeatureAssembly: FeatureAssembly {
 
         repoStore.start()
         await repoStore.reload()
-        // SIRA: workspace.load repoStore.reload'dan SONRA (migration repo listesini okur)
-        await shared.workspace.load(repos: repoStore.repos)
+        // SIRA: workspace yüklemesi repoStore.reload'dan SONRA (migration repo
+        // listesini okur); tek ui-state okumasıyla önce navigation, sonra layout.
+        let uiState = await services.config.uiState()
+        shared.loadWorkspace(state: uiState, repos: repoStore.repos)
 
         wireActiveRepo()
         wireTabClosed()
@@ -78,7 +110,7 @@ final class RepoFeatureAssembly: FeatureAssembly {
 
     /// Aktif repo değişimi: tek repo izlenir + git/tree yüklenir.
     private func wireActiveRepo() {
-        shared.workspace.onActiveRepoChanged = { [weak self] previous, current in
+        shared.navigation.onActiveRepoChanged = { [weak self] previous, current in
             guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -92,8 +124,8 @@ final class RepoFeatureAssembly: FeatureAssembly {
             }
         }
         // Bootstrap'te aktif tab varsa ilk yükleme (load() callback'ten önce kuruldu)
-        if let active = shared.workspace.activeTab {
-            shared.workspace.onActiveRepoChanged?(nil, active)
+        if let active = shared.navigation.activeRepoPath {
+            shared.navigation.onActiveRepoChanged?(nil, active)
         }
     }
 
@@ -101,7 +133,7 @@ final class RepoFeatureAssembly: FeatureAssembly {
     /// (refactor 5.5). `LayoutStore.projectGridLayouts` KASITLI olarak
     /// korunur: persist edilen kullanıcı tercihidir (karar 9).
     private func wireTabClosed() {
-        shared.workspace.onTabClosed = { [weak self] repoPath in
+        shared.navigation.onTabClosed = { [weak self] repoPath in
             guard let self else { return }
             gitStore.evict(repoPath)
             repoStore.evict(repoPath)
@@ -116,7 +148,7 @@ final class RepoFeatureAssembly: FeatureAssembly {
         let coalescer = KeyedRefreshCoalescer { [weak self] repoPath in
             guard let self else { return }
             await self.repoStore.loadFileTree(repoPath)
-            if self.shared.workspace.activeTab == repoPath {
+            if self.shared.navigation.activeRepoPath == repoPath {
                 await self.gitStore.refresh(repoPath)
             }
         }

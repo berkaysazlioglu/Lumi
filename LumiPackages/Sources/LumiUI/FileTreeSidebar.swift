@@ -11,23 +11,28 @@ import UniformTypeIdentifiers
 /// Donma önlemi: ağaç FileTreeRows ile DÜZ satır listesine indirgenir (tek
 /// seviyeli LazyVStack gerçekten lazy çizer) ve arama filtresi debounce +
 /// background task'te koşar — büyük repoda her tuş vuruşunda main thread'de
-/// recursive tarama yapılmaz (v1'deki arama donmasının önlemi).
+/// recursive tarama yapılmaz (v1'deki arama donmasının önlemi). Faz 6.7: bu
+/// debounce/iptal makinesi `LumiState.FileTreeSearchModel`'e taşındı; burada
+/// yalnız render + "arama açık mı" kabuğu kaldı.
+/// Faz 6.2: parent closure'ları kalktı — dosya açma/reveal/trash doğrudan
+/// `ShellContext` üzerinden akar. `repoPath`'i `FileTreePanelItem` verir
+/// (`.onChange(of: repoPath)` aynı view kimliğinde çalışsın diye parametre
+/// olarak kalır).
 struct FileTreeSidebar: View {
     let repoPath: String
-    let repoStore: RepoStore
-    let onOpenFile: (String) -> Void
-    let onReveal: (String) -> Void
-    let onTrash: (String) -> Void
+
+    @Shell private var shell
 
     static let filterDebounce: Duration = .milliseconds(150)
 
     @State private var isExpanded = true
     @State private var isSearchOpen = false
-    @State private var searchText = ""
-    /// Background filtrenin son sonucu; nil = arama kapalı/sonuç beklenirken
-    /// normal ağaç gösterilir (stale-while-filter).
-    @State private var searchResult: [FileTreeRows.Row]?
-    @State private var filterTask: Task<Void, Never>?
+    /// Debounce + iptal + sıra garantisi `LumiState`'te (refactor 6.7); view
+    /// yalnız sorguyu iletir ve hazır sonucu çizer.
+    @State private var search = FileTreeSearchModel<[FileTreeRows.Row]>(
+        debounce: FileTreeSidebar.filterDebounce,
+        search: { nodes, query in FileTreeRows.searchRows(nodes, query: query) }
+    )
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,16 +45,13 @@ struct FileTreeSidebar: View {
         }
         .padding(.vertical, 8)
         .background(Theme.bgSurface)
-        .onChange(of: searchText) { _, query in
-            scheduleFilter(query)
-        }
         .onChange(of: repoPath) {
             // Repo değişince arama sıfırlanır (v1 paritesi)
             closeSearch()
         }
-        .onChange(of: repoStore.fileTrees[repoPath]) {
+        .onChange(of: shell.repos.fileTrees[repoPath]) {
             // Watcher ağacı tazelerse aktif arama sonucu da tazelenir
-            scheduleFilter(searchText)
+            search.setQuery(search.query, tree: tree)
         }
     }
 
@@ -59,7 +61,7 @@ struct FileTreeSidebar: View {
         HStack(spacing: 4) {
             if isSearchOpen {
                 SidebarSearchInput(
-                    text: $searchText,
+                    text: searchBinding,
                     placeholder: "Filter files...",
                     onClose: { closeSearch() }
                 )
@@ -96,18 +98,28 @@ struct FileTreeSidebar: View {
 
     // MARK: - Ağaç
 
+    /// Aktif repo'nun (stale-while-revalidate) ağacı.
+    private var tree: [FileTreeNode] {
+        shell.repos.fileTrees[repoPath] ?? []
+    }
+
     private var rows: [FileTreeRows.Row] {
-        if isSearching, let searchResult {
-            return searchResult
+        if isSearching, let results = search.results {
+            return results
         }
         return FileTreeRows.visibleRows(
-            repoStore.fileTrees[repoPath] ?? [],
-            expanded: repoStore.expandedNodes[repoPath] ?? []
+            tree,
+            expanded: shell.repos.expandedNodes[repoPath] ?? []
         )
     }
 
-    private var isSearching: Bool {
-        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    private var isSearching: Bool { search.isSearching }
+
+    private var searchBinding: Binding<String> {
+        Binding(
+            get: { search.query },
+            set: { search.setQuery($0, tree: tree) }
+        )
     }
 
     private var treeList: some View {
@@ -134,9 +146,9 @@ struct FileTreeSidebar: View {
                 // Aramada görünüm zaten tam açık; toggle sürpriz state bırakır.
                 guard !isSearching else { return }
                 guard !row.isIgnored else { return } // ignored klasör no-op
-                repoStore.toggleNode(repoPath, path: row.path)
+                shell.repos.toggleNode(repoPath, path: row.path)
             } else {
-                onOpenFile(row.path)
+                shell.presentFile(row.path)
             }
         } label: {
             HStack(spacing: 5) {
@@ -174,50 +186,20 @@ struct FileTreeSidebar: View {
                 NSPasteboard.general.setString(row.path, forType: .string)
             }
             Button("Reveal in Finder") {
-                onReveal(row.path)
+                shell.reveal(row.path)
             }
             if row.type == .file {
                 Button("Delete", role: .destructive) {
-                    onTrash(row.path)
+                    shell.trash(row.path)
                 }
             }
         }
     }
 
-    // MARK: - Arama orkestrasyonu
-
-    /// Debounce + background filtre: tuş vuruşu main thread'de tarama başlatmaz;
-    /// debounce penceresinde yeni vuruş eskisini iptal eder, hesap nonisolated
-    /// (global executor) koşar, yalnız sonuç MainActor'a döner.
-    private func scheduleFilter(_ query: String) {
-        filterTask?.cancel()
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else {
-            searchResult = nil
-            return
-        }
-        let tree = repoStore.fileTrees[repoPath] ?? []
-        filterTask = Task {
-            try? await Task.sleep(for: Self.filterDebounce)
-            guard !Task.isCancelled else { return }
-            let result = await Self.computeSearchRows(tree: tree, query: trimmed)
-            guard !Task.isCancelled else { return }
-            searchResult = result
-        }
-    }
-
-    private nonisolated static func computeSearchRows(
-        tree: [FileTreeNode],
-        query: String
-    ) async -> [FileTreeRows.Row] {
-        FileTreeRows.searchRows(tree, query: query)
-    }
+    // MARK: - Arama
 
     private func closeSearch() {
-        filterTask?.cancel()
-        filterTask = nil
-        searchText = ""
-        searchResult = nil
+        search.cancel()
         isSearchOpen = false
     }
 }
@@ -293,5 +275,18 @@ private struct FileTreeHeaderAction: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+    }
+}
+
+/// `.fileTree` panel öğesi — aktif repo'yu çözer, gerisi `FileTreeSidebar`.
+public struct FileTreePanelItem: View {
+    @Shell private var shell
+
+    public init() {}
+
+    public var body: some View {
+        if let repoPath = shell.activeRepoPath {
+            FileTreeSidebar(repoPath: repoPath)
+        }
     }
 }

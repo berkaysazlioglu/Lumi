@@ -283,7 +283,7 @@ final class GitStoreTests: XCTestCase {
         await git.setStatus(changes)
         let store = GitStore(git: git, toasts: ToastStore(autoDismissAfter: 60))
         await store.loadChanges(repoPath)
-        store.commitMessages[repoPath] = "feat: add"
+        store.setCommitMessage("feat: add", for: repoPath)
         return store
     }
 
@@ -297,7 +297,7 @@ final class GitStoreTests: XCTestCase {
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls.first?.message, "feat: add")
         XCTAssertEqual(calls.first?.files, ["a.swift", "b.swift", "c.swift"], "sıralı gönderilir")
-        XCTAssertEqual(store.commitMessages[repoPath], "", "başarıda mesaj temizlenir")
+        XCTAssertEqual(store.commitMessage(for: repoPath), "", "başarıda mesaj temizlenir")
         XCTAssertFalse(store.isCommitting)
     }
 
@@ -318,7 +318,7 @@ final class GitStoreTests: XCTestCase {
     func testEmptyMessageBlocksCommit() async {
         let git = FakeGitService()
         let store = await makeCommitReadyStore(git)
-        store.commitMessages[repoPath] = "   \n  " // yalnız whitespace
+        store.setCommitMessage("   \n  ", for: repoPath) // yalnız whitespace
 
         await store.commit(repoPath)
 
@@ -346,13 +346,13 @@ final class GitStoreTests: XCTestCase {
 
         let calls = await git.commitCalls
         XCTAssertTrue(calls.isEmpty, "dosya seçilmeden commit yok")
-        XCTAssertEqual(store.commitMessages[repoPath], "feat: add", "mesaj korunur")
+        XCTAssertEqual(store.commitMessage(for: repoPath), "feat: add", "mesaj korunur")
     }
 
     func testCommitMessageIsTrimmedBeforeSending() async {
         let git = FakeGitService()
         let store = await makeCommitReadyStore(git)
-        store.commitMessages[repoPath] = "  fix: pad  "
+        store.setCommitMessage("  fix: pad  ", for: repoPath)
 
         await store.commit(repoPath)
         let calls = await git.commitCalls
@@ -366,19 +366,75 @@ final class GitStoreTests: XCTestCase {
         await git.setStatus(changes)
         let store = GitStore(git: git, toasts: toasts)
         await store.loadChanges(repoPath)
-        store.commitMessages[repoPath] = "feat: add"
+        store.setCommitMessage("feat: add", for: repoPath)
 
         await store.commit(repoPath)
 
         XCTAssertEqual(toasts.toasts.count, 1, "karar 5: hata görünür")
         XCTAssertEqual(toasts.toasts.first?.kind, .error)
-        XCTAssertEqual(store.commitMessages[repoPath], "feat: add", "hatada mesaj kaybolmaz")
+        XCTAssertEqual(store.commitMessage(for: repoPath), "feat: add", "hatada mesaj kaybolmaz")
         XCTAssertFalse(store.isCommitting, "isCommitting hata yolunda da düşer")
     }
 
-    func testCanCommitReflectsInFlightState() {
-        let store = makeStore(FakeGitService())
-        XCTAssertTrue(store.canCommit)
+    // MARK: - canCommit (refactor 6.7: view kuralı store'a taşındı)
+
+    func testCanCommitRequiresSelectionAndMessage() async {
+        let git = FakeGitService()
+        let store = await makeCommitReadyStore(git)
+
+        XCTAssertTrue(store.canCommit(repoPath))
+    }
+
+    func testCanCommitFalseWithoutMessage() async {
+        let git = FakeGitService()
+        await git.setStatus(changes)
+        let store = makeStore(git)
+        await store.loadChanges(repoPath)
+
+        XCTAssertFalse(store.canCommit(repoPath), "mesaj yokken commit yok")
+    }
+
+    func testCanCommitFalseForWhitespaceOnlyMessage() async {
+        let git = FakeGitService()
+        let store = await makeCommitReadyStore(git)
+        store.setCommitMessage("   \n  ", for: repoPath)
+
+        XCTAssertFalse(store.canCommit(repoPath))
+    }
+
+    func testCanCommitFalseWithoutSelectedFiles() async {
+        let git = FakeGitService()
+        let store = await makeCommitReadyStore(git)
+        store.toggleSelectAll(repoPath) // seçimi tamamen kaldır
+
+        XCTAssertFalse(store.canCommit(repoPath))
+    }
+
+    func testCanCommitFalseWhileCommitInFlight() async {
+        let git = FakeGitService()
+        await git.setBranches([GitBranch(name: "main", isCurrent: true)])
+        // commit sonrası loadAll'ın `git log` adımını askıda tutar: isCommitting
+        // bu pencerede hâlâ true (defer fonksiyon çıkışında düşer).
+        await git.setCommitsDelay(.milliseconds(80))
+        let store = await makeCommitReadyStore(git)
+
+        let task = Task { await store.commit(repoPath) }
+        try? await Task.sleep(for: .milliseconds(15))
+        // Diğer iki koşulu tek tek geri kur ki yalnız isCommitting kalsın.
+        store.setCommitMessage("feat: second", for: repoPath)
+
+        XCTAssertTrue(store.isCommitting)
+        XCTAssertFalse(store.canCommit(repoPath), "uçuştaki commit ikinciyi engeller")
+
+        await task.value
+        XCTAssertTrue(store.canCommit(repoPath), "commit bitince kapı yeniden açılır")
+    }
+
+    func testCanCommitIsPerRepo() async {
+        let git = FakeGitService()
+        let store = await makeCommitReadyStore(git)
+
+        XCTAssertFalse(store.canCommit("/tmp/other-repo"), "başka repo'nun taslağı sızmaz")
     }
 
     // MARK: - refresh

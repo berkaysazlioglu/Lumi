@@ -2,42 +2,225 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Sağ sidebar: Commits (branch + timeline) + Changes (status + commit akışı).
-/// Görünüm v1 git paneliyle birebir (Electron git paneli davranışı).
-struct GitSidebar: View {
-    let repoPath: String
-    let gitStore: GitStore
-    let onSelectCommit: (GitCommit) -> Void
-    let onShowFileDiff: (String) -> Void
+/// Git panelinin iki panel öğesi (Faz 6.2 — eski tek parça `GitSidebar`):
+/// `.gitCommits` (branch + commit zaman çizelgesi) ve `.gitChanges`
+/// (çalışma kopyası değişiklikleri + commit composer).
+///
+/// İkisi de bağımsız birer öğedir: kullanıcı `LayoutStore.move(item:to:)` ile
+/// birini sola, diğerini sağda bırakabilir. Parent closure'ları kalktı —
+/// commit/diff sunumu `ShellContext` üzerinden akar.
 
-    @State private var commitsExpanded = true
-    @State private var changesExpanded = true
+// MARK: - Commits
 
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    commitsSection
-                    Rectangle().fill(Theme.border).frame(height: 1)
-                    changesSection
+public struct GitCommitsPanelItem: View {
+    @Shell private var shell
+
+    @State private var isExpanded = true
+
+    public init() {}
+
+    public var body: some View {
+        if let repoPath = shell.activeRepoPath {
+            VStack(alignment: .leading, spacing: 0) {
+                GitSectionHeader(title: "COMMITS", isExpanded: isExpanded) {
+                    isExpanded.toggle()
                 }
+                if isExpanded {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            branches(repoPath)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            commitComposer
+            .padding(.bottom, 6)
         }
-        .background(Theme.bgSurface)
     }
 
-    // MARK: - Collapsible bölüm başlığı (v1 CollapsibleSection)
+    @ViewBuilder
+    private func branches(_ repoPath: String) -> some View {
+        let branches = shell.git.branches[repoPath] ?? []
+        if branches.isEmpty {
+            GitEmptyText("No repository")
+        }
+        ForEach(branches) { branch in
+            branchRow(repoPath, branch: branch)
+            if shell.git.isBranchExpanded(repoPath, name: branch.name) {
+                timeline(repoPath, branch: branch)
+            }
+        }
+    }
 
-    private func sectionHeader(
-        _ title: String,
-        expanded: Bool,
-        badge: Int? = nil,
-        toggle: @escaping () -> Void
-    ) -> some View {
+    private func branchRow(_ repoPath: String, branch: GitBranch) -> some View {
+        Button {
+            shell.git.toggleBranch(repoPath, name: branch.name)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: shell.git.isBranchExpanded(repoPath, name: branch.name)
+                    ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.textMuted)
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 12))
+                    .foregroundStyle(branch.isCurrent ? Theme.accentPrimary : Theme.textMuted)
+                Text(branch.name)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(branch.isCurrent ? Theme.accentPrimary : Theme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if branch.isCurrent {
+                    GitBadge(text: "current", color: Theme.accentPrimary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Timeline: sol dikey çizgi + her commit'te nokta (HEAD = en üst commit,
+    /// yeşil + glow); hash cyan, mesaj primary, tarih muted (v1 paritesi).
+    private func timeline(_ repoPath: String, branch: GitBranch) -> some View {
+        let commits = shell.git.commitsByBranch[repoPath]?[branch.name] ?? []
+        return VStack(alignment: .leading, spacing: 0) {
+            if commits.isEmpty {
+                GitEmptyText("(no branch-specific commits)").padding(.leading, 28)
+            }
+            ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
+                CommitRow(
+                    commit: commit,
+                    isHead: branch.isCurrent && index == 0,
+                    relativeTime: RelativeTimeFormatter.label(commit.date),
+                    onSelect: { shell.presentCommit(commit) }
+                )
+            }
+        }
+        .padding(.leading, 16)
+    }
+}
+
+// MARK: - Changes + commit composer
+
+public struct GitChangesPanelItem: View {
+    @Shell private var shell
+
+    @State private var isExpanded = true
+
+    public init() {}
+
+    public var body: some View {
+        if let repoPath = shell.activeRepoPath {
+            VStack(spacing: 0) {
+                header(repoPath)
+                if isExpanded {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            changeRows(repoPath)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+                composer(repoPath)
+            }
+            .padding(.top, 6)
+        }
+    }
+
+    private func header(_ repoPath: String) -> some View {
+        let changes = shell.git.changes[repoPath] ?? []
+        let selectedCount = shell.git.selectedFiles[repoPath]?.count ?? 0
+        return HStack(spacing: 0) {
+            GitSectionHeader(title: "CHANGES", isExpanded: isExpanded, badge: changes.count) {
+                isExpanded.toggle()
+            }
+            if isExpanded, !changes.isEmpty {
+                Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
+                    shell.git.toggleSelectAll(repoPath)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Theme.accentPrimary)
+                .padding(.trailing, 12)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func changeRows(_ repoPath: String) -> some View {
+        let changes = shell.git.changes[repoPath] ?? []
+        if changes.isEmpty {
+            GitEmptyText("No uncommitted changes")
+        }
+        ForEach(changes) { change in
+            FileChangeRow(
+                change: change,
+                isSelected: shell.git.isSelected(repoPath, path: change.path),
+                onToggle: { shell.git.toggleFile(repoPath, path: change.path) },
+                onShowDiff: { shell.presentDiff(change.path) }
+            )
+        }
+    }
+
+    /// Commit composer (v1: bgDeep input + focus halkası + mor buton).
+    /// Kural (`canCommit`) ve taslak mesaj artık `GitStore`'un işi — view yalnız
+    /// okur/intent çağırır (refactor 5.4 + 6.7).
+    private func composer(_ repoPath: String) -> some View {
+        let selectedCount = shell.git.selectedFiles[repoPath]?.count ?? 0
+        let canCommit = shell.git.canCommit(repoPath)
+        return VStack(spacing: 8) {
+            Rectangle().fill(Theme.border).frame(height: 1)
+            CommitMessageField(
+                text: Binding(
+                    get: { shell.git.commitMessage(for: repoPath) },
+                    set: { shell.git.setCommitMessage($0, for: repoPath) }
+                ),
+                onSubmit: {
+                    guard canCommit else { return }
+                    Task { await shell.git.commit(repoPath) }
+                }
+            )
+            Button {
+                Task { await shell.git.commit(repoPath) }
+            } label: {
+                Text(shell.git.isCommitting ? "Committing…" : "Commit (\(selectedCount))")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(Theme.accentVivid)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .opacity(canCommit ? 1 : 0.4)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canCommit)
+        }
+        .padding(10)
+    }
+}
+
+// MARK: - Ortak parçalar
+
+/// Collapsible bölüm başlığı (v1 CollapsibleSection).
+struct GitSectionHeader: View {
+    let title: String
+    let isExpanded: Bool
+    var badge: Int?
+    let toggle: () -> Void
+
+    init(title: String, isExpanded: Bool, badge: Int? = nil, toggle: @escaping () -> Void) {
+        self.title = title
+        self.isExpanded = isExpanded
+        self.badge = badge
+        self.toggle = toggle
+    }
+
+    var body: some View {
         Button(action: toggle) {
             HStack(spacing: 8) {
-                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
                 Text(title)
@@ -60,154 +243,13 @@ struct GitSidebar: View {
         }
         .buttonStyle(.plain)
     }
+}
 
-    // MARK: - Commits (branch + timeline)
+struct GitBadge: View {
+    let text: String
+    let color: Color
 
-    private var commitsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("COMMITS", expanded: commitsExpanded) {
-                commitsExpanded.toggle()
-            }
-            if commitsExpanded {
-                let branches = gitStore.branches[repoPath] ?? []
-                if branches.isEmpty {
-                    emptyText("No repository")
-                }
-                ForEach(branches) { branch in
-                    branchRow(branch)
-                    if gitStore.isBranchExpanded(repoPath, name: branch.name) {
-                        commitTimeline(for: branch)
-                    }
-                }
-            }
-        }
-        .padding(.bottom, 6)
-    }
-
-    private func branchRow(_ branch: GitBranch) -> some View {
-        Button {
-            gitStore.toggleBranch(repoPath, name: branch.name)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: gitStore.isBranchExpanded(repoPath, name: branch.name)
-                    ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Theme.textMuted)
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 12))
-                    .foregroundStyle(branch.isCurrent ? Theme.accentPrimary : Theme.textMuted)
-                Text(branch.name)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(branch.isCurrent ? Theme.accentPrimary : Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if branch.isCurrent {
-                    badge("current", color: Theme.accentPrimary)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Timeline: sol dikey çizgi + her commit'te nokta (HEAD = en üst commit,
-    /// yeşil + glow); hash cyan, mesaj primary, tarih muted (v1 paritesi).
-    private func commitTimeline(for branch: GitBranch) -> some View {
-        let commits = gitStore.commitsByBranch[repoPath]?[branch.name] ?? []
-        return VStack(alignment: .leading, spacing: 0) {
-            if commits.isEmpty {
-                emptyText("(no branch-specific commits)").padding(.leading, 28)
-            }
-            ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
-                CommitRow(
-                    commit: commit,
-                    isHead: branch.isCurrent && index == 0,
-                    relativeTime: Self.relativeTime(commit.date),
-                    onSelect: { onSelectCommit(commit) }
-                )
-            }
-        }
-        .padding(.leading, 16)
-    }
-
-    // MARK: - Changes
-
-    private var changesSection: some View {
-        let changes = gitStore.changes[repoPath] ?? []
-        let selectedCount = gitStore.selectedFiles[repoPath]?.count ?? 0
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                sectionHeader("CHANGES", expanded: changesExpanded, badge: changes.count) {
-                    changesExpanded.toggle()
-                }
-                if changesExpanded, !changes.isEmpty {
-                    Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
-                        gitStore.toggleSelectAll(repoPath)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(Theme.accentPrimary)
-                    .padding(.trailing, 12)
-                }
-            }
-            if changesExpanded {
-                if changes.isEmpty {
-                    emptyText("No uncommitted changes")
-                }
-                ForEach(changes) { change in
-                    FileChangeRow(
-                        change: change,
-                        isSelected: gitStore.isSelected(repoPath, path: change.path),
-                        onToggle: { gitStore.toggleFile(repoPath, path: change.path) },
-                        onShowDiff: { onShowFileDiff(change.path) }
-                    )
-                }
-            }
-        }
-        .padding(.top, 6)
-    }
-
-    // MARK: - Commit composer (v1: bgDeep input + focus halkası + mor buton)
-
-    private var commitComposer: some View {
-        let selectedCount = gitStore.selectedFiles[repoPath]?.count ?? 0
-        let message = gitStore.commitMessages[repoPath] ?? ""
-        let canCommit = selectedCount > 0
-            && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !gitStore.isCommitting
-        return VStack(spacing: 8) {
-            Rectangle().fill(Theme.border).frame(height: 1)
-            CommitMessageField(
-                text: Binding(
-                    get: { gitStore.commitMessages[repoPath] ?? "" },
-                    set: { gitStore.commitMessages[repoPath] = $0 }
-                ),
-                onSubmit: { if canCommit { Task { await gitStore.commit(repoPath) } } }
-            )
-            Button {
-                Task { await gitStore.commit(repoPath) }
-            } label: {
-                Text(gitStore.isCommitting ? "Committing…" : "Commit (\(selectedCount))")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
-                    .background(Theme.accentVivid)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .opacity(canCommit ? 1 : 0.4)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canCommit)
-        }
-        .padding(10)
-    }
-
-    // MARK: - Yardımcılar
-
-    private func badge(_ text: String, color: Color) -> some View {
+    var body: some View {
         Text(text)
             .font(.system(size: 9, weight: .semibold, design: .monospaced))
             .foregroundStyle(color)
@@ -216,24 +258,19 @@ struct GitSidebar: View {
             .background(color.opacity(0.2))
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
+}
 
-    private func emptyText(_ text: String) -> some View {
+struct GitEmptyText: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
         Text(text)
             .font(.system(size: 11, design: .monospaced))
             .foregroundStyle(Theme.textMuted)
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
-    }
-
-    /// "5m ago / 3h ago / 2d ago" — relative format UI katmanında.
-    /// `now` yalnız test için enjekte edilir (default: şimdi).
-    static func relativeTime(_ date: Date, now: Date = Date()) -> String {
-        let seconds = max(0, now.timeIntervalSince(date))
-        let minutes = Int(seconds / 60)
-        if minutes < 60 { return "\(minutes)m ago" }
-        let hours = minutes / 60
-        if hours < 24 { return "\(hours)h ago" }
-        return "\(hours / 24)d ago"
     }
 }
 

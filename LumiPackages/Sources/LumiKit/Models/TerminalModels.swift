@@ -79,6 +79,12 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.status = status
         self.claudeSessionID = claudeSessionID
     }
+
+    /// Kullanıcıya gösterilen başlık — TEK kaynak (refactor 6.7).
+    /// Öncelik: emülatörün OSC başlığı > spawn görevi > üretilen ad.
+    /// Kart header'ı, maximize header'ı, chip şeridi ve session listesi
+    /// bu türevi paylaşır (önceden 5 ayrı kopyaydı).
+    public var displayTitle: String { oscTitle ?? task ?? name }
 }
 
 /// Terminal servisinin yayınladığı yaşam döngüsü event'leri.

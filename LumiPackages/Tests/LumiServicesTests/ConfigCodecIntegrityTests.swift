@@ -77,6 +77,10 @@ final class ConfigCodecIntegrityTests: XCTestCase {
     func testUIStateOverlayHasNoOrphanKeys() {
         let state = Self.fullyPopulatedUIState
         let fields = Set(fieldNames(of: state).map { Self.uiStateKeyMapping[$0] ?? $0 })
+            // K34: `panelLayout` alanı diske İKİ anahtar olarak iner
+            // (`panelLayout` + `visibleSlots`) — görünürlük eski bool'larla
+            // aynı bilgi olduğu için tek başına okunabilir kalır.
+            .union(["visibleSlots"])
         let orphans = ConfigCodec.uiStateOverlay(state).keys.filter { !fields.contains($0) }
         XCTAssertTrue(orphans.isEmpty, "uiStateOverlay'de modelde olmayan anahtar: \(orphans.sorted())")
     }
@@ -166,6 +170,10 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         windowMaximized: true,
         resumeSessions: [ResumeSession(repoPath: "/r/alpha", sessionID: "s-1")],
         activeRoute: "tasks",
+        panelLayout: PanelLayout.defaults
+            .moving(.fileTree, to: .right, index: 0)
+            .settingVisible(.right, true)
+            .settingWidth(320, for: .left),
         legacyGridColumns: nil
     )
 }

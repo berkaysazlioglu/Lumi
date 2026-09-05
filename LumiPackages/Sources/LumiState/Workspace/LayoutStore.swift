@@ -2,42 +2,47 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Persist edilen yerleşim alanlarının TEK snapshot'ı (refactor 5.2).
+/// Persist edilen yerleşim alanlarının TEK snapshot'ı (refactor 5.2 / Faz 6.2).
 ///
-/// Alan başına ayrı yazım yerine tek `persist(_:)` girdisi: hangi alanın
-/// diske indiği bir yerde okunur ve Faz 6'da `visibleSlots`/`panelLayout`
-/// eklendiğinde tek yer değişir.
+/// Alan başına ayrı yazım yerine tek `persist(_:)` girdisi: hangi alanın diske
+/// indiği bir yerde okunur. `leftSidebarOpen`/`rightSidebarOpen` artık bağımsız
+/// alanlar değil, `panelLayout.visibleSlots`'un PROJEKSİYONudur (K34, karar 9):
+/// diske yazılmaya devam ederler ki eski Electron sürümü aynı dosyayı okusun.
 public struct LayoutSnapshot: Equatable, Sendable {
-    public var leftSidebarOpen: Bool
-    public var rightSidebarOpen: Bool
+    public var panelLayout: PanelLayout
     public var projectGridLayouts: [String: GridLayout]
 
-    public init(
-        leftSidebarOpen: Bool,
-        rightSidebarOpen: Bool,
-        projectGridLayouts: [String: GridLayout]
-    ) {
-        self.leftSidebarOpen = leftSidebarOpen
-        self.rightSidebarOpen = rightSidebarOpen
+    public init(panelLayout: PanelLayout, projectGridLayouts: [String: GridLayout]) {
+        self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
     }
+
+    /// Karar 9 projeksiyonu — eski bool alanı.
+    public var leftSidebarOpen: Bool { panelLayout.isVisible(.left) }
+    /// Karar 9 projeksiyonu — eski bool alanı.
+    public var rightSidebarOpen: Bool { panelLayout.isVisible(.right) }
 }
 
-/// Panel görünürlüğü, repo başına grid yerleşimi, maximize/solo ve focus mode
-/// (refactor 5.2; design/03 §4).
+/// Panel yerleşimi/görünürlüğü, repo başına grid yerleşimi, maximize/solo ve
+/// focus mode (refactor 5.2, Faz 6.2; design/03 §4, §7).
 ///
 /// Tek servis bağımlılığı `ConfigServicing`'dir. Maximize'ın "görünür mü?"
 /// sorusu terminal store'una SOMUT bağ kurmadan `isTerminalVisible`
 /// predikatıyla enjekte edilir — böylece layout, terminal listesinin tipini
 /// hiç tanımaz.
+///
+/// **Panel intent'leri tektir** (Faz 6.2): eski `toggleLeftSidebar` /
+/// `toggleRightSidebar` / `setLeftSidebarOpen` / `setRightSidebarOpen` dörtlüsü
+/// `toggleSlot(_:)` + `setSlotVisible(_:_:)` ikilisine indi; yeni bir yuva
+/// eklendiğinde yeni intent yazılmaz.
 @Observable
 @MainActor
 public final class LayoutStore {
     /// Yeni repo default'u: tek kolon + Fit (karar 31).
     public static let defaultGridLayout = GridLayout(mode: .columns, count: 1, heightMode: .fit)
 
-    public private(set) var leftSidebarOpen = true
-    public private(set) var rightSidebarOpen = false
+    /// Hangi öğe hangi yuvada + yuva görünürlükleri + genişlikler (K33/K34).
+    public private(set) var panelLayout: PanelLayout = .defaults
     public private(set) var projectGridLayouts: [String: GridLayout] = [:]
     /// Oturumluk maximize/solo — repo başına en çok bir terminal tam alanı
     /// kaplar; diğer görünürler alt şeride iner. Persist edilmez.
@@ -50,21 +55,30 @@ public final class LayoutStore {
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let isTerminalVisible: (TerminalID, String) -> Bool
+    /// Maximize odak da verir. Odaklama terminal store'unun işidir; layout onu
+    /// SOMUT olarak tanımasın diye dar bir closure ile enjekte edilir
+    /// (`isTerminalVisible` ile aynı gerekçe).
+    @ObservationIgnored private let focusTerminal: (TerminalID) -> Void
     /// Persist zincirinin kuyruğu (1.17 — sıra garantisi).
     @ObservationIgnored private var pendingPersistTask: Task<Void, Never>?
 
     public init(
         config: any ConfigServicing,
-        isTerminalVisible: @escaping (TerminalID, String) -> Bool
+        isTerminalVisible: @escaping (TerminalID, String) -> Bool,
+        focusTerminal: @escaping (TerminalID) -> Void = { _ in }
     ) {
         self.config = config
         self.isTerminalVisible = isTerminalVisible
+        self.focusTerminal = focusTerminal
     }
 
     // MARK: - Yükleme
 
     /// `openTabs` yalnız legacy `gridColumns` migration'ı için gerekir: eski
     /// global değer açık her tab'ın path'ine kopyalanır.
+    ///
+    /// K34 migration: `panelLayout` anahtarı yoksa yerleşim default'tan,
+    /// görünürlük eski `leftSidebarOpen`/`rightSidebarOpen` bool'larından gelir.
     public func load(state: UIState, openTabs: [String]) {
         projectGridLayouts = state.projectGridLayouts
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
@@ -72,8 +86,10 @@ public final class LayoutStore {
                 projectGridLayouts[tab] = legacy
             }
         }
-        leftSidebarOpen = state.leftSidebarOpen
-        rightSidebarOpen = state.rightSidebarOpen
+        panelLayout = state.panelLayout ?? PanelLayout.migrating(
+            leftOpen: state.leftSidebarOpen,
+            rightOpen: state.rightSidebarOpen
+        )
     }
 
     // MARK: - Focus mode
@@ -89,28 +105,46 @@ public final class LayoutStore {
         onFocusModeChanged?(false)
     }
 
-    // MARK: - Sidebar'lar (her toggle persist)
+    // MARK: - Panel yuvaları (her mutasyon persist)
 
-    public func toggleLeftSidebar() {
-        leftSidebarOpen.toggle()
-        persist()
+    /// Kalıcı görünürlük — focus mode'un GEÇİCİ override'ını içermez.
+    public var visibleSlots: Set<PanelSlot> { panelLayout.visibleSlots }
+
+    /// Kabuğun çizim kararı: focus mode açıkken hiçbir yuva görünmez ama
+    /// `visibleSlots` (dolayısıyla disk) değişmez — çıkışta eski hal geri gelir.
+    public func isSlotVisible(_ slot: PanelSlot) -> Bool {
+        !isFocusMode && panelLayout.isVisible(slot)
     }
 
-    public func toggleRightSidebar() {
-        rightSidebarOpen.toggle()
-        persist()
+    public func items(in slot: PanelSlot) -> [PanelItemID] {
+        panelLayout.items(in: slot)
     }
 
-    /// Settings → Appearance toggle'ları için doğrudan set (idempotent; persist).
-    public func setLeftSidebarOpen(_ open: Bool) {
-        guard leftSidebarOpen != open else { return }
-        leftSidebarOpen = open
-        persist()
+    public func width(for slot: PanelSlot) -> Double {
+        panelLayout.width(for: slot)
     }
 
-    public func setRightSidebarOpen(_ open: Bool) {
-        guard rightSidebarOpen != open else { return }
-        rightSidebarOpen = open
+    public func toggleSlot(_ slot: PanelSlot) {
+        apply(panelLayout.togglingVisible(slot))
+    }
+
+    /// Idempotent (Settings → Appearance toggle'ları): değişmezse yazım yok.
+    public func setSlotVisible(_ slot: PanelSlot, _ visible: Bool) {
+        apply(panelLayout.settingVisible(slot, visible))
+    }
+
+    /// **Bir öğeyi soldan sağa taşımak: TEK mutasyon.**
+    public func move(item: PanelItemID, to slot: PanelSlot, index: Int? = nil) {
+        apply(panelLayout.moving(item, to: slot, index: index))
+    }
+
+    public func setWidth(_ width: Double, for slot: PanelSlot) {
+        apply(panelLayout.settingWidth(width, for: slot))
+    }
+
+    private func apply(_ newLayout: PanelLayout) {
+        guard newLayout != panelLayout else { return }
+        panelLayout = newLayout
         persist()
     }
 
@@ -129,14 +163,24 @@ public final class LayoutStore {
 
     // MARK: - Maximize / solo
 
-    /// Görünür olmayan (kapanmış/minimize) id maximize edilmez.
-    /// Odak verme çağıranın işidir (facade `TerminalFocusCoordinating`'e delege
-    /// eder) — layout terminal listesini tanımaz.
+    /// Görünür olmayan (kapanmış/minimize) id maximize edilmez. Başarılıysa
+    /// odak da verilir (enjekte edilen `focusTerminal` üzerinden) — layout
+    /// terminal listesinin tipini yine tanımaz.
     @discardableResult
     public func maximize(_ id: TerminalID, in repoPath: String) -> Bool {
         guard isTerminalVisible(id, repoPath) else { return false }
         maximizedByRepo[repoPath] = id
+        focusTerminal(id)
         return true
+    }
+
+    /// Aynı id ikinci kez → restore (menü Cmd+Ctrl+M ve kart butonu aynı intent).
+    public func toggleMaximize(_ id: TerminalID, in repoPath: String) {
+        if isMaximized(id, in: repoPath) {
+            restoreMaximize(in: repoPath)
+        } else {
+            maximize(id, in: repoPath)
+        }
     }
 
     public func restoreMaximize(in repoPath: String) {
@@ -168,11 +212,7 @@ public final class LayoutStore {
     // MARK: - Persistence
 
     public var snapshot: LayoutSnapshot {
-        LayoutSnapshot(
-            leftSidebarOpen: leftSidebarOpen,
-            rightSidebarOpen: rightSidebarOpen,
-            projectGridLayouts: projectGridLayouts
-        )
+        LayoutSnapshot(panelLayout: panelLayout, projectGridLayouts: projectGridLayouts)
     }
 
     /// Yazımlar tek zincirde serileştirilir (1.17): geç kalan BAYAT snapshot en
@@ -186,8 +226,11 @@ public final class LayoutStore {
         pendingPersistTask = Task { [config] in
             await previous?.value
             await config.updateUIState { state in
+                // Karar 9: eski bool alanları `visibleSlots`'un projeksiyonu
+                // olarak YAZILMAYA devam eder.
                 state.leftSidebarOpen = snapshot.leftSidebarOpen
                 state.rightSidebarOpen = snapshot.rightSidebarOpen
+                state.panelLayout = snapshot.panelLayout
                 state.projectGridLayouts = snapshot.projectGridLayouts
             }
         }
