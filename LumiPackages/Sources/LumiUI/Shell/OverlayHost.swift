@@ -10,6 +10,8 @@ public struct OverlayID: RawRepresentable, Hashable, Sendable {
 }
 
 public extension OverlayID {
+    /// Karar 44: gizli yuvaların kenar hover'ıyla içeriğin üstünde açılması.
+    static let panelReveal = OverlayID("panelReveal")
     static let focusModeBar = OverlayID("focusModeBar")
     static let fileViewer = OverlayID("fileViewer")
     static let settings = OverlayID("settings")

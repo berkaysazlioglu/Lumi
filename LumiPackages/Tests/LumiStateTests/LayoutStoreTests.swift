@@ -62,6 +62,78 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(store.gridLayout(for: nil), LayoutStore.defaultGridLayout)
     }
 
+    // MARK: - Auto-reveal (karar 44)
+
+    func testSetAutoRevealPersistsAndIsIdempotent() async throws {
+        store.setAutoReveal(.right, true)
+        XCTAssertTrue(store.isAutoReveal(.right))
+        try await waitForPersist()
+        let persisted = await config.uiState().panelLayout
+        XCTAssertEqual(persisted?.autoRevealSlots, [.right])
+
+        let before = await config.uiStateUpdateCount
+        store.setAutoReveal(.right, true)
+        try await Task.sleep(for: .milliseconds(30))
+        let after = await config.uiStateUpdateCount
+        XCTAssertEqual(before, after, "değişmedi → yazım yok")
+    }
+
+    func testRevealOnlyWorksForHiddenAutoRevealSlot() {
+        // Sol yuva default'ta GÖRÜNÜR → reveal anlamsız
+        store.setAutoReveal(.left, true)
+        XCTAssertFalse(store.canAutoReveal(.left))
+        store.setRevealed(.left, true)
+        XCTAssertFalse(store.isSlotRevealed(.left))
+
+        // Gizlenince eligible olur
+        store.setSlotVisible(.left, false)
+        XCTAssertTrue(store.canAutoReveal(.left))
+        store.setRevealed(.left, true)
+        XCTAssertTrue(store.isSlotRevealed(.left))
+        store.setRevealed(.left, false)
+        XCTAssertFalse(store.isSlotRevealed(.left))
+    }
+
+    func testRevealWithoutAutoRevealPreferenceIsIgnored() {
+        store.setSlotVisible(.left, false)
+        store.setRevealed(.left, true)
+        XCTAssertFalse(store.isSlotRevealed(.left), "tercih kapalıyken kenar hover'ı açmaz")
+    }
+
+    func testDockingOrDisablingClearsReveal() {
+        store.setAutoReveal(.right, true)
+        store.setRevealed(.right, true)
+        XCTAssertTrue(store.isSlotRevealed(.right))
+
+        store.setSlotVisible(.right, true)
+        XCTAssertFalse(store.isSlotRevealed(.right), "yuva sabitlendi → overlay düşer")
+
+        store.setSlotVisible(.right, false)
+        store.setRevealed(.right, true)
+        store.setAutoReveal(.right, false)
+        XCTAssertFalse(store.isSlotRevealed(.right), "tercih kapatıldı → overlay düşer")
+    }
+
+    func testFocusModeSuppressesReveal() {
+        store.setAutoReveal(.right, true)
+        store.setRevealed(.right, true)
+        store.toggleFocusMode()
+        XCTAssertFalse(store.canAutoReveal(.right))
+        XCTAssertFalse(store.isSlotRevealed(.right))
+        store.exitFocusMode()
+        XCTAssertFalse(store.isSlotRevealed(.right), "focus mode'a girince reveal sıfırlanır")
+    }
+
+    func testRevealIsSessionOnlyAndNotInSnapshot() {
+        store.setAutoReveal(.right, true)
+        store.setRevealed(.right, true)
+        XCTAssertEqual(
+            store.snapshot.panelLayout,
+            PanelLayout.defaults.settingAutoReveal(.right, true),
+            "revealedSlots persist edilmez"
+        )
+    }
+
     // MARK: - Snapshot / persist
 
     func testSnapshotCarriesOnlyPersistedFields() {

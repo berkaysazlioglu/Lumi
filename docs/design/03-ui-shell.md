@@ -163,7 +163,7 @@ Tasarımın ilk hâlinde hiç yoktu; canlı bir özelliktir (karar 19'un yanınd
 
 **Metrikler (`Theme+Metrics.swift`).** `Theme.Radius`: `sm 4` / `md 6` / `lg 8` / `panel 16`. `Theme.Spacing`: `xxxs 1` / `xxs 2` / `xs 4` / `sm 6` / `md 8` / `lg 12` / `xl 16` / `xxl 24` / `xxxl 32`. `Theme.Stroke.hairline 1`. Her ikisinin de `scale` dizisi vardır (lint testi bunları okur).
 
-**Hareket (`Theme+Motion.swift`).** Süreler `quick 0.12` / `standard 0.2` / `panel 0.3` / `pulse 1` + hazır `Animation` sabitleri (`quickEase`, `standardEase`, `standardOut`, `panelEase`, `statusPulse`). Gecikmeler ayrı `Duration` sabitleridir: `hoverRevealDelay 500ms`, `hoverOpenDelay 350ms`, `hoverCloseDelay 200ms`, `searchDebounce 150ms`. StatusDot durum renk sistemi (working=success+pulse, waiting-unseen=warning+pulse, …) birebir korunur.
+**Hareket (`Theme+Motion.swift`).** Süreler `quick 0.12` / `standard 0.2` / `panel 0.3` / `pulse 1` + hazır `Animation` sabitleri (`quickEase`, `standardEase`, `standardOut`, `panelEase`, `statusPulse`). Gecikmeler ayrı `Duration` sabitleridir: `hoverRevealDelay 500ms`, `hoverOpenDelay 350ms`, `hoverCloseDelay 200ms`, `sidebarRevealDelay 100ms`, `searchDebounce 150ms`. StatusDot durum renk sistemi (working=success+pulse, waiting-unseen=warning+pulse, …) birebir korunur.
 
 **Diff (`Theme+Diff.swift`).** `Theme.Diff.backgroundOpacity = 0.13` ve `diffForeground(for:)` / `diffBackground(for:)` (SwiftUI `Color` ve `NSColor` sürümleri). Diff renk eşlemesinin üç kopyası buraya konsolide edildi.
 
@@ -226,7 +226,9 @@ Enjeksiyon tek noktadadır: `EnvironmentValues.shell` (opsiyonel) + `@Shell` pro
 
 `LayoutStore` intent'leri bu mutasyonlara iner: `toggleSlot(_:)`, `setSlotVisible(_:_:)`, `move(item:to:index:)`, `setWidth(_:for:)`. **Bir öğeyi soldan sağa taşımak tek `move` çağrısıdır.** Değişmediyse yazılmaz (idempotent). Focus mode kalıcı görünürlüğü ezmez: `visibleSlots` kalıcı hâli, `isSlotVisible(_:)` çizim kararını (`!isFocusMode && …`) verir.
 
-**Persist (K34, additive — karar 9 korunur):** `ui-state.json`'a `panelLayout` (slots + widths) ve `visibleSlots` anahtarları eklenir; `leftSidebarOpen` / `rightSidebarOpen` **okunmaya ve yazılmaya devam eder** (yerleşimin projeksiyonu: `LayoutSnapshot.leftSidebarOpen` = `panelLayout.isVisible(.left)`). `panelLayout` anahtarı yokken görünürlük eski iki bool'dan türetilir (`PanelLayout.migrating(leftOpen:rightOpen:)`).
+**Auto-reveal (karar 44):** `PanelLayout.autoRevealSlots` (+ `settingAutoReveal`) kalıcı tercihtir; `LayoutStore.canAutoReveal(_:)` = tercih açık ∧ yuva gizli ∧ focus mode kapalı, `revealedSlots`/`setRevealed`/`isSlotRevealed` oturumluk overlay hâlidir. Yuva gizliyken kenar hover'ı (`PanelRevealOverlay`, `OverlayID.panelReveal`, ilk kayıtlı overlay) yuvayı **orta alanı daraltmadan** içeriğin üstünde açar; `PanelHostView(presentation: .revealed)` aynı öğeleri çizer. Açılış beklemesi `Theme.Motion.sidebarRevealDelay` (100 ms), giriş animasyonu `standardOut` (200 ms); çıkışta bekleme yok, animasyon `quickEase` (120 ms). Hover bölgesi kalıcıdır ve animasyon almaz. Yuva sabitlenince ya da tercih kapanınca `apply` reveal kümesini budar.
+
+**Persist (K34, additive — karar 9 korunur):** `ui-state.json`'a `panelLayout` (slots + widths + `autoReveal`, karar 44) ve `visibleSlots` anahtarları eklenir; `leftSidebarOpen` / `rightSidebarOpen` **okunmaya ve yazılmaya devam eder** (yerleşimin projeksiyonu: `LayoutSnapshot.leftSidebarOpen` = `panelLayout.isVisible(.left)`). `panelLayout` anahtarı yokken görünürlük eski iki bool'dan türetilir (`PanelLayout.migrating(leftOpen:rightOpen:)`).
 
 **Descriptor:**
 

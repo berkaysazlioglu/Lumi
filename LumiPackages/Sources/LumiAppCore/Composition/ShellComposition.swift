@@ -89,6 +89,17 @@ struct ShellComposition {
     /// Kabuğun KENDİ overlay'leri — bir feature'a ait olmayanlar (focus mode
     /// barı, dosya görüntüleyici, ayarlar, toast'lar, iki onay dialogu).
     private static func registerShellOverlays(into registries: ShellRegistries) {
+        // Karar 44: İLK kayıt — diğer overlay'lerin (modal, toast, dialog) altında
+        // kalır. Yalnız en az bir yuva kenar hover'ına uygunken çizilir.
+        let panels = registries.panels
+        registries.overlays.register(OverlayDescriptor(
+            id: .panelReveal,
+            isPresented: { shell in
+                shell.activeRepoPath != nil
+                    && PanelRevealOverlay.slots.contains { shell.layout.canAutoReveal($0) }
+            },
+            makeView: { AnyView(PanelRevealOverlay(registry: panels)) }
+        ))
         registries.overlays.register(OverlayDescriptor(
             id: .focusModeBar,
             alignment: .top,

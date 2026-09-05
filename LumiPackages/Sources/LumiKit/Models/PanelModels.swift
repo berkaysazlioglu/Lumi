@@ -43,7 +43,8 @@ public extension PanelItemID {
 }
 
 /// Panel yerleşimi: hangi öğe hangi yuvada, hangi yuva görünür, yuva
-/// genişlikleri (K33/K34).
+/// genişlikleri (K33/K34) ve hangi yuvanın kenar hover'ıyla içeriğin ÜSTÜNE
+/// açıldığı (`autoRevealSlots`, karar 44).
 ///
 /// **Değişmez (immutable):** her mutasyon YENİ bir değer döndürür; `LayoutStore`
 /// tek alanı değiştirip persist eder. "Bir öğeyi soldan sağa taşımak" tek bir
@@ -68,15 +69,21 @@ public struct PanelLayout: Equatable, Sendable {
     public private(set) var slots: [PanelSlot: [PanelItemID]]
     public private(set) var visibleSlots: Set<PanelSlot>
     public private(set) var widths: [PanelSlot: Double]
+    /// Karar 44: yuva GİZLİYKEN fare pencerenin o kenarına gelince yuva orta
+    /// alanı daraltmadan, içeriğin üstünde geçici olarak açılır. Görünürlükten
+    /// bağımsız bir tercihtir: yuva sabitlenmişse (visible) etkisi yoktur.
+    public private(set) var autoRevealSlots: Set<PanelSlot>
 
     public init(
         slots: [PanelSlot: [PanelItemID]],
         visibleSlots: Set<PanelSlot>,
-        widths: [PanelSlot: Double]
+        widths: [PanelSlot: Double],
+        autoRevealSlots: Set<PanelSlot> = []
     ) {
         self.slots = slots
         self.visibleSlots = visibleSlots
         self.widths = widths
+        self.autoRevealSlots = autoRevealSlots
     }
 
     /// Sol = Sessions, sağ = sekmeli Project Tools; sol açık, sağ kapalı.
@@ -121,6 +128,10 @@ public struct PanelLayout: Equatable, Sendable {
         widths[slot] ?? Self.defaultWidth(for: slot)
     }
 
+    public func isAutoReveal(_ slot: PanelSlot) -> Bool {
+        autoRevealSlots.contains(slot)
+    }
+
     /// Öğenin bulunduğu yuva (hiçbir yuvada değilse `nil`).
     public func slot(of item: PanelItemID) -> PanelSlot? {
         for slot in PanelSlot.allCases where items(in: slot).contains(item) {
@@ -143,6 +154,17 @@ public struct PanelLayout: Equatable, Sendable {
 
     public func togglingVisible(_ slot: PanelSlot) -> PanelLayout {
         settingVisible(slot, !isVisible(slot))
+    }
+
+    /// Karar 44: kenar hover'ıyla açılma tercihi (görünürlüğe dokunmaz).
+    public func settingAutoReveal(_ slot: PanelSlot, _ enabled: Bool) -> PanelLayout {
+        var copy = self
+        if enabled {
+            copy.autoRevealSlots.insert(slot)
+        } else {
+            copy.autoRevealSlots.remove(slot)
+        }
+        return copy
     }
 
     /// Genişlik `minWidth...maxWidth` aralığına kırpılır.

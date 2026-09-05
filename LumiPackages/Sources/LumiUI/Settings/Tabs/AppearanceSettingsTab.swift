@@ -1,7 +1,8 @@
 import LumiKit
 import SwiftUI
 
-/// Panel görünürlükleri — anında uygulanır ve hatırlanır.
+/// Panel görünürlükleri + kenar hover'ıyla açılma (karar 44) — anında
+/// uygulanır ve hatırlanır.
 struct AppearanceSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .appearance
 
@@ -17,15 +18,32 @@ struct AppearanceSettingsTab: SettingsTabContent {
             )
             LumiToggleRow(
                 title: "Left Sidebar",
-                hint: "Sessions · Project Context panel",
+                hint: "Sessions panel",
                 isOn: slotBinding(.left)
             )
             LumiToggleRow(
                 title: "Right Sidebar",
-                hint: "Git panel (Commits · Changes)",
+                hint: "Project Tools (Explorer · Agent History · Source Control)",
                 isOn: slotBinding(.right)
             )
+            LumiToggleRow(
+                title: "Auto-reveal Left Sidebar",
+                hint: "When hidden, hover the left edge to show it over the content",
+                isOn: autoRevealBinding(.left)
+            )
+            LumiToggleRow(
+                title: "Auto-reveal Right Sidebar",
+                hint: "When hidden, hover the right edge to show it over the content",
+                isOn: autoRevealBinding(.right)
+            )
         }
+    }
+
+    private func autoRevealBinding(_ slot: PanelSlot) -> Binding<Bool> {
+        Binding(
+            get: { shell.layout.isAutoReveal(slot) },
+            set: { shell.layout.setAutoReveal(slot, $0) }
+        )
     }
 
     private func slotBinding(_ slot: PanelSlot) -> Binding<Bool> {

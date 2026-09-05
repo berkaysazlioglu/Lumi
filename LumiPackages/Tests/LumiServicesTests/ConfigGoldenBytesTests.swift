@@ -104,6 +104,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
                 .settingVisible(.left, false)
                 .settingVisible(.right, true)
                 .settingWidth(320, for: .right)
+                .settingAutoReveal(.left, true)
         }
         await service.flushPendingWrites()
 
@@ -170,6 +171,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "/r/beta"
       ],
       "panelLayout" : {
+        "autoReveal" : [
+          "left"
+        ],
         "slots" : {
           "bottom" : [
 

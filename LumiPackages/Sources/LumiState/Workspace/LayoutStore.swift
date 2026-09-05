@@ -49,6 +49,9 @@ public final class LayoutStore {
     public private(set) var maximizedByRepo: [String: TerminalID] = [:]
     /// Oturumluk — persist edilmez.
     public private(set) var isFocusMode = false
+    /// Karar 44: kenar hover'ıyla o an içeriğin ÜSTÜNDE açık duran yuvalar.
+    /// Oturumluk — persist edilmez; kalıcı tercih `panelLayout.autoRevealSlots`.
+    public private(set) var revealedSlots: Set<PanelSlot> = []
 
     /// Traffic-light gizleme AppKit tarafında bu callback ile senkronlanır.
     @ObservationIgnored public var onFocusModeChanged: ((Bool) -> Void)?
@@ -96,6 +99,7 @@ public final class LayoutStore {
 
     public func toggleFocusMode() {
         isFocusMode.toggle()
+        revealedSlots = []
         onFocusModeChanged?(isFocusMode)
     }
 
@@ -145,7 +149,43 @@ public final class LayoutStore {
     private func apply(_ newLayout: PanelLayout) {
         guard newLayout != panelLayout else { return }
         panelLayout = newLayout
+        // Sabitlenen ya da tercihi kapanan yuvanın geçici overlay'i düşer.
+        revealedSlots = revealedSlots.filter { canAutoReveal($0) }
         persist()
+    }
+
+    // MARK: - Auto-reveal (karar 44)
+
+    /// Kalıcı tercih: yuva gizliyken kenar hover'ı onu içeriğin üstünde açar.
+    public func isAutoReveal(_ slot: PanelSlot) -> Bool {
+        panelLayout.isAutoReveal(slot)
+    }
+
+    /// Idempotent (Settings → Appearance toggle'ları).
+    public func setAutoReveal(_ slot: PanelSlot, _ enabled: Bool) {
+        apply(panelLayout.settingAutoReveal(slot, enabled))
+    }
+
+    /// Kenar hover bölgesi bu yuva için çizilir mi: tercih açık + yuva sabit
+    /// değil (gizli) + focus mode kapalı. Sabit (docked) yuvada overlay
+    /// anlamsızdır — zaten görünür.
+    public func canAutoReveal(_ slot: PanelSlot) -> Bool {
+        !isFocusMode && panelLayout.isAutoReveal(slot) && !panelLayout.isVisible(slot)
+    }
+
+    /// Kabuğun çizim kararı: yuva o an overlay olarak açık mı.
+    public func isSlotRevealed(_ slot: PanelSlot) -> Bool {
+        canAutoReveal(slot) && revealedSlots.contains(slot)
+    }
+
+    /// Hover zamanlayıcıları (view) buraya iner; uygun olmayan yuva açılmaz.
+    public func setRevealed(_ slot: PanelSlot, _ revealed: Bool) {
+        if revealed {
+            guard canAutoReveal(slot) else { return }
+            revealedSlots.insert(slot)
+        } else {
+            revealedSlots.remove(slot)
+        }
     }
 
     // MARK: - Grid layout

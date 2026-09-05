@@ -40,6 +40,8 @@ public extension Theme {
         public static let hoverOpenDelay: Duration = .milliseconds(350)
         /// Buton ↔ popover arasında geçerken flicker olmasın diye kapanış payı.
         public static let hoverCloseDelay: Duration = .milliseconds(200)
+        /// Sidebar kenarında kısa niyet kontrolü; çıkışta bekleme yoktur.
+        public static let sidebarRevealDelay: Duration = .milliseconds(100)
         /// Arama girdisinin filtre debounce'u.
         public static let searchDebounce: Duration = .milliseconds(150)
     }

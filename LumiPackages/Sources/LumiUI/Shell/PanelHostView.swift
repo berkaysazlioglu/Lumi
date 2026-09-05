@@ -8,10 +8,22 @@ import SwiftUI
 /// kalmadıysa (hepsi `isAvailable == false`) hiçbir şey çizilmez — böylece
 /// "repo yokken sidebar da yok" davranışı yapısal olarak gelir.
 struct PanelHostView: View {
+    /// Yuva nasıl çiziliyor: kabuğun HStack'inde sabit (orta alanı daraltır)
+    /// mı, kenar hover'ıyla içeriğin ÜSTÜNDE geçici mi (karar 44).
+    enum Presentation {
+        case docked
+        case revealed
+    }
+
     let slot: PanelSlot
     let registry: PanelItemRegistry
+    var presentation: Presentation = .docked
 
     @Shell private var shell
+
+    /// Overlay yuvasının içerikten ayrılan gölgesi.
+    private static let revealShadowRadius: CGFloat = 18
+    private static let revealShadowOpacity = 0.45
 
     var body: some View {
         let items = resolvedItems
@@ -21,6 +33,11 @@ struct PanelHostView: View {
                 stack(items)
                 if slot == .left { edgeDivider }
             }
+            .shadow(
+                color: presentation == .revealed
+                    ? .black.opacity(Self.revealShadowOpacity) : .clear,
+                radius: presentation == .revealed ? Self.revealShadowRadius : 0
+            )
         }
     }
 
@@ -45,7 +62,14 @@ struct PanelHostView: View {
     }
 
     private var resolvedItems: [PanelItemDescriptor] {
-        guard shell.layout.isSlotVisible(slot) else { return [] }
+        switch presentation {
+        case .docked:
+            guard shell.layout.isSlotVisible(slot) else { return [] }
+        case .revealed:
+            // Overlay yaşam döngüsünü parent yönetir. Kapanış transition'ı
+            // bitmeden içeriği boşaltmak kayma animasyonunu keser.
+            break
+        }
         return registry.resolved(slot: slot, layout: shell.layout.panelLayout, context: shell)
     }
 

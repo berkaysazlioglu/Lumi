@@ -30,6 +30,30 @@ final class PanelLayoutTests: XCTestCase {
         )
     }
 
+    // MARK: - Auto-reveal (karar 44)
+
+    func testDefaultsHaveNoAutoRevealSlots() {
+        XCTAssertTrue(PanelLayout.defaults.autoRevealSlots.isEmpty)
+        XCTAssertFalse(PanelLayout.defaults.isAutoReveal(.left))
+    }
+
+    func testSettingAutoRevealReturnsNewValueAndKeepsSource() {
+        let base = PanelLayout.defaults
+        let enabled = base.settingAutoReveal(.right, true)
+        XCTAssertTrue(enabled.isAutoReveal(.right))
+        XCTAssertFalse(base.isAutoReveal(.right), "kaynak değişmez")
+        XCTAssertEqual(enabled.visibleSlots, base.visibleSlots, "görünürlüğe dokunmaz")
+        XCTAssertFalse(enabled.settingAutoReveal(.right, false).isAutoReveal(.right))
+    }
+
+    func testAutoRevealIsIndependentFromVisibility() {
+        let layout = PanelLayout.defaults
+            .settingAutoReveal(.left, true)
+            .settingVisible(.left, false)
+        XCTAssertTrue(layout.isAutoReveal(.left))
+        XCTAssertFalse(layout.isVisible(.left))
+    }
+
     // MARK: - Taşıma (ana hedef)
 
     func testMovingItemLeftToRightRemovesItFromSource() {

@@ -119,6 +119,11 @@ enum PanelLayoutCodec {
                 widths[slot] = value
             }
         }
+        // Karar 44 (additive, yalnız Lumi native): anahtar yoksa boş küme.
+        let autoReveal = Set(
+            ((dict["autoReveal"] as? [Any]) ?? [])
+                .compactMap { ($0 as? String).flatMap(PanelSlot.init(rawValue:)) }
+        )
         let visible: Set<PanelSlot>
         if let names = visibleSlots as? [Any] {
             visible = Set(names.compactMap { ($0 as? String).flatMap(PanelSlot.init(rawValue:)) })
@@ -128,7 +133,12 @@ enum PanelLayoutCodec {
                 .migrating(leftOpen: fallbackLeftOpen, rightOpen: fallbackRightOpen)
                 .visibleSlots
         }
-        return PanelLayout(slots: slots, visibleSlots: visible, widths: widths)
+        return PanelLayout(
+            slots: slots,
+            visibleSlots: visible,
+            widths: widths,
+            autoRevealSlots: autoReveal
+        )
     }
 
     static func overlay(_ layout: PanelLayout) -> [String: Any] {
@@ -138,7 +148,9 @@ enum PanelLayoutCodec {
             slots[slot.rawValue] = layout.items(in: slot).map(\.rawValue)
             widths[slot.rawValue] = JSONNumber.integral(layout.width(for: slot))
         }
-        return ["slots": slots, "widths": widths]
+        // Karar 44: `visibleSlots` gibi deterministik sırayla (allCases).
+        let autoReveal = PanelSlot.allCases.filter(layout.isAutoReveal).map(\.rawValue)
+        return ["slots": slots, "widths": widths, "autoReveal": autoReveal]
     }
 
     /// Deterministik sıra: `.sortedKeys` yalnız sözlükleri sıralar, diziyi değil.

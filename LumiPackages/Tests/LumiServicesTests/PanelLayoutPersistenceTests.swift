@@ -114,6 +114,30 @@ final class PanelLayoutPersistenceTests: XCTestCase {
         )
     }
 
+    // MARK: - Auto-reveal (karar 44, additive `panelLayout.autoReveal`)
+
+    func testMissingAutoRevealKeyDecodesAsEmpty() {
+        let state = decode(["panelLayout": ["slots": [:], "widths": [:]], "visibleSlots": ["left"]])
+        XCTAssertEqual(state.panelLayout?.autoRevealSlots, [])
+    }
+
+    func testAutoRevealKeyIsDecodedAndUnknownNamesIgnored() {
+        let state = decode([
+            "panelLayout": ["slots": [:], "widths": [:], "autoReveal": ["right", "ufo", 7]],
+            "visibleSlots": ["left"],
+        ])
+        XCTAssertEqual(state.panelLayout?.autoRevealSlots, [.right])
+    }
+
+    func testAutoRevealIsWrittenInsidePanelLayoutInDeterministicOrder() {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout.defaults
+            .settingAutoReveal(.right, true)
+            .settingAutoReveal(.left, true)
+        let panel = overlay(state)["panelLayout"] as? [String: Any]
+        XCTAssertEqual(panel?["autoReveal"] as? [String], ["left", "right"])
+    }
+
     // MARK: - Round-trip
 
     func testPanelLayoutRoundTripsThroughJSON() throws {
@@ -122,6 +146,7 @@ final class PanelLayoutPersistenceTests: XCTestCase {
             .moving(.fileTree, to: .right, index: 1)
             .settingVisible(.right, true)
             .settingWidth(321.5, for: .left)
+            .settingAutoReveal(.left, true)
         state.leftSidebarOpen = state.panelLayout!.isVisible(.left)
         state.rightSidebarOpen = state.panelLayout!.isVisible(.right)
 
