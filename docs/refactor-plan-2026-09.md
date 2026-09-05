@@ -2,15 +2,15 @@
 
 Bu plan, 7 paralel mimari denetimin (UI kabuğu, State, Composition root/DI, Services+Kit, Terminal alt sistemi, SwiftUI içerik view'ları, proje sağlığı) bulgularından derlendi. Amaç: büyük güncellemeler öncesi temeli SOLID'e oturtmak ve left/right/top/center alanlarını generic (slot/route/toolbar-descriptor tabanlı) hale getirmek.
 
-Durum özeti: build temiz (1 uyarı), 474/474 test yeşil, modül grafiği CLAUDE.md ile uyumlu, katman ihlali yok. Temel sağlam; sorun **kompozisyon esnekliğinin sıfır olması** ve orkestrasyon katmanlarının (RootView, AppContainer, AppDelegate, WorkspaceStore, TerminalSession) god-object'e dönüşmesi.
+Durum özeti (plan yazıldığında): build temiz (1 uyarı), 474/474 test yeşil, modül grafiği CLAUDE.md ile uyumlu, katman ihlali yok. **(Plan tamamlandığında: build temiz, 1191/1191 test yeşil.)** Temel sağlam; sorun **kompozisyon esnekliğinin sıfır olması** ve orkestrasyon katmanlarının (RootView, AppContainer, AppDelegate, WorkspaceStore, TerminalSession) god-object'e dönüşmesi.
 
 Kanıt sayısı: bugün "Tasks görünümü + servis + store" eklemek ≈ **11 dosya / 19-20 dokunuş**. Hedef: **4-5 dosya / 3 kayıt satırı**.
 
 ---
 
-## 0. Bağlayıcı kayıt kararları (kullanıcı onayı gerekir — kod öncesi)
+## 0. Bağlayıcı kayıt kararları — ✅ onaylandı / uygulandı (K33–K38, 2026-09-04/05)
 
-CLAUDE.md gereği `docs/design/` ve `docs/decisions.md` bağlayıcı. Aşağıdakiler ONAY olmadan yapılmaz:
+CLAUDE.md gereği `docs/design/` ve `docs/decisions.md` bağlayıcı. Aşağıdakiler ONAY olmadan yapılmazdı; **hepsi 2026-09-04'te onaylandı ve uygulandı** — kalıcı kayıt [decisions.md](./decisions.md) karar 33–38'dedir (K33→33, K34→34, K35→35, K36→36, K37→37, K38→38).
 
 | # | Karar | Etkilenen doküman |
 |---|---|---|
@@ -19,12 +19,12 @@ CLAUDE.md gereği `docs/design/` ve `docs/decisions.md` bağlayıcı. Aşağıda
 | K35 | `WorkspaceStore` → `NavigationStore` + `LayoutStore` + `DialogRouter`; store tablosu 11 store'a güncellenir | `03-ui-shell.md` §4 |
 | K36 | `FeatureAssembly` + `ServiceRegistry` composition kalıbı; `MainWindowController`/`MenuActionDispatcher` gerçekten çıkarılır (tasarımda zaten var, kodda yok) | `00-architecture.md` §3 |
 | K37 | `TerminalSurfaceState` (foreground/background/minimized) + `TerminalViewProviding` genişlemesi (`isAttached`, `refreshAttachedViews`, `detachAll`) | `01-terminal-subsystem.md`, `TerminalServicing` |
-| K38 | Usage aralık seti: kod {1,5} dk vs tasarım {5,15,30} + "≥5 dk TTL cache" — hangisi geçerli? | `05-usage-indicator.md` |
+| K38 | Usage aralık seti: kod {1,5} dk vs tasarım {5,15,30} + "≥5 dk TTL cache" — hangisi geçerli? **Karar: seçenek A** — {5,15,30}, default 5, legacy `1` → 5 clamp, `CachingUsageService` 300 sn TTL | `05-usage-indicator.md` |
 | Doküman drift | Prompt Queue tasarımda yok (canlı özellik); `TerminalInputGate` tasarımda yok; `Lumi.xcodeproj`/`Yams`/`Debouncer`/`LumiKitTestSupport` tasarımda var kodda yok; `02-services.md §9` LumiError bloğu bayat; `03 §2` kısayol listesi eksik (Cmd+Ctrl+M) | ilgili dosyalar |
 
 ---
 
-## Faz 1 — Acil hata düzeltmeleri (davranış korunur, 1-2 gün)
+## Faz 1 — Acil hata düzeltmeleri (davranış korunur, 1-2 gün) — ✅ tamamlandı (commit `11339a8`, 2026-09-04)
 
 Refactor'dan bağımsız, hemen yapılmalı. Her madde için önce kırmızı test.
 
@@ -57,7 +57,7 @@ Refactor'dan bağımsız, hemen yapılmalı. Her madde için önce kırmızı te
 
 ---
 
-## Faz 2 — Test altyapısı ve karakterizasyon (refactor güvenlik ağı, 2-3 gün)
+## Faz 2 — Test altyapısı ve karakterizasyon (refactor güvenlik ağı, 2-3 gün) — ✅ tamamlandı (commit `e598836`, 2026-09-04)
 
 Refactor'a başlamadan önce mevcut davranışı kilitle.
 
@@ -75,7 +75,7 @@ Refactor'a başlamadan önce mevcut davranışı kilitle.
 
 ---
 
-## Faz 3 — Composition root ve DI (Tasks özelliğinin ön koşulu, 3-4 gün)
+## Faz 3 — Composition root ve DI (Tasks özelliğinin ön koşulu, 3-4 gün) — ✅ tamamlandı (commit `1031d44`, 2026-09-04)
 
 | # | İş | Detay |
 |---|---|---|
@@ -95,7 +95,7 @@ Refactor'a başlamadan önce mevcut davranışı kilitle.
 
 ---
 
-## Faz 4 — Terminal alt sistemi sınırları (view-switch ön koşulu, 3-4 gün)
+## Faz 4 — Terminal alt sistemi sınırları (view-switch ön koşulu, 3-4 gün) — ✅ tamamlandı (commit `1628347`, 2026-09-05)
 
 | # | İş | Detay |
 |---|---|---|
@@ -120,7 +120,7 @@ Beklenen davranış tablosu (tasarım kaydına eklenmeli):
 
 ---
 
-## Faz 5 — State katmanı ayrışması (3 gün)
+## Faz 5 — State katmanı ayrışması (3 gün) — ✅ tamamlandı (commit `34226ba`, 2026-09-05)
 
 | # | İş | Detay |
 |---|---|---|
@@ -136,7 +136,7 @@ Beklenen davranış tablosu (tasarım kaydına eklenmeli):
 
 ---
 
-## Faz 6 — Generic Shell: panel / route / toolbar kompozisyonu (ana hedef, 5-7 gün)
+## Faz 6 — Generic Shell: panel / route / toolbar kompozisyonu (ana hedef, 5-7 gün) — ✅ tamamlandı (commit `70941cd`, 2026-09-05)
 
 Ön koşullar: Faz 3.3-3.5, 4.3-4.6, 5.1-5.2.
 
@@ -184,7 +184,7 @@ struct ContentRouteRegistry { func routes() -> [...]; func resolve(_:) -> Conten
 
 ---
 
-## Faz 7 — LumiUI bileşen kütüphanesi ve dosya yapısı (3-4 gün, Faz 6 ile paralel yapılabilir)
+## Faz 7 — LumiUI bileşen kütüphanesi ve dosya yapısı (3-4 gün, Faz 6 ile paralel yapılabilir) — ✅ tamamlandı (commit `2869b17`, 2026-09-05)
 
 | # | İş | Detay |
 |---|---|---|
@@ -200,7 +200,7 @@ struct ContentRouteRegistry { func routes() -> [...]; func resolve(_:) -> Conten
 
 ---
 
-## Faz 8 — Dokümantasyon senkronu (her faz sonunda, K33-K38 onayı sonrası)
+## Faz 8 — Dokümantasyon senkronu (her faz sonunda, K33-K38 onayı sonrası) — ✅ tamamlandı (2026-09-05)
 
 - `00-architecture.md`: §2 modül ağacı (SPM-only, Yams yok, `LumiTestSupport`), §3 composition (`FeatureAssembly`, `ServiceRegistry`, Environment enjeksiyonu), Ek A'ya `FeedWatchdog` durumu.
 - `01-terminal-subsystem.md`: `TerminalSurfaceState`, view-switch davranış tablosu, düzeltilmiş backpressure açıklaması (01 §2'nin "yarış yok" iddiası yanlıştı).
@@ -234,3 +234,28 @@ YENİ:  LumiKit/Protocols/TasksServicing.swift
 DEĞİŞEN: ShellComposition.swift  assemblies += [TasksAssembly()]   (1 satır)
 ```
 Bugün: ~11 dosya, ~19-20 dokunuş, `RootView`/`AppContainer`/`AppDelegate`/`WorkspaceStore`/`SettingsView` merge darboğazları.
+
+---
+
+## Sonuç (2026-09-05)
+
+Plan yedi fazın tamamıyla uygulandı; her faz ayrı commit ve yeşil test bırakarak gitti.
+
+| Ölçüt | Plan öncesi | Plan sonrası |
+|---|---|---|
+| Test | 474 | **1191** (0 hata) |
+| Build | temiz (1 uyarı) | temiz |
+| "Tasks ekleme" maliyeti | ~11 dosya / ~19-20 dokunuş, 5 merge darboğazı | **1 assembly dosyası + register satırları + `AppComposition`'da 1 satır** |
+| Kabuk kompozisyonu | elle yazılmış ağaç | `ShellRegistries` (panel / route / toolbar / overlay descriptor'ları) |
+| Modüller | 5 kütüphane + `LumiApp` executable | 5 kütüphane + `LumiAppCore` + ince `LumiApp` + `LumiTestSupport` |
+
+Bağlayıcı kayıt: [decisions.md](./decisions.md) karar 33–38 + "Refactor 2026-09 davranış notları"; mimari kayıt `docs/design/` altında güncellendi.
+
+### Kalan borçlar
+
+Bilinçli olarak ertelenen ya da hedefin altında kalan maddeler:
+
+- **6.2 — `.bottom` yuvası boş:** `PanelSlot.bottom` tanımlı, `PanelHostView` ve toolbar toggle'ı destekliyor ama **kayıtlı öğesi yok**; yuva ilk `.bottom` öğesi kaydedilene kadar gizli kalıyor. Genişlik yerine yükseklik politikası da o zaman yazılacak (`PanelHostView` bugün `.bottom` için `width` uygulamıyor).
+- **3.6 — `AppDelegate` 168 satır** (hedef ~80). `MainWindowController`, `MenuActionDispatcher` ve `AppLifecycleBridges` çıkarıldı; kalan gövde bootstrap sırası, TCC/izin akışı ve quit protokolü. Daha fazla bölmek için ayrı bir "app lifecycle" sahibi gerekiyor — YAGNI sayıldı.
+- **5.3 — `ViewerPresentation.commit` içindeki `filePath`/`content` eşleşmesi tip düzeyinde zorlanmıyor:** ikisi de opsiyonel (commit açıldı, dosya henüz seçilmedi) ve "birlikte hareket ederler" kuralı yorumda duruyor. İç içe bir `Loadable<(String, ViewerContent)>` sarmalayıcı okunabilirliği düşürdüğü için tercih edilmedi; kural testle kilitli.
+

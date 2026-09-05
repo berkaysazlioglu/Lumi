@@ -237,3 +237,27 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.current.additionalPaths.count, 1)
     }
 }
+
+// MARK: - 1.13 bozuk/yazılamayan config kullanıcıya görünür (karar 5)
+
+extension SettingsStoreTests {
+    func testLoadFailedEventShowsErrorToast() async throws {
+        store.start()
+        try await waitUntil("abonelik") { self.config.subscriberCount >= 1 }
+
+        config.emit(.loadFailed(file: "config.json", detail: "unexpected token"))
+
+        try await waitUntil("toast") { self.toasts.toasts.contains { $0.kind == .error } }
+        XCTAssertTrue(toasts.toasts.contains { $0.title.contains("config.json") })
+    }
+
+    func testWriteFailedEventShowsErrorToast() async throws {
+        store.start()
+        try await waitUntil("abonelik") { self.config.subscriberCount >= 1 }
+
+        config.emit(.writeFailed(file: "ui-state.json", detail: "EACCES"))
+
+        try await waitUntil("toast") { self.toasts.toasts.contains { $0.kind == .error } }
+        XCTAssertTrue(toasts.toasts.contains { $0.message.contains("EACCES") })
+    }
+}

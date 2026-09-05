@@ -38,6 +38,13 @@ ConfigManager'daki work-log persistence native servis katmanına taşınmaz. İl
 ### 5. Tek tip hata sözleşmesi + görünür hatalar
 Tüm servisler tek hata modeli kullanır (Swift'te typed `Result`/`Error`). Mevcut tutarsızlıklar (çoğu throw, `git:commit` envelope, spawn-limit sessiz `null`, `openExternal` sessiz yutma) taşınmaz; spawn-limit aşımı dahil kullanıcıyı etkileyen her hata görünür bildirimle sunulur.
 
+**Uygulama notu (2026-09-04, refactor Faz 1):** Denetimde bulunan sessiz hata yolları kapatıldı — bu karar artık kodda uçtan uca geçerlidir:
+- PTY yazımı EPIPE/hata verirse `TerminalEvent.writeFailed(id, errno:)` akar → toast (`TerminalListStore`). Önceden ölü terminale yazım sessizdi.
+- Terminal exit'inde çıkış kodu ≠ 0 ve ≠ SIGHUP ise toast ("Terminal exited with code N"); `statusMachine.onExit(code:)` artık gerçekten çağrılır.
+- `PromptQueueStore` enjeksiyon hatasını yutmaz: aynı terminal için **3.** ardışık başarısızlıkta bir kez toast (`injectFailureToastThreshold`) — her denemede basmak kullanıcıyı boğardı.
+- `ConfigService` parse/yazım hatası `ConfigEvent.loadFailed` / `.writeFailed` yayar (yalnız console değil).
+- `FileSystemOperations` (trash/reveal) `RepoPathGuard` ile izinli kök listesine (projectsRoot + additionalPaths, symlink çözülerek) kapatıldı; dışarısı reddedilir ve görünür hata döner.
+
 ### 6. Commit diff lazy-load
 Commit seçilince yalnızca dosya listesi yüklenir; diff içeriği dosyaya tıklanınca alınır. `getCommitDiff`'in N+1 `git show` problemi (`12-git-vcs.md`) tasarımla çözülür; UX değişikliği kabul edildi.
 
@@ -49,6 +56,10 @@ Sparkle entegrasyonu hiçbir faza alınmaz. Dağıtım manuel (DMG/zip). İlerid
 
 ### 9. Persistence formatları korunuyor
 Native sürüm `~/.lumi` altındaki mevcut JSON/YAML formatlarını okur ve yazar; geçiş döneminde Electron ve native sürümler arasında gidip-gelme mümkün kalır. `NSWindow` frame autosave gibi native-idiomatik mekanizmalara geçilmez; pencere bounds'u dahil mevcut dosya tabanlı persistence sürer (`30-app-shell.md`).
+
+**Ek (2026-09-04, refactor Faz 1 + 5.7) — persistence'ın tek kapısı `ConfigCodec`:** Config ailesindeki tipler (`AppConfig`, `UIState`, `NotificationSettings`, `SessionTrigger`, `UsageIndicators`, `UsageAutoRefresh`…) **`Codable` DEĞİLDİR**. `Codable` conformance'ı, bilinmeyen/legacy anahtarları sessizce düşüren bir yazım yolu açacağı için bu kararın tuzağıdır. Okuma/yazma yalnız `LumiServices/Config/` altındaki bölüm codec'lerinden (`AppConfigCodec`, `UIStateCodec`, `NotificationSettingsCodec`, `SessionTriggerCodec`, `UsageCodec`, `AdditionalPathCodec`) ve ham-dict overlay merge'inden geçer; skalar okuma tek yerden (`JSONValue`) yapılır — bool asla sayı sayılmaz, string toleransı yalnız kullanım API'lerinde açıktır.
+
+Dosya hiç parse edilemiyorsa (bilinmeyen anahtar koruması artık mümkün değil) defaults'a düşülmeden önce `<ad>.bak-<timestamp>` olarak yedeklenir ve `ConfigEvent.loadFailed` yayılır (karar 5) — önceden ilk yazımda kullanıcının bilinmeyen anahtarları kaybolurdu.
 
 ### 10. Terminal içi arama ilk sürümde yok
 SwiftTerm search desteğine rağmen kapsam disiplini için parite hedeflenir; arama sonraki sürüme aday feature olarak not edilir.
@@ -98,6 +109,8 @@ v1'de yoktu. Kullanıcının 5 saatlik Claude kullanım penceresini her gün bel
 Mimari: `SessionStarterServicing` (LumiKit sınırı) → `SessionStarterService` (LumiServices, `UsageService` ile aynı iskelet) → `SessionScheduleStore` (LumiState; config'i izler, `Calendar.nextDate` ile HH:MM'e uyur, `claude -p` çağırır; `isStarting`/`lastRun` durumunu UI'a açar). Config değişimi `ConfigSideEffectCoordinator` köprüsünden akar (karar 3). Başarısızlık `LumiError.sessionStartFailed` ile görünür (karar 5). Önkoşul: CLI'ın authenticated olması (usage ile aynı).
 
 Persistence karar 9 uyumlu: `config.json`'a **additive** `sessionTrigger` nested key'i eklenir (`enabled`/`hour`/`minute`/`prompt`); yoksa kapalı default'a düşer (disabled / 09:00 / "hello") ve bilinmeyen-key korumasıyla diğer alanlar bozulmaz.
+
+**Not (2026-09-04):** Bu kararın terk ettiği "bekleyen oturuma enjekte et" yaklaşımı, **Prompt Queue**'nun kendisini kapsamaz. Prompt Queue ayrı ve canlı bir özelliktir (`PromptQueueStore`, `QueuedPrompt` — eleman başına stabil `UUID`); zamanlanmış tetikleyiciyle ilişkisi yoktur ve tasarım kaydında ayrıca anlatılır.
 
 ### 20. Kullanım göstergesi opt-in auto-refresh (2026-06-12 kararının revizyonu)
 [05-usage-indicator.md](./design/05-usage-indicator.md) §6.1'de "auto-refresh YOK" diye kayıtlıydı (2026-06-12). Kullanıcı talebiyle (2026-06-15) bu duruş **opt-in** ile revize edildi: default davranış değişmez (bootstrap'te bir kez yükleme + manuel refresh), ama kullanıcı isterse açabileceği periyodik tazeleme eklenir. Settings → **Usage** sekmesi: aktivasyon toggle'ı + aralık seçimi (yalnız {**5, 15, 30**} dk) + son kontrol durumu.
@@ -199,8 +212,75 @@ Kullanıcıya görünen etki: `Library` adlı gerçek kaynak klasörleri ağaçt
   - **Codex:** `codex -c approval_policy=never -s read-only -a never app-server` üzerinden JSON-RPC `account/rateLimits/read`. `~/.codex/auth.json` yoksa `codex` hiç spawn edilmez.
 - design/05 §1'in "OAuth ToS gri alanı" gerekçesiyle ertelenen kararı bu kararla değişti: token kullanıcının kendi hesabınındır ve yalnız kendi kullanım verisini okumak için kullanılır.
 
+### 33. Generic shell kompozisyonu: slot / route / toolbar / overlay registry'leri (2026-09-05)
+Kabuk (left/right/top/center) artık elle yazılmış bir ağaç değil, **descriptor kaydıyla** kurulan bir kompozisyon (refactor planı Faz 6). Gerekçe: "Tasks" gibi tek bir yeni görünüm eklemek 11 dosya / ~20 dokunuş ve `RootView`/`AppContainer`/`AppDelegate`/`WorkspaceStore`/`SettingsView` merge darboğazı demekti.
+
+- **`ShellContext` (LumiUI) Environment enjeksiyonu:** tüm store'lar + `TerminalViewProviding` + `ShellActions` (reveal/trash/chooseFolder/runChecks/openFile/presentDiff) tek `@Observable @MainActor` bağlamda. `RootView` 14 parametre yerine `.environment(shellContext)` alır; registry'den dinamik kurulan öğelerin `init()`'i boştur, bağlamı Environment'tan okur.
+- **Panel yuvaları:** `PanelSlot` (`left`/`right`/`bottom`) + `PanelItemID` + `PanelLayout` (LumiKit, persist edilebilir) ve `PanelItemDescriptor` + `PanelItemRegistry` (LumiUI, saf/test edilir). `PanelHostView(slot:)` listeyi çizer; sol↔sağ taşıma tek `PanelLayout` mutasyonudur. `LeftSidebarView`/`GitSidebar` monolitleri `.sessions`/`.fileTree`/`.gitCommits`/`.gitChanges` öğelerine bölündü.
+- **Orta alan route'ları:** `ContentRouteID` + `ContentRouteDescriptor` + `ContentRouteRegistry`; `ContentRouterView` çözer, terminaller `TerminalsRouteView` adında sıradan bir route'tur (maximize/minimized-strip/boş-repo durumu route'un iç meselesi).
+- **Toolbar:** `ToolbarRegion` üç bölge (`leading`/`center`/`trailing`) + `ToolbarItemDescriptor` (`order`, `isVisible(ShellContext)`) + `ToolbarRegistry`; `HeaderBarView` üç `ForEach`'e indi.
+- **Overlay:** `OverlayDescriptor` + `OverlayRegistry`/`OverlayHost`, `DialogRouter` ile birleşik; elle `||` ile yazılan "input bloklayan overlay açık mı" listesi kalktı.
+- **Kayıt yeri:** descriptor **tipleri** LumiUI'da, **kümesi** `LumiAppCore/Composition/ShellComposition.swift`'te. Bir feature kabuğa katkı veriyorsa `ShellContributing`'i uygular (`FeatureAssembly` LumiState'te yaşar ve LumiUI'ı göremez — bu yüzden ayrı protokol).
+- **`AnyView` yalnız descriptor düzeyinde** (`makeView`) kullanılır; terminal kartı gibi sıcak yollar asla sarılmaz.
+
+Bağlayıcı sonuç: **yeni bir görünüm/panel öğesi/toolbar öğesi eklemek = 1 assembly dosyası + register satırları.** `RootView`, `PanelHostView`, `HeaderBarView`, `ContentRouterView` düzenlenmez.
+
+### 34. `ui-state.json`'a additive kabuk anahtarları (2026-09-05)
+Karar 9 korunarak `~/.lumi/ui-state.json`'a üç **additive** anahtar eklendi:
+
+- **`activeRoute`** (string|null): repo-dışı route kimliği (`WorkspaceRoute.content` rawValue'su). Route bir repo tab'ıysa **null** yazılır; o durumda `activeTab` otoritedir.
+- **`panelLayout`** (`{ slots, widths }`) ve **`visibleSlots`** (string dizisi): panel yerleşimi. İkiye ayrılmalarının nedeni, görünürlüğün eski bool'larla aynı bilgi olması ve tek başına okunabilmesi.
+- **`leftSidebarOpen` / `rightSidebarOpen`** yazılmaya **devam eder** — artık `visibleSlots`'un projeksiyonudur. Electron'la (ve eski Lumi sürümleriyle) gidip-gelme bozulmaz.
+- **Migration kuralı:** dosyada `panelLayout` yoksa yerleşim eski iki bool'dan türetilir (tek seferlik); `PanelLayout` tipi `Codable` değildir, `PanelLayoutCodec`'ten geçer.
+- Legacy `activeView` (ve `gridColumns`) tipli modele girmez; bilinmeyen-anahtar korumasıyla diskte aynen kalır.
+
+### 35. `WorkspaceStore` üçe bölündü; route ve viewer sunumu sum type oldu (2026-09-05)
+- **`WorkspaceStore` facade'ı kaldırıldı** (Faz 5.2 + 6.1) — geçici bir uyum katmanı olarak bile bırakılmadı, çünkü tek "kabuk store'u" alışkanlığı yeniden god-object üretiyordu. Yerine üç store: **`NavigationStore`** (openTabs, activeRoute), **`LayoutStore`** (visibleSlots, panelLayout, grid, maximize, focus mode; tek `LayoutSnapshot` persist'i), **`DialogRouter`** (5 ayrı bayrak yerine `ActiveDialog` sum type'ı; "input bloklayan overlay açık" otomatik türer). Cross-store davranış `ShellContext` üzerinden kurulur.
+- **`WorkspaceRoute`** sum type: `.repo(String)` / `.content(ContentRouteID)` / `.none`. `case tasks` gibi kapalı bir case listesi **bilinçli olarak seçilmedi** — route kümesi registry ile açıktır (karar 33), yeni bir route eklemek enum'a dokunmayı gerektirmemeli. `repoPath` adaptörü `.repo` projeksiyonudur; `onActiveRepoChanged` ve `activeTab` persist'i bunun üzerinden akar.
+- **`FileViewerStore.presentation`: `ViewerPresentation`** sum type (`hidden` / `file(...)` / `commit(...)`). Önceki "mode + 4 opsiyonel alan" modeli 48 kombinasyondan ~5'i geçerli olan bir durum uzayıydı ve her sunum yolu diğer alanları elle `nil`liyordu. **Tek hata kuralı (karar 5):** herhangi bir yükleme başarısız olursa içerik `.failed(mesaj)` olur ve toast düşer; modal yeni dosyanın adıyla açık kalır, önceki dosyanın içeriği asla ekranda kalmaz.
+- **`OnboardingStore`:** sihirbazın adım/kural/check yürütmesi view `@State`'inden store'a taşındı ("fail bloklar, warn bloklamaz" artık test edilir).
+
+### 36. Composition root: `ServiceRegistry` + `FeatureAssembly` (2026-09-04)
+`AppContainer.init` gövdesi tek bir dev fonksiyondu ve her yeni özellik onu büyütüyordu. Yerine:
+
+- **`ServiceRegistry`** (LumiKit) protokolü + `LiveServiceRegistry` / `FakeServiceRegistry`. `LumiPaths.Mode` `#if DEBUG`'dan çıkıp parametre oldu. Tüm process I/O `ProcessRunning` + `BinaryLocating` üzerinden enjekte edilir (statik `ProcessRunner` çağrıları kalktı).
+- **`FeatureAssembly` + `BootstrapPhase`** (`system` → `config` → `repo` → `ui`) **LumiState'te** yaşar. LumiKit'te olamaz: assembly store kurar, LumiKit ise store'ları görmez (modül grafiği `LumiKit ← LumiState`). LumiUI'ı da göremediği için kabuk katkısı ayrı bir protokoldür (`ShellContributing`, karar 33). `AppContainer` feature tanımayan ince bir koşucuya indi.
+- **`StoreLifecycle`** (`start()`/`stop()` simetrisi) ve **`EventConsumer`**: store'ların `for await` döngüleri tek kalıpta toplandı; `shutdown()` artık hepsini durdurur (önceden yarısı sızıyordu).
+- **`AppCommand`/`AppCommands`** (LumiKit) kısayolların **tek kaynağıdır**: `MainMenuBuilder` menüyü, `ShortcutReference` tabloyu, `MenuActionDispatcher` `id → closure` eşlemesini buradan üretir. Yeni komut = 1 satır + 1 handler.
+- **`AppDelegate` bölündü:** `MainWindowController` (pencere, bounds persistence, traffic light, fullscreen), `MenuActionDispatcher`, `AppLifecycleBridges` (NotificationCenter token'ları saklanıp kaldırılır).
+- **`LumiApp` → `LumiAppCore` (library) + ince `LumiApp` executable** (`main.swift`), böylece composition root test edilebilir (`LumiAppTests`). Paylaşılan fake'ler `LumiTestSupport` target'ında.
+
+### 37. Terminal alt sistemi sınırları: yüzey durumu, watchdog, OSC semantiği (2026-09-05)
+- **`TerminalSurfaceState`** (`foreground`/`background`/`minimized`) görünürlük ve odağı **tek kanala** indirdi: `setSurfaceState` atomik olarak coalescer aralığını (16 ms ↔ 100 ms), `statusMachine.onFocus/onBlur`'u ve `activeTerminalID` tutarlılığını birlikte günceller. **Davranış değişikliği:** repo tab'ı/route değiştiğinde arka plana düşen terminaller artık `onBlur` alır — yani odaklıyken bastırılan bildirim, sekme değiştikten sonra gelen "sıra sende"de düşer (önceden görünürlük ve odak bağımsız iki kanaldı; `waitingFocused` yanlış yükselip bildirim ve auto-minimize'i (karar 24) bozuyordu).
+- **`TerminalViewProviding`** genişledi: `isAttached(_:)`, `detachAll()`, `refreshAttachedViews()`. Route geçişinde SwiftUI'nin dismantle sırasına güvenmek yerine açık, senkron çağrı yapılır; view'lar yok edilmez.
+- **`TerminalServicing` ISP ile bölündü:** `TerminalSessionControlling` + `TerminalAppearanceControlling` + `TerminalViewProviding`. Font/cursor callback dansı silindi.
+- **`FeedWatchdog`** eklendi — [design/00-architecture.md Ek A](./design/00-architecture.md) §A.2-10 nihayet implemente edildi: feed süresi ölçülür, 2 sn'lik stall'da `TerminalEvent.stalled(id, Bool)` yayılır ve bütçe aşılınca coalescer eşiği yarıya iner. Terminaller arka planda yaşadığından donmayı başka kimse fark etmezdi.
+- **OSC semantiği OCP'ye açıldı:** `OSCStreamParser` yalnız `(code, payload)` üretir; anlamlandırma `OSCSemantics` protokolünü uygulayan enjekte edilmiş zincirdedir (`ClaudeSemantics`, `CodexSemantics`) ve çıktısı açık bir `AgentHint` struct'ıdır. Yeni ajan/OSC dizisi = yeni dosya.
+- **`TerminalEventMonitor`:** dağınık global `NSEvent` monitörleri (keyDown/leftMouseDown + N adet wheel/hover) tek `@MainActor` tipte toplandı, enjekte edilir ve `shutdown`'da kaldırılır. **`TerminalInputGate.shared` kaldırıldı**: global bayrak yerine `window.contentView?.hitTest(...)` sorulur — overlay üstteyse olay doğal yoluna gider, yeni bir overlay eklerken "tek satır eklemeyi unutma" riski kalmadı.
+- **`TerminalServicing.outputStream(id:)` / `onOutputText` seam'i kaldırıldı** (YAGNI): karar 25'te "ileride başka tüketiciler için kalır" denmişti, tüketici çıkmadı ve `EventBroadcaster`'ı sınırsız büyütüyordu.
+
+### 38. Kullanım göstergesi: aralık seti, TTL cache ve Claude OAuth hata politikası (2026-09-05)
+Refactor planındaki K38 sorusu ("kod {1,5} dk vs tasarım {5,15,30} + ≥5 dk TTL — hangisi geçerli?") **tasarım lehine** karara bağlandı (seçenek A):
+
+- **Auto-refresh aralıkları `{5, 15, 30}` dakika, default 5.** Eski dosyalardaki `1` değeri **default'a (5) clamp'lenir** — karar 9 ihlali değildir, tip zaten baştan doğrulayan bir init'e sahipti, yalnız izinli set daraldı.
+- **`CachingUsageService`** dekoratörü: `LiveServiceRegistry` her sağlayıcının servisini **300 sn TTL** ile sarar. Yalnız başarı cache'lenir (geçici bir 5xx'i TTL boyunca dondurmak göstergeyi ölü tutardı); hata anında hâlâ taze bir cache varsa o döner. Manuel tazeleme cache'i **`UsageCacheInvalidating`** ile geçersiz kılar. `UsageStore`'un 60 sn'lik `minRefreshInterval` anti-spam kapısı ayrıca durur — biri tıklama sıklığını, diğeri ağ trafiğini sınırlar. En küçük aralığın (5 dk) TTL'den küçük olmaması bu yüzden şarttır.
+- **Claude OAuth hata politikası (karar 32'nin gerekçesinin doğal sonucu):** transport hatası, **429** ve **5xx** geçicidir → bir kez jitter'lı yeniden deneme, hâlâ hata varsa `LumiError.usageUnavailable` + stderr log. Bu yollarda `claude -p "/usage"` **yedeğine düşülmez**, çünkü CLI yedeği abonelik kotasından düşer ve geçici bir sunucu hatası yüzünden kotadan yemek karar 32'ye aykırıdır. CLI yedeği yalnız **kalıcı** hâllerde devrededir: token okunamadı, token reddedildi (401/403) veya endpoint tanınmayan bir yanıt/4xx verdi.
+
+### Refactor 2026-09 davranış notları
+
+Faz 1–7 sırasında bilinçli olarak değişen, karar düzeyine çıkmayan kullanıcıya görünür davranışlar:
+
+- **Onboarding:** sistem check'leri artık ekranda **seçili sağlayıcıya** göre koşar (`runChecks(selectedProvider:)`); Codex seçiliyken `claude` yokluğu hata saymaz.
+- **Kullanım parser'ları:** `JSONSerialization`'ın bool'u `NSNumber` üretmesi nedeniyle `true` değerleri `1` olarak okunabiliyordu; `JSONValue` sayı okuyucuları bool'u **reddeder**.
+- **Git paneli:** kullanıcı bir dosyanın seçimini kaldırdıysa, FSEvents tazelemesi bunu **geri almaz** (`reposWithUserSelection`); önceden istenmeyen dosyalar commit ekranında yeniden seçili hâle geliyordu.
+- **Toast ve focus bar** opak zemine geçti (terminal içeriği arkalarından okunmuyor); **modal karartması** tek değere (%60, `ModalOverlay.scrimOpacity`) indi — önceden üç farklı opaklık vardı.
+- **Punto ve köşe yuvarlamaları** `Theme.Typography`/`Theme.Radius` token'larına indirgendi; 17 farklı font boyutu ve 9 farklı radius bir sete oturdu (küçük görsel kaymalar bilinçlidir).
+- **İkon butonlarına tooltip** (`.help`) ve zorunlu `accessibilityLabel` eklendi (`IconButton`).
+
 ## Kapsam özeti
 
 Bu kararlarla native rewrite kapsamı: **mevcut davranış paritesi** (ölü/dormant kod hariç) **+ onaylı bug düzeltmeleri + 5 bilinçli davranış değişikliği** (Settings anlık uygulama, commit-diff lazy-load, gerçek gitignore semantiği, iki-eksenli grid + maximize, side-by-side diff) **− atılan kapsam** (gamification, work-log, create-project action, auto-update, terminal arama, personas + quick actions — karar 25).
 
-Buna ek olarak [design/00-architecture.md Ek A](./design/00-architecture.md)'daki bug-türevli zorunlu gereksinimler (PTY→UI backpressure, render-crash izolasyonu, replay güvenliği) tasarımın başından bağlayıcıdır.
+Buna ek olarak [design/00-architecture.md Ek A](./design/00-architecture.md)'daki bug-türevli zorunlu gereksinimler (PTY→UI backpressure, render-crash izolasyonu, replay güvenliği) tasarımın başından bağlayıcıdır — Ek A §A.2-10 (feed watchdog) karar 37 ile tamamlandı.
+
+Kararlar 33–38 (2026-09-04/05) kapsamı **büyütmez**; nasıl inşa edildiğini bağlar: kabuk artık registry tabanlı bir kompozisyondur (33), yerleşim additive anahtarlarla persist edilir (34), state ve composition root ayrışmıştır (35–36), terminal sınırları ile kullanım göstergesi politikası nettir (37–38). Uygulama planı ve faz izleri: [refactor-plan-2026-09.md](./refactor-plan-2026-09.md).

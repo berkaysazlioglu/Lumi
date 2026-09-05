@@ -27,8 +27,17 @@ public final class SettingsStore: StoreLifecycle {
             config.events(),
             prologue: { [weak self, config] in self?.current = await config.config() }
         ) { [weak self] event in
-            guard case .configChanged(_, let new) = event else { return }
-            self?.current = new
+            guard let self else { return }
+            switch event {
+            case .configChanged(_, let new):
+                current = new
+            case .loadFailed(let file, let detail):
+                // Karar 5: bozuk dosya sessizce defaults'a düşmez, kullanıcı görür.
+                toasts.show(.error, title: "\(file) could not be read",
+                            message: "Backed up and reset to defaults. \(detail)")
+            case .writeFailed(let file, let detail):
+                toasts.show(.error, title: "\(file) could not be saved", message: detail)
+            }
         }
     }
 

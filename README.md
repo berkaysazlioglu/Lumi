@@ -38,7 +38,7 @@ cd Lumi/LumiPackages
 swift run Lumi
 ```
 
-That's all you need — SwiftPM fetches and builds the dependencies (SwiftTerm, Highlightr, Yams) itself, so the first build needs a network connection and takes a minute or two. Later builds are incremental.
+That's all you need — SwiftPM fetches and builds the dependencies (SwiftTerm, Highlightr) itself, so the first build needs a network connection and takes a minute or two. Later builds are incremental.
 
 Debug builds intentionally keep their data in `~/.lumi-dev` so you can develop without touching your real configuration.
 
@@ -84,32 +84,37 @@ LumiPackages/Sources/
   LumiKit/        models, protocols, shared support (no dependencies)
   LumiTerminal/   PTY process, terminal sessions, SwiftTerm integration
   LumiServices/   config, git/repo, notifications, system checks
-  LumiState/      observable stores (service → store → UI)
-  LumiUI/         SwiftUI views and the design system
-  LumiApp/        executable + AppContainer (dependency-injection root)
-docs/spec/        behaviour specification and binding decision log
-docs/design/      binding design record for the native implementation
-Scripts/          make-app.sh (bundle + sign + notarization notes)
+  LumiState/      observable stores + feature assemblies (service → store → UI)
+  LumiUI/         SwiftUI views, the design system, and the shell registries
+  LumiAppCore/    composition root: service registry, window, menus, shell composition
+  LumiApp/        the executable itself (a thin main.swift)
+LumiPackages/Tests/
+  LumiTestSupport/  shared fakes, used by every test target
+docs/decisions.md  binding decision log
+docs/design/       binding design record for the native implementation
+Scripts/           make-app.sh (bundle + sign + notarize + release artifacts)
 ```
 
-Dependencies flow one way: `LumiKit ← LumiTerminal / LumiServices / LumiState ← LumiUI`. The UI layer holds no business logic, and everything is wired manually in `AppContainer`.
+Dependencies flow one way: `LumiKit ← LumiTerminal / LumiServices / LumiState ← LumiUI ← LumiAppCore`. The UI layer holds no business logic, and everything is wired manually — services through a `ServiceRegistry`, features through `FeatureAssembly`.
+
+The shell is composed rather than hand-written: panels, centre routes, toolbar items and overlays are registered as descriptors, so a new view is a single assembly file plus its registration lines — no edits to `RootView`, `HeaderBarView` or the panel host.
 
 ## Design notes
 
-Three requirements were baked into the architecture from day one, after root-causing two serious bugs in the Electron version ([black screen](docs/spec/40-bug-black-screen.md), [stream OOM](docs/spec/41-bug-stream-oom.md)):
+Three requirements were baked into the architecture from day one, after root-causing two serious bugs in the Electron version (a black screen on reattach, and an out-of-memory crash on heavy terminal output):
 
 - **Ack-based backpressure** from PTY to UI, so heavy output can never grow an unbounded buffer
 - **Render-crash isolation** — PTY sessions live independently of the UI
 - **Replay safety** — sequence-safe truncation and filtering of terminal auto-responses, so replayed output can't be typed back into a live session
 
-Full context: [docs/spec/00-overview.md](docs/spec/00-overview.md) and [docs/design/00-architecture.md](docs/design/00-architecture.md).
+Full context: [docs/design/00-architecture.md](docs/design/00-architecture.md) (Appendix A) and [docs/decisions.md](docs/decisions.md).
 
 ## Status
 
-Working macOS app, built and used locally; not yet distributed as a notarized release. Some verification is still manual (long-run performance profiling, microphone permission chain for voice mode, Gatekeeper check on a notarized build).
+Working macOS app; notarized Developer ID builds are produced by the release workflow (v0.6.0 Gatekeeper-verified). Some verification is still manual (long-run performance profiling, microphone permission chain for voice mode, visual parity after the 2026-09 refactor).
 
 ## License
 
 [MIT](LICENSE).
 
-Third-party components keep their own licenses: [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm), [Highlightr](https://github.com/raspu/Highlightr), [Yams](https://github.com/jpsim/Yams) and [FlyingFox](https://github.com/swhitty/FlyingFox) are MIT; the bundled JetBrains Mono font is under the SIL Open Font License 1.1 ([OFL.txt](LumiPackages/Sources/LumiUI/Resources/Fonts/OFL.txt)).
+Third-party components keep their own licenses: [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) and [Highlightr](https://github.com/raspu/Highlightr) are MIT; the bundled JetBrains Mono font is under the SIL Open Font License 1.1 ([OFL.txt](LumiPackages/Sources/LumiUI/Resources/Fonts/OFL.txt)).
