@@ -109,6 +109,32 @@ public struct GitService: GitServicing {
         await locator.locate("gh") != nil
     }
 
+    /// Üç hafif komut: upstream adı (`@{u}` yoksa exit≠0 → yayınlanmamış),
+    /// ileri/geri sayısı ve `diff --shortstat HEAD` (staged+unstaged; untracked
+    /// satırları git'in kendisi de saymaz).
+    public func branchSummary(repoPath: String) async -> GitBranchSummary? {
+        guard let stat = await commands.run(["diff", "--shortstat", "HEAD"], in: repoPath), stat.exitCode == 0 else {
+            return nil
+        }
+        let lines = GitPorcelainParser.parseShortStat(stat.stdout)
+        let upstreamOutput = await commands.run(
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: repoPath
+        )
+        guard let upstreamOutput, upstreamOutput.exitCode == 0 else {
+            return GitBranchSummary(insertions: lines.insertions, deletions: lines.deletions)
+        }
+        let upstream = upstreamOutput.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let counts = await commands.run(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], in: repoPath)
+        let aheadBehind = counts.flatMap { $0.exitCode == 0 ? GitPorcelainParser.parseAheadBehind($0.stdout) : nil }
+        return GitBranchSummary(
+            upstream: upstream.isEmpty ? nil : upstream,
+            ahead: aheadBehind?.ahead ?? 0,
+            behind: aheadBehind?.behind ?? 0,
+            insertions: lines.insertions,
+            deletions: lines.deletions
+        )
+    }
+
     /// Tek `for-each-ref` ile yalnız iki aday ref'i sorar — `branch --list`'in
     /// tüm branch'leri listeleyip parse etmesine gerek yok.
     private func defaultBranch(in repoPath: String) async -> String? {

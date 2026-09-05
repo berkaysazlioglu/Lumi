@@ -26,6 +26,8 @@ public final class GitStore {
     public private(set) var isGitHubCLIAvailable = false
     @ObservationIgnored private var didProbeGitHubCLI = false
     public private(set) var changes: [String: [GitFileChange]] = [:]
+    /// Karar 41: başlıktaki upstream / ahead-behind / satır istatistiği.
+    public private(set) var branchSummaries: [String: GitBranchSummary] = [:]
     public private(set) var explorerStatuses: [String: [String: FileChangeStatus]] = [:]
     public private(set) var selectedFiles = KeyedToggleSet<String, String>()
     /// Commit mesajı taslakları (refactor 5.4 kapsülleme borcu kapandı):
@@ -159,6 +161,11 @@ public final class GitStore {
         let list = await git.status(repoPath: repoPath)
         changes[repoPath] = list
         explorerStatuses[repoPath] = ExplorerGitDecoration.statuses(list)
+        if let summary = await git.branchSummary(repoPath: repoPath) {
+            branchSummaries[repoPath] = summary
+        } else {
+            branchSummaries.removeValue(forKey: repoPath)
+        }
         let present = Set(list.map(\.path))
         if reposWithUserSelection.contains(repoPath) {
             selectedFiles.replace((selectedFiles[repoPath] ?? []).intersection(present), in: repoPath)
@@ -211,6 +218,7 @@ public final class GitStore {
         headHash.removeValue(forKey: repoPath)
         remoteURLs.removeValue(forKey: repoPath)
         changes.removeValue(forKey: repoPath)
+        branchSummaries.removeValue(forKey: repoPath)
         explorerStatuses.removeValue(forKey: repoPath)
         commitMessages.removeValue(forKey: repoPath)
         selectedFiles.evict(repoPath)

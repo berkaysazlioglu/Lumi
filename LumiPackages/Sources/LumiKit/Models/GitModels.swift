@@ -64,6 +64,31 @@ public struct GitCommit: Sendable, Equatable, Identifiable {
     public var isMerge: Bool { parentHashes.count > 1 }
 }
 
+/// Checkout edilmiş branch'in özet bağlamı (Source Control başlığı, karar 41):
+/// upstream adı, ileri/geri commit sayısı ve çalışma ağacının satır istatistiği.
+public struct GitBranchSummary: Sendable, Equatable {
+    /// `origin/main` — upstream yoksa nil (yayınlanmamış branch).
+    public let upstream: String?
+    /// Upstream'e göre henüz push edilmemiş commit sayısı.
+    public let ahead: Int
+    /// Upstream'den henüz çekilmemiş commit sayısı.
+    public let behind: Int
+    /// Çalışma ağacındaki (HEAD'e göre) eklenen satırlar.
+    public let insertions: Int
+    /// Çalışma ağacındaki (HEAD'e göre) silinen satırlar.
+    public let deletions: Int
+
+    public init(upstream: String? = nil, ahead: Int = 0, behind: Int = 0, insertions: Int = 0, deletions: Int = 0) {
+        self.upstream = upstream
+        self.ahead = ahead
+        self.behind = behind
+        self.insertions = insertions
+        self.deletions = deletions
+    }
+
+    public var hasLineChanges: Bool { insertions > 0 || deletions > 0 }
+}
+
 public struct GitBranch: Sendable, Equatable, Identifiable {
     public var id: String { name }
     public let name: String

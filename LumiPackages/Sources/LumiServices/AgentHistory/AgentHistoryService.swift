@@ -94,7 +94,8 @@ public actor AgentHistoryService: AgentHistoryReading {
             model: transcript.model,
             messageCount: transcript.messageCount,
             firstPrompt: transcript.firstPrompt.map { String($0.prefix(maxFirstPromptLength)) },
-            recentTurns: Array(recent)
+            recentTurns: Array(recent),
+            subagents: candidate.provider == .claude ? AgentSubagentScanner.scan(sessionLog: candidate.url) : []
         )
     }
 

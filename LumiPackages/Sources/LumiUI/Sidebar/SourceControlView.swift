@@ -2,59 +2,69 @@ import LumiKit
 import LumiState
 import SwiftUI
 
+/// Source Control sekmesi (karar 39/40/41).
+///
+/// Başlık (`SourceControlHeader`) → Changes | History anahtarı → gövde.
+/// Changes: mesaj kutusu, bölünmüş Commit butonu (sağdaki ok seçim
+/// eylemlerini açar), katlanabilir CHANGES listesi. History: commit graph'ı.
 struct SourceControlView: View {
+    enum Section: Hashable, CaseIterable {
+        case changes
+        case history
+    }
+
     let repoPath: String
     @Shell private var shell
-    @State private var showHistory = false
-    @State private var refreshing = false
+    @State private var section: Section = .changes
+    @State private var changesCollapsed = false
+    @State private var showsCommitMenu = false
 
     private var changes: [GitFileChange] { shell.git.changes[repoPath] ?? [] }
-    private var branch: GitBranch? { shell.git.branches[repoPath]?.first { $0.isCurrent } }
+    private var selectedCount: Int { shell.git.selectedFiles[repoPath]?.count ?? 0 }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: Theme.Spacing.sm) {
-                Image(systemName: "arrow.triangle.branch")
-                Text(branch?.name ?? "No commits yet").lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 0)
-                createPullRequestButton
-                IconButton(systemName: "arrow.clockwise", label: "Refresh source control") {
-                    let path = repoPath
-                    refreshing = true
-                    Task { await shell.git.refresh(path); refreshing = false }
-                }
-                .disabled(refreshing)
-            }
-            .font(Theme.Typography.ui(.body))
-            .foregroundStyle(Theme.textPrimary)
-            .padding(.horizontal, Theme.Spacing.md)
-            .frame(height: Theme.Spacing.xxxl)
-            Picker("Source control view", selection: $showHistory) {
-                Text("Changes (\(changes.count))").tag(false)
-                Text("History").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .font(Theme.Typography.ui(.label))
+            SourceControlHeader(repoPath: repoPath)
+            SegmentedModeSwitch(
+                options: Section.allCases,
+                selection: $section,
+                title: { $0 == .changes ? "Changes" : "History" },
+                accessibilityLabel: "Source control section"
+            )
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.md)
-            if showHistory {
-                history
-            } else {
-                composer
-                HStack {
-                    Text("CHANGES").font(Theme.Typography.ui(.label, weight: .semibold))
-                    Spacer()
+            switch section {
+            case .history: CommitGraphView(repoPath: repoPath)
+            case .changes: changesBody
+            }
+        }
+        .onChange(of: repoPath) { section = .changes }
+    }
+
+    // MARK: - Changes
+
+    private var changesBody: some View {
+        VStack(spacing: 0) {
+            composer
+                .padding(.horizontal, Theme.Spacing.md)
+            SectionHeader(
+                title: "Changes",
+                count: changes.isEmpty ? nil : .warning(changes.count),
+                disclosure: .leading,
+                isExpanded: !changesCollapsed,
+                contentPadding: Theme.Spacing.md,
+                onToggle: { changesCollapsed.toggle() }
+            ) {
+                if !changes.isEmpty {
                     Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
                         shell.git.toggleSelectAll(repoPath)
                     }
                     .buttonStyle(.plain)
                     .font(Theme.Typography.ui(.caption))
-                    .disabled(changes.isEmpty)
+                    .foregroundStyle(Theme.textSecondary)
                 }
-                .foregroundStyle(Theme.textSecondary)
-                .padding(Theme.Spacing.md)
+            }
+            if !changesCollapsed {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         if changes.isEmpty {
@@ -63,127 +73,131 @@ struct SourceControlView: View {
                         ForEach(changes) { change in changeRow(change) }
                     }
                 }
+            } else {
+                Spacer(minLength: 0)
             }
         }
-        .onChange(of: repoPath) { showHistory = false }
     }
-
-    private var selectedCount: Int { shell.git.selectedFiles[repoPath]?.count ?? 0 }
 
     private var composer: some View {
         VStack(spacing: Theme.Spacing.md) {
-            TextField("Commit message…", text: Binding(
+            TextField("Message", text: Binding(
                 get: { shell.git.commitMessage(for: repoPath) },
                 set: { shell.git.setCommitMessage($0, for: repoPath) }
             ), axis: .vertical)
-            .lineLimit(2...5)
+            .lineLimit(3...6)
             .font(Theme.Typography.ui(.body))
             .textFieldStyle(.plain)
             .foregroundStyle(Theme.textPrimary)
             .padding(Theme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(Theme.bgDeep)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.md)
+                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+            )
+            commitButton
+        }
+        .padding(.bottom, Theme.Spacing.sm)
+    }
+
+    /// Bölünmüş buton (Orca "Stage All ▾"): sol yarı commit, sağ ok seçim
+    /// eylemleri. İki yarı aynı zemini paylaşır, aralarında hairline ayraç var.
+    private var commitButton: some View {
+        let canCommit = shell.git.canCommit(repoPath)
+        return HStack(spacing: 0) {
             Button {
                 Task { await shell.git.commit(repoPath) }
             } label: {
-                Label(shell.git.isCommitting ? "Committing…" : "Commit (\(selectedCount))", systemImage: "checkmark")
-                    .font(Theme.Typography.ui(.body, weight: .medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Theme.Spacing.sm)
-                    .foregroundStyle(.white)
-                    .background(Theme.accentVivid)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+                Label(
+                    shell.git.isCommitting ? "Committing…" : "Commit (\(selectedCount))",
+                    systemImage: shell.git.isCommitting ? "hourglass" : "checkmark"
+                )
+                .font(Theme.Typography.ui(.body, weight: .medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Theme.Spacing.sm)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(!shell.git.canCommit(repoPath))
-            .opacity(shell.git.canCommit(repoPath) ? 1 : 0.4)
+            .disabled(!canCommit)
+            Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
+            Button { showsCommitMenu.toggle() } label: {
+                Image(systemName: "chevron.down")
+                    .font(Theme.Typography.ui(.caption, weight: .bold))
+                    .frame(width: Theme.Spacing.xxxl)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("More commit actions")
+            .accessibilityLabel("More commit actions")
+            .popover(isPresented: $showsCommitMenu, arrowEdge: .bottom) {
+                PopoverMenu(items: commitMenuItems, dismiss: { showsCommitMenu = false })
+            }
         }
-        .padding(.horizontal, Theme.Spacing.md)
+        .foregroundStyle(canCommit ? Theme.textPrimary : Theme.textMuted)
+        .background(Theme.bgElevated)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+        )
+    }
+
+    private var commitMenuItems: [PopoverMenu.Item] {
+        [
+            .action("Select All", icon: "checkmark.square", isEnabled: selectedCount < changes.count) {
+                if selectedCount < changes.count { shell.git.toggleSelectAll(repoPath) }
+            },
+            .action("Deselect All", icon: "square", isEnabled: selectedCount > 0) {
+                if selectedCount > 0 { shell.git.toggleSelectAll(repoPath) }
+            },
+            .divider,
+            .action("Clear Message", icon: "eraser", isEnabled: !shell.git.commitMessage(for: repoPath).isEmpty) {
+                shell.git.setCommitMessage("", for: repoPath)
+            },
+        ]
     }
 
     private func changeRow(_ change: GitFileChange) -> some View {
         let color = Theme.fileChangeColor(for: change.status)
-        return HStack(spacing: Theme.Spacing.sm) {
-            Button { shell.git.toggleFile(repoPath, path: change.path) } label: {
-                Image(systemName: shell.git.isSelected(repoPath, path: change.path) ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(Theme.textSecondary)
-            }
-            .buttonStyle(.plain)
-            .help("Include \(change.path) in commit")
-            .accessibilityLabel("Include \(change.path) in commit")
-            Button { shell.presentDiff(change.path) } label: {
-                HStack(spacing: Theme.Spacing.sm) {
-                    Image(systemName: "doc")
-                    Text((change.path as NSString).lastPathComponent).lineLimit(1)
-                    Text((change.path as NSString).deletingLastPathComponent)
-                        .foregroundStyle(Theme.textMuted).lineLimit(1).truncationMode(.head)
-                    Spacer(minLength: 0)
-                    Text(change.status.badgeText)
+        let name = (change.path as NSString).lastPathComponent
+        return HoverReader { hovering in
+            HStack(spacing: Theme.Spacing.sm) {
+                Button { shell.git.toggleFile(repoPath, path: change.path) } label: {
+                    Image(systemName: shell.git.isSelected(repoPath, path: change.path) ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(Theme.textSecondary)
                 }
-                .foregroundStyle(color)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .help("Include \(change.path) in commit")
+                .accessibilityLabel("Include \(change.path) in commit")
+                Button { shell.presentDiff(change.path) } label: {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        FileKindIcon(kind: FileKind.classify(name: name, isFolder: false, isExpanded: false))
+                        Text(name).foregroundStyle(color).lineLimit(1)
+                        Text((change.path as NSString).deletingLastPathComponent)
+                            .font(Theme.Typography.ui(.caption))
+                            .foregroundStyle(Theme.textMuted).lineLimit(1).truncationMode(.head)
+                        Spacer(minLength: 0)
+                        Text(change.status.badgeText)
+                            .font(Theme.Typography.mono(.caption, weight: .medium))
+                            .foregroundStyle(color)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(change.path)
+                .contextMenu {
+                    Button("Open Changes") { shell.presentDiff(change.path) }
+                    if change.status != .deleted { Button("Open File") { shell.presentFile(change.path) } }
+                    Button("Reveal in Finder") { shell.reveal(change.path) }
+                }
             }
-            .buttonStyle(.plain)
-            .help(change.path)
-            .contextMenu {
-                Button("Open Changes") { shell.presentDiff(change.path) }
-                if change.status != .deleted { Button("Open File") { shell.presentFile(change.path) } }
-                Button("Reveal in Finder") { shell.reveal(change.path) }
-            }
-        }
-        .font(Theme.Typography.ui(.body))
-        .padding(.horizontal, Theme.Spacing.md)
-        .padding(.vertical, Theme.Spacing.xs)
-    }
-
-    /// Karar 40: History artık branch başına log değil, `HEAD`ten geriye tek
-    /// topolojik graph.
-    private var history: some View {
-        CommitGraphView(repoPath: repoPath)
-    }
-
-    // MARK: - Create PR (karar 40)
-
-    /// Yalnız GitHub remote'lu ve default branch DIŞINDA bir branch checkout
-    /// edilmiş repolarda görünür. `gh` yoksa buton kalır ama kapalıdır —
-    /// kaybolması "neden yok?" sorusunu doğuruyordu.
-    @ViewBuilder
-    private var createPullRequestButton: some View {
-        if let branch = shell.git.pullRequestBranch(repoPath) {
-            let hasCLI = shell.git.isGitHubCLIAvailable
-            Button { createPullRequest(for: branch) } label: {
-                Label("Create PR", systemImage: "arrow.triangle.pull")
-                    .labelStyle(.titleAndIcon)
-                    .font(Theme.Typography.ui(.caption, weight: .medium))
-                    .foregroundStyle(hasCLI ? Theme.accentPrimary : Theme.textMuted)
-                    .padding(.horizontal, Theme.Spacing.sm)
-                    .padding(.vertical, Theme.Spacing.xxs)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                            .stroke(
-                                (hasCLI ? Theme.accentPrimary : Theme.textMuted)
-                                    .opacity(Self.prBorderOpacity),
-                                lineWidth: Theme.Stroke.hairline
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(!hasCLI)
-            .help(
-                hasCLI
-                    ? "Open a GitHub pull request for \(branch)"
-                    : "GitHub CLI (gh) not found"
-            )
+            .font(Theme.Typography.ui(.body))
+            .padding(.horizontal, Theme.Spacing.md)
+            .frame(height: Theme.Row.compact)
+            .background(hovering ? Theme.bgElevated : .clear)
         }
     }
-
-    /// PR formu tarayıcıda açılır (`--web`): başlık/gövde düzenlemesi Lumi'ye
-    /// taşınmaz (kapsam dışı), komut kullanıcının gördüğü bir terminalde koşar
-    /// ki `gh auth` istemi görünür olsun.
-    private func createPullRequest(for branch: String) {
-        let escaped = branch.replacingOccurrences(of: "'", with: "'\\''")
-        shell.terminals.spawn(in: repoPath, command: "gh pr create --web --head '\(escaped)'")
-    }
-
-    private static let prBorderOpacity = 0.5
 }

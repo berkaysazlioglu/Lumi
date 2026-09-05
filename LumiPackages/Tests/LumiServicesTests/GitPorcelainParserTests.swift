@@ -238,3 +238,24 @@ final class GitPorcelainParserTests: XCTestCase {
         XCTAssertTrue(GitPorcelainParser.parseDiffTree("Aeklenen.swift").isEmpty)
     }
 }
+
+// MARK: - Branch özeti (karar 41)
+
+final class GitBranchSummaryParserTests: XCTestCase {
+    func testAheadBehindParsesTabSeparatedCounts() {
+        let parsed = GitPorcelainParser.parseAheadBehind("2\t1\n")
+        XCTAssertEqual(parsed?.ahead, 2)
+        XCTAssertEqual(parsed?.behind, 1)
+        XCTAssertNil(GitPorcelainParser.parseAheadBehind("garbage"))
+    }
+
+    func testShortStatParsesBothCountsAndToleratesMissingPart() {
+        let both = GitPorcelainParser.parseShortStat(" 3 files changed, 4612 insertions(+), 691 deletions(-)\n")
+        XCTAssertEqual(both.insertions, 4612)
+        XCTAssertEqual(both.deletions, 691)
+        let onlyAdd = GitPorcelainParser.parseShortStat(" 1 file changed, 1 insertion(+)")
+        XCTAssertEqual(onlyAdd.insertions, 1)
+        XCTAssertEqual(onlyAdd.deletions, 0)
+        XCTAssertEqual(GitPorcelainParser.parseShortStat("").insertions, 0)
+    }
+}

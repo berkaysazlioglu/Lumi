@@ -65,7 +65,13 @@ public final class RepoStore: StoreLifecycle {
     /// Stale-while-revalidate: eski ağaç ekranda kalır, yenisi gelince değişir.
     public func loadFileTree(_ repoPath: String) async {
         let tree = await service.fileTree(repoPath: repoPath)
-        capabilities[repoPath] = await service.capabilities(repoPath: repoPath)
+        let projectCapabilities = await service.capabilities(repoPath: repoPath)
+        capabilities[repoPath] = projectCapabilities
+        // Unity projesi ilk açılışta otomatik Assets görünümüne geçer; kullanıcı
+        // seçeneği elle değiştirdiyse (`explorerOptions` dolu) dokunulmaz.
+        if projectCapabilities.isUnityProject, explorerOptions[repoPath] == nil {
+            explorerOptions[repoPath] = ExplorerOptions.unityDefault
+        }
         fileTrees[repoPath] = tree
         rebuildExplorer(repoPath)
         fileTreeRevisions[repoPath, default: 0] += 1
@@ -93,7 +99,7 @@ public final class RepoStore: StoreLifecycle {
         )
     }
 
-    public func searchContents(_ query: String, in repoPath: String) async throws -> ExplorerContentResult {
+    public func searchContents(_ query: ExplorerContentQuery, in repoPath: String) async throws -> ExplorerContentResult {
         func paths(_ nodes: [FileTreeNode]) -> [String] {
             nodes.flatMap { $0.type == .file ? [$0.path] : paths($0.children) }
         }

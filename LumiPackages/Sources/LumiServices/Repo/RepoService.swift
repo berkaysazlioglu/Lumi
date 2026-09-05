@@ -76,7 +76,7 @@ public actor RepoService: RepoServicing {
         broadcaster.stream()
     }
 
-    public func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult {
+    public func searchContents(repoPath: String, paths: [String], query: ExplorerContentQuery) async throws -> ExplorerContentResult {
         try await ExplorerContentSearcher.search(repoPath: repoPath, paths: paths, query: query)
     }
 

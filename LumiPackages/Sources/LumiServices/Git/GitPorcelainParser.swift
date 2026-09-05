@@ -148,6 +148,28 @@ public enum GitPorcelainParser {
         return left == right ? lhs.name < rhs.name : left < right
     }
 
+    // MARK: - rev-list --left-right --count HEAD...@{u}  →  "ahead\tbehind"
+
+    public static func parseAheadBehind(_ raw: String) -> (ahead: Int, behind: Int)? {
+        let parts = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: { $0 == "\t" || $0 == " " }).compactMap { Int($0) }
+        guard parts.count == 2 else { return nil }
+        return (parts[0], parts[1])
+    }
+
+    // MARK: - diff --shortstat  →  " 3 files changed, 12 insertions(+), 4 deletions(-)"
+
+    /// Eksik parça 0 sayılır (yalnız ekleme varsa "deletions" yazılmaz).
+    public static func parseShortStat(_ raw: String) -> (insertions: Int, deletions: Int) {
+        func value(before marker: String) -> Int {
+            guard let range = raw.range(of: marker) else { return 0 }
+            let prefix = raw[..<range.lowerBound]
+            let digits = prefix.reversed().drop { $0 == " " }.prefix { $0.isNumber }
+            return Int(String(digits.reversed())) ?? 0
+        }
+        return (value(before: " insertion"), value(before: " deletion"))
+    }
+
     // MARK: - status --porcelain
 
     public static func parseStatus(_ raw: String) -> [GitFileChange] {

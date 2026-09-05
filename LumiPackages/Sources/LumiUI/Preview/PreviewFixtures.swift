@@ -150,7 +150,7 @@ private struct PreviewAgentHistoryService: AgentHistoryReading {
 }
 
 private actor PreviewRepoService: RepoServicing {
-    func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult { ExplorerContentResult() }
+    func searchContents(repoPath: String, paths: [String], query: ExplorerContentQuery) async throws -> ExplorerContentResult { ExplorerContentResult() }
     func editFile(repoPath: String, edit: ExplorerFileEdit) async throws {}
     func capabilities(repoPath: String) async -> ProjectCapabilities { ProjectCapabilities(isGitRepo: true) }
     func repos() -> [Repo] { [] }
@@ -167,6 +167,7 @@ private struct PreviewGitService: GitServicing {
     func history(repoPath: String, limit: Int) async -> [GitCommit] { PreviewSamples.history }
     func remoteURL(repoPath: String) async -> String? { "git@github.com:lumi/lumi.git" }
     func isGitHubCLIAvailable() async -> Bool { true }
+    func branchSummary(repoPath: String) async -> GitBranchSummary? { GitBranchSummary(upstream: "origin/main", ahead: 2, insertions: 4612, deletions: 691) }
     func status(repoPath: String) async -> [GitFileChange] { [] }
     func commitFiles(repoPath: String, sha: String) async -> [CommitFile] { [] }
 

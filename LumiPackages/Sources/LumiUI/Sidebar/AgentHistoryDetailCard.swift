@@ -2,11 +2,12 @@ import AppKit
 import LumiKit
 import SwiftUI
 
-/// Agent History satırı açıldığında görünen detay kartı.
+/// Agent History satırı açıldığında görünen detay kartı (Orca
+/// `SessionInlineDetails` paritesi).
 ///
-/// Eskiden açılan alan yalnız mono session ID + preview'in ikinci kopyası +
-/// tek butondu; okunmuyordu. Kart artık Orca'nın oturum detayı düzenini
-/// izler: aksiyon çubuğu, ilk istem, son turlar ve çalışma dizini.
+/// Üstte tonlu aksiyon şeridi (Resume / Copy Command / View Log), altında
+/// bölümler: FIRST PROMPT ("You" kartı + Copy), LATEST TURNS (rol etiketli
+/// kartlar), SUBAGENTS (N) ve WORKTREE (branch + kompakt yol).
 struct AgentHistoryDetailCard: View {
     let entry: AgentHistoryEntry
     let onResume: () -> Void
@@ -14,54 +15,60 @@ struct AgentHistoryDetailCard: View {
     let onRevealLog: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+        VStack(alignment: .leading, spacing: 0) {
             actionBar
-            if let firstPrompt = entry.firstPrompt {
-                section("First Prompt") {
-                    Text(firstPrompt)
-                        .font(Theme.Typography.ui(.body))
-                        .foregroundStyle(Theme.textPrimary)
-                        .lineLimit(4)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            if !entry.recentTurns.isEmpty {
-                section("Latest Turns") {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        ForEach(entry.recentTurns) { turn in AgentHistoryTurnCard(turn: turn) }
+            VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                if let firstPrompt = entry.firstPrompt {
+                    AgentHistorySection(title: "First prompt", icon: "text.quote") {
+                        AgentHistoryTurnCard(
+                            turn: AgentHistoryTurn(role: .user, text: firstPrompt),
+                            onCopy: { copy(firstPrompt) }
+                        )
                     }
                 }
+                AgentHistorySection(title: "Latest turns", icon: "bubble.left") {
+                    if entry.recentTurns.isEmpty {
+                        Text("No conversation preview available")
+                            .font(Theme.Typography.ui(.body))
+                            .foregroundStyle(Theme.textMuted)
+                    } else {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            ForEach(entry.recentTurns) { turn in AgentHistoryTurnCard(turn: turn) }
+                        }
+                    }
+                }
+                if !entry.subagents.isEmpty {
+                    AgentHistorySubagentsSection(subagents: entry.subagents)
+                }
+                worktree
             }
-            if let cwd = entry.cwd {
-                Text(cwd)
-                    .font(Theme.Typography.mono(.caption))
-                    .foregroundStyle(Theme.textMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(cwd)
-            }
+            .padding(Theme.Spacing.lg)
         }
-        .padding(Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.bgElevated)
+        .background(Theme.bgSurface)
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
                 .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
         )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 
     // MARK: - Parçalar
 
     private var actionBar: some View {
-        HStack(spacing: Theme.Spacing.xs) {
+        HStack(spacing: Theme.Spacing.sm) {
             action("Resume", icon: "play.fill", isPrimary: true, action: onResume)
                 .disabled(entry.resumeCommand == nil)
             action("Copy Command", icon: "doc.on.doc", action: onCopyCommand)
                 .disabled(entry.resumeCommand == nil)
-            action("View Log", icon: "doc.text.magnifyingglass", action: onRevealLog)
+            action("View Log", icon: "doc.text", action: onRevealLog)
             Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.md)
+        .background(Theme.bgElevated)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
         }
     }
 
@@ -73,9 +80,9 @@ struct AgentHistoryDetailCard: View {
                 Image(systemName: icon).accessibilityHidden(true)
                 Text(title)
             }
-            .font(Theme.Typography.ui(.caption, weight: .medium))
+            .font(Theme.Typography.ui(.label, weight: .medium))
             .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, Theme.Spacing.sm)
+            .frame(height: Theme.Spacing.xxl + Theme.Spacing.xs)
         }
         .buttonStyle(
             HoverButtonStyle(
@@ -87,54 +94,122 @@ struct AgentHistoryDetailCard: View {
         )
     }
 
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    @ViewBuilder
+    private var worktree: some View {
+        if entry.gitBranch != nil || entry.compactPath != nil {
+            AgentHistorySection(title: "Worktree", icon: "folder.badge.gearshape") {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    if let branch = entry.gitBranch {
+                        HStack(spacing: Theme.Spacing.sm) {
+                            Text("Branch".uppercased())
+                                .font(Theme.Typography.ui(.caption, weight: .medium))
+                                .tracking(0.6)
+                                .foregroundStyle(Theme.textMuted)
+                            Text(branch)
+                                .font(Theme.Typography.mono(.caption))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineLimit(1)
+                        }
+                    }
+                    if let path = entry.compactPath {
+                        Text(path)
+                            .font(Theme.Typography.mono(.caption))
+                            .foregroundStyle(Theme.textMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(entry.cwd ?? path)
+                    }
+                }
+            }
+        }
+    }
+
+    private func copy(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+}
+
+/// Kart bölümü: ikon + büyük harfli başlık + içerik.
+struct AgentHistorySection<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text(title.uppercased())
-                .font(Theme.Typography.ui(.caption, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(Theme.textMuted)
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(Theme.Typography.ui(.caption))
+                    .accessibilityHidden(true)
+                Text(title.uppercased())
+                    .font(Theme.Typography.ui(.label, weight: .semibold))
+                    .tracking(0.6)
+            }
+            .foregroundStyle(Theme.textSecondary)
             content()
         }
     }
 }
 
-/// Tek konuşma turu — rol etiketi + metin; kullanıcı turu accent zeminlidir.
+/// Tek konuşma turu — büyük harfli rol etiketi ("YOU" / "AGENT") + metin.
+/// `onCopy` verilirse sağ üstte Copy düğmesi çıkar (ilk istem kartı).
 struct AgentHistoryTurnCard: View {
     let turn: AgentHistoryTurn
+    var onCopy: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-            Text(turn.role == .user ? "You" : "Agent")
-                .font(Theme.Typography.ui(.caption, weight: .medium))
-                .foregroundStyle(Theme.textMuted)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack(spacing: Theme.Spacing.sm) {
+                Text(turn.role == .user ? "You" : "Agent")
+                    .textCase(.uppercase)
+                    .font(Theme.Typography.ui(.caption, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(Theme.textMuted)
+                Spacer(minLength: 0)
+                if let onCopy {
+                    Button(action: onCopy) {
+                        Label("Copy", systemImage: "doc.on.doc")
+                            .labelStyle(.titleAndIcon)
+                            .font(Theme.Typography.ui(.caption))
+                    }
+                    .buttonStyle(HoverButtonStyle(cornerRadius: Theme.Radius.sm))
+                    .help("Copy prompt")
+                }
+            }
             Text(turn.text)
                 .font(Theme.Typography.ui(.body))
                 .foregroundStyle(Theme.textPrimary)
-                .lineLimit(4)
+                .lineLimit(5)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(turn.role == .user ? Theme.accentPrimary.opacity(0.08) : Theme.bgDeep)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        .background(turn.role == .user ? Theme.accentPrimary.opacity(Self.userTint) : Theme.bgElevated)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
+
+    private static let userTint = 0.08
 }
 
-/// Oturumun git dalı rozeti.
+/// Oturumun git dalı rozeti (dolu kare + ad; Orca'nın branch pill'i).
 struct AgentHistoryBranchBadge: View {
     let branch: String
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.xxs) {
-            Image(systemName: "arrow.triangle.branch").accessibilityHidden(true)
+        HStack(spacing: Theme.Spacing.xs) {
+            Image(systemName: "square.fill")
+                .font(Theme.Typography.ui(.micro))
+                .foregroundStyle(Theme.textMuted)
+                .accessibilityHidden(true)
             Text(branch).lineLimit(1)
         }
-        .font(Theme.Typography.ui(.caption))
-        .foregroundStyle(Theme.textSecondary)
+        .font(Theme.Typography.mono(.caption, weight: .medium))
+        .foregroundStyle(Theme.textPrimary)
         .padding(.horizontal, Theme.Spacing.sm)
-        .padding(.vertical, Theme.Spacing.xxxs)
-        .background(Theme.bgElevated)
+        .padding(.vertical, Theme.Spacing.xxs)
+        .background(Theme.bgDeep)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
         .accessibilityLabel("Branch \(branch)")
     }
@@ -158,12 +233,16 @@ struct AgentHistoryBranchBadge: View {
             recentTurns: [
                 AgentHistoryTurn(role: .user, text: "Kartın zemini olsun"),
                 AgentHistoryTurn(role: .assistant, text: "Kart zemini ve kenarlığı eklendi."),
+            ],
+            subagents: [
+                AgentHistorySubagent(id: "a1", name: "Orca vs Lumi Explorer", kind: "Explore", messageCount: 89, logPath: "/tmp/a1"),
+                AgentHistorySubagent(id: "a2", name: "Faz 1: Explorer yenileme", kind: "general-purpose", messageCount: 145, logPath: "/tmp/a2"),
             ]
         ),
         onResume: {}, onCopyCommand: {}, onRevealLog: {}
     )
     .padding(Theme.Spacing.lg)
-    .frame(width: 320)
+    .frame(width: 340)
     .background(Theme.bgSurface)
 }
 #endif

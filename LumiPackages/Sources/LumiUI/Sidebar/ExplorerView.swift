@@ -10,6 +10,9 @@ struct ExplorerView: View {
     /// Arama şeridinin TEK sorgusu — kip değişse de korunur; ad filtresi
     /// (`search`) ile içerik araması aynı metni okur.
     @State private var query = ""
+    /// Contents kipinin eşleme seçenekleri ve dosya filtreleri (metin `query`).
+    @State private var contentQuery = ExplorerContentQuery(text: "")
+    @State private var showsOptions = false
     @State private var selectedPath: String?
     @State private var refreshing = false
     @State private var editPrompt: ExplorerEditPrompt?
@@ -32,9 +35,9 @@ struct ExplorerView: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            ExplorerQueryStrip(query: $query, mode: $mode)
+            ExplorerQueryStrip(query: $query, mode: $mode, contentQuery: $contentQuery)
             if mode == .contents {
-                ExplorerContentSearchView(repoPath: repoPath, query: $query)
+                ExplorerContentSearchView(repoPath: repoPath, query: contentQuery.with(text: query))
             } else {
                 namesView
             }
@@ -124,38 +127,37 @@ struct ExplorerView: View {
                 }
             }
             .disabled(refreshing)
-            Menu {
-                Button("New File…") { beginEdit(.newFile, path: unityMode ? "Assets" : "") }
-                Button("New Folder…") { beginEdit(.newFolder, path: unityMode ? "Assets" : "") }
-                Section("View Mode") {
-                    Toggle("Unity Assets only", isOn: optionBinding(\.unityAssetsOnly))
-                        .disabled(shell.repos.capabilities[repoPath]?.isUnityProject != true)
-                }
-                Toggle("Show Dotfiles", isOn: optionBinding(\.showDotfiles))
-                Toggle("Show Ignored Files", isOn: optionBinding(\.showIgnoredFiles))
-                Divider()
-                Button("Reveal Project in Finder") { shell.reveal("") }
-            } label: {
-                Image(systemName: "ellipsis").font(Theme.Typography.ui(.body))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: Theme.Spacing.xxl, height: Theme.Spacing.xxl)
+            IconButton(systemName: "ellipsis", label: "Explorer view options", size: .body) {
+                showsOptions.toggle()
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Explorer view options")
-            .accessibilityLabel("Explorer view options")
+            .popover(isPresented: $showsOptions, arrowEdge: .bottom) {
+                PopoverMenu(items: optionItems, dismiss: { showsOptions = false })
+            }
         }
         .padding(.horizontal, Theme.Spacing.md)
         .frame(height: Theme.Spacing.xxxl)
     }
 
-    private func optionBinding(_ key: WritableKeyPath<ExplorerOptions, Bool>) -> Binding<Bool> {
-        Binding(get: { options[keyPath: key] }, set: {
-            var updated = options
-            updated[keyPath: key] = $0
-            shell.repos.setExplorerOptions(updated, for: repoPath)
-        })
+    /// Görünüm seçenekleri menüsü (custom popover; native `Menu` panelin
+    /// temasına uymuyordu).
+    private var optionItems: [PopoverMenu.Item] {
+        let isUnity = shell.repos.capabilities[repoPath]?.isUnityProject == true
+        return [
+            .action("New File…", icon: "doc.badge.plus") { beginEdit(.newFile, path: unityMode ? "Assets" : "") },
+            .action("New Folder…", icon: "folder.badge.plus") { beginEdit(.newFolder, path: unityMode ? "Assets" : "") },
+            .section("View Mode"),
+            .toggle("Unity Assets only", isOn: options.unityAssetsOnly, isEnabled: isUnity) { toggleOption(\.unityAssetsOnly) },
+            .toggle("Show Dotfiles", isOn: options.showDotfiles) { toggleOption(\.showDotfiles) },
+            .toggle("Show Ignored Files", isOn: options.showIgnoredFiles) { toggleOption(\.showIgnoredFiles) },
+            .divider,
+            .action("Reveal Project in Finder", icon: "folder") { shell.reveal("") },
+        ]
+    }
+
+    private func toggleOption(_ key: WritableKeyPath<ExplorerOptions, Bool>) {
+        var updated = options
+        updated[keyPath: key].toggle()
+        shell.repos.setExplorerOptions(updated, for: repoPath)
     }
 
     private func rowView(_ row: FileTreeRows.Row) -> some View {

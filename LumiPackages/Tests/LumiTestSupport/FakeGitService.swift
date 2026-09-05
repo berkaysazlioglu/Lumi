@@ -38,6 +38,7 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     public var historyToReturn: [GitCommit] = []
     public var remoteURLToReturn: String?
     public var isGitHubCLIInstalled = true
+    public var branchSummaryToReturn: GitBranchSummary?
     public var statusToReturn: [GitFileChange] = []
     /// `commits` bu süre kadar askıda kalır — eşzamanlılık ölçümü için
     /// (actor reentrancy: askıdayken başka çağrılar içeri girebilir).
@@ -144,6 +145,14 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
 
     public func isGitHubCLIAvailable() async -> Bool {
         isGitHubCLIInstalled
+    }
+
+    public func setBranchSummary(_ summary: GitBranchSummary?) {
+        branchSummaryToReturn = summary
+    }
+
+    public func branchSummary(repoPath: String) async -> GitBranchSummary? {
+        branchSummaryToReturn
     }
 
     public func status(repoPath: String) async -> [GitFileChange] {

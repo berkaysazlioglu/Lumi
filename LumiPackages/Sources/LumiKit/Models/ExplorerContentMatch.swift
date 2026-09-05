@@ -1,13 +1,19 @@
 public struct ExplorerContentMatch: Sendable, Equatable, Identifiable {
-    public var id: String { "\(path):\(line)" }
+    public var id: String { "\(path):\(line):\(column)" }
     public let path: String
     public let line: Int
     public let text: String
+    /// Eşleşmenin satır içindeki başlangıcı (karakter ofseti, 0 tabanlı).
+    public let column: Int
+    /// Eşleşen metnin karakter uzunluğu (0 → konum bilinmiyor).
+    public let length: Int
 
-    public init(path: String, line: Int, text: String) {
+    public init(path: String, line: Int, text: String, column: Int = 0, length: Int = 0) {
         self.path = path
         self.line = line
         self.text = text
+        self.column = column
+        self.length = length
     }
 }
 
@@ -90,6 +96,20 @@ public struct ExplorerMatchPreview: Sendable, Equatable {
         else {
             return ExplorerMatchPreview(before: text, match: "", after: "")
         }
+        return split(text, at: range)
+    }
+
+    /// Arayıcının bildirdiği konumdan böler (regex / tam kelime eşleşmeleri
+    /// metin aramasıyla yeniden bulunamaz). Konum yoksa `query` ile denenir.
+    public static func make(_ match: ExplorerContentMatch, query: String) -> ExplorerMatchPreview {
+        guard match.length > 0,
+              let start = match.text.index(match.text.startIndex, offsetBy: match.column, limitedBy: match.text.endIndex),
+              let end = match.text.index(start, offsetBy: match.length, limitedBy: match.text.endIndex)
+        else { return make(text: match.text, query: query) }
+        return split(match.text, at: start..<end)
+    }
+
+    private static func split(_ text: String, at range: Range<String.Index>) -> ExplorerMatchPreview {
         let rawPrefix = String(text[text.startIndex..<range.lowerBound])
             .drop { $0 == " " || $0 == "\t" }
         let prefix = rawPrefix.count > prefixLimit

@@ -32,6 +32,27 @@ public struct AgentHistoryTurn: Identifiable, Sendable, Equatable {
     }
 }
 
+/// Ana oturumun başlattığı bir alt ajan (Claude `subagents/agent-*.jsonl`).
+public struct AgentHistorySubagent: Identifiable, Sendable, Equatable {
+    public let id: String
+    /// Görev açıklaması (`meta.json` `description`), yoksa ilk istemin başı.
+    public let name: String
+    /// `general-purpose`, `Explore` … (`meta.json` `agentType`).
+    public let kind: String?
+    public let model: String?
+    public let messageCount: Int
+    public let logPath: String
+
+    public init(id: String, name: String, kind: String? = nil, model: String? = nil, messageCount: Int = 0, logPath: String) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.model = model
+        self.messageCount = messageCount
+        self.logPath = logPath
+    }
+}
+
 public struct AgentHistoryEntry: Identifiable, Sendable, Equatable {
     public let id: String
     public let provider: AgentProvider
@@ -52,11 +73,14 @@ public struct AgentHistoryEntry: Identifiable, Sendable, Equatable {
     public let firstPrompt: String?
     /// Son konuşma turları (en fazla 3, her biri kırpılmış).
     public let recentTurns: [AgentHistoryTurn]
+    /// Oturumun başlattığı alt ajanlar (yalnız Claude; Codex'te boş).
+    public let subagents: [AgentHistorySubagent]
 
     public init(provider: AgentProvider, sessionID: String, title: String, preview: String? = nil,
                 updatedAt: Date, cwd: String? = nil, logPath: String,
                 gitBranch: String? = nil, model: String? = nil, messageCount: Int = 0,
-                firstPrompt: String? = nil, recentTurns: [AgentHistoryTurn] = []) {
+                firstPrompt: String? = nil, recentTurns: [AgentHistoryTurn] = [],
+                subagents: [AgentHistorySubagent] = []) {
         self.id = "\(provider.rawValue):\(sessionID)"
         self.provider = provider
         self.sessionID = sessionID
@@ -70,12 +94,20 @@ public struct AgentHistoryEntry: Identifiable, Sendable, Equatable {
         self.messageCount = messageCount
         self.firstPrompt = firstPrompt
         self.recentTurns = recentTurns
+        self.subagents = subagents
     }
 
     public var resumeCommand: String? {
         guard sessionID.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"#, options: .regularExpression) != nil else { return nil }
         let quoted = sessionID.replacingOccurrences(of: "'", with: "'\\''")
         return provider == .claude ? "claude --resume '\(quoted)'" : "codex resume '\(quoted)'"
+    }
+
+    /// Çalışma dizininin son iki bileşeni (`Github/Lumi`) — Orca'nın kompakt yolu.
+    public var compactPath: String? {
+        guard let cwd else { return nil }
+        let parts = cwd.split(separator: "/").suffix(2)
+        return parts.isEmpty ? nil : parts.joined(separator: "/")
     }
 
     /// Metadata satırında gösterilen kısa model adı:

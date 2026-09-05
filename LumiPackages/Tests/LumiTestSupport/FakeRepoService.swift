@@ -36,7 +36,7 @@ public actor FakeRepoService: RepoServicing {
         projectCapabilities[path] = value
     }
 
-    public func searchContents(repoPath: String, paths: [String], query: String) async throws -> ExplorerContentResult { ExplorerContentResult() }
+    public func searchContents(repoPath: String, paths: [String], query: ExplorerContentQuery) async throws -> ExplorerContentResult { ExplorerContentResult() }
     public func editFile(repoPath: String, edit: ExplorerFileEdit) async throws {}
 
     public func capabilities(repoPath: String) async -> ProjectCapabilities {

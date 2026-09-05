@@ -8,6 +8,13 @@ public struct ExplorerOptions: Equatable, Sendable {
 
     public init() {}
 
+    /// Unity projesi algılanınca ilk açılış varsayılanı: yalnız `Assets/`.
+    public static var unityDefault: ExplorerOptions {
+        var options = ExplorerOptions()
+        options.unityAssetsOnly = true
+        return options
+    }
+
     public func project(_ nodes: [FileTreeNode], isUnityProject: Bool) -> [FileTreeNode] {
         let assetsOnly = unityAssetsOnly && isUnityProject
         let roots = assetsOnly

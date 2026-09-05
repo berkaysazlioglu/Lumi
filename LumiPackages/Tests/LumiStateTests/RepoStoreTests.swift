@@ -273,3 +273,47 @@ final class RepoStoreTests: XCTestCase {
         try await waitUntil("yeniden tüketim") { self.store.repos == [Self.standaloneRepo] }
     }
 }
+
+// MARK: - Unity otomatik Assets görünümü
+
+@MainActor
+final class RepoStoreUnityDefaultTests: XCTestCase {
+    func testUnityProjectDefaultsToAssetsOnlyOnFirstLoad() async {
+        let service = FakeRepoService()
+        await service.setCapabilities(ProjectCapabilities(isGitRepo: true, isUnityProject: true), for: "/u")
+        await service.setFileTree([
+            FileTreeNode(name: "Assets", path: "Assets", type: .folder, isIgnored: false, children: [
+                FileTreeNode(name: "A.prefab", path: "Assets/A.prefab", type: .file, isIgnored: false, children: []),
+            ]),
+            FileTreeNode(name: "ProjectSettings", path: "ProjectSettings", type: .folder, isIgnored: false, children: []),
+        ], for: "/u")
+        let store = RepoStore(service: service)
+
+        await store.loadFileTree("/u")
+
+        XCTAssertEqual(store.explorerOptions["/u"]?.unityAssetsOnly, true)
+        XCTAssertEqual(store.explorerTrees["/u"]?.map(\.name), ["A.prefab"])
+    }
+
+    func testUserChoiceSurvivesReload() async {
+        let service = FakeRepoService()
+        await service.setCapabilities(ProjectCapabilities(isGitRepo: true, isUnityProject: true), for: "/u")
+        let store = RepoStore(service: service)
+        await store.loadFileTree("/u")
+        store.setExplorerOptions(ExplorerOptions(), for: "/u")
+
+        await store.loadFileTree("/u")
+
+        XCTAssertEqual(store.explorerOptions["/u"]?.unityAssetsOnly, false)
+    }
+
+    func testNonUnityProjectKeepsDefaultOptions() async {
+        let service = FakeRepoService()
+        await service.setCapabilities(ProjectCapabilities(isGitRepo: true, isUnityProject: false), for: "/p")
+        let store = RepoStore(service: service)
+
+        await store.loadFileTree("/p")
+
+        XCTAssertNil(store.explorerOptions["/p"])
+    }
+}

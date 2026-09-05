@@ -27,6 +27,9 @@ public protocol GitReading: Sendable {
     /// GitHub CLI PATH'te var mı? "Create PR" eyleminin kapısı; git'e komşu bir
     /// CLI olduğu için aynı sınırda durur (repo'dan bağımsızdır).
     func isGitHubCLIAvailable() async -> Bool
+    /// Karar 41: upstream + ahead/behind + çalışma ağacı satır istatistiği.
+    /// Git repo değilse nil; upstream yoksa `upstream == nil`.
+    func branchSummary(repoPath: String) async -> GitBranchSummary?
     func status(repoPath: String) async -> [GitFileChange]
     /// Karar 6 (lazy): commit seçilince yalnız dosya listesi.
     func commitFiles(repoPath: String, sha: String) async -> [CommitFile]

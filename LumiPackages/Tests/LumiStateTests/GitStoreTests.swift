@@ -579,3 +579,29 @@ final class GitStoreTests: XCTestCase {
         XCTAssertNil(store.commitURL(repoPath, sha: "abc"))
     }
 }
+
+// MARK: - Branch özeti (karar 41)
+
+@MainActor
+final class GitStoreBranchSummaryTests: XCTestCase {
+    func testLoadChangesStoresSummaryAndEvictClearsIt() async {
+        let git = FakeGitService()
+        await git.setBranches([GitBranch(name: "feature", isCurrent: true)])
+        await git.setBranchSummary(GitBranchSummary(upstream: "origin/feature", ahead: 2, insertions: 10, deletions: 3))
+        let store = GitStore(git: git, toasts: ToastStore())
+
+        await store.loadChanges("/repo")
+        XCTAssertEqual(store.branchSummaries["/repo"]?.upstream, "origin/feature")
+        XCTAssertEqual(store.branchSummaries["/repo"]?.ahead, 2)
+        XCTAssertTrue(store.branchSummaries["/repo"]?.hasLineChanges == true)
+
+        await git.setBranchSummary(nil)
+        await store.loadChanges("/repo")
+        XCTAssertNil(store.branchSummaries["/repo"], "özet gelmezse eski değer kalmaz")
+
+        await git.setBranchSummary(GitBranchSummary())
+        await store.loadChanges("/repo")
+        store.evict("/repo")
+        XCTAssertNil(store.branchSummaries["/repo"])
+    }
+}

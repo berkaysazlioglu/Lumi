@@ -13,7 +13,8 @@ import SwiftUI
 /// atıyordu. Başlık satırı katlanabilir, eşleşme sayısını gösterir.
 struct ExplorerContentSearchView: View {
     let repoPath: String
-    @Binding var query: String
+    /// Metin + eşleme seçenekleri + dosya filtreleri (şeritte düzenlenir).
+    let query: ExplorerContentQuery
     @Shell private var shell
     @State private var result = ExplorerContentResult()
     @State private var loading = false
@@ -23,17 +24,15 @@ struct ExplorerContentSearchView: View {
 
     private struct Request: Equatable {
         let path: String
-        let query: String
+        let query: ExplorerContentQuery
         let options: ExplorerOptions
         let revision: Int
     }
 
-    private var trimmedQuery: String {
-        query.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    private var trimmedQuery: String { query.trimmedText }
 
     private var request: Request {
-        Request(path: repoPath, query: trimmedQuery,
+        Request(path: repoPath, query: query.with(text: trimmedQuery),
                 options: shell.repos.explorerOptions[repoPath] ?? ExplorerOptions(),
                 revision: shell.repos.fileTreeRevisions[repoPath] ?? 0)
     }
@@ -177,7 +176,7 @@ struct ExplorerContentSearchView: View {
     /// Eşleşen alt dizgiyi vurgulayan satır metni; ön ek gerekirse soldan
     /// kırpılır (`ExplorerMatchPreview`), böylece vurgu dar panelde görünür kalır.
     private func highlighted(_ match: ExplorerContentMatch) -> AttributedString {
-        let preview = ExplorerMatchPreview.make(text: match.text, query: trimmedQuery)
+        let preview = ExplorerMatchPreview.make(match, query: trimmedQuery)
         var before = AttributedString(preview.before)
         before.foregroundColor = Theme.textSecondary
         var hit = AttributedString(preview.match)
@@ -204,7 +203,7 @@ struct ExplorerContentSearchView: View {
         loading = true
         do {
             try await Task.sleep(for: Theme.Motion.searchDebounce)
-            let found = try await shell.repos.searchContents(trimmedQuery, in: repoPath)
+            let found = try await shell.repos.searchContents(request.query, in: repoPath)
             try Task.checkCancellation()
             result = found
             loading = false

@@ -49,10 +49,15 @@ struct CommitGraphLaneCanvas: View {
                 if index == row.laneIndex {
                     outputIndex += 1
                 } else {
+                    // Orca: dikey iniş + laneWidth yarıçaplı çeyrek yay + düğüme
+                    // yatay kol. Eskiden yay satırın yarı yüksekliğine yayılıyordu
+                    // ve 40pt satırda basık bir elips gibi görünüyordu.
+                    let radius = cornerRadius(nodeY)
                     var path = Path()
                     path.move(to: CGPoint(x: x(index), y: 0))
+                    path.addLine(to: CGPoint(x: x(index), y: nodeY - radius))
                     path.addQuadCurve(
-                        to: CGPoint(x: x(index) - laneWidth, y: nodeY),
+                        to: CGPoint(x: x(index) - radius, y: nodeY),
                         control: CGPoint(x: x(index), y: nodeY)
                     )
                     path.addLine(to: CGPoint(x: nodeX, y: nodeY))
@@ -87,14 +92,15 @@ struct CommitGraphLaneCanvas: View {
     ) {
         guard let parentLane = row.mergeParentLaneIndex,
               parentLane < row.outputLanes.count else { return }
-        let originX = x(parentLane) - laneWidth
+        let radius = cornerRadius(height - nodeY)
         var path = Path()
         path.move(to: CGPoint(x: nodeX, y: nodeY))
-        path.addLine(to: CGPoint(x: originX, y: nodeY))
+        path.addLine(to: CGPoint(x: x(parentLane) - radius, y: nodeY))
         path.addQuadCurve(
-            to: CGPoint(x: x(parentLane), y: height),
-            control: CGPoint(x: originX, y: height)
+            to: CGPoint(x: x(parentLane), y: nodeY + radius),
+            control: CGPoint(x: x(parentLane), y: nodeY)
         )
+        path.addLine(to: CGPoint(x: x(parentLane), y: height))
         stroke(path, color: row.outputLanes[parentLane].colorIndex, in: &context)
     }
 
@@ -139,6 +145,12 @@ struct CommitGraphLaneCanvas: View {
     // MARK: - Geometri yardımcıları
 
     private func x(_ laneIndex: Int) -> CGFloat { laneWidth * CGFloat(laneIndex + 1) }
+
+    /// Dal açılış/kapanış köşesinin yarıçapı: bir lane adımı (Orca `A 11 11`),
+    /// ama düğümle satır kenarı arasındaki mesafeyi aşamaz.
+    private func cornerRadius(_ available: CGFloat) -> CGFloat {
+        min(laneWidth, max(available, 0))
+    }
 
     private func circle(_ center: CGPoint, _ radius: CGFloat) -> Path {
         Path(ellipseIn: CGRect(
