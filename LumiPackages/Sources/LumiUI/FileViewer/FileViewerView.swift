@@ -13,6 +13,8 @@ struct FileViewerView: View {
     let store: FileViewerStore
     let highlighter: any SyntaxHighlighting
 
+    @Shell private var shell
+
     /// Modal'ın kabına oranı ve commit dosya listesinin genişliği — ölçek dışı
     /// geometri sabitleri.
     private enum Metrics {
@@ -77,6 +79,7 @@ struct FileViewerView: View {
 
     private var headerIcon: String {
         if store.previewKind == .image { return "photo" }
+        if store.previewKind == .binary { return "doc.zipper" }
         switch store.mode {
         case .view: return "doc.text"
         case .diff: return "plus.forwardslash.minus"
@@ -179,7 +182,29 @@ struct FileViewerView: View {
             } else {
                 SideBySideDiffView(diff: diff, size: .body)
             }
+        case .unsupported(let reason):
+            unsupportedState(reason)
         }
+    }
+
+    /// Binary dosya (video, arşiv…): hata değil, "önizleme yok" bilgisi.
+    private func unsupportedState(_ reason: String) -> some View {
+        VStack(spacing: Theme.Spacing.md) {
+            Image(systemName: "doc.zipper")
+                .font(Theme.Typography.ui(.heading))
+                .foregroundStyle(Theme.textMuted)
+                .accessibilityHidden(true)
+            Text(reason)
+                .font(Theme.Typography.bodyMono)
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, Theme.Spacing.xxl)
+            Button("Reveal in Finder") {
+                shell.reveal(store.filePath)
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func failureState(_ message: String) -> some View {

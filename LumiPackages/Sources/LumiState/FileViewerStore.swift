@@ -8,6 +8,9 @@ public enum ViewerContent: Equatable, Sendable {
     case text(String)
     case diff(UnifiedDiff)
     case image(ImagePreview)
+    /// Metin olarak sunulamayan dosya (video, arşiv, derlenmiş çıktı…). Bir
+    /// HATA değildir: toast düşmez, modal açık kalır ve nedeni gösterir.
+    case unsupported(reason: String)
 }
 
 /// Seçili commit'in kimliği + dosya listesi (karar 6: diff lazy yüklenir).
@@ -224,9 +227,19 @@ public final class FileViewerStore {
     ) async -> Loadable<ViewerContent> {
         // Görsel dosyada metin/diff okuma anlamsız (binary → bozuk UTF8).
         // Git tarafı sessizdir (eksik taraf normaldir) — placeholder'ı UI çizer.
-        guard FilePreviewKind.of(path: filePath) != .image else {
+        let kind = FilePreviewKind.of(path: filePath)
+        guard kind != .image else {
             let preview = await git.imagePreview(repoPath: repoPath, file: filePath, sha: sha)
             return .loaded(.image(preview))
+        }
+        // Video/arşiv gibi binary'ler view modunda hiç OKUNMAZ (yüzlerce MB'lık
+        // dosyayı UTF8'e çevirip NSTextView'a basmak çöküyordu). Diff yollarında
+        // git binary'yi kendisi işaretler (`UnifiedDiff.isBinary`).
+        if kind == .binary, mode == .view, sha == nil {
+            let fileExtension = (filePath as NSString).pathExtension.lowercased()
+            return .loaded(.unsupported(
+                reason: "No preview for .\(fileExtension) files (binary content)"
+            ))
         }
         do {
             return .loaded(try await readContent(

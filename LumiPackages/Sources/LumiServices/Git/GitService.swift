@@ -191,12 +191,37 @@ public struct GitService: GitServicing {
 
     // MARK: - Dosya içerikleri / diff'ler
 
+    /// Metin önizlemesinin üst sınırı: NSTextView'a bundan büyük tek parça
+    /// metin basmak ana thread'i kilitler (video dosyası crash'inin ikinci yüzü).
+    public static let maxTextPreviewBytes = 8 * 1024 * 1024
+    /// NUL sniff penceresi — uzantısı yanıltan binary'ler için (git'in kendi
+    /// binary sezgisiyle aynı yaklaşım).
+    static let binarySniffBytes = 8 * 1024
+
     public func readFile(repoPath: String, file: String) async throws -> String {
         let absolute = try resolveInsideRepo(repoPath, file)
         guard let data = FileManager.default.contents(atPath: absolute) else {
             throw LumiError.fileOperationFailed(path: file, detail: "file could not be read")
         }
+        guard data.count <= Self.maxTextPreviewBytes else {
+            let megabytes = Double(data.count) / (1024 * 1024)
+            throw LumiError.fileOperationFailed(
+                path: file,
+                detail: String(format: "file is too large to preview (%.1f MB)", megabytes)
+            )
+        }
+        guard !Self.looksBinary(data) else {
+            throw LumiError.fileOperationFailed(
+                path: file,
+                detail: "binary file cannot be previewed as text"
+            )
+        }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// İlk 8 KB'de NUL byte varsa binary sayılır.
+    static func looksBinary(_ data: Data) -> Bool {
+        data.prefix(Self.binarySniffBytes).contains(0)
     }
 
     public func fileDiff(repoPath: String, file: String) async throws -> UnifiedDiff {

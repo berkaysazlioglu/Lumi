@@ -201,6 +201,41 @@ final class GitServiceTests: XCTestCase {
         XCTAssertEqual(content, "ok")
     }
 
+    /// Uzantısı masum ama içeriği binary olan dosya (ör. `.mp4` yerine `.dat`,
+    /// uzantısız derlenmiş çıktı) metin olarak açılmaz — NUL sniff'i.
+    func testReadFileRejectsBinaryContent() async throws {
+        var bytes = Array("hello".utf8)
+        bytes.append(0)
+        bytes.append(contentsOf: Array("world".utf8))
+        try Data(bytes).write(to: repoDir.appendingPathComponent("blob"))
+
+        do {
+            _ = try await service.readFile(repoPath: repoDir.path, file: "blob")
+            XCTFail("binary içerik metin olarak okundu")
+        } catch let error as LumiError {
+            guard case .fileOperationFailed(let path, let detail) = error else {
+                return XCTFail("beklenmeyen hata: \(error)")
+            }
+            XCTAssertEqual(path, "blob")
+            XCTAssertTrue(detail.lowercased().contains("binary"), detail)
+        }
+    }
+
+    func testReadFileRejectsOversizedFile() async throws {
+        let big = Data(repeating: UInt8(ascii: "a"), count: GitService.maxTextPreviewBytes + 1)
+        try big.write(to: repoDir.appendingPathComponent("huge.log"))
+
+        do {
+            _ = try await service.readFile(repoPath: repoDir.path, file: "huge.log")
+            XCTFail("aşırı büyük dosya okundu")
+        } catch let error as LumiError {
+            guard case .fileOperationFailed(_, let detail) = error else {
+                return XCTFail("beklenmeyen hata: \(error)")
+            }
+            XCTAssertTrue(detail.lowercased().contains("large"), detail)
+        }
+    }
+
     /// 1.12: guard `standardizedFileURL` ile symlink'i çözmüyordu — repo içindeki
     /// bir symlink repo DIŞINA işaret ettiğinde okuma geçiyordu.
     func testSymlinkEscapingRepoIsRejected() async throws {

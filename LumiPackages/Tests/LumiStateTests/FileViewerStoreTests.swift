@@ -28,6 +28,48 @@ final class FileViewerStoreTests: XCTestCase {
         )
     }
 
+    // MARK: - binary dosyalar (video crash düzeltmesi)
+
+    func testPresentViewOfVideoDoesNotReadFileAndShowsUnsupported() async {
+        let git = FakeGitService()
+        let store = makeStore(git)
+
+        await store.presentView(repoPath: "/repo", filePath: "media/intro.mp4")
+
+        XCTAssertEqual(store.previewKind, .binary)
+        guard case .loaded(.unsupported(let reason))? = store.content else {
+            return XCTFail("unsupported bekleniyordu: \(String(describing: store.content))")
+        }
+        XCTAssertTrue(reason.lowercased().contains("mp4"), reason)
+        let readFileCalls = await git.readFileCalls
+        XCTAssertTrue(readFileCalls.isEmpty, "binary dosya metin olarak okunmaz")
+        XCTAssertTrue(store.isPresented, "modal açık kalır, kullanıcı mesajı görür")
+    }
+
+    func testUnsupportedBinaryIsNotAnErrorSoNoToastDrops() async {
+        let git = FakeGitService()
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let store = FileViewerStore(git: git, toasts: toasts)
+
+        await store.presentView(repoPath: "/repo", filePath: "build/app.zip")
+
+        XCTAssertTrue(toasts.toasts.isEmpty)
+        XCTAssertNil(store.failureMessage)
+    }
+
+    func testBinaryDiffStillGoesThroughGit() async {
+        // Diff yolunda git binary'yi kendisi işaretler (UnifiedDiff.isBinary) —
+        // mevcut "Binary files differ" sunumu korunur.
+        let git = FakeGitService()
+        await git.setDiff(UnifiedDiff(filePath: "a.mp4", isBinary: true, hunks: []))
+        let store = makeStore(git)
+
+        await store.presentDiff(repoPath: "/repo", filePath: "a.mp4")
+
+        let calls = await git.fileDiffCalls
+        XCTAssertEqual(calls, ["a.mp4"])
+    }
+
     // MARK: - view modu
 
     func testPresentViewLoadsTextThroughReadFile() async {

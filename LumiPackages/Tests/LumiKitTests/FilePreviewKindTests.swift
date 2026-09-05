@@ -26,6 +26,17 @@ final class FilePreviewKindTests: XCTestCase {
         XCTAssertEqual(FilePreviewKind.of(path: ""), .text)
     }
 
+    /// Video/ses/arşiv gibi dosyalar metin olarak okunmaz (crash düzeltmesi):
+    /// FileViewer bunları `unsupported` sunar, `readFile` hiç çağrılmaz.
+    func testBinaryMediaAndArchiveExtensionsAreDetected() {
+        for path in [
+            "clip.mp4", "movie.MOV", "song.mp3", "pack.zip", "lib.dylib", "font.ttf",
+            "doc.pdf", "db.sqlite", "image.dmg", "app.jar", "model.onnx",
+        ] {
+            XCTAssertEqual(FilePreviewKind.of(path: path), .binary, path)
+        }
+    }
+
     func testDirectoryNameIsNotMistakenForExtension() {
         XCTAssertEqual(FilePreviewKind.of(path: "my.png.dir/file.txt"), .text)
     }
