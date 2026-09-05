@@ -1,6 +1,37 @@
 import Foundation
 
+/// Commit'e iliştirilmiş ref (branch / remote branch / tag).
+///
+/// `git log --decorate=full` çıktısının (`%D`) parse edilmiş hâli: ad her zaman
+/// KISA biçimdir (`main`, `origin/main`, `v1.0`); `refs/heads/` gibi önekler
+/// `kind` bilgisine dönüşür.
+public struct GitRef: Sendable, Equatable, Identifiable {
+    public enum Kind: Sendable, Equatable {
+        /// Detached HEAD'in çıplak `HEAD` dekorasyonu.
+        case head
+        case localBranch
+        case remoteBranch
+        case tag
+    }
+
+    public var id: String { "\(kind)/\(name)" }
+    public let name: String
+    public let kind: Kind
+    /// `HEAD -> …` ile işaretlenmiş ref (checkout edilmiş branch).
+    public let isCurrent: Bool
+
+    public init(name: String, kind: Kind, isCurrent: Bool = false) {
+        self.name = name
+        self.kind = kind
+        self.isCurrent = isCurrent
+    }
+}
+
 /// Commit log girdisi.
+///
+/// `parentHashes` ve `references` YALNIZ graph'lı history okumasında
+/// (`GitReading.history`) dolar; branch bazlı `commits(repoPath:branch:)`
+/// bunları boş bırakır (geriye uyumlu default'lar).
 public struct GitCommit: Sendable, Equatable, Identifiable {
     public var id: String { hash }
     public let hash: String
@@ -8,14 +39,29 @@ public struct GitCommit: Sendable, Equatable, Identifiable {
     public let message: String
     public let author: String
     public let date: Date
+    /// Topolojik sırada ilk parent birinci sıradadır; merge commit'te >1 eleman.
+    public let parentHashes: [String]
+    public let references: [GitRef]
 
-    public init(hash: String, shortHash: String, message: String, author: String, date: Date) {
+    public init(
+        hash: String,
+        shortHash: String,
+        message: String,
+        author: String,
+        date: Date,
+        parentHashes: [String] = [],
+        references: [GitRef] = []
+    ) {
         self.hash = hash
         self.shortHash = shortHash
         self.message = message
         self.author = author
         self.date = date
+        self.parentHashes = parentHashes
+        self.references = references
     }
+
+    public var isMerge: Bool { parentHashes.count > 1 }
 }
 
 public struct GitBranch: Sendable, Equatable, Identifiable {

@@ -16,6 +16,17 @@ public protocol GitReading: Sendable {
     /// aralık `defaultBranch..branch`tır — yalnız branch'e özgü commit'ler
     /// (en kolay gözden kaçan davranış). Her zaman max 50.
     func commits(repoPath: String, branch: String?) async -> [GitCommit]
+    /// Karar 40: Source Control > History'nin TEK kaynağı — `HEAD`ten geriye
+    /// tek bir `--topo-order --decorate=full` log'u; parent'lar ve ref'ler
+    /// dolu gelir (`CommitGraph` lane'leri bunlardan kurar). Branch başına
+    /// ayrı log YALNIZ `commits(repoPath:branch:)`te kalır.
+    func history(repoPath: String, limit: Int) async -> [GitCommit]
+    /// `git remote get-url origin` — ham çıktı (normalizasyon `GitRemote`de).
+    /// Remote yoksa nil.
+    func remoteURL(repoPath: String) async -> String?
+    /// GitHub CLI PATH'te var mı? "Create PR" eyleminin kapısı; git'e komşu bir
+    /// CLI olduğu için aynı sınırda durur (repo'dan bağımsızdır).
+    func isGitHubCLIAvailable() async -> Bool
     func status(repoPath: String) async -> [GitFileChange]
     /// Karar 6 (lazy): commit seçilince yalnız dosya listesi.
     func commitFiles(repoPath: String, sha: String) async -> [CommitFile]

@@ -48,6 +48,106 @@ public enum GitPorcelainParser {
         }
     }
 
+    // MARK: - log -z --decorate=full (graph history, karar 40)
+
+    /// Kayıt ayracı NUL (`-z`), alan ayracı US (`%x1f`):
+    /// `%H %h %an %aI %P %D %s`.
+    ///
+    /// `--decorate=full` altında `%D` ref'leri TAM adla verir
+    /// (`HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1`);
+    /// kısa biçim de (`--decorate=short` / bayraksız) kabul edilir, çünkü
+    /// kullanıcının `log.decorate` config'i çıktıyı kısaltabilir.
+    public static func parseHistory(_ raw: String) -> [GitCommit] {
+        let dateParser = ISO8601DateFormatter()
+        return raw.split(separator: "\0", omittingEmptySubsequences: true).compactMap { record in
+            let parts = record.split(
+                separator: "\u{1f}", maxSplits: 6, omittingEmptySubsequences: false
+            )
+            guard parts.count == 7 else { return nil }
+            let hash = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !hash.isEmpty else { return nil }
+            let parents = parts[4]
+                .split(separator: " ", omittingEmptySubsequences: true)
+                .map(String.init)
+            return GitCommit(
+                hash: hash,
+                shortHash: String(parts[1]),
+                message: String(parts[6]),
+                author: String(parts[2]),
+                date: dateParser.date(from: String(parts[3])) ?? Date(timeIntervalSince1970: 0),
+                parentHashes: parents,
+                references: parseRefs(String(parts[5]))
+            )
+        }
+    }
+
+    /// `%D` dekorasyon listesi → `GitRef`ler.
+    ///
+    /// Ayraç ", " (virgül + boşluk): git ref adları boşluk içeremez, bu yüzden
+    /// ad içindeki bir virgül ayraçla karışmaz.
+    public static func parseRefs(_ raw: String) -> [GitRef] {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return [] }
+        return trimmed
+            .components(separatedBy: ", ")
+            .compactMap { parseRef($0.trimmingCharacters(in: .whitespaces)) }
+            .sorted(by: refOrder)
+    }
+
+    private static func parseRef(_ raw: String) -> GitRef? {
+        guard !raw.isEmpty else { return nil }
+        if let arrow = raw.range(of: " -> ") {
+            let target = String(raw[arrow.upperBound...])
+            return GitRef(name: shortBranchName(target), kind: .localBranch, isCurrent: true)
+        }
+        if raw == "HEAD" {
+            // Detached HEAD: işaret ettiği branch yok.
+            return GitRef(name: "HEAD", kind: .head, isCurrent: true)
+        }
+        if raw.hasPrefix("tag: ") {
+            let name = String(raw.dropFirst("tag: ".count))
+            return GitRef(name: shortTagName(name), kind: .tag)
+        }
+        if raw.hasPrefix("refs/tags/") {
+            return GitRef(name: shortTagName(raw), kind: .tag)
+        }
+        if raw.hasPrefix("refs/remotes/") {
+            let name = String(raw.dropFirst("refs/remotes/".count))
+            // `origin/HEAD` sembolik bir işaretçi; kendi rozetini hak etmiyor.
+            guard !name.hasSuffix("/HEAD") else { return nil }
+            return GitRef(name: name, kind: .remoteBranch)
+        }
+        if raw.hasPrefix("refs/heads/") {
+            return GitRef(name: String(raw.dropFirst("refs/heads/".count)), kind: .localBranch)
+        }
+        // Kısa biçim (`--decorate=short`): "origin/main" uzak, gerisi yereldir.
+        guard !raw.hasSuffix("/HEAD") else { return nil }
+        return GitRef(name: raw, kind: raw.contains("/") ? .remoteBranch : .localBranch)
+    }
+
+    private static func shortBranchName(_ raw: String) -> String {
+        raw.hasPrefix("refs/heads/") ? String(raw.dropFirst("refs/heads/".count)) : raw
+    }
+
+    private static func shortTagName(_ raw: String) -> String {
+        raw.hasPrefix("refs/tags/") ? String(raw.dropFirst("refs/tags/".count)) : raw
+    }
+
+    /// Rozet sırası: checkout edilmiş ref → yerel branch → uzak branch → tag.
+    private static func refOrder(_ lhs: GitRef, _ rhs: GitRef) -> Bool {
+        func rank(_ ref: GitRef) -> Int {
+            if ref.isCurrent { return 0 }
+            switch ref.kind {
+            case .head: return 0
+            case .localBranch: return 1
+            case .remoteBranch: return 2
+            case .tag: return 3
+            }
+        }
+        let (left, right) = (rank(lhs), rank(rhs))
+        return left == right ? lhs.name < rhs.name : left < right
+    }
+
     // MARK: - status --porcelain
 
     public static func parseStatus(_ raw: String) -> [GitFileChange] {

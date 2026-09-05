@@ -17,6 +17,7 @@ struct SourceControlView: View {
                 Image(systemName: "arrow.triangle.branch")
                 Text(branch?.name ?? "No commits yet").lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 0)
+                createPullRequestButton
                 IconButton(systemName: "arrow.clockwise", label: "Refresh source control") {
                     let path = repoPath
                     refreshing = true
@@ -135,31 +136,54 @@ struct SourceControlView: View {
         .padding(.vertical, Theme.Spacing.xs)
     }
 
+    /// Karar 40: History artık branch başına log değil, `HEAD`ten geriye tek
+    /// topolojik graph.
     private var history: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                let commits = branch.flatMap { shell.git.commitsByBranch[repoPath]?[$0.name] } ?? []
-                if commits.isEmpty { EmptyStatePlaceholder("No commits", density: .inline) }
-                ForEach(commits) { commit in
-                    Button { shell.presentCommit(commit) } label: {
-                        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-                            Image(systemName: "circle.inset.filled")
-                                .foregroundStyle(Theme.accentPrimary)
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text(commit.message).lineLimit(2).foregroundStyle(Theme.textPrimary)
-                                Text("\(commit.shortHash) · \(commit.author)")
-                                    .foregroundStyle(Theme.textSecondary)
-                                Text(commit.date, style: .relative).foregroundStyle(Theme.textMuted)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .font(Theme.Typography.ui(.body))
-                        .padding(Theme.Spacing.md)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+        CommitGraphView(repoPath: repoPath)
+    }
+
+    // MARK: - Create PR (karar 40)
+
+    /// Yalnız GitHub remote'lu ve default branch DIŞINDA bir branch checkout
+    /// edilmiş repolarda görünür. `gh` yoksa buton kalır ama kapalıdır —
+    /// kaybolması "neden yok?" sorusunu doğuruyordu.
+    @ViewBuilder
+    private var createPullRequestButton: some View {
+        if let branch = shell.git.pullRequestBranch(repoPath) {
+            let hasCLI = shell.git.isGitHubCLIAvailable
+            Button { createPullRequest(for: branch) } label: {
+                Label("Create PR", systemImage: "arrow.triangle.pull")
+                    .labelStyle(.titleAndIcon)
+                    .font(Theme.Typography.ui(.caption, weight: .medium))
+                    .foregroundStyle(hasCLI ? Theme.accentPrimary : Theme.textMuted)
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, Theme.Spacing.xxs)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .stroke(
+                                (hasCLI ? Theme.accentPrimary : Theme.textMuted)
+                                    .opacity(Self.prBorderOpacity),
+                                lineWidth: Theme.Stroke.hairline
+                            )
+                    )
             }
+            .buttonStyle(.plain)
+            .disabled(!hasCLI)
+            .help(
+                hasCLI
+                    ? "Open a GitHub pull request for \(branch)"
+                    : "GitHub CLI (gh) not found"
+            )
         }
     }
+
+    /// PR formu tarayıcıda açılır (`--web`): başlık/gövde düzenlemesi Lumi'ye
+    /// taşınmaz (kapsam dışı), komut kullanıcının gördüğü bir terminalde koşar
+    /// ki `gh auth` istemi görünür olsun.
+    private func createPullRequest(for branch: String) {
+        let escaped = branch.replacingOccurrences(of: "'", with: "'\\''")
+        shell.terminals.spawn(in: repoPath, command: "gh pr create --web --head '\(escaped)'")
+    }
+
+    private static let prBorderOpacity = 0.5
 }

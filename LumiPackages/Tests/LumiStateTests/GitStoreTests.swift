@@ -464,4 +464,118 @@ final class GitStoreTests: XCTestCase {
         XCTAssertEqual(store.changes["/repo-a"]?.count, 3)
         XCTAssertEqual(store.changes["/repo-b"]?.count, 0)
     }
+
+    // MARK: - Graph history (karar 40)
+
+    private func historyCommit(
+        _ hash: String,
+        parents: [String] = [],
+        refs: [GitRef] = []
+    ) -> GitCommit {
+        GitCommit(
+            hash: hash,
+            shortHash: String(hash.prefix(7)),
+            message: "m-\(hash)",
+            author: "a",
+            date: Date(timeIntervalSince1970: 0),
+            parentHashes: parents,
+            references: refs
+        )
+    }
+
+    func testLoadAllLoadsHistoryWithFixedLimit() async {
+        let git = FakeGitService()
+        await git.setHistory([historyCommit("aaa", parents: ["bbb"]), historyCommit("bbb")])
+        let store = makeStore(git)
+
+        await store.loadAll(repoPath)
+
+        XCTAssertEqual(store.history[repoPath]?.map(\.hash), ["aaa", "bbb"])
+        let calls = await git.historyCalls
+        XCTAssertEqual(calls, [GitStore.historyLimit])
+    }
+
+    func testHeadHashComesFromCurrentRefDecoration() async {
+        let git = FakeGitService()
+        await git.setHistory([
+            historyCommit("aaa", parents: ["bbb"]),
+            historyCommit("bbb", refs: [GitRef(name: "main", kind: .localBranch, isCurrent: true)]),
+        ])
+        let store = makeStore(git)
+
+        await store.loadHistory(repoPath)
+
+        XCTAssertEqual(store.headHash[repoPath], "bbb")
+    }
+
+    func testHeadHashFallsBackToNewestCommitWithoutDecoration() async {
+        let git = FakeGitService()
+        await git.setHistory([historyCommit("aaa"), historyCommit("bbb")])
+        let store = makeStore(git)
+
+        await store.loadHistory(repoPath)
+
+        XCTAssertEqual(store.headHash[repoPath], "aaa")
+    }
+
+    func testCommitURLIsBuiltOnlyForGitHubRemotes() async {
+        let git = FakeGitService()
+        await git.setRemoteURL("git@github.com:owner/repo.git")
+        let store = makeStore(git)
+        await store.loadHistory(repoPath)
+
+        XCTAssertEqual(
+            store.commitURL(repoPath, sha: "abc")?.absoluteString,
+            "https://github.com/owner/repo/commit/abc"
+        )
+        XCTAssertTrue(store.isGitHubRepo(repoPath))
+
+        await git.setRemoteURL("git@gitlab.com:owner/repo.git")
+        await store.loadHistory(repoPath)
+
+        XCTAssertNil(store.commitURL(repoPath, sha: "abc"))
+        XCTAssertFalse(store.isGitHubRepo(repoPath))
+    }
+
+    func testPullRequestBranchRequiresGitHubRemoteAndNonDefaultBranch() async {
+        let git = FakeGitService()
+        await git.setRemoteURL("https://github.com/owner/repo.git")
+        await git.setBranches([GitBranch(name: "feature/x", isCurrent: true)])
+        let store = makeStore(git)
+
+        await store.loadAll(repoPath)
+        XCTAssertEqual(store.pullRequestBranch(repoPath), "feature/x")
+
+        await git.setBranches([GitBranch(name: "main", isCurrent: true)])
+        await store.loadAll(repoPath)
+        XCTAssertNil(store.pullRequestBranch(repoPath), "default branch'te PR açılmaz")
+    }
+
+    func testGitHubCLIIsProbedOnlyOnce() async {
+        let git = FakeGitService()
+        await git.setGitHubCLIInstalled(true)
+        let store = makeStore(git)
+
+        await store.loadHistory(repoPath)
+        await store.loadHistory(repoPath)
+
+        XCTAssertTrue(store.isGitHubCLIAvailable)
+        await git.setGitHubCLIInstalled(false)
+        await store.loadHistory(repoPath)
+        XCTAssertTrue(store.isGitHubCLIAvailable, "yoklama tekrarlanmamalı")
+    }
+
+    func testEvictClearsHistoryCaches() async {
+        let git = FakeGitService()
+        await git.setHistory([historyCommit("aaa")])
+        await git.setRemoteURL("git@github.com:owner/repo.git")
+        let store = makeStore(git)
+        await store.loadAll(repoPath)
+
+        store.evict(repoPath)
+
+        XCTAssertNil(store.history[repoPath])
+        XCTAssertNil(store.headHash[repoPath])
+        XCTAssertNil(store.commitURL(repoPath, sha: "abc"))
+    }
 }

@@ -24,6 +24,95 @@ final class GitPorcelainParserTests: XCTestCase {
         XCTAssertEqual(GitPorcelainParser.parseBranches(raw).map(\.name), ["main"])
     }
 
+    // MARK: - log -z --decorate=full (graph history, karar 40)
+
+    private func record(
+        hash: String,
+        short: String,
+        author: String = "Ada",
+        date: String = "2026-01-02T03:04:05+03:00",
+        parents: String = "",
+        decoration: String = "",
+        subject: String = "subject"
+    ) -> String {
+        [hash, short, author, date, parents, decoration, subject]
+            .joined(separator: "\u{1f}")
+    }
+
+    func testParsesHistoryRecordsSeparatedByNUL() {
+        let raw = [
+            record(hash: "aaa", short: "aaa1111", parents: "bbb", subject: "second"),
+            record(hash: "bbb", short: "bbb2222", subject: "first"),
+        ].joined(separator: "\0")
+
+        let commits = GitPorcelainParser.parseHistory(raw)
+
+        XCTAssertEqual(commits.map(\.hash), ["aaa", "bbb"])
+        XCTAssertEqual(commits.map(\.message), ["second", "first"])
+        XCTAssertEqual(commits[0].parentHashes, ["bbb"])
+        XCTAssertTrue(commits[1].parentHashes.isEmpty, "root commit'in parent'ı yok")
+    }
+
+    func testParsesMergeParentsInOrder() {
+        let raw = record(hash: "mmm", short: "mmm1111", parents: "aaa bbb")
+
+        let commits = GitPorcelainParser.parseHistory(raw)
+
+        XCTAssertEqual(commits[0].parentHashes, ["aaa", "bbb"])
+        XCTAssertTrue(commits[0].isMerge)
+    }
+
+    func testParsesFullDecorationIntoTypedRefs() {
+        let raw = record(
+            hash: "aaa", short: "aaa1111",
+            decoration: "HEAD -> refs/heads/main, refs/remotes/origin/main, "
+                + "refs/remotes/origin/HEAD, tag: refs/tags/v1.0"
+        )
+
+        let refs = GitPorcelainParser.parseHistory(raw)[0].references
+
+        XCTAssertEqual(refs.map(\.name), ["main", "origin/main", "v1.0"])
+        XCTAssertEqual(refs.map(\.kind), [.localBranch, .remoteBranch, .tag])
+        XCTAssertEqual(refs.map(\.isCurrent), [true, false, false])
+    }
+
+    func testParsesShortDecorationForm() {
+        let raw = record(hash: "aaa", short: "aaa1111", decoration: "HEAD -> main, origin/main, tag: v1.0")
+
+        let refs = GitPorcelainParser.parseHistory(raw)[0].references
+
+        XCTAssertEqual(refs.map(\.name), ["main", "origin/main", "v1.0"])
+        XCTAssertEqual(refs.map(\.kind), [.localBranch, .remoteBranch, .tag])
+    }
+
+    func testMarksDetachedHeadAsHeadRef() {
+        let refs = GitPorcelainParser.parseRefs("HEAD, refs/tags/v2")
+
+        XCTAssertEqual(refs.map(\.kind), [.head, .tag])
+        XCTAssertTrue(refs[0].isCurrent)
+    }
+
+    func testSortsRefsCurrentThenLocalThenRemoteThenTag() {
+        let refs = GitPorcelainParser.parseRefs(
+            "tag: refs/tags/v9, refs/remotes/origin/dev, refs/heads/dev, HEAD -> refs/heads/main"
+        )
+
+        XCTAssertEqual(refs.map(\.name), ["main", "dev", "origin/dev", "v9"])
+    }
+
+    func testSkipsMalformedHistoryRecords() {
+        let raw = ["", "not-enough\u{1f}fields", record(hash: "aaa", short: "aaa1111")]
+            .joined(separator: "\0")
+
+        XCTAssertEqual(GitPorcelainParser.parseHistory(raw).map(\.hash), ["aaa"])
+    }
+
+    func testParsesEmptyDecorationAsNoRefs() {
+        let commits = GitPorcelainParser.parseHistory(record(hash: "aaa", short: "aaa1111"))
+
+        XCTAssertTrue(commits[0].references.isEmpty)
+    }
+
     // MARK: - default branch
 
     func testDefaultBranchPrefersMainOverMaster() {

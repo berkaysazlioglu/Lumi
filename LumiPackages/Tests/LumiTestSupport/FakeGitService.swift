@@ -34,6 +34,10 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     public var readFileDelay: Duration = .zero
     public var branchesToReturn: [GitBranch] = []
     public var commitsToReturn: [GitCommit] = []
+    /// `history(repoPath:limit:)` dönüşü — graph'lı History sekmesi.
+    public var historyToReturn: [GitCommit] = []
+    public var remoteURLToReturn: String?
+    public var isGitHubCLIInstalled = true
     public var statusToReturn: [GitFileChange] = []
     /// `commits` bu süre kadar askıda kalır — eşzamanlılık ölçümü için
     /// (actor reentrancy: askıdayken başka çağrılar içeri girebilir).
@@ -53,6 +57,7 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     public private(set) var branchesCallCount = 0
     public private(set) var statusCallCount = 0
     public private(set) var commitsCallCount = 0
+    public private(set) var historyCalls: [Int] = []
     public private(set) var maxConcurrentCommitsCalls = 0
     private var inFlightCommitsCalls = 0
 
@@ -82,6 +87,18 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
 
     public func setStatus(_ list: [GitFileChange]) {
         statusToReturn = list
+    }
+
+    public func setHistory(_ list: [GitCommit]) {
+        historyToReturn = list
+    }
+
+    public func setRemoteURL(_ url: String?) {
+        remoteURLToReturn = url
+    }
+
+    public func setGitHubCLIInstalled(_ installed: Bool) {
+        isGitHubCLIInstalled = installed
     }
 
     public func setDiff(_ diff: UnifiedDiff) {
@@ -114,6 +131,19 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
         }
         inFlightCommitsCalls -= 1
         return commitsToReturn
+    }
+
+    public func history(repoPath: String, limit: Int) async -> [GitCommit] {
+        historyCalls.append(limit)
+        return historyToReturn
+    }
+
+    public func remoteURL(repoPath: String) async -> String? {
+        remoteURLToReturn
+    }
+
+    public func isGitHubCLIAvailable() async -> Bool {
+        isGitHubCLIInstalled
     }
 
     public func status(repoPath: String) async -> [GitFileChange] {

@@ -55,10 +55,18 @@ public extension Theme {
         public static let compact: CGFloat = 22
         /// 16pt — satır ikonunun sabit kolon genişliği; adlar aynı x'te hizalanır.
         public static let iconColumn: CGFloat = 16
+        /// 40pt — iki satırlı commit graph satırı (mesaj + meta).
+        ///
+        /// Bu değer AYNI ZAMANDA graph'ın swimlane segment yüksekliğidir:
+        /// lane çizgilerinin satırlar arasında kesintisiz akması için canvas
+        /// yüksekliği satır yüksekliğine eşit olmak zorunda.
+        public static let commit: CGFloat = 40
     }
 
     /// Çizgi kalınlığı — tüm kenarlıklar ve ayraçlar 1pt (hairline).
     enum Stroke {
         public static let hairline: CGFloat = 1
+        /// 1.5pt — commit graph lane'i (Orca `CIRCLE_STROKE_WIDTH`).
+        public static let graph: CGFloat = 1.5
     }
 }

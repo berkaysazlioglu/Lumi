@@ -164,6 +164,9 @@ private actor PreviewRepoService: RepoServicing {
 private struct PreviewGitService: GitServicing {
     func branches(repoPath: String) async -> [GitBranch] { [] }
     func commits(repoPath: String, branch: String?) async -> [GitCommit] { [] }
+    func history(repoPath: String, limit: Int) async -> [GitCommit] { PreviewSamples.history }
+    func remoteURL(repoPath: String) async -> String? { "git@github.com:lumi/lumi.git" }
+    func isGitHubCLIAvailable() async -> Bool { true }
     func status(repoPath: String) async -> [GitFileChange] { [] }
     func commitFiles(repoPath: String, sha: String) async -> [CommitFile] { [] }
 
@@ -228,6 +231,40 @@ private struct PreviewUsageService: UsageServicing {
 /// `SideBySideDiffView` hem `MarkdownDiffView` hem FileViewer preview'ında
 /// kullanılır.
 enum PreviewSamples {
+    /// Merge'lü, ref'li küçük bir graph — `CommitGraphView` önizlemesi.
+    static let history: [GitCommit] = {
+        func commit(
+            _ hash: String, _ subject: String,
+            parents: [String], refs: [GitRef] = [], minutesAgo: Int
+        ) -> GitCommit {
+            GitCommit(
+                hash: hash,
+                shortHash: String(hash.prefix(7)),
+                message: subject,
+                author: "Ada Lovelace",
+                date: Date().addingTimeInterval(TimeInterval(-60 * minutesAgo)),
+                parentHashes: parents,
+                references: refs
+            )
+        }
+        return [
+            commit(
+                "a1b2c3d4e5f6", "feat: commit graph", parents: ["b1", "c1"],
+                refs: [
+                    GitRef(name: "main", kind: .localBranch, isCurrent: true),
+                    GitRef(name: "origin/main", kind: .remoteBranch),
+                ],
+                minutesAgo: 4
+            ),
+            commit("b1", "refactor: lane algoritması", parents: ["d1"], minutesAgo: 40),
+            commit(
+                "c1", "fix: ref rozetleri", parents: ["d1"],
+                refs: [GitRef(name: "v0.7.0", kind: .tag)], minutesAgo: 90
+            ),
+            commit("d1", "chore: ilk commit", parents: [], minutesAgo: 3000),
+        ]
+    }()
+
     static let markdown = """
     # Lumi
 

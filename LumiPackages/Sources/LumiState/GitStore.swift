@@ -9,9 +9,22 @@ import Observation
 public final class GitStore {
     /// Eşzamanlı `git log` tavanı (bkz. `loadCommits`).
     static let maxConcurrentBranchLoads = 4
+    /// History graph'ının commit tavanı (karar 40): tek log, sabit pencere.
+    public static let historyLimit = 200
+    /// PR açılamayan branch'ler — bu branch'lerdeyken "Create PR" görünmez.
+    static let defaultBranchNames: Set<String> = ["main", "master"]
 
     public private(set) var branches: [String: [GitBranch]] = [:]
     public private(set) var commitsByBranch: [String: [String: [GitCommit]]] = [:]
+    /// Karar 40: `HEAD`ten geriye tek topolojik log — graph'ın kaynağı.
+    public private(set) var history: [String: [GitCommit]] = [:]
+    /// History'nin HEAD commit'i (`HEAD -> …` dekorasyonundan türer).
+    public private(set) var headHash: [String: String] = [:]
+    /// `origin` remote URL'i (ham); GitHub eylemlerinin kapısı.
+    public private(set) var remoteURLs: [String: String] = [:]
+    /// GitHub CLI PATH'te mi? Süreç ömrü boyunca bir kez ölçülür.
+    public private(set) var isGitHubCLIAvailable = false
+    @ObservationIgnored private var didProbeGitHubCLI = false
     public private(set) var changes: [String: [GitFileChange]] = [:]
     public private(set) var explorerStatuses: [String: [String: FileChangeStatus]] = [:]
     public private(set) var selectedFiles = KeyedToggleSet<String, String>()
@@ -50,8 +63,56 @@ public final class GitStore {
         }
 
         await loadChanges(repoPath)
+        await loadHistory(repoPath)
 
         commitsByBranch[repoPath] = await loadCommits(repoPath, branches: branchList)
+    }
+
+    /// Graph history + remote bağlamı. `gh` yoklaması yalnız İLK çağrıda
+    /// koşar: PATH taraması repo'dan bağımsızdır ve her tazelemede bir
+    /// `which gh` süreci açmak gereksiz.
+    public func loadHistory(_ repoPath: String) async {
+        let commits = await git.history(repoPath: repoPath, limit: Self.historyLimit)
+        history[repoPath] = commits
+        if let head = commits.first(where: { commit in
+            commit.references.contains { $0.isCurrent || $0.kind == .head }
+        }) {
+            headHash[repoPath] = head.hash
+        } else {
+            headHash[repoPath] = commits.first?.hash
+        }
+
+        if let remote = await git.remoteURL(repoPath: repoPath) {
+            remoteURLs[repoPath] = remote
+        } else {
+            remoteURLs.removeValue(forKey: repoPath)
+        }
+
+        if !didProbeGitHubCLI {
+            didProbeGitHubCLI = true
+            isGitHubCLIAvailable = await git.isGitHubCLIAvailable()
+        }
+    }
+
+    // MARK: - GitHub türevleri (karar 40)
+
+    /// Commit'in GitHub web adresi — remote GitHub değilse nil (eylem gizlenir).
+    public func commitURL(_ repoPath: String, sha: String) -> URL? {
+        guard let remote = remoteURLs[repoPath] else { return nil }
+        return GitRemote.commitURL(from: remote, sha: sha)
+    }
+
+    public func isGitHubRepo(_ repoPath: String) -> Bool {
+        remoteURLs[repoPath].map(GitRemote.isGitHub) ?? false
+    }
+
+    /// "Create PR" kapısı: GitHub remote + `gh` kurulu + default branch DIŞINDA
+    /// bir branch checkout edilmiş olmalı.
+    public func pullRequestBranch(_ repoPath: String) -> String? {
+        guard isGitHubRepo(repoPath) else { return nil }
+        guard let current = branches[repoPath]?.first(where: { $0.isCurrent }) else { return nil }
+        guard !Self.defaultBranchNames.contains(current.name) else { return nil }
+        return current.name
     }
 
     /// Branch başına `git log` çağrısı — aynı anda en fazla
@@ -146,6 +207,9 @@ public final class GitStore {
     public func evict(_ repoPath: String) {
         branches.removeValue(forKey: repoPath)
         commitsByBranch.removeValue(forKey: repoPath)
+        history.removeValue(forKey: repoPath)
+        headHash.removeValue(forKey: repoPath)
+        remoteURLs.removeValue(forKey: repoPath)
         changes.removeValue(forKey: repoPath)
         explorerStatuses.removeValue(forKey: repoPath)
         commitMessages.removeValue(forKey: repoPath)

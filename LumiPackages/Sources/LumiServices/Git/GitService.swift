@@ -15,18 +15,28 @@ public struct GitService: GitServicing {
 
     private let commands: GitCommandRunner
     private let guardian: RepoPathGuard
+    /// `gh` (GitHub CLI) varlığı için — git'in kendisi `GitCommandRunner`dan
+    /// geçer, komşu CLI'lar PATH çözümlemesinden.
+    private let locator: any BinaryLocating
 
     public init(
         runner: any ProcessRunning = SystemProcessRunner(),
-        pathGuard: RepoPathGuard = RepoPathGuard()
+        pathGuard: RepoPathGuard = RepoPathGuard(),
+        locator: any BinaryLocating = SystemBinaryLocator()
     ) {
         self.commands = GitCommandRunner(runner: runner)
         self.guardian = pathGuard
+        self.locator = locator
     }
 
-    public init(commands: GitCommandRunner, pathGuard: RepoPathGuard = RepoPathGuard()) {
+    public init(
+        commands: GitCommandRunner,
+        pathGuard: RepoPathGuard = RepoPathGuard(),
+        locator: any BinaryLocating = SystemBinaryLocator()
+    ) {
         self.commands = commands
         self.guardian = pathGuard
+        self.locator = locator
     }
 
     // MARK: - Branch / commit log
@@ -64,6 +74,39 @@ public struct GitService: GitServicing {
             return []
         }
         return GitPorcelainParser.parseCommits(output.stdout)
+    }
+
+    /// Karar 40: History sekmesinin tek log'u. `-z` NUL çerçevelemesi mesaj
+    /// içindeki satır sonlarını korur; `--decorate=full` ref'leri tam adla
+    /// verir (kullanıcının `log.decorate` config'i çıktıyı kısaltamaz).
+    public func history(repoPath: String, limit: Int) async -> [GitCommit] {
+        guard limit > 0 else { return [] }
+        let output = await commands.run(
+            [
+                "log", "--max-count=\(limit)", "-z", "--topo-order", "--decorate=full",
+                "--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%P%x1f%D%x1f%s", "HEAD",
+            ],
+            in: repoPath
+        )
+        guard let output, output.exitCode == 0 else {
+            commands.logQuietFailure("history", output)
+            return []
+        }
+        return GitPorcelainParser.parseHistory(output.stdout)
+    }
+
+    public func remoteURL(repoPath: String) async -> String? {
+        let output = await commands.run(["remote", "get-url", "origin"], in: repoPath)
+        guard let output, output.exitCode == 0 else {
+            commands.logQuietFailure("remoteURL", output)
+            return nil
+        }
+        let trimmed = output.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    public func isGitHubCLIAvailable() async -> Bool {
+        await locator.locate("gh") != nil
     }
 
     /// Tek `for-each-ref` ile yalnız iki aday ref'i sorar — `branch --list`'in
