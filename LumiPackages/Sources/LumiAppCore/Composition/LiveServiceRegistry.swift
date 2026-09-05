@@ -3,6 +3,9 @@ import LumiKit
 import LumiServices
 import LumiState
 import LumiTerminal
+// Vurgulayıcının paleti/fontu tema token'larından gelir; composition root
+// bunları servise enjekte eder (refactor 7.5) — servis LumiUI'ı görmez.
+import LumiUI
 
 /// Üretim servis grafiği (refactor 3.2): eski `AppContainer.init` gövdesi.
 /// Somut servis tipleri YALNIZ burada görünür; `AppContainer` ve feature
@@ -16,6 +19,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let git: any GitServicing
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
+    let highlighter: any SyntaxHighlighting
     let notifications: any NotificationServicing
     let sessionStarter: any SessionStarterServicing
     let activityMonitor: any ActivityMonitoring
@@ -50,6 +54,10 @@ final class LiveServiceRegistry: ServiceRegistry {
         )
         repo = RepoService()
         git = GitService()
+        highlighter = HighlightrEngine(style: HighlightrStyle(
+            plainTextColor: Theme.NS.textPrimary,
+            font: { LumiFonts.mono(size: $0) }
+        ))
         notifications = NotificationService(presenter: notificationPresenter)
         // K38-A: her kullanım kaynağı 5 dk TTL cache dekoratörüyle sarılır
         // (design/05 §cache "≥5 dk TTL"). En küçük otomatik tazeleme aralığı da

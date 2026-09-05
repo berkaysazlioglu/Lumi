@@ -30,18 +30,10 @@ public struct FileViewerOverlay: View {
 }
 
 public struct SettingsOverlay: View {
-    @Shell private var shell
-
     public init() {}
 
     public var body: some View {
-        SettingsView(
-            settings: shell.settings,
-            sessionSchedule: shell.sessionSchedule,
-            usageStores: shell.usage,
-            chooseFolder: shell.actions.chooseFolder,
-            onClose: { shell.dialogs.isSettingsOpen = false }
-        )
+        SettingsShell()
     }
 }
 

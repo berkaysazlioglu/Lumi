@@ -18,7 +18,7 @@ public struct TerminalsRouteView: View {
     public var body: some View {
         if let repoPath {
             content(repoPath)
-                .padding(12)
+                .padding(Theme.Spacing.lg)
         } else {
             WelcomeView()
         }
@@ -29,7 +29,7 @@ public struct TerminalsRouteView: View {
         let visible = shell.terminals.visibleTerminals(in: repoPath)
         let minimized = shell.terminals.minimizedTerminals(in: repoPath)
         let maximizedID = shell.layout.maximizedTerminal(in: repoPath)
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Spacing.md) {
             if !minimized.isEmpty {
                 // Minimize şeridi: tıklama yalnız restore eder, odak vermez.
                 TerminalChipStrip(label: "Minimized:", items: minimized) {
@@ -69,10 +69,7 @@ public struct TerminalsRouteView: View {
     }
 
     private func emptyState(_ repoPath: String) -> some View {
-        VStack(spacing: 10) {
-            Text("No terminals in this repo")
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(Theme.textMuted)
+        EmptyStatePlaceholder("No terminals in this repo", density: .full) {
             // Topbar ile aynı modern split-button (DRY): hover'da dropdown açılır.
             NewTerminalButton(
                 provider: shell.settings.current.aiProvider,
@@ -85,6 +82,5 @@ public struct TerminalsRouteView: View {
                 onNewBash: { shell.terminals.spawn(in: repoPath, task: "Bash") }
             )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -48,8 +48,9 @@ public struct NewTerminalToolbarItem: View {
                 .padding(.trailing, TopBarMetrics.trailingPadding)
                 Rectangle()
                     .fill(Theme.border)
-                    .frame(width: 1, height: 16)
+                    .frame(width: Theme.Stroke.hairline, height: Theme.Spacing.xl)
                     .padding(.trailing, TopBarMetrics.trailingPadding)
+                    .accessibilityHidden(true)
             }
         }
     }

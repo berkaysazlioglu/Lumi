@@ -170,7 +170,7 @@ final class StoreEventLifecycleTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(100))
 
         XCTAssertEqual(service.writtenTexts.count, 1, "stop sonrası status event'i enjeksiyon tetiklemez")
-        XCTAssertEqual(store.prompts(for: id), ["queued"], "kuyruk olduğu gibi kalır")
+        XCTAssertEqual(store.prompts(for: id).map(\.text), ["queued"], "kuyruk olduğu gibi kalır")
     }
 
     func testPromptQueueStoreIgnoresExitEventAfterStop() async throws {
@@ -183,7 +183,7 @@ final class StoreEventLifecycleTests: XCTestCase {
         service.emit(.exited(id, code: 0))
         try await Task.sleep(for: .milliseconds(100))
 
-        XCTAssertEqual(store.prompts(for: id), ["queued"], "stop sonrası exit kuyruğu temizlemez")
+        XCTAssertEqual(store.prompts(for: id).map(\.text), ["queued"], "stop sonrası exit kuyruğu temizlemez")
     }
 
     func testPromptQueueStoreStopCancelsPendingSettleWork() async throws {
@@ -204,7 +204,7 @@ final class StoreEventLifecycleTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(400))
 
         XCTAssertTrue(service.writtenTexts.isEmpty, "stop bekleyen settle task'ını iptal eder")
-        XCTAssertEqual(store.prompts(for: id), ["hello"])
+        XCTAssertEqual(store.prompts(for: id).map(\.text), ["hello"])
     }
 
     func testPromptQueueStoreStartIsIdempotent() async throws {

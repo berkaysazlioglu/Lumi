@@ -1,14 +1,23 @@
 import Foundation
 import XCTest
 import LumiKit
+import LumiTestSupport
 @testable import LumiServices
 
 /// 1.8 / karar 32: OAuth yolundaki hataların hangisinin CLI yedeğine düşeceği,
 /// hangisinin görünür hata olacağı. CLI yedeği abonelik kotasından düştüğü için
 /// geçici sunucu/ağ hatalarında ÇAĞRILMAMALIDIR.
+///
+/// **Bu sınıf host'a HİÇ çıkmaz.** Üç kenar da ikame edilir: HTTP `URLProtocol`
+/// stub'ıyla, PATH araması `FakeBinaryLocator` ile, process çalıştırma
+/// `FakeProcessRunner` ile. `.transportError` adımının ürettiği
+/// `NSURLErrorDomain -1005` gerçek bir ağ hatası değil, stub'ın bilinçli
+/// enjeksiyonudur; `testEveryRequestGoesThroughTheInjectedStub` da tek
+/// dokunulan URL'in usage endpoint'i olduğunu kilitler.
 final class ClaudeUsageServiceTests: XCTestCase {
     /// PATH'te bulunmayacak bir ad: CLI yoluna düşüldüğü `.cliNotFound` ile
-    /// kesin olarak gözlenir.
+    /// kesin olarak gözlenir. `FakeBinaryLocator` boş olduğu için gerçek
+    /// PATH'te böyle bir arama hiç yapılmaz.
     private static let missingBinary = "lumi-yok-claude-binary"
 
     private let validBody = """
@@ -31,6 +40,9 @@ final class ClaudeUsageServiceTests: XCTestCase {
             binaryName: Self.missingBinary,
             session: URLSession(configuration: configuration),
             retryDelay: .zero,
+            // Host'un PATH'i ve process'leri testin dışında kalır.
+            runner: FakeProcessRunner(),
+            locator: FakeBinaryLocator(),
             accessToken: { token }
         )
     }
@@ -117,6 +129,23 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestCount, 2)
     }
 
+    // MARK: - Ağ izolasyonu
+
+    /// Servis yalnız enjekte edilen oturumu kullanır ve tek bir endpoint'e
+    /// gider: testler hiçbir koşulda gerçek bir host'a çıkmaz.
+    func testEveryRequestGoesThroughTheInjectedStub() async throws {
+        let service = makeService(steps: [.transportError, .status(200, validBody)])
+
+        _ = try await service.fetch()
+
+        XCTAssertEqual(StubURLProtocol.requestCount, 2)
+        XCTAssertEqual(
+            Set(StubURLProtocol.requestedURLs),
+            [ClaudeUsageService.usageURL],
+            "stub dışına çıkan bir istek var"
+        )
+    }
+
     // MARK: - Yardımcılar
 
     private func captureError(
@@ -159,18 +188,35 @@ final class StubURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var steps: [Step] = []
     nonisolated(unsafe) private static var count = 0
+    nonisolated(unsafe) private static var urls: [URL] = []
 
     static func reset(_ steps: [Step]) {
         lock.lock()
         defer { lock.unlock() }
         self.steps = steps
         count = 0
+        urls = []
     }
 
     static var requestCount: Int {
         lock.lock()
         defer { lock.unlock() }
         return count
+    }
+
+    /// Stub'a ulaşan isteklerin URL'leri — "gerçek ağa çıkıldı mı" sorusunun
+    /// kaynak-üstü cevabı.
+    static var requestedURLs: [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        return urls
+    }
+
+    static func record(_ url: URL?) {
+        guard let url else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        urls.append(url)
     }
 
     private static func nextStep() -> Step {
@@ -186,6 +232,7 @@ final class StubURLProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.record(request.url)
         switch Self.nextStep() {
         case .status(let code, let body):
             let response = HTTPURLResponse(

@@ -204,6 +204,58 @@ extension UsageStoreTests {
         XCTAssertEqual(count, 1, "hata sonrası da min aralık beklenir")
     }
 
+    // MARK: - Durum özeti (refactor 7.5/7.9)
+
+    func testStatusKindIsIdleBeforeFirstFetch() {
+        let service = FakeUsageService(outcome: .success(makeSnapshot(percent: 10)))
+        let store = UsageStore(service: service)
+
+        XCTAssertEqual(store.statusKind, .idle)
+    }
+
+    func testStatusKindReportsSuccessfulFetchTime() async {
+        let fetchedAt = Date(timeIntervalSince1970: 5000)
+        let snapshot = UsageSnapshot(limits: [], mode: .subscription, fetchedAt: fetchedAt)
+        let service = FakeUsageService(outcome: .success(snapshot))
+        let store = UsageStore(service: service)
+
+        await store.loadInitialIfNeeded()
+
+        XCTAssertEqual(store.statusKind, .updated(fetchedAt: fetchedAt))
+    }
+
+    func testStatusKindReportsFailureWhenNoSnapshotExists() async {
+        let service = FakeUsageService(outcome: .failure(.usageUnavailable(detail: "boom")))
+        let store = UsageStore(service: service)
+
+        await store.loadInitialIfNeeded()
+
+        guard case .failed(let message) = store.statusKind else {
+            return XCTFail("veri yokken hata .failed olmalı: \(store.statusKind)")
+        }
+        XCTAssertTrue(message.contains("boom"), message)
+    }
+
+    /// Karar 5: snapshot korunurken hata GİZLENMEZ — iki bilgi birden taşınır.
+    func testStatusKindKeepsBothSnapshotAndErrorAfterFailedRefresh() async {
+        let clock = ClockBox(Date(timeIntervalSince1970: 1000))
+        let fetchedAt = Date(timeIntervalSince1970: 5000)
+        let snapshot = UsageSnapshot(limits: [], mode: .subscription, fetchedAt: fetchedAt)
+        let service = FakeUsageService(outcome: .success(snapshot))
+        let store = UsageStore(service: service, now: { clock.value })
+
+        await store.loadInitialIfNeeded()
+        await service.setOutcome(.failure(.usageUnavailable(detail: "boom")))
+        clock.value = Date(timeIntervalSince1970: 1100)
+        await store.refresh()
+
+        guard case .staleWithError(let stamp, let message) = store.statusKind else {
+            return XCTFail("snapshot + hata .staleWithError olmalı: \(store.statusKind)")
+        }
+        XCTAssertEqual(stamp, fetchedAt)
+        XCTAssertTrue(message.contains("boom"), message)
+    }
+
     /// Kapalı gösterge hiç istek atmaz — min aralık dolmuş olsa bile (karar 32).
     func testDisabledStoreIgnoresTheGateEntirely() async {
         let clock = ClockBox(Date(timeIntervalSince1970: 1000))

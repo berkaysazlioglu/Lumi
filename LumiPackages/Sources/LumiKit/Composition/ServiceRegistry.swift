@@ -24,6 +24,10 @@ public protocol ServiceRegistry: AnyObject {
     /// terminal servisinin bir alanı olarak sızdırılmaz.
     var viewProvider: any TerminalViewProviding { get }
 
+    /// FileViewer'ın sözdizimi vurgulayıcısı (refactor 7.5). Somut motor
+    /// (`HighlightrEngine`, JSCore) LumiServices'te; kabuk yalnız protokolü görür.
+    var highlighter: any SyntaxHighlighting { get }
+
     var notifications: any NotificationServicing { get }
     var sessionStarter: any SessionStarterServicing { get }
     var activityMonitor: any ActivityMonitoring { get }

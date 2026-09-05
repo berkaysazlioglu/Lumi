@@ -124,11 +124,27 @@ struct PanelToggleToolbarItem: View {
     @Shell private var shell
 
     var body: some View {
-        HeaderIconButton(
-            icon: icon,
+        IconButton(
+            systemName: icon,
+            label: "\(slot.accessibilityName) panel",
+            size: .body,
+            weight: .regular,
+            side: TopBarMetrics.controlHeight,
+            role: .toggle,
             isActive: shell.layout.isSlotVisible(slot),
             action: { shell.layout.toggleSlot(slot) }
         )
+    }
+}
+
+private extension PanelSlot {
+    /// Toggle'ın erişilebilirlik adı (ikon tek başına anlamsız).
+    var accessibilityName: String {
+        switch self {
+        case .left: return "Left"
+        case .right: return "Right"
+        case .bottom: return "Bottom"
+        }
     }
 }
 
@@ -144,15 +160,17 @@ struct LogoToolbarItem: View {
     }()
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Spacing.sm) {
             if let logo = LumiAssets.logo {
                 Image(nsImage: logo)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 18, height: 18)
+                    .frame(width: Theme.Typography.Size.headline.points,
+                           height: Theme.Typography.Size.headline.points)
+                    .accessibilityHidden(true)
             }
             Text(Self.appName)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(Theme.Typography.mono(.body, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
         }
     }
@@ -163,8 +181,13 @@ struct FocusModeToolbarItem: View {
     @Shell private var shell
 
     var body: some View {
-        HeaderIconButton(
-            icon: "arrow.up.left.and.arrow.down.right",
+        IconButton(
+            systemName: "arrow.up.left.and.arrow.down.right",
+            label: "Focus mode",
+            size: .body,
+            weight: .regular,
+            side: TopBarMetrics.controlHeight,
+            role: .toggle,
             isActive: shell.layout.isFocusMode,
             action: { shell.layout.toggleFocusMode() }
         )
@@ -176,8 +199,13 @@ struct SettingsToolbarItem: View {
     @Shell private var shell
 
     var body: some View {
-        HeaderIconButton(
-            icon: "gearshape",
+        IconButton(
+            systemName: "gearshape",
+            label: "Settings",
+            size: .body,
+            weight: .regular,
+            side: TopBarMetrics.controlHeight,
+            role: .toggle,
             isActive: shell.dialogs.isSettingsOpen,
             action: { shell.dialogs.isSettingsOpen = true }
         )

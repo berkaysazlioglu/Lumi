@@ -22,9 +22,13 @@ public struct GitCommitsPanelItem: View {
     public var body: some View {
         if let repoPath = shell.activeRepoPath {
             VStack(alignment: .leading, spacing: 0) {
-                GitSectionHeader(title: "COMMITS", isExpanded: isExpanded) {
-                    isExpanded.toggle()
-                }
+                SectionHeader(
+                    title: "Commits",
+                    disclosure: .leading,
+                    isExpanded: isExpanded,
+                    contentPadding: Theme.Spacing.lg,
+                    onToggle: { isExpanded.toggle() }
+                )
                 if isExpanded {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
@@ -34,7 +38,7 @@ public struct GitCommitsPanelItem: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.bottom, 6)
+            .padding(.bottom, Theme.Spacing.sm)
         }
     }
 
@@ -42,7 +46,7 @@ public struct GitCommitsPanelItem: View {
     private func branches(_ repoPath: String) -> some View {
         let branches = shell.git.branches[repoPath] ?? []
         if branches.isEmpty {
-            GitEmptyText("No repository")
+            EmptyStatePlaceholder("No repository", density: .inline)
         }
         ForEach(branches) { branch in
             branchRow(repoPath, branch: branch)
@@ -59,26 +63,29 @@ public struct GitCommitsPanelItem: View {
             HStack(spacing: 6) {
                 Image(systemName: shell.git.isBranchExpanded(repoPath, name: branch.name)
                     ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(Theme.Typography.ui(.tiny, weight: .bold))
                     .foregroundStyle(Theme.textMuted)
+                    .accessibilityHidden(true)
                 Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 12))
+                    .font(Theme.Typography.ui(.body))
                     .foregroundStyle(branch.isCurrent ? Theme.accentPrimary : Theme.textMuted)
+                    .accessibilityHidden(true)
                 Text(branch.name)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(Theme.Typography.mono(.body))
                     .foregroundStyle(branch.isCurrent ? Theme.accentPrimary : Theme.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if branch.isCurrent {
-                    GitBadge(text: "current", color: Theme.accentPrimary)
+                    Badge(text: "current")
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.vertical, Theme.Spacing.sm)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Branch \(branch.name)")
     }
 
     /// Timeline: sol dikey çizgi + her commit'te nokta (HEAD = en üst commit,
@@ -87,7 +94,8 @@ public struct GitCommitsPanelItem: View {
         let commits = shell.git.commitsByBranch[repoPath]?[branch.name] ?? []
         return VStack(alignment: .leading, spacing: 0) {
             if commits.isEmpty {
-                GitEmptyText("(no branch-specific commits)").padding(.leading, 28)
+                EmptyStatePlaceholder("(no branch-specific commits)", density: .inline)
+                    .padding(.leading, 28)
             }
             ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
                 CommitRow(
@@ -98,7 +106,7 @@ public struct GitCommitsPanelItem: View {
                 )
             }
         }
-        .padding(.leading, 16)
+        .padding(.leading, Theme.Spacing.xl)
     }
 }
 
@@ -125,25 +133,28 @@ public struct GitChangesPanelItem: View {
                 Spacer(minLength: 0)
                 composer(repoPath)
             }
-            .padding(.top, 6)
+            .padding(.top, Theme.Spacing.sm)
         }
     }
 
     private func header(_ repoPath: String) -> some View {
         let changes = shell.git.changes[repoPath] ?? []
         let selectedCount = shell.git.selectedFiles[repoPath]?.count ?? 0
-        return HStack(spacing: 0) {
-            GitSectionHeader(title: "CHANGES", isExpanded: isExpanded, badge: changes.count) {
-                isExpanded.toggle()
-            }
+        return SectionHeader(
+            title: "Changes",
+            count: .warning(changes.count),
+            disclosure: .leading,
+            isExpanded: isExpanded,
+            contentPadding: Theme.Spacing.lg,
+            onToggle: { isExpanded.toggle() }
+        ) {
             if isExpanded, !changes.isEmpty {
                 Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
                     shell.git.toggleSelectAll(repoPath)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, design: .monospaced))
+                .font(Theme.Typography.mono(.caption))
                 .foregroundStyle(Theme.accentPrimary)
-                .padding(.trailing, 12)
             }
         }
     }
@@ -152,7 +163,7 @@ public struct GitChangesPanelItem: View {
     private func changeRows(_ repoPath: String) -> some View {
         let changes = shell.git.changes[repoPath] ?? []
         if changes.isEmpty {
-            GitEmptyText("No uncommitted changes")
+            EmptyStatePlaceholder("No uncommitted changes", density: .inline)
         }
         ForEach(changes) { change in
             FileChangeRow(
@@ -170,13 +181,14 @@ public struct GitChangesPanelItem: View {
     private func composer(_ repoPath: String) -> some View {
         let selectedCount = shell.git.selectedFiles[repoPath]?.count ?? 0
         let canCommit = shell.git.canCommit(repoPath)
-        return VStack(spacing: 8) {
-            Rectangle().fill(Theme.border).frame(height: 1)
-            CommitMessageField(
+        return VStack(spacing: Theme.Spacing.md) {
+            Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
+            LumiTextInput(
                 text: Binding(
                     get: { shell.git.commitMessage(for: repoPath) },
                     set: { shell.git.setCommitMessage($0, for: repoPath) }
                 ),
+                placeholder: "Commit message…",
                 onSubmit: {
                     guard canCommit else { return }
                     Task { await shell.git.commit(repoPath) }
@@ -186,93 +198,23 @@ public struct GitChangesPanelItem: View {
                 Task { await shell.git.commit(repoPath) }
             } label: {
                 Text(shell.git.isCommitting ? "Committing…" : "Commit (\(selectedCount))")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(Theme.Typography.mono(.body, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 7) // ölçek dışı ara değer (v1 paritesi)
                     .background(Theme.accentVivid)
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
                     .opacity(canCommit ? 1 : 0.4)
             }
             .buttonStyle(.plain)
             .disabled(!canCommit)
         }
+        // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
         .padding(10)
     }
 }
 
 // MARK: - Ortak parçalar
-
-/// Collapsible bölüm başlığı (v1 CollapsibleSection).
-struct GitSectionHeader: View {
-    let title: String
-    let isExpanded: Bool
-    var badge: Int?
-    let toggle: () -> Void
-
-    init(title: String, isExpanded: Bool, badge: Int? = nil, toggle: @escaping () -> Void) {
-        self.title = title
-        self.isExpanded = isExpanded
-        self.badge = badge
-        self.toggle = toggle
-    }
-
-    var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 8) {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.textSecondary)
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .kerning(0.5)
-                    .foregroundStyle(Theme.textSecondary)
-                if let badge {
-                    Text("\(badge)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Theme.warning)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Theme.warning.opacity(0.2))
-                        .clipShape(Capsule())
-                }
-                Spacer()
-            }
-            .padding(12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-struct GitBadge: View {
-    let text: String
-    let color: Color
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-            .foregroundStyle(color)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.2))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
-struct GitEmptyText: View {
-    let text: String
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(Theme.textMuted)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-    }
-}
 
 /// Commit satırı (v1 timeline): sol çizgi + nokta (HEAD yeşil+glow); başlık
 /// hover'da sığmıyorsa sağdan sola kayar (MarqueeText); hover'da elevated zemin.
@@ -282,35 +224,36 @@ private struct CommitRow: View {
     let relativeTime: String
     let onSelect: () -> Void
 
-    @State private var isHovering = false
-
     var body: some View {
-        Button(action: onSelect) {
-            HStack(alignment: .top, spacing: 0) {
-                gutter
-                VStack(alignment: .leading, spacing: 2) {
-                    MarqueeText(
-                        text: commit.message,
-                        font: .system(size: 12, design: .monospaced),
-                        color: Theme.textPrimary,
-                        animating: isHovering
-                    )
-                    HStack(spacing: 6) {
-                        Text(commit.shortHash).foregroundStyle(Theme.accentCyan)
-                        Text(commit.author).foregroundStyle(Theme.textMuted)
-                        Text(relativeTime).foregroundStyle(Theme.textMuted)
+        HoverReader { isHovering in
+            Button(action: onSelect) {
+                HStack(alignment: .top, spacing: 0) {
+                    gutter
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                        MarqueeText(
+                            text: commit.message,
+                            font: Theme.Typography.mono(.body),
+                            color: Theme.textPrimary,
+                            animating: isHovering
+                        )
+                        HStack(spacing: Theme.Spacing.sm) {
+                            Text(commit.shortHash).foregroundStyle(Theme.accentCyan)
+                            Text(commit.author).foregroundStyle(Theme.textMuted)
+                            Text(relativeTime).foregroundStyle(Theme.textMuted)
+                        }
+                        .font(Theme.Typography.mono(.caption))
                     }
-                    .font(.system(size: 10, design: .monospaced))
+                    // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
+                    .padding(.trailing, 10)
+                    .padding(.vertical, Theme.Spacing.xs)
                 }
-                .padding(.trailing, 10)
-                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isHovering ? Theme.bgElevated : Color.clear)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isHovering ? Theme.bgElevated : Color.clear)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
+        .accessibilityLabel("Commit \(commit.shortHash): \(commit.message)")
     }
 
     private var gutter: some View {
@@ -338,70 +281,59 @@ private struct FileChangeRow: View {
     let onToggle: () -> Void
     let onShowDiff: () -> Void
 
-    @State private var isHovering = false
-
     var body: some View {
-        HStack(spacing: 8) {
-            Button(action: onToggle) {
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? Theme.accentVivid : Theme.textMuted)
+        HoverReader { isHovering in
+            HStack(spacing: Theme.Spacing.md) {
+                Button(action: onToggle) {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(Theme.Typography.ui(.body))
+                        .foregroundStyle(isSelected ? Theme.accentVivid : Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stage \(change.path)")
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+
+                Text(change.status.badgeText)
+                    .font(Theme.Typography.mono(.caption, weight: .bold))
+                    .foregroundStyle(Theme.fileChangeColor(for: change.status))
+                    .frame(width: Theme.Spacing.xl, height: Theme.Spacing.xl)
+
+                Text((change.path as NSString).lastPathComponent)
+                    .font(Theme.Typography.mono(.body))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(change.path)
+
+                Spacer(minLength: 0)
+
+                IconButton(
+                    systemName: "eye",
+                    label: "Show diff for \(change.path)",
+                    size: .body,
+                    weight: .regular,
+                    side: 22,
+                    showsHoverBackground: false,
+                    action: onShowDiff
+                )
+                .opacity(isHovering ? 1 : 0)
             }
-            .buttonStyle(.plain)
-
-            Text(change.status.badgeText)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(Theme.fileChangeColor(for: change.status))
-                .frame(width: 16, height: 16)
-
-            Text((change.path as NSString).lastPathComponent)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(change.path)
-
-            Spacer(minLength: 0)
-
-            Button(action: onShowDiff) {
-                Image(systemName: "eye")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovering ? 1 : 0)
-            .help("Show diff")
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.vertical, Theme.Spacing.xs)
+            .background(isHovering ? Theme.bgElevated : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(isHovering ? Theme.bgElevated : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .onHover { isHovering = $0 }
     }
 }
 
-/// Commit mesajı alanı (v1: bgDeep zemin, odakta mor kenarlık).
-private struct CommitMessageField: View {
-    @Binding var text: String
-    let onSubmit: () -> Void
-
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        TextField("Commit message…", text: $text)
-            .textFieldStyle(.plain)
-            .font(.system(size: 12, design: .monospaced))
-            .foregroundStyle(Theme.textPrimary)
-            .focused($isFocused)
-            .onSubmit(onSubmit)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Theme.bgDeep)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isFocused ? Theme.accentVivid : Theme.border, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+#if DEBUG
+#Preview("Git panels") {
+    HStack(spacing: 0) {
+        GitCommitsPanelItem()
+        GitChangesPanelItem()
     }
+    .frame(width: 560, height: 420)
+    .background(Theme.bgSurface)
+    .environment(\.shell, ShellContext.preview())
 }
+#endif

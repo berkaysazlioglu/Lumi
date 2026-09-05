@@ -17,10 +17,10 @@ struct TerminalChipStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Spacing.sm) {
                 if let label {
                     Text(label)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(Theme.Typography.mono(.label))
                         .foregroundStyle(Theme.textMuted)
                 }
                 ForEach(items) { meta in
@@ -28,31 +28,34 @@ struct TerminalChipStrip: View {
                 }
             }
         }
-        .frame(height: 24)
+        .frame(height: Theme.Spacing.xxl)
     }
 
     private func chip(_ meta: TerminalMeta) -> some View {
         Button {
             onSelect(meta.id)
         } label: {
+            // 5/3pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
             HStack(spacing: 5) {
                 Circle()
                     .fill(Theme.statusColor(for: meta.status))
-                    .frame(width: 6, height: 6)
+                    .frame(width: Theme.Spacing.sm, height: Theme.Spacing.sm)
+                    .accessibilityHidden(true)
                 Text(meta.displayTitle)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(Theme.Typography.mono(.label))
                     .lineLimit(1)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, 3)
             .background(Theme.bgSurface)
             .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .stroke(Theme.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.textSecondary)
+        .accessibilityLabel(meta.displayTitle)
     }
 }

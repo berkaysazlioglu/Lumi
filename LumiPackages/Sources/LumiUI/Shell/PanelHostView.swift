@@ -28,7 +28,7 @@ struct PanelHostView: View {
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 {
-                    Rectangle().fill(Theme.border).frame(height: 1)
+                    Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
                 }
                 itemView(item)
             }
@@ -41,7 +41,7 @@ struct PanelHostView: View {
 
     /// Yuvayı orta alandan ayıran 1px çizgi (eski `RootView.mainArea` ayraçları).
     private var edgeDivider: some View {
-        Rectangle().fill(Theme.border).frame(width: 1)
+        Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
     }
 
     private var resolvedItems: [PanelItemDescriptor] {

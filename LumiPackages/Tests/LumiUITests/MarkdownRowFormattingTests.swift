@@ -32,20 +32,31 @@ final class MarkdownRowFormattingTests: XCTestCase {
     // MARK: - headingSize
 
     func testHeadingSizeLadderIsMonotonic() {
-        let base: CGFloat = 13
-        let sizes = (1 ... 6).map { MarkdownRowFormatting.headingSize($0, fontSize: base) }
-        XCTAssertEqual(sizes[0], base + 7)
-        XCTAssertEqual(sizes[1], base + 4)
-        XCTAssertEqual(sizes[2], base + 2)
-        XCTAssertEqual(sizes[3], base + 1, "h4+ tek bir taban boyutu paylaşır")
-        XCTAssertEqual(sizes[4], base + 1)
-        XCTAssertEqual(sizes[5], base + 1)
+        // Faz 7.1 ikinci dalga: `fontSize + 7/4/2/1` aritmetiği yerine ölçek
+        // basamağı. 13pt tabanda merdiven 20/18/15/13 (v1: 20/17/15/14).
+        let base = Theme.Typography.Size.base
+        let sizes = (1 ... 6).map { MarkdownRowFormatting.headingSize($0, base: base) }
+        XCTAssertEqual(sizes[0], .heading)
+        XCTAssertEqual(sizes[1], .headline)
+        XCTAssertEqual(sizes[2], .title)
+        XCTAssertEqual(sizes[3], base, "h4+ tek bir taban boyutu paylaşır")
+        XCTAssertEqual(sizes[4], base)
+        XCTAssertEqual(sizes[5], base)
         XCTAssertEqual(sizes, sizes.sorted(by: >), "h1 en büyük, aşağı doğru küçülür")
     }
 
-    func testHeadingSizeScalesWithFontSize() {
-        XCTAssertEqual(MarkdownRowFormatting.headingSize(1, fontSize: 20), 27)
-        XCTAssertEqual(MarkdownRowFormatting.headingSize(0, fontSize: 20), 21, "geçersiz level default dala düşer")
+    func testHeadingSizeIsRelativeToTheGivenBase() {
+        // Taban değişince merdiven ölçeğin İÇİNDE kayar, ölçek dışına taşmaz.
+        XCTAssertEqual(MarkdownRowFormatting.headingSize(1, base: .body), .headline)
+        XCTAssertEqual(
+            MarkdownRowFormatting.headingSize(0, base: .body), .body,
+            "geçersiz level default dala düşer"
+        )
+    }
+
+    func testHeadingSizeClampsAtTheTopOfTheScale() {
+        // Ölçeğin tepesinde +3 basamak yoktur; kırpılır, taşmaz.
+        XCTAssertEqual(MarkdownRowFormatting.headingSize(1, base: .splash), .splash)
     }
 
     // MARK: - gutterLabel

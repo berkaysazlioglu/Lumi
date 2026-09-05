@@ -1,3 +1,4 @@
+import LumiKit
 import SwiftUI
 import XCTest
 @testable import LumiUI
@@ -6,18 +7,18 @@ import XCTest
 /// alır ve metin bozulmaz (run range'leri mutasyon sırasında geçerli kalır).
 final class MarkdownInlineStylerTests: XCTestCase {
     func testCodeRunsGetMonospacedFontAndAccentColor() {
-        let styled = MarkdownInlineStyler.styled("çalıştır: `swift build` sonra dene", fontSize: 13)
+        let styled = MarkdownInlineStyler.styled("çalıştır: `swift build` sonra dene", size: .base)
 
         XCTAssertEqual(String(styled.characters), "çalıştır: swift build sonra dene")
         let codeRun = styled.runs.first { $0.inlinePresentationIntent?.contains(.code) == true }
         let range = try? XCTUnwrap(codeRun?.range)
         XCTAssertNotNil(range)
         XCTAssertEqual(styled[range!].foregroundColor, Theme.accentCyan)
-        XCTAssertEqual(styled[range!].font, .system(size: 12, design: .monospaced))
+        XCTAssertEqual(styled[range!].font, Theme.Typography.mono(.body))
     }
 
     func testLinkRunsGetAccentColorAndUnderline() {
-        let styled = MarkdownInlineStyler.styled("[tasarım](docs/design.md)", fontSize: 13)
+        let styled = MarkdownInlineStyler.styled("[tasarım](docs/design.md)", size: .base)
 
         let linkRun = styled.runs.first { $0.link != nil }
         let range = try? XCTUnwrap(linkRun?.range)
@@ -27,7 +28,7 @@ final class MarkdownInlineStylerTests: XCTestCase {
     }
 
     func testMultipleCodeRunsAreAllStyled() {
-        let styled = MarkdownInlineStyler.styled("`a` ve `b` ve `c`", fontSize: 13)
+        let styled = MarkdownInlineStyler.styled("`a` ve `b` ve `c`", size: .base)
 
         let codeRuns = styled.runs.filter { $0.inlinePresentationIntent?.contains(.code) == true }
         XCTAssertEqual(codeRuns.count, 3)
@@ -36,7 +37,7 @@ final class MarkdownInlineStylerTests: XCTestCase {
     }
 
     func testPlainTextIsUnchanged() {
-        let styled = MarkdownInlineStyler.styled("düz metin", fontSize: 13)
+        let styled = MarkdownInlineStyler.styled("düz metin", size: .base)
 
         XCTAssertEqual(String(styled.characters), "düz metin")
         XCTAssertNil(styled.runs.first?.foregroundColor)

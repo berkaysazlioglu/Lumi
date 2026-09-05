@@ -5,6 +5,10 @@ import LumiTestSupport
 
 @MainActor
 final class PromptQueueStoreTests: XCTestCase {
+    private func texts(_ store: PromptQueueStore, _ id: TerminalID) -> [String] {
+        store.prompts(for: id).map(\.text)
+    }
+
     private func makeStore() -> (PromptQueueStore, FakeTerminalService) {
         let service = FakeTerminalService()
         // settle=0 → testlerde deterministik: pendingInjection await edilir.
@@ -28,7 +32,7 @@ final class PromptQueueStoreTests: XCTestCase {
         store.apply(.viewFocused(id))
 
         // Assert
-        XCTAssertEqual(store.prompts(for: id), ["a"])
+        XCTAssertEqual(texts(store, id), ["a"])
         XCTAssertFalse(store.isPaused(id))
     }
 
@@ -39,7 +43,7 @@ final class PromptQueueStoreTests: XCTestCase {
         let id = TerminalID()
         store.enqueue("  hello  ", for: id)
         store.enqueue("   ", for: id)
-        XCTAssertEqual(store.prompts(for: id), ["hello"])
+        XCTAssertEqual(texts(store, id), ["hello"])
     }
 
     func testRemoveAndClear() {
@@ -47,10 +51,59 @@ final class PromptQueueStoreTests: XCTestCase {
         let id = TerminalID()
         store.enqueue("a", for: id)
         store.enqueue("b", for: id)
-        store.remove(at: 0, for: id)
-        XCTAssertEqual(store.prompts(for: id), ["b"])
+        store.remove(store.prompts(for: id)[0].id, for: id)
+        XCTAssertEqual(texts(store, id), ["b"])
         store.clear(for: id)
         XCTAssertEqual(store.count(for: id), 0)
+    }
+
+    // MARK: - Stabil kimlik (refactor 7.8)
+
+    func testEachQueuedPromptGetsAUniqueStableID() {
+        let (store, _) = makeStore()
+        let id = TerminalID()
+        // Aynı metin iki kez: indeks tabanlı kimlikte ayırt edilemezdi
+        store.enqueue("same", for: id)
+        store.enqueue("same", for: id)
+
+        let ids = store.prompts(for: id).map(\.id)
+        XCTAssertEqual(Set(ids).count, 2, "aynı metinli iki prompt farklı kimlik alır")
+    }
+
+    func testIDsSurviveReordering() {
+        let (store, _) = makeStore()
+        let id = TerminalID()
+        ["a", "b", "c"].forEach { store.enqueue($0, for: id) }
+        let before = Dictionary(uniqueKeysWithValues: store.prompts(for: id).map { ($0.id, $0.text) })
+
+        store.move(fromOffsets: IndexSet(integer: 2), toOffset: 0, for: id)
+
+        for prompt in store.prompts(for: id) {
+            XCTAssertEqual(before[prompt.id], prompt.text, "sıralama kimliği kaydırmamalı")
+        }
+    }
+
+    func testRemoveByIDDeletesTheIntendedRowAfterReordering() {
+        let (store, _) = makeStore()
+        let id = TerminalID()
+        ["a", "b", "c"].forEach { store.enqueue($0, for: id) }
+        let bID = store.prompts(for: id)[1].id
+
+        // Sıra değişse bile kimlik doğru satırı bulur (indeks bulamazdı)
+        store.move(fromOffsets: IndexSet(integer: 2), toOffset: 0, for: id)
+        store.remove(bID, for: id)
+
+        XCTAssertEqual(texts(store, id), ["c", "a"])
+    }
+
+    func testRemovingUnknownIDIsNoOp() {
+        let (store, _) = makeStore()
+        let id = TerminalID()
+        store.enqueue("a", for: id)
+
+        store.remove(UUID(), for: id)
+
+        XCTAssertEqual(texts(store, id), ["a"])
     }
 
     func testMoveReorders() {
@@ -58,7 +111,7 @@ final class PromptQueueStoreTests: XCTestCase {
         let id = TerminalID()
         ["a", "b", "c"].forEach { store.enqueue($0, for: id) }
         store.move(fromOffsets: IndexSet(integer: 2), toOffset: 0, for: id)
-        XCTAssertEqual(store.prompts(for: id), ["c", "a", "b"])
+        XCTAssertEqual(texts(store, id), ["c", "a", "b"])
     }
 
     // MARK: - canInject predikatı
@@ -114,7 +167,7 @@ final class PromptQueueStoreTests: XCTestCase {
         store.injectHead(id)
         XCTAssertEqual(service.writtenTexts.count, 1)
         XCTAssertEqual(service.writtenTexts.first?.text, PromptInjection.encode("first"))
-        XCTAssertEqual(store.prompts(for: id), ["second"])
+        XCTAssertEqual(texts(store, id), ["second"])
     }
 
     // MARK: - Tetikleme (deterministik await)
@@ -138,7 +191,7 @@ final class PromptQueueStoreTests: XCTestCase {
         store.apply(.awaitingDecisionChanged(id, true))
         await store.pendingInjection(for: id)?.value
         XCTAssertTrue(service.writtenTexts.isEmpty)
-        XCTAssertEqual(store.prompts(for: id), ["go"])
+        XCTAssertEqual(texts(store, id), ["go"])
     }
 
     func testExitClearsQueue() {
@@ -163,7 +216,7 @@ final class PromptQueueStoreTests: XCTestCase {
             store.injectHead(id)
         }
 
-        XCTAssertEqual(store.prompts(for: id), ["go"], "kuyruk korunur")
+        XCTAssertEqual(texts(store, id), ["go"], "kuyruk korunur")
         XCTAssertEqual(toasts.toasts.count, 1, "eşikte bir kez toast")
 
         // Eşik geçildikten sonra tekrar tekrar toast basılmaz.

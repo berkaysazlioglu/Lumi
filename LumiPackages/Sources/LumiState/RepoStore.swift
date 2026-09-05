@@ -126,4 +126,40 @@ public final class RepoStore: StoreLifecycle {
 
         return groups
     }
+
+    // MARK: - Seçici sorguları (refactor 7.5: RepoSelectorView'dan taşındı)
+
+    /// Açık tab'ları gizler + isimde case-insensitive substring filtresi;
+    /// grup yapısı KORUNUR (boş grup düşmez — gruplu görünümde "No repositories
+    /// found" mesajı çıkar). Saf: girdiden başka bir şeye bakmaz.
+    public static func filteredGroups(
+        _ groups: [RepoGroup],
+        excluding openTabPaths: Set<String>,
+        matching query: String
+    ) -> [RepoGroup] {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return groups.map { group in
+            RepoGroup(
+                id: group.id,
+                label: group.label,
+                repos: group.repos.filter { repo in
+                    guard !openTabPaths.contains(repo.path) else { return false }
+                    return needle.isEmpty || repo.name.lowercased().contains(needle)
+                }
+            )
+        }
+    }
+
+    /// Klavye navigasyonunun gezdiği düz liste — collapsed gruplar atlanır.
+    public static func flatRepos(_ groups: [RepoGroup], collapsed: Set<String>) -> [Repo] {
+        groups.flatMap { collapsed.contains($0.id) ? [] : $0.repos }
+    }
+
+    /// Store'un kendi grupları üzerinden kısayol (çağıran grupları taşımaz).
+    public func filteredGroups(
+        matching query: String,
+        excluding openTabPaths: Set<String>
+    ) -> [RepoGroup] {
+        Self.filteredGroups(groupedRepos, excluding: openTabPaths, matching: query)
+    }
 }

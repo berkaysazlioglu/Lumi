@@ -1,0 +1,197 @@
+import LumiKit
+import SwiftUI
+
+/// Sade grid ayar popover'ı (design/03 — iki eksenli model): tetik butonu mevcut
+/// yerleşimi özetler, popover'da iki segmented kontrol — Kolon (Auto·1–5) ve
+/// Yükseklik (Sığdır·Kaydır). Header ve FocusModeBar ortak kullanır (DRY).
+struct GridSettingsControl: View {
+    let layout: LumiKit.GridLayout
+    let onChange: (LumiKit.GridLayout) -> Void
+
+    @State private var isOpen = false
+
+    var body: some View {
+        Button {
+            isOpen.toggle()
+        } label: {
+            HStack(spacing: Theme.Spacing.sm) {
+                // Kolon ekseni: ikon (kolon olduğunu anlatır) + değer ("auto" / "3")
+                Image(systemName: "rectangle.split.3x1")
+                    .font(Theme.Typography.ui(.label))
+                Text(columnLabel)
+                    .font(Theme.Typography.mono(.label, weight: .semibold))
+                // Yükseklik ekseni: yalnız ikon (Sığdır/Kaydır metni yerine)
+                Image(systemName: heightIcon)
+                    .font(Theme.Typography.ui(.label))
+                Image(systemName: "chevron.down")
+                    .font(Theme.Typography.ui(.micro, weight: .bold))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, Theme.Spacing.md)
+            .frame(height: TopBarMetrics.controlHeight)
+            .background(Theme.bgElevated)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.md)
+                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Grid layout: \(helpText)")
+        .help(helpText)
+        .popover(isPresented: $isOpen, arrowEdge: .bottom) {
+            popoverBody
+        }
+    }
+
+    /// Tetik etiketinde kolon değeri: Auto modunda "auto", aksi halde sayı.
+    private var columnLabel: String {
+        layout.mode == .auto ? "auto" : "\(layout.count)"
+    }
+
+    /// Yükseklik politikasını anlatan ikon: Sığdır = sıkıştır, Kaydır = genişlet.
+    private var heightIcon: String {
+        layout.heightMode == .fit ? "rectangle.compress.vertical" : "rectangle.expand.vertical"
+    }
+
+    /// İkonlar belirsiz kalmasın diye hover ipucu tam yerleşimi yazar.
+    private var helpText: String {
+        let columns = layout.mode == .auto ? "Auto columns" : "\(layout.count) columns"
+        let height = layout.heightMode == .fit ? "Fit" : "Scroll"
+        return "\(columns) · \(height)"
+    }
+
+    private var popoverBody: some View {
+        // 14pt: ölçek dışı ara değer (v1 paritesi korunuyor).
+        VStack(alignment: .leading, spacing: 14) {
+            section(title: "Columns") {
+                SegmentedRow(
+                    options: GridColumnOption.allOptions,
+                    isSelected: { $0.matches(layout) },
+                    label: { $0.label },
+                    onSelect: { onChange($0.apply(to: layout)) }
+                )
+            }
+            section(title: "Height") {
+                SegmentedRow(
+                    options: [LumiKit.GridLayout.HeightMode.fit, .scroll],
+                    isSelected: { $0 == layout.heightMode },
+                    label: { $0 == .fit ? "Fit" : "Scroll" },
+                    onSelect: { var copy = layout; copy.heightMode = $0; onChange(copy) }
+                )
+            }
+            if layout.heightMode == .scroll {
+                section(title: "Row ratio (of width)") {
+                    SegmentedRow(
+                        options: LumiKit.GridLayout.HeightRatio.allCases,
+                        isSelected: { $0 == layout.heightRatio },
+                        label: { $0.displayLabel },
+                        onSelect: { var copy = layout; copy.heightRatio = $0; onChange(copy) }
+                    )
+                }
+            }
+            Text(layout.heightMode == .fit
+                 ? "All terminals fit in the window (no scroll)."
+                 : "Min terminal height = width × ratio; scrolls vertically when it overflows.")
+                .font(Theme.Typography.ui(.caption))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(width: 280)
+        .background(Theme.bgSurface)
+    }
+
+    private func section(title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            Text(title)
+                .font(Theme.Typography.ui(.label, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+            content()
+        }
+    }
+}
+
+/// Kolon ekseni seçenekleri: Auto + sabit 1–5. LumiKit.GridLayout'a iki-yönlü eşlenir.
+private enum GridColumnOption: Hashable {
+    case auto
+    case fixed(Int)
+
+    static let allOptions: [GridColumnOption] = [.auto, .fixed(1), .fixed(2), .fixed(3), .fixed(4), .fixed(5)]
+
+    var label: String {
+        switch self {
+        case .auto: return "Auto"
+        case .fixed(let n): return "\(n)"
+        }
+    }
+
+    func matches(_ layout: LumiKit.GridLayout) -> Bool {
+        switch self {
+        case .auto: return layout.mode == .auto
+        case .fixed(let n): return layout.mode == .columns && layout.count == n
+        }
+    }
+
+    func apply(to layout: LumiKit.GridLayout) -> LumiKit.GridLayout {
+        switch self {
+        case .auto:
+            return LumiKit.GridLayout(
+                mode: .auto, count: layout.count,
+                heightMode: layout.heightMode, heightRatio: layout.heightRatio
+            )
+        case .fixed(let n):
+            return LumiKit.GridLayout(
+                mode: .columns, count: n,
+                heightMode: layout.heightMode, heightRatio: layout.heightRatio
+            )
+        }
+    }
+}
+
+/// Tema uyumlu küçük segmented kontrol (native picker yerine — sade/polished).
+private struct SegmentedRow<Option>: View {
+    let options: [Option]
+    let isSelected: (Option) -> Bool
+    let label: (Option) -> String
+    let onSelect: (Option) -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.xxs) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                let selected = isSelected(option)
+                Button {
+                    onSelect(option)
+                } label: {
+                    Text(label(option))
+                        .font(Theme.Typography.mono(.label))
+                        .foregroundStyle(selected ? Theme.textPrimary : Theme.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: TopBarMetrics.controlHeight)
+                        .background(selected ? Theme.accentVivid : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(label(option))
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+            }
+        }
+        .padding(Theme.Spacing.xxs)
+        .background(Theme.bgElevated)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+    }
+}
+
+#if DEBUG
+#Preview("GridSettingsControl") {
+    GridSettingsControl(
+        layout: LumiKit.GridLayout(mode: .columns, count: 1, heightMode: .fit),
+        onChange: { _ in }
+    )
+        .padding(Theme.Spacing.xxl)
+        .background(Theme.bgSurface)
+}
+#endif

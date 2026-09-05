@@ -26,3 +26,6 @@ jobs:
       - name: Test
         run: swift test
         working-directory: LumiPackages
+      - name: Build (release)
+        run: swift build -c release --product Lumi
+        working-directory: LumiPackages

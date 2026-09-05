@@ -14,7 +14,9 @@ import Observation
 @Observable
 @MainActor
 public final class PromptQueueStore: StoreLifecycle {
-    public private(set) var queues: [TerminalID: [String]] = [:]
+    /// Kuyruk elemanları stabil kimlik taşır (refactor 7.8): liste
+    /// `id: \.offset` ile çizildiğinde `.onMove`/silme indeksten kayıyordu.
+    public private(set) var queues: [TerminalID: [QueuedPrompt]] = [:]
     public private(set) var pausedIDs: Set<TerminalID> = []
 
     /// Kaçıncı ARDIŞIK başarısız yazımda kullanıcı uyarılır (öncesi geçici
@@ -56,7 +58,7 @@ public final class PromptQueueStore: StoreLifecycle {
 
     // MARK: - Sorgular
 
-    public func prompts(for id: TerminalID) -> [String] {
+    public func prompts(for id: TerminalID) -> [QueuedPrompt] {
         queues[id] ?? []
     }
 
@@ -74,14 +76,18 @@ public final class PromptQueueStore: StoreLifecycle {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         var queue = queues[id] ?? []
-        queue.append(trimmed)
+        queue.append(QueuedPrompt(text: trimmed))
         queues[id] = queue
         reevaluate(id)
     }
 
-    public func remove(at index: Int, for id: TerminalID) {
-        guard var queue = queues[id], queue.indices.contains(index) else { return }
-        queue.remove(at: index)
+    /// Silme KİMLİKLE yapılır: sürükleme/otomatik gönderim kuyruğu değiştirmişse
+    /// indeks bayatlar, kimlik bayatlamaz (refactor 7.8).
+    public func remove(_ promptID: QueuedPrompt.ID, for id: TerminalID) {
+        guard var queue = queues[id] else { return }
+        let remaining = queue.filter { $0.id != promptID }
+        guard remaining.count != queue.count else { return }
+        queue = remaining
         queues[id] = queue
     }
 
@@ -163,7 +169,7 @@ public final class PromptQueueStore: StoreLifecycle {
     func injectHead(_ id: TerminalID) {
         guard var queue = queues[id], let prompt = queue.first else { return }
         do {
-            try service.write(id: id, text: PromptInjection.encode(prompt))
+            try service.write(id: id, text: PromptInjection.encode(prompt.text))
             queue.removeFirst()
             queues[id] = queue
             injectFailures[id] = nil

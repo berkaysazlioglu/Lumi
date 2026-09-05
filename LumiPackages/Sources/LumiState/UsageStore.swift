@@ -51,6 +51,20 @@ public final class UsageStore {
     /// Topbar göstergesinin gösterdiği değer (5 saatlik oturum yüzdesi).
     public var fiveHourPercent: Int? { snapshot?.fiveHour?.percentUsed }
 
+    /// Durum satırının TEK kaynağı (refactor 7.5/7.9). Topbar popover'ı ve
+    /// Settings satırı aynı üçlüyü iki farklı kuralla türetiyordu; sıra artık
+    /// burada bir kez kararlaştırılır. `.staleWithError` ayrı bir hâldir:
+    /// snapshot korunurken hata gizlenmez (karar 5).
+    public var statusKind: UsageStatusKind {
+        if isLoading { return .loading }
+        if let fetchedAt = snapshot?.fetchedAt {
+            guard let errorMessage else { return .updated(fetchedAt: fetchedAt) }
+            return .staleWithError(fetchedAt: fetchedAt, message: errorMessage)
+        }
+        if let errorMessage { return .failed(message: errorMessage) }
+        return .idle
+    }
+
     /// Yenilenebilir mi? (açık + yüklenmiyor + son denemeden bu yana min aralık geçti)
     public var canRefresh: Bool {
         if !isEnabled || isLoading { return false }

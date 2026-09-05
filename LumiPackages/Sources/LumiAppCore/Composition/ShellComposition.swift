@@ -54,7 +54,7 @@ struct ShellComposition {
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
             viewProvider: registry.viewProvider,
-            highlighter: HighlightrEngine(),
+            highlighter: registry.highlighter,
             actions: makeActions(registry: registry, shared: shared, repo: repo)
         )
         return ShellComposition(registries: registries, context: context)

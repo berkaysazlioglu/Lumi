@@ -16,6 +16,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var git: any GitServicing
     public var terminal: any TerminalServicing
     public var viewProvider: any TerminalViewProviding
+    public var highlighter: any SyntaxHighlighting
     public var notifications: any NotificationServicing
     public var sessionStarter: any SessionStarterServicing
     public var activityMonitor: any ActivityMonitoring
@@ -53,6 +54,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
         self.terminal = terminal
         self.viewProvider = viewProvider
         self.notifications = notifications
+        self.highlighter = FakeSyntaxHighlighter()
         self.sessionStarter = FakeSessionStarterService()
         self.activityMonitor = FakeActivityMonitor(idleSeconds: 0)
         var usage: [AgentProvider: any UsageServicing] = [:]

@@ -73,12 +73,12 @@ public struct WelcomeView: View {
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.Spacing.lg) {
             Text("Lumi")
-                .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                .font(Theme.Typography.mono(.display, weight: .semibold))
                 .foregroundStyle(Theme.accentPrimary)
             Text("Open a repo and start a terminal")
-                .font(.system(size: 13, design: .monospaced))
+                .font(Theme.Typography.mono(.base))
                 .foregroundStyle(Theme.textMuted)
             Button("Open Repo") {
                 shell.dialogs.isRepoSelectorOpen = true
@@ -89,3 +89,12 @@ public struct WelcomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+#if DEBUG
+#Preview("WelcomeView") {
+    WelcomeView()
+        .frame(width: 640, height: 400)
+        .background(Theme.bgDeep)
+        .environment(\.shell, ShellContext.preview())
+}
+#endif

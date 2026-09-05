@@ -32,15 +32,19 @@ let package = Package(
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
             ]
         ),
-        .target(name: "LumiServices", dependencies: ["LumiKit"]),
+        // Highlightr (highlight.js/JSCore) refactor 7.5'te LumiUI'dan buraya
+        // taşındı: view modülü artık ne JSCore'u ne de arka plan kuyruğunu tanır.
+        .target(
+            name: "LumiServices",
+            dependencies: [
+                "LumiKit",
+                .product(name: "Highlightr", package: "Highlightr"),
+            ]
+        ),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
         .target(
             name: "LumiUI",
-            dependencies: [
-                "LumiKit",
-                "LumiState",
-                .product(name: "Highlightr", package: "Highlightr"),
-            ],
+            dependencies: ["LumiKit", "LumiState"],
             resources: [
                 .copy("Resources/Fonts"),
                 .copy("Resources/Icons"),
