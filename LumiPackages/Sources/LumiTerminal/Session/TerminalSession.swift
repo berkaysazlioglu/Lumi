@@ -8,6 +8,7 @@ protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus)
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool)
     func session(_ session: TerminalSession, didChangeTitle title: String)
+    func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)
@@ -51,6 +52,8 @@ final class TerminalSession {
         name: String,
         task: String?,
         claudeSessionID: String? = nil,
+        provider: AgentProvider? = nil,
+        hookEndpoint: AgentHookEndpoint? = nil,
         font: NSFont,
         ptySpawner: any PTYSpawning = SystemPTYSpawner(),
         viewMaker: any TerminalViewMaking = DropAwareTerminalViewMaker(),
@@ -64,18 +67,19 @@ final class TerminalSession {
             repoPath: repoPath,
             createdAt: Date(),
             task: task,
-            claudeSessionID: claudeSessionID
+            claudeSessionID: claudeSessionID,
+            provider: provider
         )
 
         let queue = DispatchQueue(label: "lumi.terminal.\(id.raw.uuidString)", qos: .utility)
         self.ioQueue = queue
-        self.pipeline = pipeline ?? TerminalPipeline(queue: queue)
+        self.pipeline = pipeline ?? TerminalPipeline(queue: queue, initialProvider: provider)
 
         self.pty = try ptySpawner.spawn(
             executable: ShellResolver.defaultShell(),
             args: ["-l"],
             cwd: repoPath,
-            env: TerminalEnvironment.childEnvironment(),
+            env: TerminalEnvironment.childEnvironment(hookEndpoint: hookEndpoint, terminalID: id),
             cols: Self.initialCols,
             rows: Self.initialRows,
             queue: queue
@@ -110,6 +114,9 @@ final class TerminalSession {
         }
         pipeline.onDisplayTitle = { [weak self] title in
             hopToMain { self?.applyTitle(title) }
+        }
+        pipeline.onProviderChange = { [weak self] provider in
+            hopToMain { self?.applyProvider(provider) }
         }
         pipeline.onStallChange = { [weak self] stalled in
             hopToMain { self?.applyStalled(stalled) }
@@ -161,6 +168,12 @@ final class TerminalSession {
         delegate?.session(self, didChangeTitle: title)
     }
 
+    private func applyProvider(_ provider: AgentProvider?) {
+        guard !isTerminated, meta.provider != provider else { return }
+        meta.provider = provider
+        delegate?.session(self, didChangeProvider: provider)
+    }
+
     private func applyStalled(_ stalled: Bool) {
         guard !isTerminated else { return }
         delegate?.session(self, didChangeStalled: stalled)
@@ -203,6 +216,15 @@ final class TerminalSession {
 
     func write(_ text: String) {
         write(Data(text.utf8))
+    }
+
+    /// Karar 45: hook sunucusundan gelen olay, diğer tüm durum sinyalleriyle
+    /// aynı serial io queue'da uygulanır — OSC ve hook birbirini yarıştırmaz.
+    func applyHookEvent(_ event: AgentHookEvent) {
+        guard !isTerminated else { return }
+        ioQueue.async { [pipeline] in
+            pipeline.processHookEvent(event)
+        }
     }
 
     /// Tüm PTY-bound yazımların tek hunisi (design/01 §4): klavye, SwiftTerm

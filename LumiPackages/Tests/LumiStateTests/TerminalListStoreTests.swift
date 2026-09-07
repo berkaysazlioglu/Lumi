@@ -30,6 +30,19 @@ final class TerminalListStoreTests: XCTestCase {
         return meta
     }
 
+    // MARK: - Ajan kimliği (karar 45)
+
+    func testProviderChangedUpdatesMetaAndClearsOnNil() {
+        let terminal = makeTerminal("t1")
+        XCTAssertNil(store.meta(for: terminal.id)?.provider)
+
+        store.apply(.providerChanged(terminal.id, .codex))
+        XCTAssertEqual(store.meta(for: terminal.id)?.provider, .codex)
+
+        store.apply(.providerChanged(terminal.id, nil))
+        XCTAssertNil(store.meta(for: terminal.id)?.provider)
+    }
+
     // MARK: - Donma rozeti (design/00 Ek A §A.2-10)
 
     func testStalledEventMarksAndClearsTerminal() {

@@ -34,6 +34,7 @@ struct AppComposition {
             terminal: registry.terminal,
             viewProvider: registry.viewProvider
         )
+        let agentHooks = AgentHooksAssembly()
         let terminal = TerminalFeatureAssembly()
         let notifications = NotificationAssembly()
         let sessionSchedule = SessionScheduleAssembly()
@@ -44,7 +45,7 @@ struct AppComposition {
         let container = AppContainer(
             services: registry,
             shared: shared,
-            assemblies: [terminal, notifications, sessionSchedule, usage, repo, workspaceBoot, statusBar]
+            assemblies: [agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot, statusBar]
         )
         let shell = ShellComposition.make(
             registry: registry,

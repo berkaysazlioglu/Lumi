@@ -27,8 +27,7 @@ struct TerminalSettingsTab: SettingsTabContent {
             LumiField(
                 title: "Auto-Minimize on Send",
                 hint: "Minimize a chat while the assistant works on your message; "
-                    + "bring it back when it finishes or waits for input.",
-                isLast: true
+                    + "bring it back when it finishes or waits for input."
             ) {
                 LumiToggleSwitch(
                     isOn: Binding(
@@ -36,6 +35,21 @@ struct TerminalSettingsTab: SettingsTabContent {
                         set: { shell.settings.setAutoMinimizeOnSend($0) }
                     ),
                     label: "Auto-minimize on send"
+                )
+            }
+            LumiField(
+                title: "Agent Status Hooks",
+                hint: "Install Lumi hooks into Claude Code and Codex so working / waiting / idle "
+                    + "come straight from the agent. Turning this off removes the hooks and falls "
+                    + "back to terminal-title heuristics.",
+                isLast: true
+            ) {
+                LumiToggleSwitch(
+                    isOn: Binding(
+                        get: { shell.settings.current.agentHooksEnabled },
+                        set: { shell.settings.setAgentHooksEnabled($0) }
+                    ),
+                    label: "Agent status hooks"
                 )
             }
         }

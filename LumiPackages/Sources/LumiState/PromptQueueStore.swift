@@ -139,7 +139,7 @@ public final class PromptQueueStore: StoreLifecycle {
             awaitingDecisionIDs.remove(id)
             injectFailures[id] = nil
             cancelSettle(id)
-        case .spawned, .titleChanged, .bell, .writeFailed, .viewFocused, .stalled:
+        case .spawned, .titleChanged, .providerChanged, .bell, .writeFailed, .viewFocused, .stalled:
             break
         }
     }

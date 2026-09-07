@@ -151,6 +151,7 @@ private final class SpyDelegate: TerminalSessionDelegate {
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus) {}
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool) {}
     func session(_ session: TerminalSession, didChangeTitle title: String) {}
+    func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?) {}
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {
         stalls.append(stalled)
     }

@@ -133,6 +133,8 @@ private final class PreviewTerminalService: TerminalServicing {
     func write(id: TerminalID, text: String) throws {}
     func kill(id: TerminalID) throws {}
     func processID(for id: TerminalID) -> Int32? { nil }
+    func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {}
+    func applyAgentHookEvent(_ event: AgentHookEvent) {}
     func killAll() {}
     func resize(id: TerminalID, cols: Int, rows: Int) {}
     func setFocused(_ id: TerminalID?) {}

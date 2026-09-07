@@ -6,10 +6,16 @@ import LumiKit
 /// TÜM üyelere yalnız terminalin serial io queue'sundan dokunulur; `@unchecked
 /// Sendable` bu confinement sözleşmesine dayanır. Callback'ler io queue'da çağrılır;
 /// tüketici (TerminalSession) main'e kendisi sıçrar.
+///
+/// Durum otoritesi (karar 45): ajan hook olayları (`processHookEvent`) geldiği
+/// andan itibaren `hookReducer.isBound` açılır ve OSC başlığı / Codex çıktı
+/// sessizliği / Enter sezgileri durumu SÜRMEZ — yalnız başlık metnini günceller.
+/// Hook yoksa (düz shell, hook kurulamamış) eski sezgisel yol aynen çalışır.
 final class TerminalPipeline: @unchecked Sendable {
     let flow: FlowController
     let statusMachine = StatusStateMachine()
     let decisionTracker = DecisionTracker()
+    let hookReducer = AgentHookStatusReducer()
 
     private var decoder = UTF8StreamDecoder()
     private let oscParser = OSCStreamParser()
@@ -20,8 +26,13 @@ final class TerminalPipeline: @unchecked Sendable {
     private var inputFilter = PTYInputFilter()
     private let coalescer: OutputCoalescer
     private let silenceTimer: CodexSilenceTimer
+    /// Esc/Ctrl+C sonrası hook gelmezse kesme çıkarımı (Orca
+    /// `AGENT_INTERRUPT_SETTLE_MS`).
+    private let interruptTimer: InterruptSettleTimer
     /// Donma gözetimi + adaptif batching (design/00 Ek A §A.2-10).
     let watchdog: FeedWatchdog
+    /// Dışa en son bildirilen sağlayıcı kimliği — yalnız gerçek değişim yayılır.
+    private var reportedProvider: AgentProvider?
 
     // @Sendable: bu callback'ler io queue'da çağrılır; MainActor bağlamında atanan
     // closure'ların izolasyon miras almasını engeller (tüketici main'e kendisi sıçrar)
@@ -29,6 +40,9 @@ final class TerminalPipeline: @unchecked Sendable {
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı; kuyruk tüketir.
     var onAwaitingDecisionChange: (@Sendable (Bool) -> Void)?
     var onDisplayTitle: (@Sendable (String) -> Void)?
+    /// Terminaldeki ajan kimliği değişti (karar 45): launch komutu / çıktı
+    /// çıkarımı / hook sağlayıcısı; `nil` = düz shell.
+    var onProviderChange: (@Sendable (AgentProvider?) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
     /// Feed akışı durdu / düzeldi (Ek A §A.2-10). UI "stalled" rozeti gösterir.
     var onStallChange: (@Sendable (Bool) -> Void)?
@@ -41,12 +55,15 @@ final class TerminalPipeline: @unchecked Sendable {
         flow: FlowController = FlowController(),
         coalescerScheduler: OneShotScheduling? = nil,
         silenceScheduler: OneShotScheduling? = nil,
+        interruptScheduler: OneShotScheduling? = nil,
         semantics: [any OSCSemantics] = OSCSemanticsDefaults.all,
         watchdogHeartbeat: (any HeartbeatScheduling)? = nil,
-        clock: any MonotonicClock = SystemMonotonicClock()
+        clock: any MonotonicClock = SystemMonotonicClock(),
+        initialProvider: AgentProvider? = nil
     ) {
         self.flow = flow
         self.semantics = OSCSemanticsChain(semantics)
+        self.reportedProvider = initialProvider
         let coalescer = OutputCoalescer(
             scheduler: coalescerScheduler ?? DispatchOneShotScheduler(queue: queue)
         )
@@ -54,18 +71,27 @@ final class TerminalPipeline: @unchecked Sendable {
         self.silenceTimer = CodexSilenceTimer(
             scheduler: silenceScheduler ?? DispatchOneShotScheduler(queue: queue)
         )
+        self.interruptTimer = InterruptSettleTimer(
+            scheduler: interruptScheduler ?? DispatchOneShotScheduler(queue: queue)
+        )
         self.watchdog = FeedWatchdog(
             clock: clock,
             heartbeat: watchdogHeartbeat ?? DispatchHeartbeatScheduler(queue: queue),
             budget: coalescer.budget,
             inFlight: { [flow] in flow.inFlight }
         )
+        if let initialProvider {
+            inferencer.applyOSCHint(AgentHint(rawValue: initialProvider.rawValue))
+        }
 
         coalescer.onFlush = { [weak self] data in
             self?.onFlushBatch?(data)
         }
         silenceTimer.onSilence = { [weak self] in
             self?.statusMachine.onOutputSilence()
+        }
+        interruptTimer.onSettle = { [weak self] in
+            self?.settleInterrupt()
         }
         statusMachine.onChange = { [weak self] status in
             self?.onStatusChange?(status)
@@ -95,11 +121,13 @@ final class TerminalPipeline: @unchecked Sendable {
                 }
             }
             // Codex fallback: turn-complete görülen chunk'ta timer resetlenmez ve
-            // aktivite işlenmez — aksi halde "bitti" sinyali anında geri alınırdı
-            if inferencer.hint == .codex, !sawTurnComplete {
+            // aktivite işlenmez — aksi halde "bitti" sinyali anında geri alınırdı.
+            // Hook otoritesi varken sezgi tamamen susar.
+            if inferencer.hint == .codex, !sawTurnComplete, !hookReducer.isBound {
                 statusMachine.onOutputActivity()
                 silenceTimer.touch()
             }
+            reportProviderIfChanged()
         }
         coalescer.ingest(data)
         return directive == .suspend ? .suspend : .proceed
@@ -114,20 +142,21 @@ final class TerminalPipeline: @unchecked Sendable {
             if let display = title.displayTitle {
                 onDisplayTitle?(display)
             }
-            if let isWorking = title.isWorking {
-                statusMachine.onTitleChange(isWorking: isWorking)
-                // Çalışmaya dönüş izin promptunun kapandığını gösterir.
-                if isWorking { decisionTracker.onWorking() }
-            }
+            guard !hookReducer.isBound, let isWorking = title.isWorking else { return }
+            statusMachine.onTitleChange(isWorking: isWorking)
+            // Çalışmaya dönüş izin promptunun kapandığını gösterir.
+            if isWorking { decisionTracker.onWorking() }
         case .notification(let kind):
             switch kind {
             case .codexTurnComplete:
                 sawTurnComplete = true
                 applyHint(.codex)
                 silenceTimer.cancel()
+                guard !hookReducer.isBound else { return }
                 statusMachine.onTitleChange(isWorking: false)
             case .permissionRequest:
                 // "Karar bekliyor" — status'e dokunma; yalnız ayrı sinyali kaldır.
+                guard !hookReducer.isBound else { return }
                 decisionTracker.onPermissionRequest()
             }
         }
@@ -142,6 +171,57 @@ final class TerminalPipeline: @unchecked Sendable {
         }
     }
 
+    // MARK: - Hook yolu (karar 45)
+
+    /// Ajan hook olayı: reducer etkilerini durum makinesine uygular. Bekleyen
+    /// kesme çıkarımı iptal olur — gerçek sinyal geldi.
+    func processHookEvent(_ event: AgentHookEvent) {
+        interruptTimer.cancel()
+        silenceTimer.cancel()
+        let effects = hookReducer.reduce(event)
+        apply(effects)
+        if case .sessionEnd = event.kind {
+            // Ajan çıktı: geride düz shell var; eski çıkarım hint'i de düşer.
+            inferencer.reset()
+        } else {
+            inferencer.applyOSCHint(AgentHint(rawValue: event.provider.rawValue))
+        }
+        reportProviderIfChanged()
+    }
+
+    private func apply(_ effects: [AgentHookEffect]) {
+        for effect in effects {
+            switch effect {
+            case .working:
+                statusMachine.onTitleChange(isWorking: true)
+            case .turnEnded:
+                statusMachine.onTitleChange(isWorking: false)
+            case .sessionIdle, .sessionEnded:
+                statusMachine.reset()
+                decisionTracker.reset()
+            case .decisionRequested:
+                decisionTracker.onPermissionRequest()
+            case .decisionResolved:
+                decisionTracker.onWorking()
+            }
+        }
+    }
+
+    /// Esc/Ctrl+C sonrası pencere doldu ve hook gelmedi → kesildi say.
+    private func settleInterrupt() {
+        guard statusMachine.status == .working else { return }
+        apply(hookReducer.inferInterrupt())
+    }
+
+    private func reportProviderIfChanged() {
+        let current: AgentProvider? = hookReducer.isBound
+            ? hookReducer.provider
+            : AgentProvider(rawValue: inferencer.hint.rawValue)
+        guard current != reportedProvider else { return }
+        reportedProvider = current
+        onProviderChange?(current)
+    }
+
     // MARK: - Yazma yolu
 
     /// Filtre → inference → \r etkisi. Dönen veri PTY'ye yazılacak veridir;
@@ -153,9 +233,14 @@ final class TerminalPipeline: @unchecked Sendable {
         guard !filtered.isEmpty else { return filtered }
         let text = String(decoding: filtered, as: UTF8.self)
         inferencer.observeInput(text)
-        if text.contains("\r"), inferencer.hint == .codex {
+        if hookReducer.isBound {
+            if statusMachine.status == .working, InterruptSettleTimer.isInterruptKeystroke(filtered) {
+                interruptTimer.touch()
+            }
+        } else if text.contains("\r"), inferencer.hint == .codex {
             statusMachine.onUserInput()
         }
+        reportProviderIfChanged()
         return filtered
     }
 
@@ -192,6 +277,7 @@ final class TerminalPipeline: @unchecked Sendable {
     func prepareForExit() {
         watchdog.stop()
         silenceTimer.cancel()
+        interruptTimer.cancel()
         decisionTracker.reset()
         coalescer.flushNow()
     }
@@ -203,7 +289,9 @@ final class TerminalPipeline: @unchecked Sendable {
     func finishExit(code: Int32) {
         watchdog.stop()
         silenceTimer.cancel()
+        interruptTimer.cancel()
         oscParser.reset()
+        hookReducer.reset()
         statusMachine.onExit(code: code)
     }
 
