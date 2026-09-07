@@ -84,6 +84,7 @@ struct TerminalCardHeader: View {
     var body: some View {
         HStack(spacing: style.spacing) {
             StatusDot(status: meta.status)
+            TerminalIdentityIcon(provider: meta.provider, size: style.titleSize)
             if isStalled {
                 Badge(text: "stalled", color: Theme.warning)
                     .accessibilityLabel("Terminal stalled")
@@ -132,6 +133,29 @@ struct TerminalCardHeader: View {
     }
 }
 
+/// Kim koşuyor (karar 45; Orca `TerminalTabLeadingIcon`): durum noktasının
+/// yanında ajan logosu (Claude / Codex) ya da düz shell için terminal glifi.
+/// İki ayrı glif — biri "ne durumda", diğeri "kim" — tek süslü ikona
+/// kaynaştırılmaz ki paralel kartlar taranabilir kalsın.
+struct TerminalIdentityIcon: View {
+    let provider: AgentProvider?
+    var size: Theme.Typography.Size = .label
+
+    var body: some View {
+        Group {
+            if let provider {
+                ProviderIcon(provider: provider, size: size)
+            } else {
+                Image(systemName: "terminal")
+                    .font(Theme.Typography.ui(size))
+                    .foregroundStyle(Theme.textMuted)
+            }
+        }
+        .frame(width: size.points, height: size.points)
+        .accessibilityLabel(provider.map { $0.rawValue.capitalized } ?? "Shell")
+    }
+}
+
 /// Durum noktası: working / waiting-unseen pulse'lı, gerisi sabit.
 struct StatusDot: View {
     let status: TerminalStatus
@@ -164,6 +188,11 @@ struct StatusDot: View {
 #Preview("TerminalCardHeader") {
     VStack(spacing: Theme.Spacing.xl) {
         StatusDot(status: .working)
+        HStack(spacing: Theme.Spacing.sm) {
+            TerminalIdentityIcon(provider: .claude)
+            TerminalIdentityIcon(provider: .codex)
+            TerminalIdentityIcon(provider: nil)
+        }
         Badge(text: "stalled", color: Theme.warning)
     }
     .padding(Theme.Spacing.xxl)

@@ -26,6 +26,8 @@ final class LiveServiceRegistry: ServiceRegistry {
     let activityMonitor: any ActivityMonitoring
     let processSampler: any ProcessSampling
     let sleepAssertion: any SleepAsserting
+    let agentHooks: any AgentHookServing
+    let agentHookInstaller: any AgentHookInstalling
 
     private let usageServices: [AgentProvider: any UsageServicing]
     /// P1 ölçüm harness'ı somut manager'a bağlıdır (debug-only araç, design/04).
@@ -74,6 +76,8 @@ final class LiveServiceRegistry: ServiceRegistry {
         activityMonitor = SystemActivityMonitor()
         processSampler = PSProcessSampler()
         sleepAssertion = IOKitSleepAssertion()
+        agentHooks = AgentHookServer()
+        agentHookInstaller = AgentHookInstaller(paths: paths)
         sessionStarter = SessionStarterService()
         let manager = TerminalSessionManager()
         terminalManager = manager

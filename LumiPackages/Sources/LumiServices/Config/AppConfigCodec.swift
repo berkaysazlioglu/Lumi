@@ -40,6 +40,9 @@ enum AppConfigCodec {
         config.usageAutoRefresh = UsageAutoRefreshCodec.decode(nested(dict, "usageAutoRefresh"))
         config.usageIndicators = UsageIndicatorsCodec.decode(nested(dict, "usageIndicators"))
         config.computerAwakeMode = ComputerAwakeMode.normalized(dict["computerAwakeMode"] as? String)
+        if let value = JSONValue.bool(dict["agentHooksEnabled"]) {
+            config.agentHooksEnabled = value
+        }
         return config
     }
 
@@ -59,6 +62,7 @@ enum AppConfigCodec {
             "usageAutoRefresh": UsageAutoRefreshCodec.overlay(config.usageAutoRefresh),
             "usageIndicators": UsageIndicatorsCodec.overlay(config.usageIndicators),
             "computerAwakeMode": config.computerAwakeMode.rawValue,
+            "agentHooksEnabled": config.agentHooksEnabled,
         ]
     }
 

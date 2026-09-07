@@ -58,7 +58,7 @@ final class NotificationAssembly: FeatureAssembly {
                 case .exited(let id, _):
                     // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
                     self.services.notifications.terminalRemoved(id)
-                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell,
+                case .spawned, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
                      .writeFailed, .viewFocused, .stalled:
                     break
                 }

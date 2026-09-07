@@ -97,6 +97,18 @@ public final class FakeTerminalService: TerminalServicing {
         processIDs[id]
     }
 
+    // MARK: Karar 45 — hook kablosu
+    public private(set) var hookEndpoints: [AgentHookEndpoint?] = []
+    public private(set) var appliedHookEvents: [AgentHookEvent] = []
+
+    public func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {
+        hookEndpoints.append(endpoint)
+    }
+
+    public func applyAgentHookEvent(_ event: AgentHookEvent) {
+        appliedHookEvents.append(event)
+    }
+
     public func killAll() {
         killAllCount += 1
     }

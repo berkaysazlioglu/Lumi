@@ -43,6 +43,13 @@ public enum AgentProvider: String, Sendable, Codable, Equatable, CaseIterable {
     /// Yeni provider terminalinde spawn sonrası enjekte edilen CLI komutu
     /// (önce shell açılır, sonra komut yazılır).
     public var launchCommand: String { rawValue }
+
+    /// Launch komutunun ilk token'ından sağlayıcı çıkarımı (`claude …` /
+    /// `codex …`); başka komut ya da `nil` → `nil` (düz shell).
+    public static func detect(launchCommand: String?) -> AgentProvider? {
+        guard let first = launchCommand?.split(whereSeparator: \.isWhitespace).first else { return nil }
+        return AgentProvider(rawValue: String(first))
+    }
 }
 
 /// Terminal metadata'sı — UI/state katmanının gördüğü tek model.
@@ -59,6 +66,10 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// oturum kimliği — quit'te persist edilip açılışta resume için kullanılır.
     /// nil = bu terminal Lumi'nin izlediği bir claude oturumu taşımıyor.
     public let claudeSessionID: String?
+    /// Terminalde şu an hangi ajan koşuyor (karar 45): launch komutu, OSC/çıktı
+    /// çıkarımı ve hook olaylarından türetilir; ajan çıkınca (`SessionEnd`)
+    /// `nil`e döner = düz shell. Kart header'ındaki kimlik ikonunun kaynağı.
+    public var provider: AgentProvider?
 
     public init(
         id: TerminalID,
@@ -68,7 +79,8 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         task: String? = nil,
         oscTitle: String? = nil,
         status: TerminalStatus = .idle,
-        claudeSessionID: String? = nil
+        claudeSessionID: String? = nil,
+        provider: AgentProvider? = nil
     ) {
         self.id = id
         self.name = name
@@ -78,6 +90,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.oscTitle = oscTitle
         self.status = status
         self.claudeSessionID = claudeSessionID
+        self.provider = provider
     }
 
     /// Kullanıcıya gösterilen başlık — TEK kaynak (refactor 6.7).
@@ -94,6 +107,8 @@ public enum TerminalEvent: Sendable, Equatable {
     case exited(TerminalID, code: Int32)
     case statusChanged(TerminalID, TerminalStatus)
     case titleChanged(TerminalID, String)
+    /// Terminaldeki ajan kimliği değişti (karar 45): `nil` = düz shell.
+    case providerChanged(TerminalID, AgentProvider?)
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)

@@ -94,7 +94,8 @@ Terminal başına:
     │     └─ OSCSemanticsChain.interpret(raw, hint:) → [OSCEvent]   (§3.3)
     │           └─ StatusStateMachine / DecisionTracker (BURADA, io queue'da koşar)
     │                 └─ durum değişimi → hopToMain → metadata publish + Notifier
-    → CodexSilenceTimer.touch()              // 3 sn DispatchSourceTimer, aynı queue
+    │              (hook otoritesi bağlıyken — §3.5 — OSC yalnız başlık metnini sürer)
+    → CodexSilenceTimer.touch()              // 3 sn DispatchSourceTimer, aynı queue (hook'suzken)
     → OutputCoalescer.ingest(rawBytes)       // HAM byte — emülatör byte ister
          └─ flush koşulu: ilk byte'tan beri 16ms (yüzey görünmüyorsa 100ms)
             VEYA ≥ AdaptiveBatchBudget.threshold (default 128KB, §3.2)
@@ -146,6 +147,16 @@ Ek A §A.2-10 Faz 4.2'ye kadar **hiç implemente edilmemişti**; terminaller ark
 2. **Adaptif batching.** Feed 4 ms'i aşarsa `AdaptiveBatchBudget.noteOverrun()`, aşmazsa `noteWithinBudget()` (§3.2).
 
 Sinyalin UI'a yolu: `TerminalPipeline.onStallChange` → `TerminalSessionDelegate.session(_:didChangeStalled:)` → `TerminalEvent.stalled(TerminalID, Bool)` → `TerminalListStore.stalledIDs: Set<TerminalID>` → terminal kartındaki rozet. **`TerminalMeta` formatı değişmez** — stall efemer bir UI durumudur, metadata değil, dolayısıyla persist edilmez. Testler saat ve heartbeat'i enjekte ederek deterministik koşar (`FeedWatchdogTests`).
+
+### 3.5 Durum otoritesi: ajan hook'ları (karar 45)
+
+Claude Code / Codex, kurulu hook script'i üzerinden her yaşam döngüsü olayını Lumi'nin loopback sunucusuna POST eder ([02 §7.2](./02-services.md)). Olay `TerminalSessionManager.applyAgentHookEvent` → `TerminalSession.applyHookEvent` → **io queue'da** `TerminalPipeline.processHookEvent` yolunu izler; böylece OSC ile hook aynı serial kuyrukta sıralanır, yarışmaz.
+
+- `AgentHookStatusReducer` (`Status/`) saf çeviricidir: olay → `[AgentHookEffect]` (`working` / `turnEnded` / `sessionIdle` / `sessionEnded` / `decisionRequested` / `decisionResolved`). Model: **lider turn + çalışan alt ajan kadrosu**; ikisi de bitmeden `turnEnded` üretilmez. Pipeline etkileri `StatusStateMachine.onTitleChange(isWorking:)` / `reset()` ve `DecisionTracker` çağrılarına indirir — 6 durumlu makine ve odak varyantları değişmez.
+- İlk hook olayıyla `hookReducer.isBound` açılır: OSC title `isWorking`, OSC 9 izin kalıbı, Codex çıktı-sessizliği ve Enter sezgileri **durumu sürmez**; başlık metni akmaya devam eder. `SessionEnd` ve PTY exit otoriteyi bırakır (düz shell'e dönüş → sezgiler geri gelir).
+- `InterruptSettleTimer` (`Status/`, 0.5 s, injectable `OneShotScheduling`): bağlıyken `working` durumda tek başına ESC/Ctrl+C gelirse pencere açılır; hook gelmezse `reducer.inferInterrupt()` (kadro boşsa) turn'ü kapatır. Her hook olayı pencereyi iptal eder.
+- Sağlayıcı kimliği (`TerminalMeta.provider`) pipeline'dan `onProviderChange` ile çıkar: bağlıyken hook sağlayıcısı, değilken `ProviderInferencer` hint'i; yalnız gerçek değişim yayılır (`TerminalEvent.providerChanged`).
+- PTY env'i: `TerminalEnvironment.childEnvironment(hookEndpoint:terminalID:)` `LUMI_TERMINAL_ID` / `LUMI_AGENT_HOOK_PORT` / `LUMI_AGENT_HOOK_TOKEN` yazar; uç nokta yoksa miras kalan üçlü silinir (başka bir Lumi örneğinin portuna post edilmesin).
 
 ### 3.4 Yüzey durumu: `TerminalSurfaceState`
 
@@ -245,6 +256,7 @@ Aşağıdakiler Electron sürümünden **birebir** taşınır:
 - **OSC parser semantiği:** `ESC ] cmd ; payload (BEL | ESC \)` (önce gelen sonlandırıcı); OSC 0/2 → title event (✳ U+2733 prefix = Claude idle/`isWorking=false`; `claude` kelime-sınırı → hint; boş title → karar yok; ilk karakter + boşluk strip paritesi); OSC 9 → `turn/task (complete|completed|done|finished)` regex'i ve `waiting for input` / `all idle` / `idle state` literalleri → `codexTurnComplete`; diğer tüm OSC kodları sessizce düşer; 4096-char partial cap; terminal kapanışında buffer temizliği. **Parite üstü ekleme:** `ClaudeSemantics` OSC 9'da "needs your permission" / `\bpermission\b` kalıbını `.permissionRequest` olarak yorumlar (turn-complete DEĞİL) ve zincirde codex'ten önce sınanır — prompt kuyruğu "karar bekliyor"da duraklar, "turn bitti"de akar (`DecisionTracker`).
 - **StatusStateMachine:** 6 durum; `focused × windowFocused` etkin odak; geçiş tablosu (onTitleChange/onOutputActivity/onOutputSilence-3sn/onUserInput/onFocus/onBlur/onWindowFocus/onWindowBlur/onExit/reset) ve "codex hint'i output'la asla düşürülmez" asimetrisi dahil birebir.
 - **Provider inference:** input `^claude/^codex`, output `"openai codex"`/`"claude code"`, OSC kaynaklı hint'ler; codex silence heuristiği yalnız hint==codex iken aktif.
+- **Parite üstü — hook otoritesi (karar 45):** yukarıdaki üç madde yalnız hook bağlı DEĞİLKEN durumu sürer. Claude/Codex hook'u geldiği andan itibaren durumun kaynağı `AgentHookStatusReducer`'dır (§3.5); OSC başlığı yalnız görünen adı günceller. Electron/Orca'daki gibi "başlıktan tahmin" yerine "ajanın söylediği" geçerlidir.
 - **Exit-cleanup sırası (bug'a duyarlı — Faz 1.5'te fiilen uygulandı):**
   1. io queue'da `TerminalPipeline.prepareForExit()`: watchdog durdur → silence timer iptal → decision tracker sıfırla → coalescer `flushNow()`.
   2. MainActor'a hop; `isTerminated = true` (oturum kayıttan düşmüş sayılır — bayat status push'u yapısal olarak imkânsız).
@@ -268,6 +280,8 @@ Modül klasörleri sorumluluğa göre bölünmüştür: `PTY/`, `Parsing/`, `Flo
 | `StatusStateMachine` | `Status/` | 6 durum, geçiş tablosu birebir; exit-sıralaması guard'ı dahil |
 | `DecisionTracker` | `Status/` | "karar bekleniyor" bayrağı (`.permissionRequest` ↔ turn-complete) |
 | `CodexSilenceTimer` | `Status/` | Injectable scheduler (`OneShotScheduling`); 3 sn; claude-hint'te iptal |
+| `AgentHookStatusReducer` | `Status/` | Hook olayı → etki listesi (karar 45): lider turn + alt ajan kadrosu, karar bayrağı, `SessionStart` kaynak allowlist'i, `background_tasks`, `inferInterrupt` |
+| `InterruptSettleTimer` | `Status/` | ESC/Ctrl+C sonrası 0.5 s hook bekleme penceresi; `isInterruptKeystroke` |
 | `OSCStreamParser` | `Parsing/` | Yalnız `OSCRawEvent(code:payload:)`; 4096-char cap; BEL/ST önceliği; `reset()` |
 | `OSCSemantics` zinciri | `Parsing/` | `ClaudeSemantics` / `CodexSemantics` / `GenericTitleSemantics` + `OSCSemanticsChain` (ilk-eşleşen-kazanır) |
 | `OSCTitleInterpreter` | `Parsing/` | Paylaşılan saf title yorumu (✳ işareti, strip paritesi, `isWorking`) |

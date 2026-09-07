@@ -39,6 +39,10 @@ public struct AppConfig: Sendable, Equatable {
     /// Alt bardaki "Keep computer awake" modu (karar 43). Additive (karar 9):
     /// yoksa/geçersizse `off`.
     public var computerAwakeMode: ComputerAwakeMode
+    /// Claude/Codex hook'larının kurulup terminal durumunun hook'lardan okunması
+    /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
+    /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
+    public var agentHooksEnabled: Bool
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -65,7 +69,8 @@ public struct AppConfig: Sendable, Equatable {
         sessionTrigger: .defaults,
         usageAutoRefresh: .defaults,
         usageIndicators: .defaults,
-        computerAwakeMode: .default
+        computerAwakeMode: .default,
+        agentHooksEnabled: true
     )
 
     public init(
@@ -82,7 +87,8 @@ public struct AppConfig: Sendable, Equatable {
         sessionTrigger: SessionTrigger = .defaults,
         usageAutoRefresh: UsageAutoRefresh = .defaults,
         usageIndicators: UsageIndicators = .defaults,
-        computerAwakeMode: ComputerAwakeMode = .default
+        computerAwakeMode: ComputerAwakeMode = .default,
+        agentHooksEnabled: Bool = true
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
@@ -98,5 +104,6 @@ public struct AppConfig: Sendable, Equatable {
         self.usageAutoRefresh = usageAutoRefresh
         self.usageIndicators = usageIndicators
         self.computerAwakeMode = computerAwakeMode
+        self.agentHooksEnabled = agentHooksEnabled
     }
 }

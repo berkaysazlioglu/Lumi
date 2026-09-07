@@ -128,6 +128,11 @@ public final class SettingsStore: StoreLifecycle {
         apply { $0.autoMinimizeOnSend = enabled }
     }
 
+    /// Karar 45: hook tabanlı ajan durumu.
+    public func setAgentHooksEnabled(_ enabled: Bool) {
+        apply { $0.agentHooksEnabled = enabled }
+    }
+
     public func setSessionTrigger(_ trigger: SessionTrigger) {
         apply { $0.sessionTrigger = trigger }
     }

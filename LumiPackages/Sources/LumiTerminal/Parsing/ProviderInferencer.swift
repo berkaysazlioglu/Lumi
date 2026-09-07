@@ -37,4 +37,10 @@ struct ProviderInferencer {
         guard newHint != .unknown else { return }
         hint = newHint
     }
+
+    /// Ajan süreci çıktı (`SessionEnd`, karar 45): geride düz shell kaldı,
+    /// eski çıkarım yeni bir komut yazılana dek geçersiz.
+    mutating func reset() {
+        hint = .unknown
+    }
 }

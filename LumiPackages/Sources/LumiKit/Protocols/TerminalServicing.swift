@@ -40,6 +40,14 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Sıralı koleksiyon — Map-insertion-order tuzağına karşı (karar 11).
     var terminals: [TerminalMeta] { get }
 
+    /// Karar 45: hook sunucusunun uç noktası. Sonraki spawn'ların PTY env'ine
+    /// (`LUMI_AGENT_HOOK_*`) yazılır; `nil` = hook'lar kapalı, env eklenmez.
+    func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?)
+    /// Karar 45: sunucudan gelen hook olayını ilgili oturumun durum
+    /// makinesine iletir. Tanınmayan terminal kimliği sessizce düşer (kapanmış
+    /// terminalin geç gelen hook'u).
+    func applyAgentHookEvent(_ event: AgentHookEvent)
+
     func events() -> AsyncStream<TerminalEvent>
 
     /// Kapanış simetrisi: global NSEvent monitörleri gibi process-ömürlü

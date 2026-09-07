@@ -35,6 +35,9 @@ public protocol ServiceRegistry: AnyObject {
     /// Karar 43: alt bar Resource Manager örnekleyicisi ve uyku engeli.
     var processSampler: any ProcessSampling { get }
     var sleepAssertion: any SleepAsserting { get }
+    /// Karar 45: ajan hook sunucusu ve sağlayıcı ayar dosyalarına kurulumu.
+    var agentHooks: any AgentHookServing { get }
+    var agentHookInstaller: any AgentHookInstalling { get }
 
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.

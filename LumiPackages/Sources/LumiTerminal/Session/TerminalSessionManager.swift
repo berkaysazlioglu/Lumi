@@ -26,6 +26,9 @@ public final class TerminalSessionManager: TerminalServicing {
     /// yerine aynı kaynaktan okusun — foreground olmak tek başına odak
     /// kazandırmaz.
     private var focusedID: TerminalID?
+    /// Karar 45: hook sunucusunun uç noktası; sonraki spawn'ların PTY env'ine
+    /// yazılır. `nil` = hook'lar kapalı.
+    private var hookEndpoint: AgentHookEndpoint?
     /// Terminal alt sisteminin tek uygulama-seviyesi NSEvent monitörü (refactor 4.7):
     /// klavye eşlemesi, kart odağı, tekerlek/hover. Enjekte edilir ki testler gerçek
     /// bir global monitör kurmadan (ya da kurulumu doğrulayarak) koşabilsin.
@@ -84,6 +87,8 @@ public final class TerminalSessionManager: TerminalServicing {
             name: "Terminal \(spawnCounter)",
             task: task,
             claudeSessionID: prepared.sessionID,
+            provider: AgentProvider.detect(launchCommand: prepared.command),
+            hookEndpoint: hookEndpoint,
             font: font
         )
         session.delegate = self
@@ -131,6 +136,15 @@ public final class TerminalSessionManager: TerminalServicing {
 
     public func processID(for id: TerminalID) -> Int32? {
         session(for: id)?.processID
+    }
+
+    public func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {
+        hookEndpoint = endpoint
+    }
+
+    /// Kapanmış terminalin geç gelen hook'u sessizce düşer.
+    public func applyAgentHookEvent(_ event: AgentHookEvent) {
+        session(for: event.terminalID)?.applyHookEvent(event)
     }
 
     public func resize(id: TerminalID, cols: Int, rows: Int) {
@@ -202,6 +216,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
     func session(_ session: TerminalSession, didChangeTitle title: String) {
         guard isRegistered(session) else { return }
         broadcaster.send(.titleChanged(session.id, title))
+    }
+
+    func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.providerChanged(session.id, provider))
     }
 
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {

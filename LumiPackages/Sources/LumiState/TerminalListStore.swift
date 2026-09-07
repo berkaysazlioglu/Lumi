@@ -287,6 +287,9 @@ public final class TerminalListStore: StoreLifecycle {
             applyAutoMinimize(id, status: status)
         case .titleChanged(let id, let title):
             update(id) { $0.oscTitle = title }
+        case .providerChanged(let id, let provider):
+            // Karar 45: kart header'ındaki kimlik ikonu (Claude / Codex / shell).
+            update(id) { $0.provider = provider }
         case .awaitingDecisionChanged(let id, let awaiting):
             if awaiting {
                 awaitingDecisionIDs.insert(id)

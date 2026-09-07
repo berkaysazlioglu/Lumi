@@ -226,6 +226,24 @@ public protocol SessionStarterServicing: Sendable {
 
 ---
 
+### 7.2 AgentHookServing / AgentHookInstalling (karar 45)
+
+```swift
+public protocol AgentHookServing: Sendable {
+    func start() async throws -> AgentHookEndpoint   // 127.0.0.1:<port> + rastgele token; idempotent
+    func stop() async
+    func events() -> AsyncStream<AgentHookEvent>
+}
+public protocol AgentHookInstalling: Sendable {
+    func install() async -> [AgentHookInstallResult]   // sağlayıcı başına installed/unchanged/skipped/failed
+    func uninstall() async -> [AgentHookInstallResult]
+}
+```
+
+- **`AgentHookServer`** (`LumiServices/AgentHooks/`): Network.framework `NWListener`, tek isteklik bağlantılar. `HTTPRequestParser` (saf; istek satırı + başlıklar + `Content-Length`, 16 KB başlık / 1 MiB gövde bütçesi) → `AgentHookRequestRouter` (saf; `POST /hook/<provider>`, `X-Lumi-Agent-Hook-Token`, `X-Lumi-Terminal-ID`) → `AgentHookEvent.parse` (LumiKit; ham JSON'dan yalnız durum için gereken alanlar). Hata sözleşmesi: yanlış istek HTTP koduyla reddedilir ve yayılmaz; sunucu hatası `LumiError.underlying` fırlatır, assembly toast basar ve hook'suz devam eder.
+- **`AgentHookInstaller`**: script'ler (`AgentHookScript`, `~/.lumi/hooks/lumi-*-hook.sh`, 0755) + `ClaudeHookSettings` (`~/.claude/settings.json` `hooks` bölümü) + `CodexHookSettings` (`~/.codex/hooks.json`) + `CodexHookTrust`/`CodexConfigTomlEditor` (`config.toml` `[hooks.state."…"] trusted_hash`, satır tabanlı ve geri kalanı byte-byte koruyan). Dosya I/O doğrudan `FileManager`'dır (process yok); JSON yazımı `.prettyPrinted + .sortedKeys + .withoutEscapingSlashes`, atomik.
+- **Assembly:** `AgentHooksAssembly` (`.system`, terminal assembly'sinden önce) sunucuyu açar → `TerminalSessionControlling.setAgentHookEndpoint` → olayları `applyAgentHookEvent`'e akıtır → kurulumu ayrı Task'ta koşar. `agentHooksEnabled` kapanınca sunucu durur, uç nokta `nil`e çekilir ve `uninstall()` çağrılır; kapanışta yalnız sunucu durur.
+
 ## 8. SystemServicing
 
 ```swift

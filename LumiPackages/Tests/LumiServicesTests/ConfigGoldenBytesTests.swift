@@ -75,6 +75,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 5)
             config.usageIndicators = UsageIndicators(claude: false, codex: true)
             config.computerAwakeMode = .auto
+            config.agentHooksEnabled = false
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -127,6 +128,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
           "type" : "repo"
         }
       ],
+      "agentHooksEnabled" : false,
       "aiProvider" : "codex",
       "autoMinimizeOnSend" : true,
       "computerAwakeMode" : "auto",
