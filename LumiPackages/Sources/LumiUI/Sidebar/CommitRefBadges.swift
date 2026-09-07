@@ -8,6 +8,12 @@ struct CommitRefBadges: View {
     let refs: [GitRef]
     /// Rozetin ait olduğu düğümün lane rengi; `isCurrent` ref accent alır.
     let colorIndex: Int
+    /// Rozet metni (karar 45 eki: Plastic `…/parent/current` kısaltması);
+    /// tooltip her zaman TAM adı gösterir.
+    var displayName: (GitRef) -> String = { $0.name }
+    /// Verilirse rozet bu genişliği aşamaz ve sığmayan metin rozet içinde
+    /// sürekli kayar (dükkân tabelası); nil → Git davranışı (orta kırpma).
+    var marqueeMaxWidth: CGFloat? = nil
 
     static let maxVisibleRefs = 2
     private static let badgeBorderOpacity = 0.6
@@ -31,11 +37,7 @@ struct CommitRefBadges: View {
 
     private func badge(_ ref: GitRef) -> some View {
         let color = ref.isCurrent ? Theme.accentVivid : Theme.Graph.laneColor(colorIndex)
-        return Text(ref.name)
-            .font(Theme.Typography.ui(.caption, weight: .medium))
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .truncationMode(.middle)
+        return label(displayName(ref), color: color)
             .padding(.horizontal, Theme.Spacing.xs)
             .padding(.vertical, Theme.Spacing.xxxs)
             .background(Theme.bgElevated)
@@ -45,6 +47,26 @@ struct CommitRefBadges: View {
                     .stroke(color.opacity(Self.badgeBorderOpacity), lineWidth: Theme.Stroke.hairline)
             )
             .help(Self.help(ref))
+    }
+
+    @ViewBuilder
+    private func label(_ text: String, color: Color) -> some View {
+        if let marqueeMaxWidth {
+            MarqueeText(
+                text: text,
+                font: Theme.Typography.ui(.caption, weight: .medium),
+                color: color,
+                animating: true,
+                trailingGap: Theme.Graph.refBadgeMarqueeGap,
+                maxWidth: marqueeMaxWidth  // kısa ad rozeti daraltır; uzun ad tavana dayanır ve kayar
+            )
+        } else {
+            Text(text)
+                .font(Theme.Typography.ui(.caption, weight: .medium))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
     }
 
     static func help(_ ref: GitRef) -> String {

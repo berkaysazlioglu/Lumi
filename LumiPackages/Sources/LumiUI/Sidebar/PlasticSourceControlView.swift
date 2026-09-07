@@ -63,11 +63,12 @@ struct PlasticSourceControlView: View {
             }
             .frame(height: Theme.Spacing.xxxl)
             HStack(spacing: Theme.Spacing.sm) {
-                Text(info?.branch ?? (info.map { "cs:\($0.changesetID)" } ?? "Not a workspace"))
+                Text(info?.branch.map(PlasticBranchName.display) ?? (info.map { "cs:\($0.changesetID)" } ?? "Not a workspace"))
                     .font(Theme.Typography.mono(.body, weight: .medium))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .help(info?.branch ?? "")
                 Spacer(minLength: 0)
                 if let info {
                     Text("cs:\(info.changesetID)")
@@ -280,7 +281,12 @@ struct PlasticSourceControlView: View {
                             .foregroundStyle(Theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
-                        CommitRefBadges(refs: commit.references, colorIndex: row.nodeColorIndex)
+                        CommitRefBadges(
+                            refs: commit.references,
+                            colorIndex: row.nodeColorIndex,
+                            displayName: { PlasticBranchName.display($0.name) },
+                            marqueeMaxWidth: Theme.Graph.refBadgeMaxWidth
+                        )
                     }
                     HStack(spacing: Theme.Spacing.xs) {
                         Text(commit.shortHash)

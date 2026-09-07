@@ -18,6 +18,12 @@ public extension Theme {
         public static let curveRadius: CGFloat = 5
         /// HEAD halkasının ve merge iç deliğinin düğüm yarıçapına eklediği pay.
         public static let ringInset: CGFloat = 3
+        /// 96pt — kayan (marquee) ref rozetinin tavanı (karar 45 eki): rozet
+        /// bundan geniş olamaz, uzun ad rozet içinde kayar, yorum yer bulur.
+        public static let refBadgeMaxWidth: CGFloat = 96
+        /// Rozet marquee'sinin döngü aralığı: metin bir tur attıktan sonra bu
+        /// kadar boşluk bırakılır (`MarqueeText.trailingGap`in dar rozet sürümü).
+        public static let refBadgeMarqueeGap: CGFloat = 24
 
         /// 5 basamaklı lane paleti. 0 = checkout edilmiş branch (mor vurgu).
         public static let laneColors: [Color] = [
