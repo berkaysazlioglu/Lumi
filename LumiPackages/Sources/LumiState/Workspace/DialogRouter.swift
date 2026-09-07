@@ -15,7 +15,7 @@ public struct CloseTabDialogState: Equatable, Sendable {
     }
 }
 
-/// Workspace silme onayının sunum verisi (karar 49).
+/// Workspace silme onayının sunum verisi (karar 51).
 public struct DeleteWorkspaceDialogState: Equatable, Sendable {
     public let workspace: ProjectWorkspace
     /// Silmeyle birlikte kapanacak canlı terminal sayısı.

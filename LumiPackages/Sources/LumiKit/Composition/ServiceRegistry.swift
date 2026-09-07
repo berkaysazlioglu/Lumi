@@ -17,6 +17,10 @@ public protocol ServiceRegistry: AnyObject {
     var repo: any RepoServicing { get }
     var workspaces: any WorkspaceServicing { get }
     var git: any GitServicing { get }
+    /// Plastic SCM yüzeyi (karar 46): okuma + checkin/undo.
+    var plastic: any PlasticServicing { get }
+    /// Commit/checkin mesajı üreticisi (karar 47) — `claude -p` arka planda.
+    var commitMessages: any CommitMessageGenerating { get }
     var agentHistory: any AgentHistoryReading { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).

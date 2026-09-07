@@ -13,10 +13,18 @@ public struct ProjectToolsPanel: View {
         return shell.repos.capabilities[path]?.isGitRepo ?? shell.repos.repo(at: path)?.isGitRepo ?? false
     }
 
+    /// Karar 46: `.plastic/` kökü Source Control sekmesini Plastic sürümüyle açar.
+    private var isPlasticWorkspace: Bool {
+        guard let path = shell.activeRepoPath else { return false }
+        return shell.repos.capabilities[path]?.isPlasticWorkspace ?? false
+    }
+
+    private var hasSourceControl: Bool { isGitRepo || isPlasticWorkspace }
+
     public var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(ProjectToolsTab.available(isGitRepo: isGitRepo), id: \.self) { tab in
+                ForEach(ProjectToolsTab.available(isGitRepo: isGitRepo, isPlasticWorkspace: isPlasticWorkspace), id: \.self) { tab in
                     Button { selected = tab } label: {
                         VStack(spacing: 0) {
                             Image(systemName: tab.icon)
@@ -47,7 +55,12 @@ public struct ProjectToolsPanel: View {
                 case .explorer: ExplorerView(repoPath: path)
                 case .agentHistory: AgentHistoryView(repoPath: path)
                 case .sourceControl:
-                    if isGitRepo { SourceControlView(repoPath: path) }
+                    // Her iki VCS de varsa Git öncelikli (karar 46).
+                    if isGitRepo {
+                        SourceControlView(repoPath: path)
+                    } else if isPlasticWorkspace {
+                        PlasticSourceControlView(repoPath: path)
+                    }
                 }
             } else {
                 EmptyStatePlaceholder("Select a project", density: .inline)
@@ -57,9 +70,9 @@ public struct ProjectToolsPanel: View {
         .background(Theme.bgSurface)
         .foregroundStyle(Theme.textPrimary)
         .environment(\.colorScheme, .dark)
-        .onChange(of: isGitRepo) { if !isGitRepo && selected == .sourceControl { selected = .explorer } }
+        .onChange(of: hasSourceControl) { if !hasSourceControl && selected == .sourceControl { selected = .explorer } }
         .onChange(of: shell.activeRepoPath) {
-            if !isGitRepo && selected == .sourceControl { selected = .explorer }
+            if !hasSourceControl && selected == .sourceControl { selected = .explorer }
         }
     }
 }

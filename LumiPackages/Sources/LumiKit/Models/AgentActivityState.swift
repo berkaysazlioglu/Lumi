@@ -1,6 +1,6 @@
 import Foundation
 
-/// Sidebar ajan satırının durum glifi (karar 49, Orca `AgentStateDot`).
+/// Sidebar ajan satırının durum glifi (karar 51, Orca `AgentStateDot`).
 ///
 /// Altı durumlu `TerminalStatus` + karar bekleme bayrağı, kullanıcıya dört
 /// anlama indirgenir: **çalışıyor** (spinner), **karar bekliyor** (zil),

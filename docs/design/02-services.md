@@ -169,6 +169,39 @@ public typealias GitServicing = GitReading & GitContentReading & GitWriting
 - `fileDiff`/`commitFileDiff` çıktısı tiplenmiş `UnifiedDiff` modelidir (`UnifiedDiffParser`; FileViewer doğrudan render eder — [03 §6](./03-ui-shell.md)).
 - **`imagePreview` (karar 21):** görsel dosyalarda metin diff'i yerine ham blob çifti. `sha` verilirse `git show sha^:file` ↔ `git show sha:file`, verilmezse `HEAD:file` ↔ disk. Çıktı `GitCommandRunner.runRaw` ile **`Data`** olarak alınır (UTF8 decode görselleri bozar). Liste operasyonları gibi **sessiz**: eksik taraf nil'dir (root commit'in parent'ı, eklenen/silinen dosya, untracked dosya — hepsi rutin), yalnız path-traversal ihlali loglanır. Taraf başına `maxImagePreviewBytes` (20 MB) sınırı; disk tarafında boyut önce file attribute'undan okunur, sınır üstü dosya belleğe hiç alınmaz.
 
+### 4.1 PlasticReading (Plastic SCM, karar 46)
+
+Git'in yanında ikinci VCS sınırı; Git'teki gibi hata sözleşmesine göre ikiye bölünmüştür.
+
+```swift
+/// SESSİZ-BOŞ: nil/boş + log (çalışma alanı olmayan dizin, cm yok — rutin).
+public protocol PlasticReading: Sendable {
+    func isCLIAvailable() async -> Bool
+    func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo?      // cs + repo@server + branch
+    func status(workspacePath: String) async -> [PlasticFileChange]              // --all, ignored hariç
+    func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]  // yeniden eskiye
+    func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String  // karar 47
+}
+
+/// FIRLATAN: LumiError.plasticFailed / cliNotFound / pathOutsideRepo.
+public protocol PlasticWriting: Sendable {
+    func checkin(workspacePath: String, message: String, files: [String]) async throws  // cm checkin … --all --applychanged --private
+    func undo(workspacePath: String, files: [String]) async throws                      // cm undo … (geri alınamaz)
+}
+
+public typealias PlasticServicing = PlasticReading & PlasticWriting
+```
+
+| Parça | Sorumluluk |
+|---|---|
+| `PlasticService` (**actor**, §11: çağrılar arası durum) | `cm` yolunu `BinaryLocating` ile bir kez çözer ve saklar; komut koşumu `ProcessRunning` (30 sn); "is not in a workspace" çıktısı sessizdir |
+| `PlasticOutputParser` (enum, I/O yok) | `parseHeader` / `parseSelectorBranch` / `parseStatus` (mutlak → relative path, kod eşlemesi) / `parseChangesets` (0x1F ayraçlı, ISO tarih, çok satırlı yorum) |
+
+- Algı `RepoService.capabilities` içinde `.plastic/` dizin kontrolüdür — `cm` süreci açılmaz.
+- Tarih penceresi (7 gün) ve fallback (en yeni 25) `PlasticStore.select` içinde saf fonksiyondur; sorguda tarih filtresi yoktur (locale'e bağlı literal).
+- Yazma metodları relative path alır ve `RepoPathGuard.resolve` ile mutlak, kök-içi path'e çevirir (karar 11); `cm`'e her zaman mutlak path'ler verilir. Okuma metodları path almaz; dosya açma Git'teki gibi `FileViewerStore`'dan geçer.
+- History graph'ı için ayrı algoritma yoktur: `PlasticHistoryGraph` (LumiKit, saf) changeset'leri `GitCommit`e projekte eder ve `CommitGraph` aynen kullanılır.
+
 ---
 
 ## 5. PersonaServicing — **kaldırıldı (karar 25, 2026-09-04)**
@@ -300,6 +333,17 @@ public protocol BinaryLocating: Sendable {
 - **Sessiz-fail sözleşmesi:** timeout, başlatma hatası veya iptal `nil` döndürür — fırlatmaz; çağıran servis bunu kendi hata sözleşmesine map'ler.
 - Refactor 3.1: eskiden static bir `ProcessRunner` enum'una (artık yok) giden 7 çağıran vardı; artık her servis `init(runner:locator:)` ile ikame alabilir (`FakeProcessRunner`, `FakeBinaryLocator`) — git/claude/codex binary'si olmayan ortamda da birim testi yazılır.
 - `SystemProcessRunner` düzeltmeleri (Faz 1.11): timeout/launch-failure yolunda `DispatchGroup` `leave`'leri tamamlandı (process + fd sızıntısı), `withTaskCancellationHandler` ile iptalde `terminate()`. Stdout/stderr `readabilityHandler` ile paralel okunur (klasik `NSTask` deadlock'una karşı).
+
+### 8.1.1 CommitMessageGenerating (karar 47)
+
+```swift
+/// FIRLATAN: cliNotFound / commitMessageGenerationFailed.
+public protocol CommitMessageGenerating: Sendable {
+    func generate(_ request: CommitMessageRequest) async throws -> String   // tek satır
+}
+```
+
+`ClaudeCommitMessageService` (actor): `claude -p <talimat> --model sonnet --effort low --output-format json --tools "" --setting-sources "" --no-session-persistence`, gövde stdin'den, CWD geçici dizin, `--bare` YOK (keychain). Agent SDK bilinçli olarak kullanılmaz (yalnız Python/TS; dokümanı diğer diller için CLI alt sürecini önerir — karar 47). Prompt kurulumu ve yanıt temizliği saf `CommitMessagePrompt`tadır. Girdi: `GitReading.workingTreeDiffText` / `PlasticReading.workingTreeDiffText` (`cm cat` tabanı + `diff -u`), ikisi de sessiz-boş. Store tarafı `CommitMessageAssistant` + `ShellContext` intent'i.
 
 ### 8.2 SyntaxHighlighting (FileViewer dikişi)
 

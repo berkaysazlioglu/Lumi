@@ -120,7 +120,7 @@ final class WorkspaceServiceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.path + "/workspaces"))
     }
 
-    // MARK: - Silme (karar 49)
+    // MARK: - Silme (karar 51)
 
     func testRemovesCleanGitWorktreeAndKeepsBranch() async throws {
         let source = try makeGitProject("source")

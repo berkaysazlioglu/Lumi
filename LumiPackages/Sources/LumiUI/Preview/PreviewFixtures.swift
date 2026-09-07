@@ -35,6 +35,8 @@ public extension ShellContext {
             repos: repos,
             workspaces: ProjectWorkspaceStore(service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts),
             git: GitStore(git: git, toasts: shared.toasts),
+            plastic: PlasticStore(service: PreviewPlasticService(), toasts: shared.toasts),
+            commitAssistant: CommitMessageAssistant(generator: PreviewCommitMessageGenerator(), toasts: shared.toasts),
             agentHistory: AgentHistoryStore(service: PreviewAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
             settings: shared.settings,
@@ -197,7 +199,22 @@ private actor PreviewRepoService: RepoServicing {
     nonisolated func events() -> AsyncStream<RepoEvent> { AsyncStream { _ in } }
 }
 
+private struct PreviewPlasticService: PlasticServicing {
+    func checkin(workspacePath: String, message: String, files: [String]) async throws {}
+    func undo(workspacePath: String, files: [String]) async throws {}
+    func isCLIAvailable() async -> Bool { false }
+    func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo? { nil }
+    func status(workspacePath: String) async -> [PlasticFileChange] { [] }
+    func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset] { [] }
+    func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String { "" }
+}
+
+private struct PreviewCommitMessageGenerator: CommitMessageGenerating {
+    func generate(_ request: CommitMessageRequest) async throws -> String { "Update \(request.changes.count) files" }
+}
+
 private struct PreviewGitService: GitServicing {
+    func workingTreeDiffText(repoPath: String, files: [String]) async -> String { "" }
     func branches(repoPath: String) async -> [GitBranch] { [] }
     func commits(repoPath: String, branch: String?) async -> [GitCommit] { [] }
     func history(repoPath: String, limit: Int) async -> [GitCommit] { PreviewSamples.history }

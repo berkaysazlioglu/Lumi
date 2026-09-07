@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Workspace silme onayı (karar 49, Orca `DeleteWorkspaceDialog`).
+/// Workspace silme onayı (karar 51, Orca `DeleteWorkspaceDialog`).
 ///
 /// İlk deneme temiz silmedir; kirli Git worktree'si reddedilirse hata metni
 /// dialogda kalır ve buton `Force Delete`e döner — zorla silme yalnız açık

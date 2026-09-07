@@ -16,9 +16,17 @@ struct MarqueeText: View {
     /// Dışarıdan (satır hover'ı) sürülür; tek sorumluluk: kayma kararı burada.
     var animating: Bool = false
 
-    /// v1 paritesi — span `padding-right: 50px` + `animation: 5s`.
-    static let trailingGap: CGFloat = 50
-    static let cycleDuration: Double = 5
+    /// v1 paritesi — span `padding-right: 50px` + `animation: 5s`. Dar
+    /// rozetlerde daha kısa boşluk/döngü verilebilir.
+    var trailingGap: CGFloat = MarqueeText.defaultTrailingGap
+    var cycleDuration: Double = MarqueeText.defaultCycleDuration
+    /// Verilirse görünüm kabı doldurmaz: genişliği metnin kendi genişliği ile
+    /// bu tavanın küçüğüdür (rozet gibi içeriğe sarılan kaplar için). nil →
+    /// ebeveynin verdiği genişlik (v1 commit mesajı davranışı).
+    var maxWidth: CGFloat? = nil
+
+    static let defaultTrailingGap: CGFloat = 50
+    static let defaultCycleDuration: Double = 5
 
     @State private var textWidth: CGFloat = 0
     @State private var textHeight: CGFloat = 16
@@ -36,6 +44,7 @@ struct MarqueeText: View {
                 .onAppear { containerWidth = geo.size.width }
                 .onChange(of: geo.size.width) { _, width in containerWidth = width }
         }
+        .frame(width: maxWidth.map { min(textWidth, $0) })  // içeriğe sarıl (tavanlı)
         .frame(height: textHeight)                 // GeometryReader dikey açgözlülüğünü topla
         .onChange(of: shouldScroll) { _, scroll in
             if scroll { startDate = Date() }       // her hover'da baştan başla
@@ -49,8 +58,8 @@ struct MarqueeText: View {
             // cycleDuration'da 0..1 ilerler ve başa snap'ler (v1 linear infinite).
             TimelineView(.animation) { timeline in
                 let elapsed = timeline.date.timeIntervalSince(startDate)
-                let cycle = textWidth + Self.trailingGap
-                let progress = (elapsed / Self.cycleDuration).truncatingRemainder(dividingBy: 1)
+                let cycle = textWidth + trailingGap
+                let progress = (elapsed / cycleDuration).truncatingRemainder(dividingBy: 1)
                 label.offset(x: -cycle * max(0, progress))
             }
         } else {

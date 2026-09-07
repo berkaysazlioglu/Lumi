@@ -70,7 +70,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// çıkarımı ve hook olaylarından türetilir; ajan çıkınca (`SessionEnd`)
     /// `nil`e döner = düz shell. Kart header'ındaki kimlik ikonunun kaynağı.
     public var provider: AgentProvider?
-    /// Son durum değişiminin zamanı (karar 49): sidebar ajan satırındaki
+    /// Son durum değişiminin zamanı (karar 51): sidebar ajan satırındaki
     /// "9m / 2h" etiketi buradan türer; hiç değişmediyse `createdAt` geçer.
     public var statusChangedAt: Date?
 

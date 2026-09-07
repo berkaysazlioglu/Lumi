@@ -20,7 +20,7 @@ public final class ProjectWorkspaceStore {
     public private(set) var records: [ProjectWorkspace] = []
     public private(set) var sidebarProjectPaths: [String] = []
     public private(set) var missingWorkspacePaths = Set<String>()
-    /// Silme akışı (karar 49): sürmekte olan silmenin yolu ve son hatası.
+    /// Silme akışı (karar 51): sürmekte olan silmenin yolu ve son hatası.
     public private(set) var deletingPath: String?
     public private(set) var deleteError: String?
     /// Kirli Git worktree'si ilk denemede reddedilir; kullanıcı açıkça
@@ -247,7 +247,7 @@ public final class ProjectWorkspaceStore {
         isInspecting = false
     }
 
-    // MARK: - Silme (karar 49)
+    // MARK: - Silme (karar 51)
 
     public var isDeleting: Bool { deletingPath != nil }
 

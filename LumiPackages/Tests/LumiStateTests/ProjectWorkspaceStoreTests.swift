@@ -222,7 +222,7 @@ final class ProjectWorkspaceStoreTests: XCTestCase {
         XCTAssertEqual(repos.repo(at: record.path), record.repo)
     }
 
-    // MARK: - Silme (karar 49)
+    // MARK: - Silme (karar 51)
 
     func testDeleteWorkspaceRemovesRecordAndConfigEntry() async throws {
         let seed = record

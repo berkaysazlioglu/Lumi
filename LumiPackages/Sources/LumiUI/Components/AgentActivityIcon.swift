@@ -1,7 +1,7 @@
 import LumiKit
 import SwiftUI
 
-/// Sidebar ajan satırının durum glifi (karar 49, Orca `AgentStateDot`):
+/// Sidebar ajan satırının durum glifi (karar 51, Orca `AgentStateDot`):
 /// çalışıyor → spinner, karar bekliyor → zil, bitti → yeşil tik, hata →
 /// kırmızı çarpı, boşta → soluk nokta. Kimlik ikonu (`TerminalIdentityIcon`)
 /// ayrı bir gliftir; iki anlam tek ikona kaynaştırılmaz (karar 45).

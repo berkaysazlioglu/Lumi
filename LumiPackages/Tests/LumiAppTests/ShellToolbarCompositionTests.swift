@@ -146,6 +146,8 @@ private struct ShellFixture {
             repos: repos,
             workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts),
             git: GitStore(git: git, toasts: toasts),
+            plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
+            commitAssistant: CommitMessageAssistant(generator: FakeCommitMessageGenerator(), toasts: toasts),
             agentHistory: AgentHistoryStore(service: FakeAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: toasts),
             settings: shared.settings,

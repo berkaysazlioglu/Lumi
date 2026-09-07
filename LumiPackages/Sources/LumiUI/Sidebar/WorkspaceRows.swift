@@ -25,7 +25,7 @@ enum Checkout: Identifiable {
     }
 }
 
-/// Checkout satırı + ajan listesi (karar 49, Orca `WorktreeCard` sadeliği).
+/// Checkout satırı + ajan listesi (karar 51, Orca `WorktreeCard` sadeliği).
 ///
 /// Satır: ikon · ad · (`primary` rozeti | branch) · sağda toplu durum.
 /// Altında birden fazla ajan varsa "N agents" daraltıcısı, tek ajan doğrudan.

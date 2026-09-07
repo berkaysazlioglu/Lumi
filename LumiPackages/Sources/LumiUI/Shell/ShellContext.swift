@@ -13,7 +13,7 @@ public struct ShellActions {
     public let reveal: @MainActor (String, String) -> Void
     /// (repoPath, göreli yol) → çöp kutusuna taşı.
     public let trash: @MainActor (String, String) -> Void
-    /// Mutlak proje/workspace yolunu Finder'da göster (karar 49).
+    /// Mutlak proje/workspace yolunu Finder'da göster (karar 51).
     public let revealPath: @MainActor (String) -> Void
 
     public init(
@@ -54,6 +54,10 @@ public final class ShellContext {
     public let workspaces: ProjectWorkspaceStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
+    /// Plastic SCM panel store'u (karar 46).
+    public let plastic: PlasticStore
+    /// Commit mesajı üretimi (karar 47) — Git ve Plastic composer'ları paylaşır.
+    public let commitAssistant: CommitMessageAssistant
     public let fileViewer: FileViewerStore
     public let settings: SettingsStore
     public let sessionSchedule: SessionScheduleStore
@@ -80,6 +84,8 @@ public final class ShellContext {
         repos: RepoStore,
         workspaces: ProjectWorkspaceStore,
         git: GitStore,
+        plastic: PlasticStore,
+        commitAssistant: CommitMessageAssistant,
         agentHistory: AgentHistoryStore,
         fileViewer: FileViewerStore,
         settings: SettingsStore,
@@ -101,6 +107,8 @@ public final class ShellContext {
         self.repos = repos
         self.workspaces = workspaces
         self.git = git
+        self.plastic = plastic
+        self.commitAssistant = commitAssistant
         self.agentHistory = agentHistory
         self.fileViewer = fileViewer
         self.settings = settings
@@ -144,7 +152,7 @@ public final class ShellContext {
         }
     }
 
-    // MARK: - Projects paneli ajan satırları ve silme (karar 49)
+    // MARK: - Projects paneli ajan satırları ve silme (karar 51)
 
     /// Sidebar ajan satırı: terminalin sekmesi açık değilse açılır, sonra
     /// minimize edilmişse geri getirilip odaklanır.
@@ -222,6 +230,22 @@ public final class ShellContext {
     public func presentCommit(_ commit: GitCommit) {
         guard let repoPath = activeRepoPath else { return }
         Task { await fileViewer.presentCommit(repoPath: repoPath, commit: commit) }
+    }
+
+    /// Karar 47: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.
+    /// Kullanıcı bu arada yazmaya başladıysa yanıt onu EZMEZ.
+    public func generateGitCommitMessage(_ repoPath: String) async {
+        let draftBefore = git.commitMessage(for: repoPath)
+        let request = await git.commitMessageRequest(repoPath)
+        guard let message = await commitAssistant.generate(repoPath, request: request) else { return }
+        if git.commitMessage(for: repoPath) == draftBefore { git.setCommitMessage(message, for: repoPath) }
+    }
+
+    public func generatePlasticCheckinMessage(_ repoPath: String) async {
+        let draftBefore = plastic.checkinMessage(for: repoPath)
+        let request = await plastic.checkinMessageRequest(repoPath)
+        guard let message = await commitAssistant.generate(repoPath, request: request) else { return }
+        if plastic.checkinMessage(for: repoPath) == draftBefore { plastic.setCheckinMessage(message, for: repoPath) }
     }
 
     public func reveal(_ relativePath: String) {

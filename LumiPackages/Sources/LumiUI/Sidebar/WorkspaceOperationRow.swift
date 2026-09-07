@@ -3,7 +3,7 @@ import LumiState
 import SwiftUI
 
 /// Arka planda süren / yeni biten workspace oluşturmasının sidebar satırı
-/// (karar 47): spinner, sonuç ve kurtarma eylemleri ilgili projenin altında.
+/// (karar 49): spinner, sonuç ve kurtarma eylemleri ilgili projenin altında.
 struct WorkspaceOperationRow: View {
     @Shell private var shell
 

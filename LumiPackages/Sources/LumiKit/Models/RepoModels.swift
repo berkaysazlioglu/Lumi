@@ -35,9 +35,16 @@ public enum RepoEvent: Sendable, Equatable {
 public struct ProjectCapabilities: Sendable, Equatable {
     public let isGitRepo: Bool
     public let isUnityProject: Bool
+    /// Kökte `.plastic/` dizini var (karar 46). Git ile birlikte doğru
+    /// olabilir; Source Control sekmesi o durumda Git'i gösterir.
+    public let isPlasticWorkspace: Bool
 
-    public init(isGitRepo: Bool = false, isUnityProject: Bool = false) {
+    public init(isGitRepo: Bool = false, isUnityProject: Bool = false, isPlasticWorkspace: Bool = false) {
         self.isGitRepo = isGitRepo
         self.isUnityProject = isUnityProject
+        self.isPlasticWorkspace = isPlasticWorkspace
     }
+
+    /// Source Control sekmesinin kapısı: en az bir VCS tanındı.
+    public var hasSourceControl: Bool { isGitRepo || isPlasticWorkspace }
 }

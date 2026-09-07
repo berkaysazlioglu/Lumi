@@ -74,7 +74,7 @@ final class ShellContextTests: XCTestCase {
         XCTAssertEqual(shell.dialogs.active, .settings)
     }
 
-    // MARK: - Workspace silme ve ajan odağı (karar 49)
+    // MARK: - Workspace silme ve ajan odağı (karar 51)
 
     private let managedWorkspace = ProjectWorkspace(
         projectPath: "/p", path: "/w/review", name: "Review", branch: "review", scm: .git
@@ -258,6 +258,8 @@ final class ShellContextTests: XCTestCase {
             repos: context.repos,
             workspaces: context.workspaces,
             git: context.git,
+            plastic: context.plastic,
+            commitAssistant: context.commitAssistant,
             agentHistory: context.agentHistory,
             fileViewer: context.fileViewer,
             settings: context.settings,

@@ -156,6 +156,13 @@ public final class TerminalSessionManager: TerminalServicing {
         for session in sessions {
             session.setTabFocused(session.id == id)
         }
+        // Durum makinesi odağı ile klavye odağı aynı otoriteden akar: mor çerçeve
+        // (activeTerminalID) neyi gösteriyorsa klavye girdisi oraya gitmeli.
+        if let id {
+            viewRegistry.requestKeyboardFocus(for: id)
+        } else {
+            viewRegistry.cancelPendingKeyboardFocus()
+        }
     }
 
     /// Faz 4.3 — tek terminalin yüzey durumu. Odak bilgisi manager'ın kendi

@@ -88,6 +88,9 @@ public actor FakeProcessRunner: ProcessRunning {
     // MARK: Çağrı kaydı
 
     public private(set) var invocations: [Invocation] = []
+    /// Aynı anda uçuşta olan çağrı sayısının tepe değeri (eşzamanlılık testleri).
+    public private(set) var maxConcurrentInvocations = 0
+    private var inFlight = 0
 
     public init() {}
 
@@ -107,6 +110,7 @@ public actor FakeProcessRunner: ProcessRunning {
 
     public func reset() {
         invocations = []
+        maxConcurrentInvocations = 0
         byCommandLine = [:]
         byExecutable = [:]
         defaultResult = .success()
@@ -172,6 +176,9 @@ public actor FakeProcessRunner: ProcessRunning {
             isRaw: isRaw
         )
         invocations.append(invocation)
+        inFlight += 1
+        maxConcurrentInvocations = max(maxConcurrentInvocations, inFlight)
+        defer { inFlight -= 1 }
 
         let result = byCommandLine[invocation.commandLine]
             ?? byExecutable[executable]

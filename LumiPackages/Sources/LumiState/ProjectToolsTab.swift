@@ -3,7 +3,9 @@ public enum ProjectToolsTab: String, CaseIterable, Sendable {
     case agentHistory
     case sourceControl
 
-    public static func available(isGitRepo: Bool) -> [ProjectToolsTab] {
-        isGitRepo ? allCases : [.explorer, .agentHistory]
+    /// Source Control sekmesi Git reposunda VEYA Plastic SCM çalışma alanında
+    /// görünür (karar 39 + 45).
+    public static func available(isGitRepo: Bool, isPlasticWorkspace: Bool = false) -> [ProjectToolsTab] {
+        isGitRepo || isPlasticWorkspace ? allCases : [.explorer, .agentHistory]
     }
 }

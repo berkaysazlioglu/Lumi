@@ -81,21 +81,18 @@ struct SourceControlView: View {
 
     private var composer: some View {
         VStack(spacing: Theme.Spacing.md) {
-            TextField("Message", text: Binding(
-                get: { shell.git.commitMessage(for: repoPath) },
-                set: { shell.git.setCommitMessage($0, for: repoPath) }
-            ), axis: .vertical)
-            .lineLimit(3...6)
-            .font(Theme.Typography.ui(.body))
-            .textFieldStyle(.plain)
-            .foregroundStyle(Theme.textPrimary)
-            .padding(Theme.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(Theme.bgDeep)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.md)
-                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+            CommitMessageField(
+                placeholder: "Message",
+                text: Binding(
+                    get: { shell.git.commitMessage(for: repoPath) },
+                    set: { shell.git.setCommitMessage($0, for: repoPath) }
+                ),
+                isGenerating: shell.commitAssistant.isGenerating(repoPath),
+                canGenerate: selectedCount > 0,
+                onGenerate: {
+                    let path = repoPath
+                    Task { await shell.generateGitCommitMessage(path) }
+                }
             )
             commitButton
         }

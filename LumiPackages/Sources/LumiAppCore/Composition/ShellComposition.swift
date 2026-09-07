@@ -48,6 +48,8 @@ struct ShellComposition {
             repos: repo.repoStore,
             workspaces: repo.workspaceStore,
             git: repo.gitStore,
+            plastic: repo.plasticStore,
+            commitAssistant: repo.commitAssistant,
             agentHistory: repo.agentHistory,
             fileViewer: repo.fileViewer,
             settings: shared.settings,

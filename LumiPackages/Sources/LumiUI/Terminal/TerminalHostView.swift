@@ -26,6 +26,18 @@ final class TerminalHostContainer: NSView {
         pinTerminalView()
     }
 
+    /// Spawn anında `attachView` pencere hiyerarşisine girmemiş bir container'a
+    /// gelebilir (makeNSView → updateNSView, henüz window yok). Bekleyen klavye
+    /// odağı isteği o anda yerine getirilemez; container pencereye girince
+    /// tamamlanır. İstek yoksa no-op.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, let provider else { return }
+        MainActor.assumeIsolated {
+            provider.fulfillPendingKeyboardFocus()
+        }
+    }
+
     /// Reparenting yarışına karşı kendini onarır: maximize↔grid round-trip'inde
     /// ölmekte olan host paylaşılan view'ı öksüz bırakabiliyor. Hayatta kalan
     /// (layout olan) container, her layout'ta terminalini yeniden claim eder —

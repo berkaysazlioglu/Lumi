@@ -155,6 +155,17 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
         branchSummaryToReturn
     }
 
+    /// `workingTreeDiffText` dönüşü (karar 47).
+    public var diffTextToReturn = ""
+    public private(set) var diffTextCalls: [[String]] = []
+
+    public func setDiffText(_ text: String) { diffTextToReturn = text }
+
+    public func workingTreeDiffText(repoPath: String, files: [String]) async -> String {
+        diffTextCalls.append(files)
+        return diffTextToReturn
+    }
+
     public func status(repoPath: String) async -> [GitFileChange] {
         statusCallCount += 1
         return statusToReturn

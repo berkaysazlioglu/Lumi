@@ -441,7 +441,7 @@ final class TerminalListStoreTests: XCTestCase {
     }
 }
 
-// MARK: - Sidebar etkinlik zamanı (karar 49)
+// MARK: - Sidebar etkinlik zamanı (karar 51)
 
 extension TerminalListStoreTests {
     func testStatusChangeStampsActivityOnlyWhenStatusDiffers() {

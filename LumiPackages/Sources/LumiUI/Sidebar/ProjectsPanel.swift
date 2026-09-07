@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Projects paneli (karar 46–49): proje → checkout (original / workspace) →
+/// Projects paneli (karar 48–51): proje → checkout (original / workspace) →
 /// ajan satırları. Orca sidebar'ının sadeliği hedeftir: çalışan ve biten
 /// ajanlar tek bakışta ayrışır, satırlar sağ tıkla yönetilir.
 ///

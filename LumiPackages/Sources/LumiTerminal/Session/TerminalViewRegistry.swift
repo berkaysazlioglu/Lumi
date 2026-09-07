@@ -22,6 +22,15 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     }
 
     private var entries: [TerminalID: Entry] = [:]
+    /// Store'un odak kararı (`setFocused`) ile AppKit first responder arasındaki
+    /// köprü. Fare tıklaması ters yönde akar (AppKit FR → `viewFocused` event →
+    /// store); klavye kısayolları (Cmd+T spawn, Cmd+1..9, focusNext) ve route
+    /// dönüşü ise store'dan başlar ve FR'ı BU istekle taşır. View henüz bir
+    /// pencerede değilse (spawn anında host bağlanmamıştır) istek bekler ve
+    /// attach / pencereye giriş anında yerine getirilir. Bir kez yerine getirilen
+    /// istek DÜŞER: sonraki bir reattach kullanıcının başka yere verdiği odağı
+    /// geri çalmaz.
+    private var pendingKeyboardFocusID: TerminalID?
 
     func register(
         view: NSView,
@@ -36,6 +45,33 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     func unregister(_ id: TerminalID) {
         entries[id]?.view.removeFromSuperview()
         entries.removeValue(forKey: id)
+        if pendingKeyboardFocusID == id {
+            pendingKeyboardFocusID = nil
+        }
+    }
+
+    // MARK: - Klavye odağı
+
+    /// Terminalin NSView'ını first responder yapmayı ister. Kayıtlı değilse yok
+    /// sayılır; pencerede değilse attach/pencereye giriş anına ertelenir.
+    func requestKeyboardFocus(for id: TerminalID) {
+        guard entries[id] != nil else { return }
+        pendingKeyboardFocusID = id
+        fulfillPendingKeyboardFocus()
+    }
+
+    /// Bekleyen isteği düşürür (`setFocused(nil)` — yüzey arka plana alındı).
+    func cancelPendingKeyboardFocus() {
+        pendingKeyboardFocusID = nil
+    }
+
+    public func fulfillPendingKeyboardFocus() {
+        guard let id = pendingKeyboardFocusID,
+              let view = entries[id]?.view,
+              let window = view.window else { return }
+        if window.firstResponder === view || window.makeFirstResponder(view) {
+            pendingKeyboardFocusID = nil
+        }
     }
 
     /// Click-to-focus için ters arama: first responder olan view → terminal id.
@@ -75,6 +111,9 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         // tarafında kalıcıdır, host frame'i oturttuğunda içerik görünür olur.
         entry.view.needsDisplay = true
         entry.onVisibilityChange(true)
+        // Spawn'da store odağı view bağlanmadan önce gelir — bekleyen isteği
+        // burada yerine getir (container pencerede değilse host tetikler).
+        fulfillPendingKeyboardFocus()
     }
 
     /// Fullscreen geçişi / pencere-space değişimi sonrası onarım. AppKit, native

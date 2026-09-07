@@ -18,6 +18,8 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var repoStore: RepoStore!
     private(set) var workspaceStore: ProjectWorkspaceStore!
     private(set) var gitStore: GitStore!
+    private(set) var plasticStore: PlasticStore!
+    private(set) var commitAssistant: CommitMessageAssistant!
     private(set) var agentHistory: AgentHistoryStore!
     private(set) var fileViewer: FileViewerStore!
 
@@ -38,6 +40,8 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         )
         agentHistory = AgentHistoryStore(service: services.agentHistory)
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
+        plasticStore = PlasticStore(service: services.plastic, toasts: shared.toasts)
+        commitAssistant = CommitMessageAssistant(generator: services.commitMessages, toasts: shared.toasts)
         fileViewer = FileViewerStore(git: services.git, toasts: shared.toasts)
     }
 
@@ -122,6 +126,10 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         repoStore.stop()
     }
 
+    private func isPlasticWorkspace(_ repoPath: String) -> Bool {
+        repoStore.capabilities[repoPath]?.isPlasticWorkspace == true
+    }
+
     // MARK: - Aktif repo
 
     /// Aktif repo değişimi: tek repo izlenir + git/tree yüklenir.
@@ -137,6 +145,10 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
                 await self.services.repo.watchFileTree(repoPath: current)
                 await self.repoStore.loadFileTree(current)
                 await self.gitStore.loadAll(current)
+                // Karar 46: `cm` yalnız `.plastic/` tanınan dizinde koşar.
+                if self.isPlasticWorkspace(current) {
+                    await self.plasticStore.loadAll(current)
+                }
             }
         }
         // Bootstrap'te aktif tab varsa ilk yükleme (load() callback'ten önce kuruldu)
@@ -152,6 +164,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         shared.navigation.onTabClosed = { [weak self] repoPath in
             guard let self else { return }
             gitStore.evict(repoPath)
+            plasticStore.evict(repoPath)
             agentHistory.evict(repoPath)
             repoStore.evict(repoPath)
         }
@@ -167,6 +180,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             await self.repoStore.loadFileTree(repoPath)
             if self.shared.navigation.activeRepoPath == repoPath {
                 await self.gitStore.refresh(repoPath)
+                if self.isPlasticWorkspace(repoPath) {
+                    await self.plasticStore.refreshStatus(repoPath)
+                }
             }
         }
         let stream = services.repo.events()
