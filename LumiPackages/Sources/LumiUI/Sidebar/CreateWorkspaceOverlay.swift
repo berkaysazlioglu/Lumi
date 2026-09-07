@@ -98,8 +98,7 @@ public struct CreateWorkspaceOverlay: View {
     }
 
     private var projectCandidates: [Repo] {
-        let managed = Set(shell.workspaces.records.map(\.path))
-        return shell.repos.repos.filter { !managed.contains($0.path) }
+        shell.workspaces.addedProjects
     }
 
     private func form(_ project: Repo) -> some View {
@@ -126,6 +125,17 @@ public struct CreateWorkspaceOverlay: View {
             if shell.workspaces.source?.isUnityProject == true {
                 unitySection.disabled(shell.workspaces.lastCreated != nil)
             }
+            if shell.workspaces.source?.scm == .plastic {
+                field("Branch") {
+                    Picker("Branch", selection: binding(\.createNewBranch)) {
+                        Text("Continue on current branch").tag(false)
+                        Text("Create a new branch").tag(true)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .disabled(shell.workspaces.lastCreated != nil)
+                }
+            }
             advanced.disabled(shell.workspaces.lastCreated != nil)
             if let message = shell.workspaces.errorMessage {
                 Text(message).font(Theme.Typography.labelMono).foregroundStyle(Theme.error)
@@ -133,31 +143,10 @@ public struct CreateWorkspaceOverlay: View {
             if let message = shell.workspaces.warningMessage {
                 Text(message).font(Theme.Typography.labelMono).foregroundStyle(Theme.warning)
             }
-            if shell.workspaces.lastCreated != nil {
-                HStack(spacing: Theme.Spacing.md) {
-                    if shell.workspaces.needsSave {
-                        Button("Retry Save") { Task { await shell.workspaces.retrySave() } }
-                            .buttonStyle(.bordered)
-                    }
-                    if shell.workspaces.libraryNeedsRetry {
-                        Button("Retry Library") {
-                            Task { await shell.workspaces.retryLibrary() }
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    if let created = shell.workspaces.lastCreated, !shell.workspaces.needsSave {
-                        Button("Continue") {
-                            shell.openCreatedWorkspace(created, agent: shell.workspaces.agent)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.accentVivid)
-                    }
-                }
-            }
             HStack {
                 Spacer(minLength: 0)
                 Button("Cancel", action: dismiss).buttonStyle(.bordered)
-                Button(shell.workspaces.phaseText) { create(projects: shell.repos.repos) }
+                Button(shell.workspaces.phaseText) { shell.startWorkspaceCreation() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accentVivid)
                     .disabled(!shell.workspaces.canCreate || shell.workspaces.isCreating)
@@ -205,18 +194,22 @@ public struct CreateWorkspaceOverlay: View {
                 .fixedSize(horizontal: false, vertical: true)
             DisclosureGroup("Advanced", isExpanded: $isAdvancedExpanded) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text("Branch name")
-                        .font(Theme.Typography.labelMono).foregroundStyle(Theme.textSecondary)
-                    LumiTextInput(
-                        text: binding(\.branchName),
-                        placeholder: shell.workspaces.source?.suggestedBranch(name: shell.workspaces.name) ?? "Branch name"
-                    )
+                    if shell.workspaces.createNewBranch {
+                        Text("Branch name")
+                            .font(Theme.Typography.labelMono).foregroundStyle(Theme.textSecondary)
+                        LumiTextInput(
+                            text: binding(\.branchName),
+                            placeholder: shell.workspaces.source?.suggestedBranch(name: shell.workspaces.name) ?? "Branch name"
+                        )
+                    }
                     if let source = shell.workspaces.source, !source.revision.isEmpty {
                         Text("Base: \(source.revision)")
                             .font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("Starts from the current commit or changeset. Uncommitted changes are not copied.")
+                    Text(shell.workspaces.createNewBranch
+                        ? "Starts from the current commit or changeset. Uncommitted changes are not copied."
+                        : "Checks out the current branch in a separate workspace. Uncommitted changes are not copied.")
                         .font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -226,17 +219,6 @@ public struct CreateWorkspaceOverlay: View {
 
     private func binding<Value>(_ keyPath: ReferenceWritableKeyPath<ProjectWorkspaceStore, Value>) -> Binding<Value> {
         Binding(get: { shell.workspaces[keyPath: keyPath] }, set: { shell.workspaces[keyPath: keyPath] = $0 })
-    }
-
-    private func create(projects: [Repo]) {
-        guard project != nil else { return }
-        Task { @MainActor in
-            if let workspace = await shell.workspaces.create(projects: projects) {
-                if shell.workspaces.warningMessage == nil {
-                    shell.openCreatedWorkspace(workspace, agent: shell.workspaces.agent)
-                }
-            }
-        }
     }
 
     private func dismiss() {

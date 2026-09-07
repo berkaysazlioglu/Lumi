@@ -60,6 +60,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
                 AdditionalPath(id: "id-1", path: "/Users/dev/extra", type: .root, label: "Extra"),
                 AdditionalPath(id: "id-2", path: "/Users/dev/solo", type: .repo),
             ]
+            config.sidebarProjectPaths = ["/Users/dev/selected", "/Users/dev/another"]
             config.aiProvider = .codex
             config.theme = "light"
             config.terminalFontSize = 17
@@ -146,6 +147,10 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "minute" : 45,
         "prompt" : "go"
       },
+      "sidebarProjectPaths" : [
+        "/Users/dev/selected",
+        "/Users/dev/another"
+      ],
       "terminalCursorBlink" : false,
       "terminalCursorStyle" : "bar",
       "terminalFontFamily" : "Menlo",
@@ -184,8 +189,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
           ],
           "left" : [
-            "projects",
-            "sessions"
+            "sessions",
+            "projects"
           ],
           "right" : [
             "projectTools"

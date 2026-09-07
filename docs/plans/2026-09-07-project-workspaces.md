@@ -145,3 +145,11 @@ Git oluşturma gerçek geçici repository'lerle; Plastic metadata kurulu CLI'nin
 - Son UI açıklama değişikliği sonrası native render + tasarım token denetimi: 5 test, 0 hata.
 - Debug ve release `Lumi` ürünü derlendi. Sidebar ve Plastic+Unity popup'ı native PNG render ile gözden geçirildi.
 - Kullanıcının gerçek projelerinde SCM oluşturma/switch veya Library kopyalama çalıştırılmadı; Git yazma testleri geçici repository'lerdedir.
+
+## Kullanıcı düzeltmeleri (2026-09-07, karar 47)
+
+Önceki planın ilgili maddeleri güncellendi: Sessions önce, Projects sonra; Projects yalnız tek tek eklenen projelerden oluşur. Plastic varsayılan olarak mevcut branch ile yeni workspace oluşturur, yeni branch isteğe bağlıdır. Create popup'ı kapanır; süreç ve kurtarma sidebar'da sürer, tamamlanma kullanıcının odağını değiştirmez. Fiziksel hedef hâlâ kaynak proje dışındaki `~/lumi/workspaces/...` konumudur.
+
+## Sidebar seçimi düzeltmesi (karar 48)
+
+“Eklediğim projeler”, additional paths girdileri anlamına gelmez. Projects `+` topbar'ın aynı repo seçme popup'ını kullanır; kullanıcı keşfedilen repolardan kendi sidebar listesini oluşturur. Seçim `sidebarProjectPaths` olarak bağımsız saklanır; Finder açılmaz, topbar'da açık repo yeniden seçilebilir ve sidebar'a ekleme topbar tab'larını değiştirmez.

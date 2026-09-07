@@ -22,8 +22,9 @@ final class WorkspaceRenderingTests: XCTestCase {
             destinationDirectory: "~/lumi/workspaces/Unity-Game", isUnityProject: true, hasLibrary: true)))
         let fixture = await ShellContextFixture.make(repo: repoService, workspaces: workspaceService)
         defer { fixture.stop() }
+        fixture.context.workspaces.updateSidebarProjects([project.path])
         await fixture.context.repos.reload()
-        let record = ProjectWorkspace(projectPath: project.path, path: NSTemporaryDirectory(), name: "Inventory UI", branch: "/main/inventory-ui", scm: .plastic)
+        let record = ProjectWorkspace(projectPath: project.path, path: NSTemporaryDirectory(), name: "Combat UI", branch: "/main/combat-ui", scm: .plastic)
         fixture.context.workspaces.updateRecords([record])
         fixture.context.navigation.openTab(record.path)
         try await render(ProjectsPanel().environment(\.shell, fixture.context), size: NSSize(width: 320, height: 580), name: "sidebar")
@@ -31,6 +32,14 @@ final class WorkspaceRenderingTests: XCTestCase {
         try await render(CreateWorkspaceOverlay().environment(\.shell, fixture.context), size: NSSize(width: 900, height: 800), name: "create") {
             fixture.context.workspaces.name = "Inventory UI"
         }
+        await workspaceService.setCreateDelay(.milliseconds(600))
+        await workspaceService.setCreateOutcome(.success(WorkspaceCreateResult(workspace: ProjectWorkspace(
+            projectPath: project.path, path: NSTemporaryDirectory() + "inventory-ui", name: "Inventory UI", branch: "/main", scm: .plastic))))
+        fixture.context.startWorkspaceCreation()
+        XCTAssertEqual(fixture.context.dialogs.active, .none)
+        try await render(ProjectsPanel().environment(\.shell, fixture.context), size: NSSize(width: 320, height: 580), name: "loading")
+        while fixture.context.workspaces.isCreating { try await Task.sleep(for: .milliseconds(10)) }
+
     }
 
     private func render<Content: View>(_ content: Content, size: NSSize, name: String,

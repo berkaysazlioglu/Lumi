@@ -9,6 +9,8 @@ public final class ProjectWorkspaceStore {
     public var branchName = ""
     public var agent: WorkspaceAgent = .claude
     public var copyLibrary = false
+    public var createNewBranch = true
+    public private(set) var hasBackgroundOperation = false
     public private(set) var selectedProjectPath: String?
     public private(set) var source: WorkspaceSource?
     public private(set) var isInspecting = false
@@ -16,6 +18,7 @@ public final class ProjectWorkspaceStore {
     public private(set) var errorMessage: String?
     public private(set) var lastCreated: ProjectWorkspace?
     public private(set) var records: [ProjectWorkspace] = []
+    public private(set) var sidebarProjectPaths: [String] = []
     public private(set) var missingWorkspacePaths = Set<String>()
     private var pendingRecords: [String: ProjectWorkspace] = [:]
     private var libraryWarning: String?
@@ -34,6 +37,18 @@ public final class ProjectWorkspaceStore {
         self.toasts = toasts
     }
 
+    public var addedProjects: [Repo] {
+        let managed = Set(records.map(\.path))
+        return sidebarProjectPaths.compactMap { path in
+            managed.contains(path) ? nil : repos.repo(at: path)
+        }
+    }
+
+    public func updateSidebarProjects(_ paths: [String]) {
+        var seen = Set<String>()
+        sidebarProjectPaths = paths.filter { seen.insert($0).inserted }
+    }
+
     public var needsSave: Bool { lastCreated.map { pendingRecords[$0.path] != nil } ?? false }
     public var libraryNeedsRetry: Bool { lastCreated != nil && libraryWarning != nil }
     public var warningMessage: String? {
@@ -41,7 +56,11 @@ public final class ProjectWorkspaceStore {
         return messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
-    public func load() async { updateRecords(await config.config().workspaces) }
+    public func load() async {
+        let saved = await config.config()
+        updateRecords(saved.workspaces)
+        updateSidebarProjects(saved.sidebarProjectPaths)
+    }
 
     public func updateRecords(_ records: [ProjectWorkspace]) {
         var merged: [String: ProjectWorkspace] = [:]
@@ -53,30 +72,30 @@ public final class ProjectWorkspaceStore {
     }
 
     @discardableResult
-    public func addProject(path: String) async -> Bool {
-        let canonical = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-            .standardizedFileURL.resolvingSymlinksInPath().path
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: canonical, isDirectory: &isDirectory), isDirectory.boolValue else {
-            toasts.show(.error, title: "Project folder is unavailable", message: canonical)
-            return false
-        }
-        if repos.repos.contains(where: { $0.path == canonical }) { return true }
-        let entry = AdditionalPath(id: UUID().uuidString, path: canonical, type: .repo)
+    public func addProject(_ project: Repo) async -> Bool {
+        guard repos.repo(at: project.path) != nil,
+              !records.contains(where: { $0.path == project.path }) else { return false }
         do {
             try await config.updateConfig { config in
-                guard !config.additionalPaths.contains(where: {
-                    URL(fileURLWithPath: ($0.path as NSString).expandingTildeInPath)
-                        .standardizedFileURL.resolvingSymlinksInPath().path == canonical
-                }) else { return }
-                config.additionalPaths.append(entry)
+                if !config.sidebarProjectPaths.contains(project.path) {
+                    config.sidebarProjectPaths.append(project.path)
+                }
             }
-            let updated = await config.config()
-            await repos.applyRoots(projectsRoot: updated.projectsRoot, additionalPaths: updated.additionalPaths)
+            updateSidebarProjects(await config.config().sidebarProjectPaths)
             return true
         } catch {
             toasts.show(.error, title: "Project could not be added", message: error.localizedDescription)
             return false
+        }
+    }
+
+    public func removeProject(_ project: Repo) async {
+        guard !(isCreating && selectedProjectPath == project.path) else { return }
+        do {
+            try await config.updateConfig { $0.sidebarProjectPaths.removeAll { $0 == project.path } }
+            updateSidebarProjects(await config.config().sidebarProjectPaths)
+        } catch {
+            toasts.show(.error, title: "Project could not be removed", message: error.localizedDescription)
         }
     }
 
@@ -90,6 +109,7 @@ public final class ProjectWorkspaceStore {
             let inspected = try await service.inspect(project: repo)
             guard generation == inspectionGeneration, selectedProjectPath == repo.path else { return }
             source = inspected
+            createNewBranch = inspected.scm != .plastic
         } catch {
             guard generation == inspectionGeneration else { return }
             errorMessage = error.localizedDescription
@@ -117,8 +137,27 @@ public final class ProjectWorkspaceStore {
         return "Create workspace"
     }
 
+    /// The store owns this task so closing the modal cannot cancel creation.
+    @discardableResult
+    public func startCreation(projects: [Repo]) -> Bool {
+        guard let request = beginCreation(projects: projects) else { return false }
+        hasBackgroundOperation = true
+        Task {
+            let result = await finishCreation(request)
+            if let result, warningMessage == nil {
+                toasts.show(.success, title: "Workspace ready", message: result.name)
+            }
+        }
+        return true
+    }
+
     @discardableResult
     public func create(projects: [Repo]) async -> ProjectWorkspace? {
+        guard let request = beginCreation(projects: projects) else { return nil }
+        return await finishCreation(request)
+    }
+
+    private func beginCreation(projects: [Repo]) -> WorkspaceCreateRequest? {
         guard !isCreating, lastCreated == nil else { return nil }
         guard canCreate, let project = projects.first(where: { $0.path == selectedProjectPath }) else {
             errorMessage = "Enter a valid name and select a Git or Plastic project."
@@ -128,11 +167,14 @@ public final class ProjectWorkspaceStore {
         errorMessage = nil
         libraryWarning = nil
         saveWarning = nil
-        defer { isCreating = false }
         let override = branchName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let request = WorkspaceCreateRequest(project: project, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            branchName: override.isEmpty ? nil : override, copyLibrary: copyLibrary,
+        return WorkspaceCreateRequest(project: project, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            branchName: override.isEmpty ? nil : override, createNewBranch: createNewBranch, copyLibrary: copyLibrary,
             knownProjectPaths: repos.repos.map(\.path))
+    }
+
+    private func finishCreation(_ request: WorkspaceCreateRequest) async -> ProjectWorkspace? {
+        defer { isCreating = false }
         do {
             let result = try await service.create(request)
             lastCreated = result.workspace
@@ -190,6 +232,8 @@ public final class ProjectWorkspaceStore {
         name = ""
         branchName = ""
         copyLibrary = false
+        createNewBranch = true
+        hasBackgroundOperation = false
         errorMessage = nil
         libraryWarning = nil
         saveWarning = nil

@@ -25,6 +25,7 @@ public struct CloseTabDialogState: Equatable, Sendable {
 public enum ActiveDialog: Equatable, Sendable {
     case none
     case repoSelector
+    case sidebarProjectSelector
     case createWorkspace(projectPath: String)
     case settings
     case onboarding
@@ -38,7 +39,7 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .createWorkspace, .settings, .onboarding, .closeTab, .quit: true
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab, .quit: true
         }
     }
 }

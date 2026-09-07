@@ -19,9 +19,7 @@ public struct ProjectsPanel: View {
                 disclosure: .leading, isExpanded: !isCollapsed,
                 onToggle: { isCollapsed.toggle() }
             ) {
-                IconButton(systemName: "plus", label: "Add project") {
-                    Task { await shell.addProject() }
-                }
+                addProjectButton
             }
                 .padding(.bottom, Theme.Spacing.xs)
             if !isCollapsed {
@@ -37,11 +35,14 @@ public struct ProjectsPanel: View {
                         }
                         ForEach(filteredProjects) { project in
                             projectRow(project)
-                            if !collapsedProjects.contains(project.path) || !searchText.isEmpty {
+                            if !collapsedProjects.contains(project.path) || !searchText.isEmpty || operationBelongs(to: project) {
                                 originalRow(project)
                                 ForEach(shell.workspaces.workspaces(for: project.path)) { workspace in
-                                    workspaceRow(workspace)
+                                    if !operationBelongs(to: project) || shell.workspaces.lastCreated?.path != workspace.path {
+                                        workspaceRow(workspace)
+                                    }
                                 }
+                                if operationBelongs(to: project) { operationRow }
                             }
                         }
                     }
@@ -50,11 +51,34 @@ public struct ProjectsPanel: View {
         }
         .padding(Theme.Spacing.lg)
         .frame(maxHeight: .infinity, alignment: .top)
+        .onChange(of: shell.workspaces.hasBackgroundOperation) { _, active in
+            if active { isCollapsed = false; searchText = "" }
+        }
+    }
+
+    private var addProjectButton: some View {
+        IconButton(systemName: "plus", label: "Add project") {
+            shell.dialogs.setPresented(.sidebarProjectSelector, !shell.dialogs.isPresenting(.sidebarProjectSelector))
+        }
+        .popover(isPresented: Binding(
+            get: { shell.dialogs.isPresenting(.sidebarProjectSelector) },
+            set: { shell.dialogs.setPresented(.sidebarProjectSelector, $0) }
+        )) {
+            RepoSelectorView(
+                groups: shell.repos.groupedRepos,
+                excludedRepoPaths: Set(shell.workspaces.sidebarProjectPaths + shell.workspaces.records.map(\.path)),
+                collapsedGroups: Binding(
+                    get: { shell.dialogs.collapsedRepoGroups },
+                    set: { shell.dialogs.collapsedRepoGroups = $0 }
+                )
+            ) { repo in
+                Task { await shell.addSidebarProject(repo) }
+            }
+        }
     }
 
     private var originalProjects: [Repo] {
-        let managedPaths = Set(shell.workspaces.records.map(\.path))
-        return shell.repos.repos.filter { !managedPaths.contains($0.path) }
+        shell.workspaces.addedProjects
     }
 
     private var filteredProjects: [Repo] {
@@ -93,10 +117,70 @@ public struct ProjectsPanel: View {
             IconButton(systemName: "plus", label: "Create workspace for \(project.name)", size: .label, side: Theme.Spacing.xxl) {
                 shell.dialogs.present(.createWorkspace(projectPath: project.path))
             }
+            .disabled(shell.workspaces.isCreating)
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xs)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .contextMenu {
+            Button("Remove from Projects") { Task { await shell.workspaces.removeProject(project) } }
+                .disabled(shell.workspaces.isCreating && operationBelongs(to: project))
+        }
+    }
+
+    private func operationBelongs(to project: Repo) -> Bool {
+        shell.workspaces.hasBackgroundOperation && shell.workspaces.selectedProjectPath == project.path
+    }
+
+    private var operationRow: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack(spacing: Theme.Spacing.sm) {
+                if shell.workspaces.isCreating {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: shell.workspaces.lastCreated == nil ? "exclamationmark.circle" : "checkmark.circle")
+                        .foregroundStyle(shell.workspaces.lastCreated == nil ? Theme.warning : Theme.success)
+                }
+                Text(shell.workspaces.name)
+                    .font(Theme.Typography.labelMono)
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+            }
+            if shell.workspaces.isCreating {
+                Text(shell.workspaces.phaseText)
+                    .font(Theme.Typography.captionMono).foregroundStyle(Theme.textSecondary)
+            } else {
+                if let message = shell.workspaces.errorMessage ?? shell.workspaces.warningMessage {
+                    Text(message).font(Theme.Typography.captionMono).foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack { operationActions }
+                    VStack(alignment: .leading) { operationActions }
+                }
+            }
+        }
+        .padding(.leading, Theme.Spacing.xl)
+        .padding(.vertical, Theme.Spacing.sm)
+    }
+
+    @ViewBuilder
+    private var operationActions: some View {
+        if shell.workspaces.needsSave {
+            Button("Retry Save") { Task { await shell.workspaces.retrySave() } }
+        }
+        if shell.workspaces.libraryNeedsRetry {
+            Button("Retry Library") { Task { await shell.workspaces.retryLibrary() } }
+        }
+        if let created = shell.workspaces.lastCreated, !shell.workspaces.needsSave {
+            Button(shell.workspaces.libraryNeedsRetry ? "Open without Library" : "Open") {
+                shell.openCreatedWorkspace(created, agent: shell.workspaces.agent)
+                shell.workspaces.clearForm()
+            }
+        } else if shell.workspaces.lastCreated == nil {
+            Button("Retry") { shell.workspaces.startCreation(projects: shell.repos.repos) }
+        }
+        Button("Dismiss") { shell.workspaces.clearForm() }
     }
 
     private func originalRow(_ project: Repo) -> some View {

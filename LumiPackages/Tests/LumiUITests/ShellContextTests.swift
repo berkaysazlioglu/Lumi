@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import LumiState
+import LumiTestSupport
 import SwiftUI
 import XCTest
 @testable import LumiUI
@@ -20,6 +21,57 @@ final class ShellContextTests: XCTestCase {
 
     override func setUp() async throws {
         fixture = await ShellContextFixture.make()
+    }
+
+    func testSidebarSelectionDoesNotOpenTopbarTabOrAlterDiscoveryPaths() async throws {
+        fixture.stop()
+        let service = FakeRepoService()
+        let repo = Repo(name: "Game", path: "/projects/game", isGitRepo: true, source: .projectsRoot)
+        await service.setRepos([repo])
+        fixture = await ShellContextFixture.make(repo: service)
+        await shell.repos.reload()
+        shell.navigation.openTab(repo.path)
+        shell.navigation.openTab("/already-open")
+        shell.dialogs.present(.sidebarProjectSelector)
+        await shell.addSidebarProject(repo)
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertEqual(shell.workspaces.addedProjects, [repo])
+        XCTAssertEqual(shell.navigation.openTabs, [repo.path, "/already-open"])
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/already-open")
+        let saved = await fixture.config.config()
+        XCTAssertEqual(saved.sidebarProjectPaths, [repo.path])
+        XCTAssertTrue(saved.additionalPaths.isEmpty)
+        shell.navigation.openTab(repo.path)
+        await shell.workspaces.removeProject(repo)
+        XCTAssertTrue(shell.navigation.openTabs.contains(repo.path), "Removing from sidebar does not close a topbar tab")
+    }
+
+    func testWorkspaceCreationDismissesModalAndDoesNotInterruptLaterNavigation() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        let repoService = FakeRepoService()
+        let project = Repo(name: "Game", path: "/p", isGitRepo: false, source: .standalone)
+        let result = ProjectWorkspace(projectPath: "/p", path: "/w/review", name: "Review", branch: "/main", scm: .plastic)
+        await repoService.setRepos([project])
+        await service.setDefaultInspection(.success(WorkspaceSource(projectPath: "/p", scm: .plastic, branch: "/main", destinationDirectory: "/w")))
+        await service.setCreateOutcome(.success(WorkspaceCreateResult(workspace: result)))
+        await service.setCreateDelay(.milliseconds(80))
+        fixture = await ShellContextFixture.make(repo: repoService, workspaces: service)
+        await shell.repos.reload()
+        await shell.workspaces.selectProject(project)
+        shell.workspaces.name = "Review"
+        shell.dialogs.present(.createWorkspace(projectPath: project.path))
+        shell.startWorkspaceCreation()
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertTrue(shell.workspaces.isCreating)
+        XCTAssertFalse(shell.dialogs.isInputBlockingOverlayOpen)
+        shell.navigation.openTab("/another-project")
+        shell.dialogs.present(.settings)
+        let deadline = Date().addingTimeInterval(2)
+        while shell.workspaces.isCreating, Date() < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(shell.workspaces.lastCreated, result)
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/another-project")
+        XCTAssertEqual(shell.dialogs.active, .settings)
     }
 
     // MARK: - Close-tab guard'ı (navigation sorar, dialogs sunar)

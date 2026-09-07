@@ -11,6 +11,9 @@ import Foundation
 public struct AppConfig: Sendable, Equatable {
     public var projectsRoot: String
     public var additionalPaths: [AdditionalPath]
+    /// Independently selected projects shown in the sidebar. Additive (karar
+    /// 9): yoksa boş; `additionalPaths` ile migration yapılmaz.
+    public var sidebarProjectPaths: [String]
     public var aiProvider: AgentProvider
     public var theme: String
     public var terminalFontSize: Int
@@ -72,7 +75,8 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: .defaults,
         computerAwakeMode: .default,
         agentHooksEnabled: true,
-        workspaces: []
+        workspaces: [],
+        sidebarProjectPaths: []
     )
 
     public init(
@@ -91,10 +95,12 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: UsageIndicators = .defaults,
         computerAwakeMode: ComputerAwakeMode = .default,
         agentHooksEnabled: Bool = true,
-        workspaces: [ProjectWorkspace] = []
+        workspaces: [ProjectWorkspace] = [],
+        sidebarProjectPaths: [String] = []
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
+        self.sidebarProjectPaths = sidebarProjectPaths
         self.aiProvider = aiProvider
         self.theme = theme
         self.terminalFontSize = terminalFontSize

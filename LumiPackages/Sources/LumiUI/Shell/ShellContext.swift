@@ -121,18 +121,22 @@ public final class ShellContext {
 
     // MARK: - Koordinasyon intent'leri (birden fazla store'a dokunanlar)
 
+    public func startWorkspaceCreation() {
+        guard workspaces.startCreation(projects: repos.repos) else { return }
+        if case .createWorkspace = dialogs.active { dialogs.dismiss() }
+    }
+
     public func openCreatedWorkspace(_ workspace: ProjectWorkspace, agent: WorkspaceAgent) {
-        dialogs.dismiss()
+        if case .createWorkspace = dialogs.active { dialogs.dismiss() }
         navigation.openTab(workspace.path)
         if agent != .none {
             terminals.spawn(in: workspace.path, command: agent.command, task: workspace.name)
         }
     }
 
-    public func addProject() async {
-        guard let path = await actions.chooseFolder() else { return }
-        if await workspaces.addProject(path: path) {
-            navigation.openTab(path)
+    public func addSidebarProject(_ project: Repo) async {
+        if await workspaces.addProject(project) {
+            dialogs.dismiss(.sidebarProjectSelector)
         }
     }
 

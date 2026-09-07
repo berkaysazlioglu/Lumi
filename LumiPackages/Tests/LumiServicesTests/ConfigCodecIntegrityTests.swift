@@ -127,6 +127,25 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         XCTAssertEqual(ConfigCodec.decodeConfig(from: ConfigCodec.configOverlay(config)), config)
     }
 
+    func testSidebarProjectPathsDecodeAsAbsoluteUniquePathsWithoutMigration() {
+        let decoded = ConfigCodec.decodeConfig(from: [
+            "additionalPaths": [
+                ["id": "id-1", "path": "/tmp/legacy", "type": "root"],
+            ],
+            "sidebarProjectPaths": [
+                "/tmp/one", "relative", "/tmp/one", "", 42, "/tmp/two",
+            ],
+        ])
+        XCTAssertEqual(decoded.sidebarProjectPaths, ["/tmp/one", "/tmp/two"])
+
+        let absent = ConfigCodec.decodeConfig(from: [
+            "additionalPaths": [
+                ["id": "id-1", "path": "/tmp/legacy", "type": "root"],
+            ],
+        ])
+        XCTAssertEqual(absent.sidebarProjectPaths, [])
+    }
+
     // MARK: - Fixture'lar
 
     private func jsonRoundTrip(_ overlay: [String: Any]) throws -> [String: Any] {
@@ -158,7 +177,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
         agentHooksEnabled: false,
-        workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)]
+        workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
+        sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
     )
 
     private static let fullyPopulatedUIState = UIState(

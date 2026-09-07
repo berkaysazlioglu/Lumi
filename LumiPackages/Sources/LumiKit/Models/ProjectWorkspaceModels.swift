@@ -80,13 +80,15 @@ public struct WorkspaceCreateRequest: Sendable {
     public let project: Repo
     public let name: String
     public let branchName: String?
+    public let createNewBranch: Bool
     public let copyLibrary: Bool
     public let knownProjectPaths: [String]
 
-    public init(project: Repo, name: String, branchName: String? = nil, copyLibrary: Bool = false, knownProjectPaths: [String] = []) {
+    public init(project: Repo, name: String, branchName: String? = nil, createNewBranch: Bool = true, copyLibrary: Bool = false, knownProjectPaths: [String] = []) {
         self.project = project
         self.name = name
         self.branchName = branchName
+        self.createNewBranch = createNewBranch
         self.copyLibrary = copyLibrary
         self.knownProjectPaths = knownProjectPaths
     }

@@ -13,6 +13,7 @@ enum AppConfigCodec {
             config.projectsRoot = value
         }
         config.additionalPaths = AdditionalPathCodec.decodeList(dict["additionalPaths"])
+        config.sidebarProjectPaths = decodeAbsoluteUniquePaths(dict["sidebarProjectPaths"])
         if let raw = dict["aiProvider"] as? String,
            let provider = AgentProvider(rawValue: raw) {
             config.aiProvider = provider
@@ -51,6 +52,7 @@ enum AppConfigCodec {
         [
             "projectsRoot": config.projectsRoot,
             "additionalPaths": AdditionalPathCodec.overlayList(config.additionalPaths),
+            "sidebarProjectPaths": config.sidebarProjectPaths,
             "aiProvider": config.aiProvider.rawValue,
             "theme": config.theme,
             "terminalFontSize": config.terminalFontSize,
@@ -71,5 +73,17 @@ enum AppConfigCodec {
     /// Alt bölüm sözlüğü; yoksa/yanlış tipliyse nil → alt codec default döner.
     private static func nested(_ dict: [String: Any], _ key: String) -> [String: Any]? {
         dict[key] as? [String: Any]
+    }
+
+    private static func decodeAbsoluteUniquePaths(_ value: Any?) -> [String] {
+        guard let values = value as? [Any] else { return [] }
+        var seen = Set<String>()
+        return values.compactMap { value in
+            guard let path = value as? String,
+                  !path.isEmpty,
+                  (path as NSString).isAbsolutePath,
+                  seen.insert(path).inserted else { return nil }
+            return path
+        }
     }
 }

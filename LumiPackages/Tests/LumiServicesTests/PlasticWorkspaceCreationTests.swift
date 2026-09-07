@@ -30,6 +30,19 @@ final class PlasticWorkspaceCreationTests: XCTestCase {
         XCTAssertEqual(mutations[2].cwd, result.workspace.path)
     }
 
+    func testReusesCurrentBranchWithoutCreatingAnotherBranch() async throws {
+        let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path)
+        let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: ["cm": "/fake/cm"]), workspaceRoot: root.appendingPathComponent("workspaces"))
+        let project = Repo(name: "Game", path: root.appendingPathComponent("source").path, isGitRepo: false, source: .standalone)
+        let result = try await service.create(WorkspaceCreateRequest(project: project, name: "Review", branchName: "/ignored", createNewBranch: false))
+        XCTAssertEqual(result.workspace.branch, "/main/release")
+        let mutations = await runner.mutations
+        XCTAssertEqual(mutations.count, 2)
+        XCTAssertEqual(mutations[0].args.suffix(2), [result.workspace.path, "game@team@cloud"])
+        XCTAssertEqual(mutations[1].args, ["switch", "br:/main/release@game@team@cloud", "--workspace=\(result.workspace.path)", "--noinput"])
+        XCTAssertEqual(mutations[1].cwd, result.workspace.path)
+    }
+
     func testSwitchFailureKeepsPartialWorkspaceAndReportsRecoveryLocation() async throws {
         let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path, failSwitch: true)
         let managed = root.appendingPathComponent("workspaces")

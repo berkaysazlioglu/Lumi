@@ -350,3 +350,17 @@ Terminalin `working` / `waiting-*` / `idle` durumu artık Orca'daki gibi **ajan�
 - Git yeni branch + `git worktree add` ile mevcut commit'ten ayrılır. Plastic yalnız regular/static workspace'lerde `cm` ile gerçek repository/changeset/selector metadata'sından yeni branch + workspace oluşturup yeni hedefte switch yapar. Gluon/dynamic ve çok branch'li selector ilk kapsamın dışındadır. Kaynak workspace switch edilmez.
 - `workspaces` config'e additive manual codec alanıdır. RepoStore kayıtları path bazında birleştirir; terminal, dosya görünümü ve git cache'leri ayrı repo yollarıyla mevcut mekanizmayı kullanır. Disk kaydı hatasında yeniden oluşturulmaz: kayıt retry'ı ve konum sunulur. Library başarısızlığında SCM workspace korunur; retry veya Continue sunulur. Kısmi SCM hatasında konum/branch açıklanır, otomatik silme yapılmaz.
 - Workspace silme/arşivleme, Plastic diff/check-in/history, uzak ortamlar ve sparse checkout bu değişikliğin kapsamı dışındadır.
+
+### 47. Elle eklenen Projects, Sessions önceliği ve arka planda oluşturma (2026-09-07)
+
+- Kullanıcı düzeltmesiyle sol varsayılan sıra `sessions`, `projects` oldu. Önceki sol yerleşimde Projects Sessions'ın önündeyse arkasına taşınır; diğer yuvalar ve görünürlük/genişlik tercihleri korunur.
+- Projects yalnız `additionalPaths` içinde tek tek `type: repo` olarak eklenen projeleri gösterir. Projects Root ve ek root taramasının sonuçları bu listeye otomatik girmez; üst repo seçicinin keşif davranışı sürer. `+ Add project`, zaten keşfedilmiş bir projeyi de açıkça listeye kaydeder.
+- Plastic'te varsayılan `Continue on current branch` olur: yeni yerel workspace mevcut branch'e switch edilir, `cm branch create` çalışmaz. `Create a new branch` isteğe bağlıdır; Git'te yeni branch davranışı korunur. Mevcut Plastic branch seçeneği branch'in güncel içeriğini getirir; kaynakta commit edilmemiş değişiklikleri taşımaz.
+- Create sonrasında popup hemen kapanır. Oluşturma task'ı store'a aittir; sidebar'da ilgili projenin altında spinner, sonuç ve hata/kurtarma eylemleri görünür. Tamamlanma kullanıcının yeni seçtiği repo veya dialogu değiştirmez; hazır workspace `Open` ile açılıp seçilen ajan başlatılır. Library ve config retry'ları aynı sidebar satırındadır. Oluşturma sürerken ikinci create engellenir; diğer oturumlar kullanılabilir.
+
+### 48. Sidebar projesi seçimi, keşif ayarlarından ve topbar tab'larından bağımsızdır (2026-09-07)
+
+- Kullanıcı düzeltmesi: karar 47'deki `additionalPaths(type: repo)` filtresi sidebar seçimi değildir. Projects `+`, topbar ile aynı `RepoSelectorView` arama/grup/klavye popup'ını açar; Finder veya klasör seçici açılmaz. Kaynak listesi mevcut keşfedilen repolardır.
+- Sidebar seçimi additive `AppConfig.sidebarProjectPaths` dizisine ayrı kaydedilir. Varsayılan boştur; `projectsRoot`, `additionalPaths` veya açık tab'lardan otomatik doldurulmaz. Popup sidebar'a eklenmiş projeleri ve yönetilen workspace çocuklarını dışlar; topbar'da açık olmak sidebar'a eklenmeyi engellemez.
+- Sidebar'a ekleme tab açmaz, aktif tab'ı değiştirmez ve keşif ayarlarına yazmaz. `Remove from Projects` yalnız bu listeden çıkarır; tab, repository veya workspace kaydı silmez. Yeniden başlatmada seçim korunur.
+- `sidebarProjectSelector` ayrı dialog kimliğidir; iki popover aynı anda açık kalmaz ve gecikmiş kapatma diğer dialogu kapatmaz. Terminal girdisini diğer repo popup'ı gibi bloke eder.

@@ -383,3 +383,7 @@ Kurallar:
 `UnityLibraryCopier` kaynak Editor lock'larını denetler; Library'yi hedefte benzersiz staging dizinine bağımsız dosyalarla kopyalar, Temp/Logs ve symlink'leri dışlar (symlink hata üretir). Başarılı staging atomik move ile kurulur, hata yalnız operasyona ait staging'i temizler. Önceden var olan hedef Library ezilmez. Library hatası başarılı SCM workspace sonucunu warning ile döndürür; SCM kısmi hatasında kalmış branch/workspace konumu belirtilir ve otomatik silinmez.
 
 `ProjectWorkspaceCodec`, config'in additive `workspaces` alanını manual sözlük codec'iyle taşır. Malformed ve yinelenen kayıtlar elenir; mevcut config anahtarlarının ham sözlük korunması devam eder. `FakeWorkspaceService` state testlerinde; gerçek geçici Git repoları ve fake Plastic process zinciri servis testlerinde kullanılır.
+
+Karar 47: `WorkspaceCreateRequest.createNewBranch` Plastic'te false olduğunda gerçek kaynak branch'i kullanılır, branch create atlanır ve yalnız yeni workspace'te switch yapılır. Bu seçenek branch'in güncel içeriğini alır; yeni branch modu kaynak changeset'ine sabitlenir. Git oluşturma davranışı değişmez. Oluşturma task'ının UI yaşam döngüsünden bağımsız sahibi `ProjectWorkspaceStore`'dur.
+
+Karar 48: `sidebarProjectPaths` additive config dizisi sidebar seçimini tutar; codec mutlak string yolları sıra koruyarak tekilleştirir, yoksa boş liste okur. Bu alan `additionalPaths` ve `workspaces` kayıtlarından bağımsızdır, keşif köklerinde değişiklik yaratmaz.

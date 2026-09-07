@@ -62,7 +62,12 @@ public actor WorkspaceService: WorkspaceServicing {
             throw WorkspaceFailure("Enter a workspace name containing letters or numbers (up to 120 bytes).")
         }
         let override = request.branchName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let branch = override.isEmpty ? inspected.suggestedBranch(name: name) : override
+        let branch: String
+        if inspected.scm == .plastic, !request.createNewBranch {
+            branch = inspected.branch
+        } else {
+            branch = override.isEmpty ? inspected.suggestedBranch(name: name) : override
+        }
         let destination = URL(fileURLWithPath: inspected.destinationDirectory).appendingPathComponent(folder)
         try validateDestination(destination, source: inspected.projectPath, known: request.knownProjectPaths)
         if request.copyLibrary {
@@ -86,13 +91,18 @@ public actor WorkspaceService: WorkspaceServicing {
                 throw WorkspaceFailure("Plastic CLI or repository is unavailable.")
             }
             let spec = "br:\(branch)@\(repository)"
-            _ = try await command(cm, ["branch", "create", spec, "--changeset=cs:\(inspected.revision)@\(repository)", "-c=Created by Lumi"], at: inspected.projectPath)
+            if request.createNewBranch {
+                _ = try await command(cm, ["branch", "create", spec, "--changeset=cs:\(inspected.revision)@\(repository)", "-c=Created by Lumi"], at: inspected.projectPath)
+            }
             do {
                 let workspaceName = "lumi-\(folder)-\(UUID().uuidString.prefix(8).lowercased())"
                 _ = try await command(cm, ["workspace", "create", workspaceName, destination.path, repository], at: inspected.projectPath, creatingAt: destination.path)
                 _ = try await command(cm, ["switch", spec, "--workspace=\(destination.path)", "--noinput"], at: destination.path, creatingAt: destination.path)
             } catch {
-                throw WorkspaceFailure("\(error.localizedDescription)\nThe branch \(spec) may remain. Inspect the workspace at \(destination.path) before retrying; Lumi has not removed it.")
+                let recovery = request.createNewBranch
+                    ? "The branch \(spec) may remain. Inspect the workspace at \(destination.path) before retrying; Lumi has not removed it."
+                    : "Inspect the workspace at \(destination.path) before retrying; Lumi did not create a new branch."
+                throw WorkspaceFailure("\(error.localizedDescription)\n\(recovery)")
             }
         case .none: break
         }

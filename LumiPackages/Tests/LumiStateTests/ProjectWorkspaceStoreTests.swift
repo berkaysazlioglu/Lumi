@@ -26,6 +26,81 @@ final class ProjectWorkspaceStoreTests: XCTestCase {
         await service.setCreateOutcome(.success(WorkspaceCreateResult(workspace: record)))
     }
 
+    func testSidebarSelectionIsIndependentOfAdditionalPaths() async throws {
+        let discovered = Repo(name: "Discovered", path: "/projects/discovered", isGitRepo: true, source: .projectsRoot)
+        await repoService.setRepos([project, discovered])
+        await repos.reload()
+        let roots = [AdditionalPath(id: "root", path: "/projects", type: .root),
+                     AdditionalPath(id: "repo", path: project.path, type: .repo)]
+        repos.setAdditionalPaths(roots)
+        try await config.updateConfig { $0.additionalPaths = roots }
+        await store.load()
+        XCTAssertTrue(store.addedProjects.isEmpty, "Neither roots nor explicit additional paths select sidebar projects")
+        let added = await store.addProject(discovered)
+        XCTAssertTrue(added)
+        XCTAssertEqual(store.addedProjects, [discovered])
+        let saved = await config.config()
+        XCTAssertEqual(saved.additionalPaths, roots)
+        XCTAssertEqual(saved.sidebarProjectPaths, [discovered.path])
+        store.updateRecords([record])
+        XCTAssertEqual(store.addedProjects, [discovered])
+    }
+
+    func testSidebarSelectionPersistsDeduplicatesAndRemovesWithoutDeletingWorkspaces() async {
+        _ = await store.addProject(project)
+        _ = await store.addProject(project)
+        let saved = await config.config()
+        XCTAssertEqual(saved.sidebarProjectPaths, [project.path])
+        store.updateSidebarProjects([])
+        await store.load()
+        XCTAssertEqual(store.addedProjects, [project])
+        store.updateRecords([record])
+        await store.removeProject(project)
+        XCTAssertTrue(store.addedProjects.isEmpty)
+        XCTAssertEqual(store.records, [record])
+        XCTAssertEqual(repos.repo(at: project.path), project)
+        let updated = await config.config()
+        XCTAssertTrue(updated.sidebarProjectPaths.isEmpty)
+    }
+
+    func testSidebarSaveFailureDoesNotChangeSelection() async {
+        await config.setUpdateConfigError(.configIOFailed(file: "config", detail: "disk full"))
+        let added = await store.addProject(project)
+        XCTAssertFalse(added)
+        XCTAssertTrue(store.addedProjects.isEmpty)
+    }
+
+    func testPlasticDefaultsToCurrentBranchAndGitResetsToNewBranch() async {
+        await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .plastic,
+            branch: "/main/release", destinationDirectory: "/w", isUnityProject: true)))
+        await store.selectProject(project)
+        XCTAssertFalse(store.createNewBranch)
+        store.name = "Review"
+        _ = await store.create(projects: [project])
+        let calls = await service.createCalls
+        XCTAssertEqual(calls.first?.request.createNewBranch, false)
+        store.clearForm()
+        await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .git, destinationDirectory: "/w")))
+        await store.selectProject(project)
+        XCTAssertTrue(store.createNewBranch)
+    }
+
+    func testBackgroundCreationLocksSynchronouslyAndFinishesWithoutModalLifetime() async throws {
+        await service.setCreateDelay(.milliseconds(80))
+        await store.selectProject(project)
+        store.name = "Review"
+        XCTAssertTrue(store.startCreation(projects: [project]))
+        XCTAssertTrue(store.isCreating)
+        XCTAssertTrue(store.hasBackgroundOperation)
+        XCTAssertFalse(store.startCreation(projects: [project]))
+        let deadline = Date().addingTimeInterval(2)
+        while store.isCreating, Date() < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertFalse(store.isCreating)
+        XCTAssertEqual(store.lastCreated, record)
+        XCTAssertEqual(store.records, [record])
+        XCTAssertTrue(store.hasBackgroundOperation, "The sidebar keeps the ready result available")
+    }
+
     func testCreationPersistsWithoutLosingConfigAndSurvivesReload() async throws {
         try await config.updateConfig { $0.theme = "light" }
         await store.selectProject(project)

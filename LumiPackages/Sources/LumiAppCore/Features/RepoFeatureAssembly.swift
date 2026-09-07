@@ -89,6 +89,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func configDidChange(old: AppConfig, new: AppConfig) {
+        if old.sidebarProjectPaths != new.sidebarProjectPaths {
+            workspaceStore.updateSidebarProjects(new.sidebarProjectPaths)
+        }
         if old.workspaces != new.workspaces {
             workspaceStore.updateRecords(new.workspaces)
         }
