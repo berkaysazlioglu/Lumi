@@ -15,6 +15,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var repo: any RepoServicing
     public var agentHistory: any AgentHistoryReading = FakeAgentHistoryService()
     public var git: any GitServicing
+    public var plastic: any PlasticReading = FakePlasticService()
     public var terminal: any TerminalServicing
     public var viewProvider: any TerminalViewProviding
     public var highlighter: any SyntaxHighlighting

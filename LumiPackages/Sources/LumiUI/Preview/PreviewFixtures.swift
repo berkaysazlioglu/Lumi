@@ -33,6 +33,7 @@ public extension ShellContext {
             terminals: shared.terminals,
             repos: RepoStore(service: PreviewRepoService()),
             git: GitStore(git: git, toasts: shared.toasts),
+            plastic: PlasticStore(service: PreviewPlasticService()),
             agentHistory: AgentHistoryStore(service: PreviewAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
             settings: shared.settings,
@@ -179,6 +180,13 @@ private actor PreviewRepoService: RepoServicing {
     func watchFileTree(repoPath: String) {}
     func unwatchFileTree(repoPath: String) {}
     nonisolated func events() -> AsyncStream<RepoEvent> { AsyncStream { _ in } }
+}
+
+private struct PreviewPlasticService: PlasticReading {
+    func isCLIAvailable() async -> Bool { false }
+    func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo? { nil }
+    func status(workspacePath: String) async -> [PlasticFileChange] { [] }
+    func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset] { [] }
 }
 
 private struct PreviewGitService: GitServicing {

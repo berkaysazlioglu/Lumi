@@ -93,7 +93,9 @@ public actor RepoService: RepoServicing {
         return ProjectCapabilities(
             isGitRepo: git?.exitCode == 0 && git?.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "true",
             isUnityProject: isDirectory(repoPath + "/Assets")
-                && FileManager.default.fileExists(atPath: repoPath + "/ProjectSettings/ProjectVersion.txt")
+                && FileManager.default.fileExists(atPath: repoPath + "/ProjectSettings/ProjectVersion.txt"),
+            // Karar 45: `cm` süreci açmadan, `.plastic/` varlığıyla tanınır.
+            isPlasticWorkspace: isDirectory(repoPath + "/.plastic")
         )
     }
 

@@ -49,6 +49,8 @@ public final class ShellContext {
     public let repos: RepoStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
+    /// Plastic SCM salt-okunur panel store'u (karar 45).
+    public let plastic: PlasticStore
     public let fileViewer: FileViewerStore
     public let settings: SettingsStore
     public let sessionSchedule: SessionScheduleStore
@@ -74,6 +76,7 @@ public final class ShellContext {
         terminals: TerminalListStore,
         repos: RepoStore,
         git: GitStore,
+        plastic: PlasticStore,
         agentHistory: AgentHistoryStore,
         fileViewer: FileViewerStore,
         settings: SettingsStore,
@@ -94,6 +97,7 @@ public final class ShellContext {
         self.terminals = terminals
         self.repos = repos
         self.git = git
+        self.plastic = plastic
         self.agentHistory = agentHistory
         self.fileViewer = fileViewer
         self.settings = settings

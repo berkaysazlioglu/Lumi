@@ -169,6 +169,28 @@ public typealias GitServicing = GitReading & GitContentReading & GitWriting
 - `fileDiff`/`commitFileDiff` çıktısı tiplenmiş `UnifiedDiff` modelidir (`UnifiedDiffParser`; FileViewer doğrudan render eder — [03 §6](./03-ui-shell.md)).
 - **`imagePreview` (karar 21):** görsel dosyalarda metin diff'i yerine ham blob çifti. `sha` verilirse `git show sha^:file` ↔ `git show sha:file`, verilmezse `HEAD:file` ↔ disk. Çıktı `GitCommandRunner.runRaw` ile **`Data`** olarak alınır (UTF8 decode görselleri bozar). Liste operasyonları gibi **sessiz**: eksik taraf nil'dir (root commit'in parent'ı, eklenen/silinen dosya, untracked dosya — hepsi rutin), yalnız path-traversal ihlali loglanır. Taraf başına `maxImagePreviewBytes` (20 MB) sınırı; disk tarafında boyut önce file attribute'undan okunur, sınır üstü dosya belleğe hiç alınmaz.
 
+### 4.1 PlasticReading (Plastic SCM, karar 45)
+
+Git'in yanında ikinci, **salt-okunur** VCS sınırı. Aynı sessiz-boş sözleşme (`nil`/boş + log); fırlatan yüzey yoktur çünkü yazma operasyonu yoktur.
+
+```swift
+public protocol PlasticReading: Sendable {
+    func isCLIAvailable() async -> Bool
+    func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo?      // cs + repo@server + branch
+    func status(workspacePath: String) async -> [PlasticFileChange]              // --all, ignored hariç
+    func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]  // yeniden eskiye
+}
+```
+
+| Parça | Sorumluluk |
+|---|---|
+| `PlasticService` (**actor**, §11: çağrılar arası durum) | `cm` yolunu `BinaryLocating` ile bir kez çözer ve saklar; komut koşumu `ProcessRunning` (30 sn); "is not in a workspace" çıktısı sessizdir |
+| `PlasticOutputParser` (enum, I/O yok) | `parseHeader` / `parseSelectorBranch` / `parseStatus` (mutlak → relative path, kod eşlemesi) / `parseChangesets` (0x1F ayraçlı, ISO tarih, çok satırlı yorum) |
+
+- Algı `RepoService.capabilities` içinde `.plastic/` dizin kontrolüdür — `cm` süreci açılmaz.
+- Tarih penceresi (7 gün) ve fallback (en yeni 25) `PlasticStore.select` içinde saf fonksiyondur; sorguda tarih filtresi yoktur (locale'e bağlı literal).
+- Path doğrulaması gerekmez: hiçbir metod kullanıcıdan relative path almaz; dosya açma Git'teki gibi `FileViewerStore`'dan geçer.
+
 ---
 
 ## 5. PersonaServicing — **kaldırıldı (karar 25, 2026-09-04)**

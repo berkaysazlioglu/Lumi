@@ -9,4 +9,11 @@ final class ProjectToolsTabTests: XCTestCase {
     func testAvailableTabsForFolderWorkspace() {
         XCTAssertEqual(ProjectToolsTab.available(isGitRepo: false), [.explorer, .agentHistory])
     }
+
+    func testAvailableTabsForPlasticWorkspace() {
+        XCTAssertEqual(
+            ProjectToolsTab.available(isGitRepo: false, isPlasticWorkspace: true),
+            [.explorer, .agentHistory, .sourceControl]
+        )
+    }
 }
