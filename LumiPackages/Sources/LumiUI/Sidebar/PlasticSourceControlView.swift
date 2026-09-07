@@ -101,20 +101,24 @@ struct PlasticSourceControlView: View {
         VStack(spacing: 0) {
             composer
                 .padding(.horizontal, Theme.Spacing.md)
+            // `trailing:` etiketi ZORUNLU: etiketsiz trailing closure ilk closure
+            // parametresi olan `onToggle`a bağlanıyordu — düğme hiç çizilmiyor,
+            // başlık tıklanabilir görünüyordu (release build uyarısı bunu yakaladı).
             SectionHeader(
                 title: "Changes",
                 count: changes.isEmpty ? nil : .warning(changes.count),
-                contentPadding: Theme.Spacing.md
-            ) {
-                if !changes.isEmpty {
-                    Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
-                        shell.plastic.toggleSelectAll(repoPath)
+                contentPadding: Theme.Spacing.md,
+                trailing: {
+                    if !changes.isEmpty {
+                        Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
+                            shell.plastic.toggleSelectAll(repoPath)
+                        }
+                        .buttonStyle(.plain)
+                        .font(Theme.Typography.ui(.caption))
+                        .foregroundStyle(Theme.textSecondary)
                     }
-                    .buttonStyle(.plain)
-                    .font(Theme.Typography.ui(.caption))
-                    .foregroundStyle(Theme.textSecondary)
                 }
-            }
+            )
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if changes.isEmpty {
