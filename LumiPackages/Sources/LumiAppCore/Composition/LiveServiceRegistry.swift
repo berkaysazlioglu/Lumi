@@ -18,7 +18,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let repo: any RepoServicing
     let agentHistory: any AgentHistoryReading
     let git: any GitServicing
-    let plastic: any PlasticReading
+    let plastic: any PlasticServicing
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
     let highlighter: any SyntaxHighlighting

@@ -7,6 +7,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case spawnFailed(reason: String)
     case terminalNotFound(TerminalID)
     case gitFailed(operation: String, detail: String)
+    /// Plastic SCM `cm` yazma operasyonu (checkin/undo) başarısız (karar 45).
+    case plasticFailed(operation: String, detail: String)
     case pathOutsideRepo(path: String)
     case fileOperationFailed(path: String, detail: String)
     case configIOFailed(file: String, detail: String)
@@ -25,6 +27,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Terminal not found: \(id)"
         case .gitFailed(let operation, let detail):
             return "Git \(operation) failed: \(detail)"
+        case .plasticFailed(let operation, let detail):
+            return "Plastic SCM \(operation) failed: \(detail)"
         case .pathOutsideRepo(let path):
             return "Path is outside the repository: \(path)"
         case .fileOperationFailed(let path, let detail):

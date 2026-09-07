@@ -8,7 +8,7 @@ import LumiKit
 /// `actor` (design/02 §11): çağrılar arası durum tutar — `cm` binary'sinin
 /// çözümlenmiş yolu bir kez bulunur ve saklanır (`which` her çağrıda koşmaz).
 /// Komut koşumu `ProcessRunning`, binary çözümü `BinaryLocating` üzerinden.
-public actor PlasticService: PlasticReading {
+public actor PlasticService: PlasticServicing {
     public static let executableName = "cm"
     /// `cm find` sunucuya gider (cloud); git'in 20 sn'sinden geniş tutuldu.
     public static let commandTimeout: TimeInterval = 30
@@ -21,6 +21,7 @@ public actor PlasticService: PlasticReading {
 
     private let runner: any ProcessRunning
     private let locator: any BinaryLocating
+    private let guardian: RepoPathGuard
     private let timeout: TimeInterval
     /// `.some(nil)` = arandı, bulunamadı; `nil` = henüz aranmadı.
     private var resolvedExecutable: String??
@@ -28,10 +29,12 @@ public actor PlasticService: PlasticReading {
     public init(
         runner: any ProcessRunning = SystemProcessRunner(),
         locator: any BinaryLocating = SystemBinaryLocator(),
+        pathGuard: RepoPathGuard = RepoPathGuard(),
         timeout: TimeInterval = PlasticService.commandTimeout
     ) {
         self.runner = runner
         self.locator = locator
+        self.guardian = pathGuard
         self.timeout = timeout
     }
 
@@ -74,6 +77,55 @@ public actor PlasticService: PlasticReading {
         ]
         guard let stdout = await run(arguments, in: workspacePath, operation: "find changesets") else { return [] }
         return PlasticOutputParser.parseChangesets(stdout)
+    }
+
+    // MARK: - PlasticWriting
+
+    public func checkin(workspacePath: String, message: String, files: [String]) async throws {
+        guard !files.isEmpty else {
+            throw LumiError.plasticFailed(operation: "checkin", detail: "No files selected")
+        }
+        let paths = try files.map { try guardian.resolve(repoPath: workspacePath, relativePath: $0) }
+        // `--all`: verilen path'lerdeki changed/moved/deleted; `--applychanged`:
+        // checkout edilmemiş değişiklikler; `--private`: kontrolsüz öğeler de
+        // eklenir (ayrı `cm add` gerekmez). Path'ler HER ZAMAN verilir — aksi
+        // halde `--private` tüm çalışma alanını gönderirdi.
+        let arguments = ["checkin"] + paths + ["-c=\(message)", "--all", "--applychanged", "--private", "--noshowchangeset"]
+        try await runThrowing(arguments, in: workspacePath, operation: "checkin")
+    }
+
+    public func undo(workspacePath: String, files: [String]) async throws {
+        guard !files.isEmpty else {
+            throw LumiError.plasticFailed(operation: "undo", detail: "No files selected")
+        }
+        let paths = try files.map { try guardian.resolve(repoPath: workspacePath, relativePath: $0) }
+        try await runThrowing(["undo"] + paths, in: workspacePath, operation: "undo")
+    }
+
+    /// Yazma yolu: `cm` yoksa `cliNotFound`, exit ≠ 0 ise `plasticFailed`
+    /// (detay stderr, boşsa stdout; 500 karakter). `cm` hatayı stderr'e
+    /// `Error: …` önekiyle yazar ve exit 1 döner.
+    private func runThrowing(_ arguments: [String], in workspacePath: String, operation: String) async throws {
+        guard let executable = await executable() else {
+            throw LumiError.cliNotFound(binary: Self.executableName)
+        }
+        let output = await runner.run(
+            executable,
+            arguments: arguments,
+            currentDirectory: workspacePath,
+            standardInput: nil,
+            timeout: timeout
+        )
+        guard let output else {
+            throw LumiError.plasticFailed(operation: operation, detail: "timeout")
+        }
+        guard output.exitCode == 0 else {
+            let detail = output.stderr.isEmpty ? output.stdout : output.stderr
+            throw LumiError.plasticFailed(
+                operation: operation,
+                detail: String(detail.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+            )
+        }
     }
 
     // MARK: - Koşum

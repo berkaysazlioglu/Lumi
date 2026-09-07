@@ -34,7 +34,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         repoStore = RepoStore(service: services.repo)
         agentHistory = AgentHistoryStore(service: services.agentHistory)
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
-        plasticStore = PlasticStore(service: services.plastic)
+        plasticStore = PlasticStore(service: services.plastic, toasts: shared.toasts)
         fileViewer = FileViewerStore(git: services.git, toasts: shared.toasts)
     }
 

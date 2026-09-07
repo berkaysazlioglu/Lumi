@@ -144,7 +144,7 @@ private struct ShellFixture {
             terminals: shared.terminals,
             repos: RepoStore(service: FakeRepoService()),
             git: GitStore(git: git, toasts: toasts),
-            plastic: PlasticStore(service: FakePlasticService()),
+            plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
             agentHistory: AgentHistoryStore(service: FakeAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: toasts),
             settings: shared.settings,

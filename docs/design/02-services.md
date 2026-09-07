@@ -171,15 +171,24 @@ public typealias GitServicing = GitReading & GitContentReading & GitWriting
 
 ### 4.1 PlasticReading (Plastic SCM, karar 45)
 
-Git'in yanında ikinci, **salt-okunur** VCS sınırı. Aynı sessiz-boş sözleşme (`nil`/boş + log); fırlatan yüzey yoktur çünkü yazma operasyonu yoktur.
+Git'in yanında ikinci VCS sınırı; Git'teki gibi hata sözleşmesine göre ikiye bölünmüştür.
 
 ```swift
+/// SESSİZ-BOŞ: nil/boş + log (çalışma alanı olmayan dizin, cm yok — rutin).
 public protocol PlasticReading: Sendable {
     func isCLIAvailable() async -> Bool
     func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo?      // cs + repo@server + branch
     func status(workspacePath: String) async -> [PlasticFileChange]              // --all, ignored hariç
     func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]  // yeniden eskiye
 }
+
+/// FIRLATAN: LumiError.plasticFailed / cliNotFound / pathOutsideRepo.
+public protocol PlasticWriting: Sendable {
+    func checkin(workspacePath: String, message: String, files: [String]) async throws  // cm checkin … --all --applychanged --private
+    func undo(workspacePath: String, files: [String]) async throws                      // cm undo … (geri alınamaz)
+}
+
+public typealias PlasticServicing = PlasticReading & PlasticWriting
 ```
 
 | Parça | Sorumluluk |
@@ -189,7 +198,8 @@ public protocol PlasticReading: Sendable {
 
 - Algı `RepoService.capabilities` içinde `.plastic/` dizin kontrolüdür — `cm` süreci açılmaz.
 - Tarih penceresi (7 gün) ve fallback (en yeni 25) `PlasticStore.select` içinde saf fonksiyondur; sorguda tarih filtresi yoktur (locale'e bağlı literal).
-- Path doğrulaması gerekmez: hiçbir metod kullanıcıdan relative path almaz; dosya açma Git'teki gibi `FileViewerStore`'dan geçer.
+- Yazma metodları relative path alır ve `RepoPathGuard.resolve` ile mutlak, kök-içi path'e çevirir (karar 11); `cm`'e her zaman mutlak path'ler verilir. Okuma metodları path almaz; dosya açma Git'teki gibi `FileViewerStore`'dan geçer.
+- History graph'ı için ayrı algoritma yoktur: `PlasticHistoryGraph` (LumiKit, saf) changeset'leri `GitCommit`e projekte eder ve `CommitGraph` aynen kullanılır.
 
 ---
 

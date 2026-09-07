@@ -9,6 +9,14 @@ final class PlasticServiceTests: XCTestCase {
     private let workspace = "/Users/me/wkspaces/Unity/sand_out"
     private let cm = "/usr/local/bin/cm"
 
+    /// Guard `resolvingSymlinksInPath` ile canonicalize eder; var olmayan bir kök
+    /// dizin gibi çözülmez. Yazma testleri gerçek bir temp dizin kullanır.
+    private func makeTemporaryWorkspace() throws -> URL {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
     private func makeService(runner: FakeProcessRunner, cmInstalled: Bool = true) -> (PlasticService, FakeBinaryLocator) {
         let locator = FakeBinaryLocator(paths: cmInstalled ? ["cm": cm] : [:])
         return (PlasticService(runner: runner, locator: locator), locator)
@@ -104,5 +112,75 @@ final class PlasticServiceTests: XCTestCase {
 
         XCTAssertTrue(changesets.isEmpty)
         XCTAssertNil(info)
+    }
+
+    // MARK: Yazma
+
+    func testCheckinPassesResolvedPathsCommentAndInclusionFlags() async throws {
+        let runner = FakeProcessRunner()
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let canonicalRoot = root.resolvingSymlinksInPath().path
+        let (service, _) = makeService(runner: runner)
+
+        try await service.checkin(workspacePath: root.path, message: "fix lid", files: ["Assets/A.cs", "new.txt"])
+
+        let invocation = await runner.invocations.first
+        XCTAssertEqual(invocation?.executable, cm)
+        XCTAssertEqual(invocation?.arguments, [
+            "checkin", canonicalRoot + "/Assets/A.cs", canonicalRoot + "/new.txt",
+            "-c=fix lid", "--all", "--applychanged", "--private", "--noshowchangeset",
+        ])
+    }
+
+    func testCheckinRejectsPathsOutsideWorkspaceBeforeSpawning() async {
+        let runner = FakeProcessRunner()
+        let (service, _) = makeService(runner: runner)
+
+        do {
+            try await service.checkin(workspacePath: workspace, message: "x", files: ["../secret"])
+            XCTFail("kök dışı path kabul edilmemeli")
+        } catch let error as LumiError {
+            guard case .pathOutsideRepo = error else { return XCTFail("beklenmeyen hata: \(error)") }
+        } catch { XCTFail("beklenmeyen hata: \(error)") }
+        let invocations = await runner.invocations
+        XCTAssertTrue(invocations.isEmpty)
+    }
+
+    func testCheckinFailureSurfacesStderrDetail() async throws {
+        let runner = FakeProcessRunner()
+        await runner.setDefaultResult(.failure(exitCode: 1, stdout: "Assembling checkin data\n", stderr: "Error: There are no changes in the workspace\n"))
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, _) = makeService(runner: runner)
+
+        do {
+            try await service.checkin(workspacePath: root.path, message: "x", files: ["a.cs"])
+            XCTFail("exit 1 hata fırlatmalı")
+        } catch let error as LumiError {
+            guard case .plasticFailed(let operation, let detail) = error else { return XCTFail("beklenmeyen hata: \(error)") }
+            XCTAssertEqual(operation, "checkin")
+            XCTAssertEqual(detail, "Error: There are no changes in the workspace")
+        } catch { XCTFail("beklenmeyen hata: \(error)") }
+    }
+
+    func testUndoRunsCMUndoWithResolvedPathsAndMissingCLIThrowsCLINotFound() async throws {
+        let runner = FakeProcessRunner()
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, _) = makeService(runner: runner)
+        try await service.undo(workspacePath: root.path, files: ["Assets/A.cs"])
+        let arguments = await runner.invocations.first?.arguments
+        XCTAssertEqual(arguments?.first, "undo")
+        XCTAssertEqual(arguments?.last?.hasSuffix("/Assets/A.cs"), true)
+
+        let (missing, _) = makeService(runner: FakeProcessRunner(), cmInstalled: false)
+        do {
+            try await missing.undo(workspacePath: root.path, files: ["a"])
+            XCTFail("cm yokken hata fırlatmalı")
+        } catch let error as LumiError {
+            guard case .cliNotFound(let binary) = error else { return XCTFail("beklenmeyen hata: \(error)") }
+            XCTAssertEqual(binary, "cm")
+        } catch { XCTFail("beklenmeyen hata: \(error)") }
     }
 }

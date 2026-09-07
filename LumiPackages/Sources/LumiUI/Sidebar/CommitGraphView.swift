@@ -49,7 +49,7 @@ struct CommitGraphView: View {
                             .foregroundStyle(Theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
-                        refBadges(commit.references, colorIndex: row.nodeColorIndex)
+                        CommitRefBadges(refs: commit.references, colorIndex: row.nodeColorIndex)
                     }
                     metaLine(commit)
                 }
@@ -86,44 +86,6 @@ struct CommitGraphView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// En fazla iki rozet + "+N" (Orca kuralı): dar sidebar'da ref listesi
-    /// mesajı ezmemeli.
-    @ViewBuilder
-    private func refBadges(_ refs: [GitRef], colorIndex: Int) -> some View {
-        let visible = refs.prefix(Self.maxVisibleRefs)
-        let hidden = refs.dropFirst(Self.maxVisibleRefs)
-        HStack(spacing: Theme.Spacing.xxs) {
-            ForEach(Array(visible)) { ref in
-                refBadge(ref, colorIndex: colorIndex)
-            }
-            if !hidden.isEmpty {
-                Text("+\(hidden.count)")
-                    .font(Theme.Typography.ui(.caption))
-                    .foregroundStyle(Theme.textMuted)
-                    .help(hidden.map(\.name).joined(separator: ", "))
-            }
-        }
-        .fixedSize()
-    }
-
-    private func refBadge(_ ref: GitRef, colorIndex: Int) -> some View {
-        let color = ref.isCurrent ? Theme.accentVivid : Theme.Graph.laneColor(colorIndex)
-        return Text(ref.name)
-            .font(Theme.Typography.ui(.caption, weight: .medium))
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .padding(.horizontal, Theme.Spacing.xs)
-            .padding(.vertical, Theme.Spacing.xxxs)
-            .background(Theme.bgElevated)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                    .stroke(color.opacity(Self.badgeBorderOpacity), lineWidth: Theme.Stroke.hairline)
-            )
-            .help(Self.refHelp(ref))
-    }
-
     // MARK: - Sağ tık menüsü
 
     @ViewBuilder
@@ -144,19 +106,6 @@ struct CommitGraphView: View {
         NSPasteboard.general.setString(value, forType: .string)
     }
 
-    // MARK: - Sabitler
-
-    private static let maxVisibleRefs = 2
-    private static let badgeBorderOpacity = 0.6
-
-    private static func refHelp(_ ref: GitRef) -> String {
-        switch ref.kind {
-        case .head: return "Detached HEAD"
-        case .localBranch: return ref.isCurrent ? "\(ref.name) (current branch)" : "\(ref.name) (branch)"
-        case .remoteBranch: return "\(ref.name) (remote branch)"
-        case .tag: return "\(ref.name) (tag)"
-        }
-    }
 }
 
 #if DEBUG

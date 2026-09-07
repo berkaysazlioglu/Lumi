@@ -17,7 +17,7 @@ final class PlasticStoreTests: XCTestCase {
 
     private func makeStore(_ service: FakePlasticService) -> PlasticStore {
         let now = self.now
-        return PlasticStore(service: service, now: { now })
+        return PlasticStore(service: service, toasts: ToastStore(autoDismissAfter: 60), now: { now })
     }
 
     func testLoadAllFillsWorkspaceStatusAndChangesets() async {
@@ -55,12 +55,12 @@ final class PlasticStoreTests: XCTestCase {
         XCTAssertTrue(statusCalls.isEmpty)
     }
 
-    func testRecentChangesetsUsesSevenDayWindow() {
-        let all = [changeset(3, daysAgo: 0.5), changeset(2, daysAgo: 6.9), changeset(1, daysAgo: 7.1)]
+    func testRecentChangesetsUsesSevenDayWindowOrderedByChangesetID() {
+        let all = [changeset(2, daysAgo: 0.5), changeset(3, daysAgo: 6.9), changeset(1, daysAgo: 7.1)]
 
         let recent = PlasticStore.select(from: all, now: now)
 
-        XCTAssertEqual(recent.items.map(\.changesetID), [3, 2])
+        XCTAssertEqual(recent.items.map(\.changesetID), [3, 2], "sıra tarihe değil id'ye göredir (topolojik)")
         XCTAssertFalse(recent.isFallback)
     }
 
@@ -106,5 +106,83 @@ final class PlasticStoreTests: XCTestCase {
         XCTAssertNil(store.changesets[path])
         XCTAssertNil(store.changes[path])
         XCTAssertEqual(store.recentChangesets(path), .empty)
+    }
+
+    // MARK: Seçim + checkin
+
+    func testStatusLoadSelectsAllUntilUserTogglesThenPreservesSelection() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified), PlasticFileChange(path: "b", status: .added)])
+        let store = makeStore(service)
+
+        await store.refreshStatus(path)
+        XCTAssertEqual(store.selectedFiles[path], ["a", "b"])
+
+        store.toggleFile(path, path: "b")
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified), PlasticFileChange(path: "c", status: .untracked)])
+        await store.refreshStatus(path)
+        XCTAssertEqual(store.selectedFiles[path], ["a"], "kullanıcı dokunduysa yeni dosya kendiliğinden seçilmez")
+    }
+
+    func testCanCheckinRequiresSelectionAndMessage() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+
+        XCTAssertFalse(store.canCheckin(path), "mesaj boş")
+        store.setCheckinMessage("  ", for: path)
+        XCTAssertFalse(store.canCheckin(path))
+        store.setCheckinMessage("fix", for: path)
+        XCTAssertTrue(store.canCheckin(path))
+        store.toggleSelectAll(path)
+        XCTAssertFalse(store.canCheckin(path), "seçim boş")
+    }
+
+    func testCheckinSendsSortedSelectionClearsMessageAndReloads() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "b", status: .modified), PlasticFileChange(path: "a", status: .added)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+        store.setCheckinMessage("  lid fix ", for: path)
+
+        await store.checkin(path)
+
+        let calls = await service.checkinCalls
+        XCTAssertEqual(calls, [FakePlasticService.CheckinCall(workspacePath: path, message: "lid fix", files: ["a", "b"])])
+        XCTAssertEqual(store.checkinMessage(for: path), "")
+        XCTAssertEqual(store.changes[path], [], "başarılı checkin sonrası durum yeniden yüklenir")
+        XCTAssertFalse(store.isCheckingIn)
+    }
+
+    func testCheckinFailureKeepsMessageAndReportsToast() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified)])
+        await service.setErrorToThrow(.plasticFailed(operation: "checkin", detail: "no changes"))
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let now = self.now
+        let store = PlasticStore(service: service, toasts: toasts, now: { now })
+        await store.refreshStatus(path)
+        store.setCheckinMessage("fix", for: path)
+
+        await store.checkin(path)
+
+        XCTAssertEqual(store.checkinMessage(for: path), "fix")
+        XCTAssertEqual(toasts.toasts.count, 1)
+    }
+
+    func testUndoRefreshesStatusOnly() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified), PlasticFileChange(path: "b", status: .modified)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+
+        await store.undo(path, path: "a")
+
+        let undo = await service.undoCalls
+        XCTAssertEqual(undo, [["a"]])
+        XCTAssertEqual(store.changes[path]?.map(\.path), ["b"])
+        let changesetCalls = await service.changesetCalls
+        XCTAssertTrue(changesetCalls.isEmpty)
     }
 }

@@ -2,11 +2,13 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Source Control sekmesinin Plastic SCM sürümü (karar 45) — salt-okunur.
+/// Source Control sekmesinin Plastic SCM sürümü (karar 45).
 ///
 /// Başlık: branch + `cs:N` + repo@server + ↻. Gövde: Changes | History.
-/// Changes çalışma alanı durumunu listeler (tıklama dosyayı açar; diff Git'e
-/// özgü olduğundan sunulmaz). History son 7 günün changeset'leri; pencere
+/// Changes: mesaj kutusu + Check in butonu, seçim kutulu dosya listesi
+/// (tıklama dosyayı açar; diff Git'e özgü olduğundan sunulmaz), sağ tık
+/// Undo Changes / Move to Trash. History: son 7 günün changeset'leri Git ile
+/// aynı lane graph'ında (`PlasticHistoryGraph` → `CommitGraph`); pencere
 /// boşsa en yeni kayıtlar "Latest" başlığıyla gösterilir.
 struct PlasticSourceControlView: View {
     enum Section: Hashable, CaseIterable {
@@ -20,6 +22,7 @@ struct PlasticSourceControlView: View {
 
     private var info: PlasticWorkspaceInfo? { shell.plastic.workspaces[repoPath] }
     private var changes: [PlasticFileChange] { shell.plastic.changes[repoPath] ?? [] }
+    private var selectedCount: Int { shell.plastic.selectedFiles[repoPath]?.count ?? 0 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -95,11 +98,22 @@ struct PlasticSourceControlView: View {
 
     private var changesBody: some View {
         VStack(spacing: 0) {
+            composer
+                .padding(.horizontal, Theme.Spacing.md)
             SectionHeader(
                 title: "Changes",
                 count: changes.isEmpty ? nil : .warning(changes.count),
                 contentPadding: Theme.Spacing.md
-            )
+            ) {
+                if !changes.isEmpty {
+                    Button(selectedCount == changes.count ? "Deselect All" : "Select All") {
+                        shell.plastic.toggleSelectAll(repoPath)
+                    }
+                    .buttonStyle(.plain)
+                    .font(Theme.Typography.ui(.caption))
+                    .foregroundStyle(Theme.textSecondary)
+                }
+            }
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if changes.isEmpty {
@@ -114,31 +128,88 @@ struct PlasticSourceControlView: View {
         }
     }
 
+    private var composer: some View {
+        VStack(spacing: Theme.Spacing.md) {
+            TextField("Comment", text: Binding(
+                get: { shell.plastic.checkinMessage(for: repoPath) },
+                set: { shell.plastic.setCheckinMessage($0, for: repoPath) }
+            ), axis: .vertical)
+            .lineLimit(3...6)
+            .font(Theme.Typography.ui(.body))
+            .textFieldStyle(.plain)
+            .foregroundStyle(Theme.textPrimary)
+            .padding(Theme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(Theme.bgDeep)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.md)
+                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+            )
+            checkinButton
+        }
+        .padding(.bottom, Theme.Spacing.sm)
+    }
+
+    /// Sabit yükseklikli (`Row.control`) checkin butonu — Git'teki Commit
+    /// butonuyla aynı geometri; bölünmüş menü yok (seçim eylemleri başlıkta).
+    private var checkinButton: some View {
+        let canCheckin = shell.plastic.canCheckin(repoPath)
+        return Button {
+            Task { await shell.plastic.checkin(repoPath) }
+        } label: {
+            Label(
+                shell.plastic.isCheckingIn ? "Checking in…" : "Check in (\(selectedCount))",
+                systemImage: shell.plastic.isCheckingIn ? "hourglass" : "checkmark"
+            )
+            .font(Theme.Typography.ui(.body, weight: .medium))
+            .frame(maxWidth: .infinity)
+            .frame(height: Theme.Row.control)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canCheckin)
+        .foregroundStyle(canCheckin ? Theme.textPrimary : Theme.textMuted)
+        .background(Theme.bgElevated)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+        )
+        .help("Check in selected items as one changeset")
+    }
+
     private func changeRow(_ change: PlasticFileChange) -> some View {
         let color = Theme.fileChangeColor(for: change.status)
         let name = (change.path as NSString).lastPathComponent
         return HoverReader { hovering in
-            Button {
-                if change.status != .deleted { shell.presentFile(change.path) }
-            } label: {
-                HStack(spacing: Theme.Spacing.sm) {
-                    FileKindIcon(kind: FileKind.classify(name: name, isFolder: false, isExpanded: false))
-                    Text(name).foregroundStyle(color).lineLimit(1)
-                    Text((change.path as NSString).deletingLastPathComponent)
-                        .font(Theme.Typography.ui(.caption))
-                        .foregroundStyle(Theme.textMuted).lineLimit(1).truncationMode(.head)
-                    Spacer(minLength: 0)
-                    Text(change.status.badgeText)
-                        .font(Theme.Typography.mono(.caption, weight: .medium))
-                        .foregroundStyle(color)
+            HStack(spacing: Theme.Spacing.sm) {
+                Button { shell.plastic.toggleFile(repoPath, path: change.path) } label: {
+                    Image(systemName: shell.plastic.isSelected(repoPath, path: change.path) ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(Theme.textSecondary)
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(change.path)
-            .contextMenu {
-                if change.status != .deleted { Button("Open File") { shell.presentFile(change.path) } }
-                Button("Reveal in Finder") { shell.reveal(change.path) }
+                .buttonStyle(.plain)
+                .help("Include \(change.path) in check-in")
+                .accessibilityLabel("Include \(change.path) in check-in")
+                Button {
+                    if change.status != .deleted { shell.presentFile(change.path) }
+                } label: {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        FileKindIcon(kind: FileKind.classify(name: name, isFolder: false, isExpanded: false))
+                        Text(name).foregroundStyle(color).lineLimit(1)
+                        Text((change.path as NSString).deletingLastPathComponent)
+                            .font(Theme.Typography.ui(.caption))
+                            .foregroundStyle(Theme.textMuted).lineLimit(1).truncationMode(.head)
+                        Spacer(minLength: 0)
+                        Text(change.status.badgeText)
+                            .font(Theme.Typography.mono(.caption, weight: .medium))
+                            .foregroundStyle(color)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(change.path)
+                .contextMenu { changeContextMenu(change) }
             }
             .font(Theme.Typography.ui(.body))
             .padding(.horizontal, Theme.Spacing.md)
@@ -147,10 +218,33 @@ struct PlasticSourceControlView: View {
         }
     }
 
+    /// Private (kontrolsüz) öğede `cm undo` etkisizdir → çöpe taşıma sunulur;
+    /// diğerlerinde Undo Changes yerel değişikliği atar (geri alınamaz, Plastic
+    /// uyarısı) — bu yüzden `.destructive` rol.
+    @ViewBuilder
+    private func changeContextMenu(_ change: PlasticFileChange) -> some View {
+        if change.status != .deleted { Button("Open File") { shell.presentFile(change.path) } }
+        Button("Reveal in Finder") { shell.reveal(change.path) }
+        Divider()
+        if change.status == .untracked {
+            Button("Move to Trash", role: .destructive) { shell.trash(change.path) }
+        } else {
+            Button("Undo Changes", role: .destructive) {
+                let path = change.path
+                Task { await shell.plastic.undo(repoPath, path: path) }
+            }
+        }
+    }
+
     // MARK: - History
 
     private var historyBody: some View {
         let recent = shell.plastic.recentChangesets(repoPath)
+        let rows = CommitGraph.build(
+            PlasticHistoryGraph.commits(from: recent.items, currentBranch: info?.branch),
+            headHash: PlasticHistoryGraph.headHash(workspaceChangesetID: info?.changesetID, in: recent.items)
+        )
+        let laneCount = CommitGraph.maxLaneCount(rows)
         return VStack(spacing: 0) {
             SectionHeader(
                 title: recent.isFallback ? "Latest changesets" : "Last 7 days",
@@ -165,47 +259,54 @@ struct PlasticSourceControlView: View {
                             density: .inline
                         )
                     }
-                    ForEach(recent.items) { changeset in changesetRow(changeset) }
+                    ForEach(rows) { row in changesetRow(row, laneCount: laneCount) }
                 }
             }
         }
     }
 
-    private func changesetRow(_ changeset: PlasticChangeset) -> some View {
-        HoverReader { hovering in
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                HStack(spacing: Theme.Spacing.xs) {
-                    Text(changeset.comment.isEmpty ? "(no comment)" : changeset.comment)
-                        .font(Theme.Typography.ui(.body))
-                        .foregroundStyle(Theme.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Badge(text: changeset.branch, color: Theme.accentPrimary, style: .neutral)
+    /// Git History satırıyla aynı düzen: lane kanvası + yorum + ref rozetleri
+    /// (branch uçları) + `cs:N · owner · süre`. `row.commit` Plastic
+    /// changeset'inin `GitCommit` projeksiyonudur (`shortHash` = `cs:N`).
+    private func changesetRow(_ row: CommitGraphRow, laneCount: Int) -> some View {
+        let commit = row.commit
+        return HoverReader { hovering in
+            HStack(spacing: Theme.Spacing.sm) {
+                CommitGraphLaneCanvas(row: row, laneCount: laneCount, height: Theme.Row.commit)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Text(commit.message.isEmpty ? "(no comment)" : commit.message)
+                            .font(Theme.Typography.ui(.body))
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        CommitRefBadges(refs: commit.references, colorIndex: row.nodeColorIndex)
+                    }
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Text(commit.shortHash)
+                            .font(Theme.Typography.mono(.caption))
+                            .foregroundStyle(Theme.textSecondary)
+                        Text("·").foregroundStyle(Theme.textMuted)
+                        Text(commit.author)
+                            .font(Theme.Typography.ui(.caption))
+                            .foregroundStyle(Theme.textMuted)
+                            .lineLimit(1)
+                        Text("·").foregroundStyle(Theme.textMuted)
+                        Text(RelativeTimeFormatter.label(commit.date))
+                            .font(Theme.Typography.ui(.caption))
+                            .foregroundStyle(Theme.textMuted)
+                    }
                 }
-                HStack(spacing: Theme.Spacing.xs) {
-                    Text("cs:\(changeset.changesetID)")
-                        .font(Theme.Typography.mono(.caption))
-                        .foregroundStyle(Theme.textSecondary)
-                    Text("·").foregroundStyle(Theme.textMuted)
-                    Text(changeset.owner)
-                        .font(Theme.Typography.ui(.caption))
-                        .foregroundStyle(Theme.textMuted)
-                        .lineLimit(1)
-                    Text("·").foregroundStyle(Theme.textMuted)
-                    Text(RelativeTimeFormatter.label(changeset.date))
-                        .font(Theme.Typography.ui(.caption))
-                        .foregroundStyle(Theme.textMuted)
-                }
+                .padding(.trailing, Theme.Spacing.md)
             }
-            .padding(.horizontal, Theme.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: Theme.Row.commit)
             .background(hovering ? Theme.bgElevated : Color.clear)
             .contentShape(Rectangle())
-            .help(changeset.comment)
+            .help(commit.message)
             .contextMenu {
-                Button("Copy Changeset ID") { copy("\(changeset.changesetID)") }
-                Button("Copy Comment") { copy(changeset.comment) }
+                Button("Copy Changeset ID") { copy(commit.hash) }
+                Button("Copy Comment") { copy(commit.message) }
             }
         }
     }

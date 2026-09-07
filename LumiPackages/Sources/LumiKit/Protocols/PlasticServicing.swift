@@ -5,9 +5,9 @@ import Foundation
 /// çalışma alanı olmayan dizinler ve `cm` kurulu olmayan makineler rutin
 /// durumdur; UI'ya hata sızmaz, panel boş kalır.
 ///
-/// Yalnız okuma: checkin/undo/update kapsam dışıdır (karar 45 — "git gibi
-/// gelişmiş olması gerekmez"). Tüm çağrılar `cm` CLI'sından geçer ve
-/// binary `BinaryLocating` ile çözülür; sabit path yoktur.
+/// Update/switch/merge kapsam dışıdır (karar 45 — "git gibi gelişmiş
+/// olması gerekmez"). Tüm çağrılar `cm` CLI'sından geçer ve binary
+/// `BinaryLocating` ile çözülür; sabit path yoktur.
 public protocol PlasticReading: Sendable {
     /// `cm` PATH'te (veya bilinen kurulum dizinlerinde) var mı? Görünümün
     /// "CLI bulunamadı" kapısı; süreç ömrü boyunca bir kez ölçülmesi yeterlidir.
@@ -23,3 +23,20 @@ public protocol PlasticReading: Sendable {
     /// uygular.
     func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]
 }
+
+/// **Yazma sözleşmesi** (karar 45 eki): çalışma alanını değiştiren iki
+/// operasyon; başarısızlık her zaman görünür hatadır (`LumiError.plasticFailed`).
+/// Dosya path'leri çalışma alanı köküne göre relative'dir ve kök-içi
+/// doğrulamasından geçer (karar 11).
+public protocol PlasticWriting: Sendable {
+    /// `cm checkin <paths> -c=<message>`: seçili öğeler tek changeset olur.
+    /// Private (PR) öğeler de dahildir (`--private`), ayrı `cm add` gerekmez.
+    func checkin(workspacePath: String, message: String, files: [String]) async throws
+    /// `cm undo <paths>`: öğenin yerel değişikliğini GERİ ALINAMAZ biçimde
+    /// atar (Plastic'in kendi uyarısı). Private öğede etkisizdir; UI o durumda
+    /// undo yerine çöpe taşımayı sunar.
+    func undo(workspacePath: String, files: [String]) async throws
+}
+
+/// Tam Plastic yüzeyi — composition root ve `PlasticService` bunu kullanır.
+public typealias PlasticServicing = PlasticReading & PlasticWriting
