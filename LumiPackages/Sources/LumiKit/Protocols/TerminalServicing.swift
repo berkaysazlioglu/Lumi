@@ -96,4 +96,13 @@ public protocol TerminalViewProviding: AnyObject {
     /// Fullscreen giriş/çıkışı gibi AppKit'in view hiyerarşisini taşıdığı
     /// geçişlerin onarımı — çağıran somut registry tipini tanımak zorunda kalmaz.
     func refreshAttachedViews()
+
+    /// Bekleyen klavye-odağı isteğini (servisin `setFocused`'ı) yerine getirmeyi
+    /// dener: view bir pencereye ulaşmışsa first responder yapılır. Host container
+    /// pencereye girdiğinde / layout aldığında çağırır — istek yoksa no-op.
+    func fulfillPendingKeyboardFocus()
+}
+
+public extension TerminalViewProviding {
+    func fulfillPendingKeyboardFocus() {}
 }
