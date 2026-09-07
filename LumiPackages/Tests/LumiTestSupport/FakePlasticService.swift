@@ -59,6 +59,16 @@ public actor FakePlasticService: PlasticReading, PlasticWriting {
         return Array(changesetsToReturn.prefix(limit))
     }
 
+    public var diffTextToReturn = ""
+    public private(set) var diffTextCalls: [(changesetID: Int, paths: [String])] = []
+
+    public func setDiffText(_ text: String) { diffTextToReturn = text }
+
+    public func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String {
+        diffTextCalls.append((changesetID, changes.map(\.path)))
+        return diffTextToReturn
+    }
+
     public func checkin(workspacePath: String, message: String, files: [String]) async throws {
         checkinCalls.append(CheckinCall(workspacePath: workspacePath, message: message, files: files))
         if let errorToThrow { throw errorToThrow }

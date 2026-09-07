@@ -118,6 +118,7 @@ final class ShellContextTests: XCTestCase {
             repos: context.repos,
             git: context.git,
             plastic: context.plastic,
+            commitAssistant: context.commitAssistant,
             agentHistory: context.agentHistory,
             fileViewer: context.fileViewer,
             settings: context.settings,

@@ -18,6 +18,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var repoStore: RepoStore!
     private(set) var gitStore: GitStore!
     private(set) var plasticStore: PlasticStore!
+    private(set) var commitAssistant: CommitMessageAssistant!
     private(set) var agentHistory: AgentHistoryStore!
     private(set) var fileViewer: FileViewerStore!
 
@@ -35,6 +36,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         agentHistory = AgentHistoryStore(service: services.agentHistory)
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
         plasticStore = PlasticStore(service: services.plastic, toasts: shared.toasts)
+        commitAssistant = CommitMessageAssistant(generator: services.commitMessages, toasts: shared.toasts)
         fileViewer = FileViewerStore(git: services.git, toasts: shared.toasts)
     }
 

@@ -241,6 +241,19 @@ public final class GitStore {
             .isEmpty
     }
 
+    // MARK: - Commit mesajı üretimi (karar 46)
+
+    /// Seçili dosyalar + HEAD'e göre diff metni. Seçim boşsa diff okunmaz.
+    public func commitMessageRequest(_ repoPath: String) async -> CommitMessageRequest {
+        let selected = selectedFiles[repoPath] ?? []
+        let changes = (changes[repoPath] ?? [])
+            .filter { selected.contains($0.path) }
+            .map { CommitMessageRequest.Change(path: $0.path, status: $0.status) }
+        guard !changes.isEmpty else { return CommitMessageRequest(vcsName: "Git", changes: []) }
+        let diff = await git.workingTreeDiffText(repoPath: repoPath, files: changes.map(\.path))
+        return CommitMessageRequest(vcsName: "Git", changes: changes, diff: diff)
+    }
+
     // MARK: - Commit mesajı (kapsülleme, refactor 5.4)
 
     public func commitMessage(for repoPath: String) -> String {

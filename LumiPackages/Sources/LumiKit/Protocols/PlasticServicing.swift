@@ -22,6 +22,12 @@ public protocol PlasticReading: Sendable {
     /// yoktur: `cm find`in tarih literali locale'e bağlıdır; pencereyi store
     /// uygular.
     func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]
+    /// Karar 46: seçili öğelerin unified diff metni (commit mesajı üretimine
+    /// girdi). Değişen dosya için taban `cm cat "rev:<path>#cs:<changesetID>"`
+    /// ile alınıp yerel dosyayla `diff -u` yapılır; eklenen/private dosya
+    /// `/dev/null`a karşı tamamı-ekleme, silinen dosya tek satır notla gelir.
+    /// Sessiz: hata → o dosya atlanır.
+    func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String
 }
 
 /// **Yazma sözleşmesi** (karar 45 eki): çalışma alanını değiştiren iki

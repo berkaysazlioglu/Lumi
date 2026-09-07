@@ -183,4 +183,69 @@ final class PlasticServiceTests: XCTestCase {
             XCTAssertEqual(binary, "cm")
         } catch { XCTFail("beklenmeyen hata: \(error)") }
     }
+
+    // MARK: Diff metni (karar 46)
+
+    func testWorkingTreeDiffTextUsesCMCatBaseAndRewritesHeaders() async throws {
+        let runner = FakeProcessRunner()
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let canonicalRoot = root.resolvingSymlinksInPath().path
+        try "new\n".write(to: root.appendingPathComponent("Assets/New.cs".replacingOccurrences(of: "Assets/", with: "")), atomically: true, encoding: .utf8)
+        await runner.stub(executable: "/usr/bin/diff", with: .failure(exitCode: 1, stdout: "--- /tmp/base\t2026\n+++ \(canonicalRoot)/A.cs\t2026\n@@ -1 +1 @@\n-old\n+new\n"))
+        let (service, _) = makeService(runner: runner)
+
+        let text = await service.workingTreeDiffText(
+            workspacePath: root.path, changesetID: 214,
+            changes: [
+                PlasticFileChange(path: "A.cs", status: .modified),
+                PlasticFileChange(path: "Gone.cs", status: .deleted),
+                PlasticFileChange(path: "New.cs", status: .untracked),
+            ]
+        )
+
+        XCTAssertTrue(text.hasPrefix("--- a/A.cs\n+++ b/A.cs\n@@ -1 +1 @@\n-old\n+new\n"), text)
+        XCTAssertTrue(text.contains("--- a/Gone.cs\n+++ /dev/null\n(deleted)\n"))
+        XCTAssertTrue(text.contains("--- /dev/null\n+++ b/New.cs\n"))
+        let invocations = await runner.invocations
+        let cat = invocations.first { $0.arguments.first == "cat" }
+        XCTAssertEqual(cat?.executable, cm)
+        XCTAssertEqual(cat?.arguments[1], "rev:\(canonicalRoot)/A.cs#cs:214")
+        XCTAssertTrue(cat?.arguments[2].hasPrefix("--file=") ?? false)
+        let diffs = invocations.filter { $0.executable == "/usr/bin/diff" }
+        XCTAssertEqual(diffs.count, 2, "değişen + eklenen; silinen için diff koşmaz")
+        XCTAssertTrue(diffs.contains { Array($0.arguments.prefix(2)) == ["-u", "/dev/null"] }, "eklenen dosya /dev/null'a karşı (sıra paralel yüzünden serbest)")
+    }
+
+    func testWorkingTreeDiffTextSkipsFilesWhoseBaseCannotBeFetched() async throws {
+        let runner = FakeProcessRunner()
+        await runner.stub(executable: cm, with: .failure(exitCode: 1, stderr: "The specified revision couldn't be found"))
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, _) = makeService(runner: runner)
+
+        let text = await service.workingTreeDiffText(workspacePath: root.path, changesetID: 1, changes: [PlasticFileChange(path: "A.cs", status: .modified)])
+
+        XCTAssertEqual(text, "")
+    }
+
+    func testWorkingTreeDiffTextFetchesBasesConcurrentlyButKeepsOrder() async throws {
+        let runner = FakeProcessRunner()
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        await runner.stub(executable: cm, with: .success(delay: .milliseconds(40)))
+        await runner.stub(executable: "/usr/bin/diff", with: .failure(exitCode: 1, stdout: "--- x\n+++ y\n@@\n+line\n"))
+        let (service, _) = makeService(runner: runner)
+        let changes = (0 ..< 12).map { PlasticFileChange(path: "F\($0).cs", status: .modified) }
+
+        let started = Date()
+        let text = await service.workingTreeDiffText(workspacePath: root.path, changesetID: 1, changes: changes)
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertLessThan(elapsed, 0.40, "12 × 40 ms sıralı 0.48 sn olurdu; paralel çok daha kısa")
+        let headers = text.split(separator: "\n").filter { $0.hasPrefix("+++ b/") }.map(String.init)
+        XCTAssertEqual(headers, (0 ..< 12).map { "+++ b/F\($0).cs" }, "çıktı sırası changes sırasıdır")
+        let peak = await runner.maxConcurrentInvocations
+        XCTAssertLessThanOrEqual(peak, PlasticService.maxConcurrentDiffs + 1)
+    }
 }

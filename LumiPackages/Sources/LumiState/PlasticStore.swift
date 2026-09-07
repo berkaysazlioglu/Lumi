@@ -140,6 +140,21 @@ public final class PlasticStore {
 
     // MARK: - Checkin
 
+    /// Karar 46: seçili öğeler + çalışma alanı changeset'ine göre diff metni
+    /// (`cm cat` tabanı ↔ yerel dosya). Başlık bilgisi yoksa yalnız liste gider.
+    public func checkinMessageRequest(_ workspacePath: String) async -> CommitMessageRequest {
+        let selected = selectedFiles[workspacePath] ?? []
+        let selectedChanges = (changes[workspacePath] ?? []).filter { selected.contains($0.path) }
+        let changes = selectedChanges.map { CommitMessageRequest.Change(path: $0.path, status: $0.status) }
+        guard !changes.isEmpty, let changesetID = workspaces[workspacePath]?.changesetID else {
+            return CommitMessageRequest(vcsName: "Plastic SCM", changes: changes)
+        }
+        let diff = await service.workingTreeDiffText(
+            workspacePath: workspacePath, changesetID: changesetID, changes: selectedChanges
+        )
+        return CommitMessageRequest(vcsName: "Plastic SCM", changes: changes, diff: diff)
+    }
+
     public func checkinMessage(for workspacePath: String) -> String {
         checkinMessages[workspacePath] ?? ""
     }

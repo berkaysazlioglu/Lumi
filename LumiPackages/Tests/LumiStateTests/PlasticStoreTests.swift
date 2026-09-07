@@ -185,4 +185,35 @@ final class PlasticStoreTests: XCTestCase {
         let changesetCalls = await service.changesetCalls
         XCTAssertTrue(changesetCalls.isEmpty)
     }
+
+    func testCheckinMessageRequestUsesWorkspaceChangesetForDiff() async {
+        let service = FakePlasticService()
+        await service.setWorkspaceInfo(PlasticWorkspaceInfo(changesetID: 214, repository: "r", server: "s", branch: "/main"))
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified), PlasticFileChange(path: "b", status: .untracked)])
+        await service.setDiffText("+x")
+        let store = makeStore(service)
+        await store.loadAll(path)
+        store.toggleFile(path, path: "a")
+
+        let request = await store.checkinMessageRequest(path)
+
+        XCTAssertEqual(request, CommitMessageRequest(vcsName: "Plastic SCM", changes: [.init(path: "b", status: .untracked)], diff: "+x"))
+        let calls = await service.diffTextCalls
+        XCTAssertEqual(calls.map(\.changesetID), [214])
+        XCTAssertEqual(calls.map(\.paths), [["b"]])
+    }
+
+    func testCheckinMessageRequestWithoutHeaderOrSelectionSkipsDiff() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+
+        let request = await store.checkinMessageRequest(path)
+
+        XCTAssertEqual(request.changes.map(\.path), ["a"])
+        XCTAssertEqual(request.diff, "", "başlık (changeset) bilinmiyorsa cm cat koşmaz")
+        let calls = await service.diffTextCalls
+        XCTAssertTrue(calls.isEmpty)
+    }
 }

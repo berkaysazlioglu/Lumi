@@ -49,8 +49,10 @@ public final class ShellContext {
     public let repos: RepoStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
-    /// Plastic SCM salt-okunur panel store'u (karar 45).
+    /// Plastic SCM panel store'u (karar 45).
     public let plastic: PlasticStore
+    /// Commit mesajı üretimi (karar 46) — Git ve Plastic composer'ları paylaşır.
+    public let commitAssistant: CommitMessageAssistant
     public let fileViewer: FileViewerStore
     public let settings: SettingsStore
     public let sessionSchedule: SessionScheduleStore
@@ -77,6 +79,7 @@ public final class ShellContext {
         repos: RepoStore,
         git: GitStore,
         plastic: PlasticStore,
+        commitAssistant: CommitMessageAssistant,
         agentHistory: AgentHistoryStore,
         fileViewer: FileViewerStore,
         settings: SettingsStore,
@@ -98,6 +101,7 @@ public final class ShellContext {
         self.repos = repos
         self.git = git
         self.plastic = plastic
+        self.commitAssistant = commitAssistant
         self.agentHistory = agentHistory
         self.fileViewer = fileViewer
         self.settings = settings
@@ -159,6 +163,22 @@ public final class ShellContext {
     public func presentCommit(_ commit: GitCommit) {
         guard let repoPath = activeRepoPath else { return }
         Task { await fileViewer.presentCommit(repoPath: repoPath, commit: commit) }
+    }
+
+    /// Karar 46: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.
+    /// Kullanıcı bu arada yazmaya başladıysa yanıt onu EZMEZ.
+    public func generateGitCommitMessage(_ repoPath: String) async {
+        let draftBefore = git.commitMessage(for: repoPath)
+        let request = await git.commitMessageRequest(repoPath)
+        guard let message = await commitAssistant.generate(repoPath, request: request) else { return }
+        if git.commitMessage(for: repoPath) == draftBefore { git.setCommitMessage(message, for: repoPath) }
+    }
+
+    public func generatePlasticCheckinMessage(_ repoPath: String) async {
+        let draftBefore = plastic.checkinMessage(for: repoPath)
+        let request = await plastic.checkinMessageRequest(repoPath)
+        guard let message = await commitAssistant.generate(repoPath, request: request) else { return }
+        if plastic.checkinMessage(for: repoPath) == draftBefore { plastic.setCheckinMessage(message, for: repoPath) }
     }
 
     public func reveal(_ relativePath: String) {

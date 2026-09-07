@@ -605,3 +605,40 @@ final class GitStoreBranchSummaryTests: XCTestCase {
         XCTAssertNil(store.branchSummaries["/repo"])
     }
 }
+
+/// Karar 46: commit mesajı üretim isteğinin kurulumu.
+@MainActor
+final class GitStoreCommitMessageRequestTests: XCTestCase {
+    // MARK: - Commit mesajı üretimi (karar 46)
+
+    func testCommitMessageRequestUsesSelectedFilesAndDiffText() async {
+        let git = FakeGitService()
+        await git.setStatus([GitFileChange(path: "a.swift", status: .modified), GitFileChange(path: "b.swift", status: .untracked)])
+        await git.setDiffText("+hello")
+        let store = GitStore(git: git, toasts: ToastStore(autoDismissAfter: 60))
+        await store.loadChanges("/repo")
+        store.toggleFile("/repo", path: "b.swift")
+
+        let request = await store.commitMessageRequest("/repo")
+
+        XCTAssertEqual(request.vcsName, "Git")
+        XCTAssertEqual(request.changes, [.init(path: "a.swift", status: .modified)])
+        XCTAssertEqual(request.diff, "+hello")
+        let calls = await git.diffTextCalls
+        XCTAssertEqual(calls, [["a.swift"]])
+    }
+
+    func testCommitMessageRequestWithEmptySelectionSkipsDiff() async {
+        let git = FakeGitService()
+        await git.setStatus([GitFileChange(path: "a.swift", status: .modified)])
+        let store = GitStore(git: git, toasts: ToastStore(autoDismissAfter: 60))
+        await store.loadChanges("/repo")
+        store.toggleSelectAll("/repo")
+
+        let request = await store.commitMessageRequest("/repo")
+
+        XCTAssertTrue(request.changes.isEmpty)
+        let calls = await git.diffTextCalls
+        XCTAssertTrue(calls.isEmpty)
+    }
+}

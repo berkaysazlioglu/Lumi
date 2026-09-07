@@ -39,6 +39,7 @@ struct ShellContextFixture {
             repos: RepoStore(service: repo),
             git: GitStore(git: git, toasts: toasts),
             plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
+            commitAssistant: CommitMessageAssistant(generator: FakeCommitMessageGenerator(), toasts: toasts),
             agentHistory: AgentHistoryStore(service: FakeAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: toasts),
             settings: shared.settings,

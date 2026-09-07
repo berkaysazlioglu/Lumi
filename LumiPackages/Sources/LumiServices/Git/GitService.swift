@@ -248,6 +248,30 @@ public struct GitService: GitServicing {
         return UnifiedDiffParser.parse(output.stdout, filePath: file)
     }
 
+    /// Karar 46: tracked dosyalar tek `git diff HEAD -- files` ile; untracked
+    /// olanlar (`ls-files --others`) `/dev/null`a karşı ayrı ayrı (`--no-index`
+    /// exit 1 = fark var, hata değil). Guard ihlali ya da hata → boş metin.
+    public func workingTreeDiffText(repoPath: String, files: [String]) async -> String {
+        guard !files.isEmpty else { return "" }
+        for file in files where (try? resolveInsideRepo(repoPath, file)) == nil {
+            commands.logQuietFailure("diff (path outside repo: \(file))", nil)
+            return ""
+        }
+        var text = ""
+        if let tracked = await commands.run(["diff", "HEAD", "--"] + files, in: repoPath), tracked.exitCode == 0 {
+            text += tracked.stdout
+        } else {
+            commands.logQuietFailure("diff HEAD", nil)
+        }
+        let untracked = await commands.run(["ls-files", "--others", "--exclude-standard", "--"] + files, in: repoPath)
+        for file in (untracked?.stdout ?? "").split(whereSeparator: \.isNewline).map(String.init) where !file.isEmpty {
+            if let output = await commands.run(["diff", "--no-index", "--", "/dev/null", file], in: repoPath) {
+                text += output.stdout
+            }
+        }
+        return text
+    }
+
     public func commitFiles(repoPath: String, sha: String) async -> [CommitFile] {
         let output = await commands.run(
             ["diff-tree", "--no-commit-id", "-r", "--name-status", "--root", sha],

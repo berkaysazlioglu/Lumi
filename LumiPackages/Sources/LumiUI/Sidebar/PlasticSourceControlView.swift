@@ -131,21 +131,18 @@ struct PlasticSourceControlView: View {
 
     private var composer: some View {
         VStack(spacing: Theme.Spacing.md) {
-            TextField("Comment", text: Binding(
-                get: { shell.plastic.checkinMessage(for: repoPath) },
-                set: { shell.plastic.setCheckinMessage($0, for: repoPath) }
-            ), axis: .vertical)
-            .lineLimit(3...6)
-            .font(Theme.Typography.ui(.body))
-            .textFieldStyle(.plain)
-            .foregroundStyle(Theme.textPrimary)
-            .padding(Theme.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(Theme.bgDeep)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.md)
-                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+            CommitMessageField(
+                placeholder: "Comment",
+                text: Binding(
+                    get: { shell.plastic.checkinMessage(for: repoPath) },
+                    set: { shell.plastic.setCheckinMessage($0, for: repoPath) }
+                ),
+                isGenerating: shell.commitAssistant.isGenerating(repoPath),
+                canGenerate: selectedCount > 0,
+                onGenerate: {
+                    let path = repoPath
+                    Task { await shell.generatePlasticCheckinMessage(path) }
+                }
             )
             checkinButton
         }

@@ -180,6 +180,7 @@ public protocol PlasticReading: Sendable {
     func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo?      // cs + repo@server + branch
     func status(workspacePath: String) async -> [PlasticFileChange]              // --all, ignored hariç
     func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]  // yeniden eskiye
+    func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String  // karar 46
 }
 
 /// FIRLATAN: LumiError.plasticFailed / cliNotFound / pathOutsideRepo.
@@ -314,6 +315,17 @@ public protocol BinaryLocating: Sendable {
 - **Sessiz-fail sözleşmesi:** timeout, başlatma hatası veya iptal `nil` döndürür — fırlatmaz; çağıran servis bunu kendi hata sözleşmesine map'ler.
 - Refactor 3.1: eskiden static bir `ProcessRunner` enum'una (artık yok) giden 7 çağıran vardı; artık her servis `init(runner:locator:)` ile ikame alabilir (`FakeProcessRunner`, `FakeBinaryLocator`) — git/claude/codex binary'si olmayan ortamda da birim testi yazılır.
 - `SystemProcessRunner` düzeltmeleri (Faz 1.11): timeout/launch-failure yolunda `DispatchGroup` `leave`'leri tamamlandı (process + fd sızıntısı), `withTaskCancellationHandler` ile iptalde `terminate()`. Stdout/stderr `readabilityHandler` ile paralel okunur (klasik `NSTask` deadlock'una karşı).
+
+### 8.1.1 CommitMessageGenerating (karar 46)
+
+```swift
+/// FIRLATAN: cliNotFound / commitMessageGenerationFailed.
+public protocol CommitMessageGenerating: Sendable {
+    func generate(_ request: CommitMessageRequest) async throws -> String   // tek satır
+}
+```
+
+`ClaudeCommitMessageService` (actor): `claude -p <talimat> --model sonnet --effort low --output-format json --tools "" --setting-sources "" --no-session-persistence`, gövde stdin'den, CWD geçici dizin, `--bare` YOK (keychain). Agent SDK bilinçli olarak kullanılmaz (yalnız Python/TS; dokümanı diğer diller için CLI alt sürecini önerir — karar 46). Prompt kurulumu ve yanıt temizliği saf `CommitMessagePrompt`tadır. Girdi: `GitReading.workingTreeDiffText` / `PlasticReading.workingTreeDiffText` (`cm cat` tabanı + `diff -u`), ikisi de sessiz-boş. Store tarafı `CommitMessageAssistant` + `ShellContext` intent'i.
 
 ### 8.2 SyntaxHighlighting (FileViewer dikişi)
 

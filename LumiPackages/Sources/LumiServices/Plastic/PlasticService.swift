@@ -79,6 +79,82 @@ public actor PlasticService: PlasticServicing {
         return PlasticOutputParser.parseChangesets(stdout)
     }
 
+    // MARK: - Diff metni (karar 46)
+
+    static let diffExecutable = "/usr/bin/diff"
+
+    /// Aynı anda koşan `cm cat` tavanı: her çağrı .NET çalışma zamanını
+    /// ayağa kaldırır (~1.4 sn); ölçüm 6 dosyada sıralı 8.6 sn, paralel 2.2 sn.
+    public static let maxConcurrentDiffs = 6
+
+    /// Dosya başına diff'ler sınırlı bir TaskGroup'ta paralel çekilir; çıktı
+    /// `changes` sırasında birleştirilir (model deterministik girdi görür).
+    public func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String {
+        let indexed = Array(changes.enumerated())
+        let parts = await withTaskGroup(of: (Int, String).self, returning: [String].self) { group in
+            var pending = indexed.makeIterator()
+            var results = Array(repeating: "", count: changes.count)
+
+            func addNext() -> Bool {
+                guard let (index, change) = pending.next() else { return false }
+                group.addTask { (index, await self.diffText(for: change, workspacePath: workspacePath, changesetID: changesetID)) }
+                return true
+            }
+
+            for _ in 0 ..< Self.maxConcurrentDiffs {
+                guard addNext() else { break }
+            }
+            for await (index, text) in group {
+                results[index] = text
+                _ = addNext()
+            }
+            return results
+        }
+        return parts.joined()
+    }
+
+    private func diffText(for change: PlasticFileChange, workspacePath: String, changesetID: Int) async -> String {
+        guard let absolute = try? guardian.resolve(repoPath: workspacePath, relativePath: change.path) else { return "" }
+        switch change.status {
+        case .deleted:
+            return "--- a/\(change.path)\n+++ /dev/null\n(deleted)\n"
+        case .added, .untracked:
+            return await unifiedDiff(base: "/dev/null", local: absolute, relative: change.path) ?? ""
+        case .modified, .renamed:
+            guard let base = await baseRevisionFile(absolute, changesetID: changesetID) else { return "" }
+            defer { try? FileManager.default.removeItem(atPath: base) }
+            return await unifiedDiff(base: base, local: absolute, relative: change.path) ?? ""
+        }
+    }
+
+    /// `cm cat rev:<abs>#cs:N --file=<tmp>` → geçici dosya yolu; başarısızsa nil.
+    private func baseRevisionFile(_ absolute: String, changesetID: Int) async -> String? {
+        let temp = NSTemporaryDirectory() + "lumi-plastic-base-\(UUID().uuidString)"
+        let spec = "rev:\(absolute)#cs:\(changesetID)"
+        guard await run(["cat", spec, "--file=\(temp)"], in: (absolute as NSString).deletingLastPathComponent, operation: "cat") != nil else {
+            try? FileManager.default.removeItem(atPath: temp)
+            return nil
+        }
+        return temp
+    }
+
+    /// `diff -u` exit 1 = fark var (hata değil); başlıklar `a/<rel>` `b/<rel>`
+    /// olarak yeniden yazılır ki model geçici dosya yolunu görmesin.
+    private func unifiedDiff(base: String, local: String, relative: String) async -> String? {
+        let output = await runner.run(
+            Self.diffExecutable, arguments: ["-u", base, local],
+            currentDirectory: nil, standardInput: nil, timeout: timeout
+        )
+        guard let output, output.exitCode <= 1 else { return nil }
+        var lines = output.stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if lines.count >= 2, lines[0].hasPrefix("--- "), lines[1].hasPrefix("+++ ") {
+            lines[0] = base == "/dev/null" ? "--- /dev/null" : "--- a/\(relative)"
+            lines[1] = "+++ b/\(relative)"
+        }
+        let text = lines.joined(separator: "\n")
+        return text.hasSuffix("\n") ? text : text + "\n"
+    }
+
     // MARK: - PlasticWriting
 
     public func checkin(workspacePath: String, message: String, files: [String]) async throws {

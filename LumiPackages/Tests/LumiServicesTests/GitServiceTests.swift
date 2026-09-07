@@ -26,6 +26,26 @@ final class GitServiceTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    // MARK: - Karar 46: ham diff metni
+
+    func testWorkingTreeDiffTextCoversTrackedAndUntrackedFiles() async throws {
+        try "one\n".write(to: repoDir.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+        try git("add", "tracked.txt")
+        try git("commit", "-m", "init")
+        try "two\n".write(to: repoDir.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+        try "new\n".write(to: repoDir.appendingPathComponent("fresh.txt"), atomically: true, encoding: .utf8)
+
+        let text = await service.workingTreeDiffText(repoPath: repoDir.path, files: ["tracked.txt", "fresh.txt"])
+
+        XCTAssertTrue(text.contains("-one"))
+        XCTAssertTrue(text.contains("+two"))
+        XCTAssertTrue(text.contains("+new"), "untracked dosya /dev/null'a karşı eklenir")
+        let outside = await service.workingTreeDiffText(repoPath: repoDir.path, files: ["../escape"])
+        XCTAssertEqual(outside, "")
+        let none = await service.workingTreeDiffText(repoPath: repoDir.path, files: [])
+        XCTAssertEqual(none, "")
+    }
+
     private func git(_ args: String...) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")

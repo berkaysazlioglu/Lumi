@@ -31,6 +31,10 @@ public protocol GitReading: Sendable {
     /// Git repo değilse nil; upstream yoksa `upstream == nil`.
     func branchSummary(repoPath: String) async -> GitBranchSummary?
     func status(repoPath: String) async -> [GitFileChange]
+    /// Karar 46: seçili dosyaların HEAD'e göre ham unified diff metni (commit
+    /// mesajı üretimine girdi). Untracked dosyalar `/dev/null`a karşı
+    /// tamamı-ekleme olarak eklenir. Sessiz: hata → boş metin.
+    func workingTreeDiffText(repoPath: String, files: [String]) async -> String
     /// Karar 6 (lazy): commit seçilince yalnız dosya listesi.
     func commitFiles(repoPath: String, sha: String) async -> [CommitFile]
     /// Karar 21: görsel dosyalar diff yerine önizlemeyle gösterilir. `sha`
