@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import XCTest
 import LumiKit
+import LumiState
 import LumiTestSupport
 @testable import LumiUI
 
@@ -27,7 +28,18 @@ final class WorkspaceRenderingTests: XCTestCase {
         let record = ProjectWorkspace(projectPath: project.path, path: NSTemporaryDirectory(), name: "Combat UI", branch: "/main/combat-ui", scm: .plastic)
         fixture.context.workspaces.updateRecords([record])
         fixture.context.navigation.openTab(record.path)
+        let running = try await fixture.spawnTerminal(named: "Branch commit'lerini opus subagent'larına incelet", in: record.path)
+        let done = try await fixture.spawnTerminal(named: "Source control desteği Plastic", in: record.path)
+        _ = try await fixture.spawnTerminal(named: "Lumi projesi mimarisi incelemesi", in: project.path)
+        fixture.terminalService.emit(.providerChanged(running.id, .claude))
+        fixture.terminalService.emit(.statusChanged(running.id, .working))
+        fixture.terminalService.emit(.providerChanged(done.id, .codex))
+        fixture.terminalService.emit(.statusChanged(done.id, .waitingSeen))
+        try await Task.sleep(for: .milliseconds(100))
         try await render(ProjectsPanel().environment(\.shell, fixture.context), size: NSSize(width: 320, height: 580), name: "sidebar")
+        fixture.context.dialogs.present(.deleteWorkspace(DeleteWorkspaceDialogState(workspace: record, sessionCount: 2)))
+        try await render(DeleteWorkspaceDialogOverlay().environment(\.shell, fixture.context), size: NSSize(width: 720, height: 420), name: "delete")
+        fixture.context.dialogs.dismiss()
         fixture.context.dialogs.present(.createWorkspace(projectPath: project.path))
         try await render(CreateWorkspaceOverlay().environment(\.shell, fixture.context), size: NSSize(width: 900, height: 800), name: "create") {
             fixture.context.workspaces.name = "Inventory UI"

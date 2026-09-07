@@ -120,6 +120,76 @@ final class WorkspaceServiceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.path + "/workspaces"))
     }
 
+    // MARK: - Silme (karar 49)
+
+    func testRemovesCleanGitWorktreeAndKeepsBranch() async throws {
+        let source = try makeGitProject("source")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let created = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "review")).workspace
+        try await service.remove(created, force: false)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: created.path))
+        XCTAssertFalse(try outputGit(in: source, "worktree", "list").contains(created.path))
+        XCTAssertTrue(try outputGit(in: source, "branch", "--list", "review").contains("review"), "branch kullanıcıya kalır")
+    }
+
+    func testDirtyGitWorktreeRequiresForce() async throws {
+        let source = try makeGitProject("source")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let created = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "dirty")).workspace
+        try Data("wip".utf8).write(to: URL(fileURLWithPath: created.path).appendingPathComponent("untracked.txt"))
+        do {
+            try await service.remove(created, force: false)
+            XCTFail("Kirli worktree force'suz silinmemeli")
+        } catch {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: created.path + "/untracked.txt"), "ilk deneme hiçbir şeyi silmez")
+        }
+        try await service.remove(created, force: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: created.path))
+    }
+
+    func testRemovePrunesWorktreeWhoseFolderIsAlreadyGone() async throws {
+        let source = try makeGitProject("source")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let created = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "gone")).workspace
+        try FileManager.default.removeItem(atPath: created.path)
+        try await service.remove(created, force: false)
+        XCTAssertFalse(try outputGit(in: source, "worktree", "list").contains("gone"))
+    }
+
+    func testRemoveRefusesPathsOutsideManagedRoot() async throws {
+        let source = try makeGitProject("source")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let outside = ProjectWorkspace(projectPath: source.path, path: source.path, name: "source", branch: "main", scm: .git)
+        do {
+            try await service.remove(outside, force: true)
+            XCTFail("Yönetilen kök dışı yol silinmemeli")
+        } catch {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: source.path + "/a.txt"))
+        }
+        let rootItself = ProjectWorkspace(projectPath: source.path, path: root.appendingPathComponent("workspaces").path, name: "root", branch: "main", scm: .none)
+        do {
+            try await service.remove(rootItself, force: true)
+            XCTFail("Yönetilen kökün kendisi silinmemeli")
+        } catch {}
+    }
+
+    func testRemovePlasticWithoutCLIOnlyForceTrashesFolder() async throws {
+        let workspaces = root.appendingPathComponent("workspaces")
+        let folder = workspaces.appendingPathComponent("game/ui")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let runner = FakeProcessRunner()
+        let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: [:]), workspaceRoot: workspaces)
+        let record = ProjectWorkspace(projectPath: root.appendingPathComponent("plastic").path, path: folder.path, name: "ui", branch: "/main/ui", scm: .plastic)
+        do {
+            try await service.remove(record, force: false)
+            XCTFail("cm yokken force'suz silme reddedilmeli")
+        } catch {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: folder.path))
+        }
+        try await service.remove(record, force: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
+
     private func repo(_ url: URL, name: String = "source") -> Repo {
         Repo(name: name, path: url.path, isGitRepo: true, source: .standalone)
     }

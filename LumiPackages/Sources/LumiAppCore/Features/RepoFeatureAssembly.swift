@@ -49,12 +49,17 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             makeView: { AnyView(ProjectsPanel()) }
         ))
         registries.overlays.register(OverlayDescriptor(
-            id: OverlayID("createWorkspace"),
+            id: .createWorkspace,
             isPresented: {
                 if case .createWorkspace = $0.dialogs.active { return true }
                 return false
             },
             makeView: { AnyView(CreateWorkspaceOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .deleteWorkspaceDialog,
+            isPresented: { $0.dialogs.deleteWorkspaceDialog != nil },
+            makeView: { AnyView(DeleteWorkspaceDialogOverlay()) }
         ))
         registries.panels.register(PanelItemDescriptor(
             id: .projectTools,

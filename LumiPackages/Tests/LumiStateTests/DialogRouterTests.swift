@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import LumiKit
 @testable import LumiState
 
 /// `DialogRouter` birim testleri — beş bağımsız bayrağın yerini alan tek
@@ -42,6 +43,8 @@ final class DialogRouterTests: XCTestCase {
             .settings,
             .onboarding,
             .closeTab(CloseTabDialogState(repoPath: "/r", repoName: "r", minimizedCount: 1)),
+            .deleteWorkspace(DeleteWorkspaceDialogState(
+                workspace: ProjectWorkspace(projectPath: "/r", path: "/w", name: "w", branch: "w", scm: .git), sessionCount: 1)),
             .quit(terminalCount: 2),
         ]
         for dialog in dialogs {

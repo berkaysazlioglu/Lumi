@@ -54,3 +54,14 @@ final class RelativeTimeFormatterTests: XCTestCase {
         )
     }
 }
+
+extension RelativeTimeFormatterTests {
+    func testShortLabelBands() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertEqual(RelativeTimeFormatter.shortLabel(now.addingTimeInterval(-30), now: now), "now")
+        XCTAssertEqual(RelativeTimeFormatter.shortLabel(now.addingTimeInterval(-9 * 60), now: now), "9m")
+        XCTAssertEqual(RelativeTimeFormatter.shortLabel(now.addingTimeInterval(-3 * 3600), now: now), "3h")
+        XCTAssertEqual(RelativeTimeFormatter.shortLabel(now.addingTimeInterval(-2 * 86400), now: now), "2d")
+        XCTAssertEqual(RelativeTimeFormatter.shortLabel(now.addingTimeInterval(60), now: now), "now", "gelecek tarih negatif olmaz")
+    }
+}

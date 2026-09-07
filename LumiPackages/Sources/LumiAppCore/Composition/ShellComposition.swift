@@ -73,6 +73,9 @@ struct ShellComposition {
     /// yapılır.
     static func makeRegistries(contributors: [any ShellContributing]) -> ShellRegistries {
         let registries = ShellRegistries()
+        // Karar 44: panelReveal İLK kayıt olmak zorunda — feature overlay'leri
+        // (createWorkspace modalı, silme dialogu) de onun ÜSTÜNDE çizilir.
+        registerPanelRevealOverlay(into: registries)
         for contributor in contributors {
             contributor.registerShellItems(into: registries)
         }
@@ -89,9 +92,9 @@ struct ShellComposition {
 
     /// Kabuğun KENDİ overlay'leri — bir feature'a ait olmayanlar (focus mode
     /// barı, dosya görüntüleyici, ayarlar, toast'lar, iki onay dialogu).
-    private static func registerShellOverlays(into registries: ShellRegistries) {
-        // Karar 44: İLK kayıt — diğer overlay'lerin (modal, toast, dialog) altında
-        // kalır. Yalnız en az bir yuva kenar hover'ına uygunken çizilir.
+    /// Karar 44: İLK kayıt — diğer overlay'lerin (modal, toast, dialog) altında
+    /// kalır. Yalnız en az bir yuva kenar hover'ına uygunken çizilir.
+    private static func registerPanelRevealOverlay(into registries: ShellRegistries) {
         let panels = registries.panels
         registries.overlays.register(OverlayDescriptor(
             id: .panelReveal,
@@ -101,6 +104,9 @@ struct ShellComposition {
             },
             makeView: { AnyView(PanelRevealOverlay(registry: panels)) }
         ))
+    }
+
+    private static func registerShellOverlays(into registries: ShellRegistries) {
         registries.overlays.register(OverlayDescriptor(
             id: .focusModeBar,
             alignment: .top,
@@ -154,7 +160,8 @@ struct ShellComposition {
                     }
                     await repo.repoStore.loadFileTree(repoPath)
                 }
-            }
+            },
+            revealPath: { path in registry.system.revealInFinder(path: path) }
         )
     }
 }

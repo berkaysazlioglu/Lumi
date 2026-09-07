@@ -117,6 +117,47 @@ public actor WorkspaceService: WorkspaceServicing {
             path: destination.path, name: name, branch: branch, scm: inspected.scm), warning: warning)
     }
 
+    /// Karar 49. Sıra: SCM kaydı → artık klasör → sahiplik seti. Hedef, kanonik
+    /// yolla `workspaceRoot` içinde kalmak ve kaynak projeyi kapsamamak zorunda;
+    /// aksi hâlde hiçbir komut çalışmaz. Klasör diskte yoksa yalnız SCM
+    /// metadata'sı temizlenir (`git worktree prune`).
+    public func remove(_ workspace: ProjectWorkspace, force: Bool) async throws {
+        let target = Self.canonical(workspace.path)
+        guard Self.contains(target, in: workspaceRoot.path), target != workspaceRoot.path else {
+            throw WorkspaceFailure("Only workspaces inside \(workspaceRoot.path) can be deleted; \(workspace.path) is outside the managed root.")
+        }
+        let project = Self.canonical(workspace.projectPath)
+        guard !Self.contains(project, in: target) else {
+            throw WorkspaceFailure("Refusing to delete a folder that contains the source project.")
+        }
+        let exists = Self.entryExists(target)
+        switch workspace.scm {
+        case .git:
+            guard Self.isDirectory(project) else { break }
+            if exists {
+                let arguments = ["worktree", "remove"] + (force ? ["--force"] : []) + [target]
+                _ = try await command("/usr/bin/git", arguments, at: project, timeout: Self.commandTimeout)
+            } else {
+                _ = try await command("/usr/bin/git", ["worktree", "prune"], at: project)
+            }
+        case .plastic:
+            guard exists else { break }
+            if let cm = await locator.locate("cm") {
+                let cwd = Self.isDirectory(project) ? project : workspaceRoot.path
+                _ = try await command(cm, ["workspace", "delete", target], at: cwd, timeout: Self.commandTimeout)
+            } else if !force {
+                throw WorkspaceFailure("Plastic SCM cm CLI is unavailable, so the workspace registration cannot be removed. Force Delete removes only the folder.")
+            }
+        case .none:
+            break
+        }
+        if Self.entryExists(target) {
+            do { try FileManager.default.trashItem(at: URL(fileURLWithPath: target), resultingItemURL: nil) }
+            catch { throw WorkspaceFailure("Workspace folder could not be moved to Trash: \(error.localizedDescription)") }
+        }
+        ownedDestinations.remove(target)
+    }
+
     public func copyLibrary(sourcePath: String, workspacePath: String) async throws {
         let destination = Self.canonical(workspacePath)
         guard ownedDestinations.contains(destination), Self.contains(destination, in: workspaceRoot.path) else {
@@ -133,8 +174,9 @@ public actor WorkspaceService: WorkspaceServicing {
             libraryCopyBlockedReason: unity ? libraryCopier.blockedReason(sourcePath: root) : nil)
     }
 
-    private func command(_ binary: String, _ arguments: [String], at path: String, creatingAt destination: String? = nil) async throws -> String {
-        let timeout = destination == nil ? 30.0 : Self.commandTimeout
+    private func command(_ binary: String, _ arguments: [String], at path: String, creatingAt destination: String? = nil,
+                         timeout explicitTimeout: TimeInterval? = nil) async throws -> String {
+        let timeout = explicitTimeout ?? (destination == nil ? 30.0 : Self.commandTimeout)
         let output = await runner.run(binary, arguments: arguments, currentDirectory: path, timeout: timeout)
         guard let output, output.exitCode == 0 else {
             let detail = output.map { $0.stderr.isEmpty ? $0.stdout : $0.stderr } ?? "Command timed out or could not be started."

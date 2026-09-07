@@ -221,4 +221,75 @@ final class ProjectWorkspaceStoreTests: XCTestCase {
         XCTAssertEqual(store.records, [record])
         XCTAssertEqual(repos.repo(at: record.path), record.repo)
     }
+
+    // MARK: - Silme (karar 49)
+
+    func testDeleteWorkspaceRemovesRecordAndConfigEntry() async throws {
+        let seed = record
+        try await config.updateConfig { $0.workspaces = [seed] }
+        await store.load()
+        XCTAssertEqual(store.records, [record])
+        let deleted = await store.deleteWorkspace(record, force: false)
+        XCTAssertTrue(deleted)
+        XCTAssertTrue(store.records.isEmpty)
+        XCTAssertNil(repos.repo(at: record.path), "RepoStore birleşik listesinden de düşer")
+        let calls = await service.removeCalls
+        XCTAssertEqual(calls.map(\.0.path), [record.path])
+        XCTAssertEqual(calls.map(\.1), [false])
+        let saved = await config.config()
+        XCTAssertTrue(saved.workspaces.isEmpty)
+        XCTAssertNil(store.deleteError)
+        XCTAssertFalse(store.isDeleting)
+    }
+
+    func testDeleteFailureKeepsRecordAndOffersForce() async throws {
+        let seed = record
+        try await config.updateConfig { $0.workspaces = [seed] }
+        await store.load()
+        await service.setRemoveOutcome(.failure(WorkspaceFailure("contains modified or untracked files")))
+        let deleted = await store.deleteWorkspace(record, force: false)
+        XCTAssertFalse(deleted)
+        XCTAssertEqual(store.records, [record])
+        XCTAssertEqual(store.deleteError, "contains modified or untracked files")
+        XCTAssertTrue(store.canForceDelete)
+        await service.setRemoveOutcome(.success(()))
+        let forced = await store.deleteWorkspace(record, force: true)
+        XCTAssertTrue(forced)
+        let forcedCalls = await service.removeCalls
+        XCTAssertEqual(forcedCalls.map(\.1), [false, true])
+        XCTAssertTrue(store.records.isEmpty)
+    }
+
+    func testForcedFailureDoesNotOfferForceAgain() async throws {
+        let seed = record
+        try await config.updateConfig { $0.workspaces = [seed] }
+        await store.load()
+        store.beginDeleteFlow()
+        await service.setRemoveOutcome(.failure(WorkspaceFailure("permission denied")))
+        _ = await store.deleteWorkspace(record, force: true)
+        XCTAssertFalse(store.canForceDelete)
+        XCTAssertEqual(store.deleteError, "permission denied")
+    }
+
+    func testForgetWorkspaceDropsRecordWithoutTouchingSCM() async throws {
+        let seed = record
+        try await config.updateConfig { $0.workspaces = [seed] }
+        await store.load()
+        await store.forgetWorkspace(record)
+        XCTAssertTrue(store.records.isEmpty)
+        let calls = await service.removeCalls
+        XCTAssertTrue(calls.isEmpty)
+        let saved = await config.config()
+        XCTAssertTrue(saved.workspaces.isEmpty)
+    }
+
+    func testDeleteRecordSaveFailureStillDropsRecordFromMemory() async throws {
+        let seed = record
+        try await config.updateConfig { $0.workspaces = [seed] }
+        await store.load()
+        await config.setUpdateConfigError(.configIOFailed(file: "config", detail: "disk full"))
+        let deleted = await store.deleteWorkspace(record, force: false)
+        XCTAssertTrue(deleted, "SCM silmesi başarılı; kayıt hatası toast'la bildirilir")
+        XCTAssertTrue(store.records.isEmpty)
+    }
 }

@@ -20,6 +20,12 @@ public final class ProjectWorkspaceStore {
     public private(set) var records: [ProjectWorkspace] = []
     public private(set) var sidebarProjectPaths: [String] = []
     public private(set) var missingWorkspacePaths = Set<String>()
+    /// Silme akışı (karar 49): sürmekte olan silmenin yolu ve son hatası.
+    public private(set) var deletingPath: String?
+    public private(set) var deleteError: String?
+    /// Kirli Git worktree'si ilk denemede reddedilir; kullanıcı açıkça
+    /// "Force Delete" derse ikinci deneme `force` ile gider (Orca paritesi).
+    public private(set) var canForceDelete = false
     private var pendingRecords: [String: ProjectWorkspace] = [:]
     private var libraryWarning: String?
     private var saveWarning: String?
@@ -239,6 +245,54 @@ public final class ProjectWorkspaceStore {
         saveWarning = nil
         lastCreated = nil
         isInspecting = false
+    }
+
+    // MARK: - Silme (karar 49)
+
+    public var isDeleting: Bool { deletingPath != nil }
+
+    /// Yeni bir silme onayı açılırken önceki hata/force durumu sıfırlanır.
+    public func beginDeleteFlow() {
+        deleteError = nil
+        canForceDelete = false
+    }
+
+    /// SCM kaydını ve klasörü kaldırır, ardından config kaydını düşürür.
+    /// Başarısızlıkta kayıt yerinde kalır; hata dialogda gösterilir.
+    @discardableResult
+    public func deleteWorkspace(_ workspace: ProjectWorkspace, force: Bool) async -> Bool {
+        guard !isDeleting, !(isCreating && lastCreated?.path == workspace.path) else { return false }
+        deletingPath = workspace.path
+        deleteError = nil
+        defer { deletingPath = nil }
+        do {
+            try await service.remove(workspace, force: force)
+        } catch {
+            deleteError = error.localizedDescription
+            canForceDelete = !force
+            return false
+        }
+        await forgetRecord(workspace)
+        toasts.show(.success, title: "Workspace deleted", message: workspace.name)
+        return true
+    }
+
+    /// Yalnız kaydı düşürür; disk ve SCM'e dokunmaz (eksik workspace için).
+    public func forgetWorkspace(_ workspace: ProjectWorkspace) async {
+        guard !isDeleting else { return }
+        await forgetRecord(workspace)
+    }
+
+    private func forgetRecord(_ workspace: ProjectWorkspace) async {
+        pendingRecords.removeValue(forKey: workspace.path)
+        if lastCreated?.path == workspace.path, !isCreating { clearForm() }
+        do {
+            try await config.updateConfig { $0.workspaces.removeAll { $0.path == workspace.path } }
+            updateRecords(await config.config().workspaces)
+        } catch {
+            updateRecords(records.filter { $0.path != workspace.path })
+            toasts.show(.error, title: "Workspace record could not be saved", message: error.localizedDescription)
+        }
     }
 
     public func isMissing(_ record: ProjectWorkspace) -> Bool { missingWorkspacePaths.contains(record.path) }

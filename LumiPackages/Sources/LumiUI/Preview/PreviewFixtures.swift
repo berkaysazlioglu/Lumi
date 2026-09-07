@@ -98,6 +98,7 @@ private actor PreviewWorkspaceService: WorkspaceServicing {
         throw WorkspaceFailure("Creation is unavailable in previews.")
     }
     func copyLibrary(sourcePath: String, workspacePath: String) async throws {}
+    func remove(_ workspace: ProjectWorkspace, force: Bool) async throws {}
 }
 
 /// Diskte hiçbir şey yoktur; değerler bellekte tutulur.

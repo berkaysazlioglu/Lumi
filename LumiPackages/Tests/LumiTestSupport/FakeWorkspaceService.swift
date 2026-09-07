@@ -17,6 +17,8 @@ public actor FakeWorkspaceService: WorkspaceServicing {
     private var defaultInspection: Result<WorkspaceSource, Error>?
     private var createOutcome: Result<WorkspaceCreateResult, Error>?
     private var copyOutcome: Result<Void, Error> = .success(())
+    private var removeOutcome: Result<Void, Error> = .success(())
+    private var _removeCalls: [(ProjectWorkspace, Bool)] = []
     private var inspectionDelay: Duration?
     private var createDelay: Duration?
     private var _createCalls: [CreateCall] = []
@@ -27,6 +29,8 @@ public actor FakeWorkspaceService: WorkspaceServicing {
     public func setDefaultInspection(_ result: Result<WorkspaceSource, Error>) { defaultInspection = result }
     public func setCreateOutcome(_ result: Result<WorkspaceCreateResult, Error>) { createOutcome = result }
     public func setCopyOutcome(_ result: Result<Void, Error>) { copyOutcome = result }
+    public func setRemoveOutcome(_ result: Result<Void, Error>) { removeOutcome = result }
+    public var removeCalls: [(ProjectWorkspace, Bool)] { _removeCalls }
     public func setInspectionDelay(_ delay: Duration?) { inspectionDelay = delay }
     public func setCreateDelay(_ delay: Duration?) { createDelay = delay }
     public var createCalls: [CreateCall] { _createCalls }
@@ -46,5 +50,8 @@ public actor FakeWorkspaceService: WorkspaceServicing {
     }
     public func copyLibrary(sourcePath: String, workspacePath: String) async throws {
         _copyCalls.append((sourcePath, workspacePath)); try copyOutcome.get()
+    }
+    public func remove(_ workspace: ProjectWorkspace, force: Bool) async throws {
+        _removeCalls.append((workspace, force)); try removeOutcome.get()
     }
 }

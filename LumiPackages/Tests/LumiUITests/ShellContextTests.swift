@@ -74,6 +74,94 @@ final class ShellContextTests: XCTestCase {
         XCTAssertEqual(shell.dialogs.active, .settings)
     }
 
+    // MARK: - Workspace silme ve ajan odağı (karar 49)
+
+    private let managedWorkspace = ProjectWorkspace(
+        projectPath: "/p", path: "/w/review", name: "Review", branch: "review", scm: .git
+    )
+
+    func testRequestDeletePresentsDialogWithLiveSessionCount() async throws {
+        shell.navigation.openTab(managedWorkspace.path)
+        _ = try await fixture.spawnTerminal(named: "a", in: managedWorkspace.path)
+        _ = try await fixture.spawnTerminal(named: "b", in: managedWorkspace.path)
+        shell.requestDeleteWorkspace(managedWorkspace)
+        XCTAssertEqual(shell.dialogs.deleteWorkspaceDialog, DeleteWorkspaceDialogState(workspace: managedWorkspace, sessionCount: 2))
+        XCTAssertTrue(shell.dialogs.isInputBlockingOverlayOpen)
+        XCTAssertEqual(shell.navigation.openTabs, [managedWorkspace.path], "onaydan önce hiçbir şey kapanmaz")
+        XCTAssertTrue(fixture.terminalService.killedIDs.isEmpty)
+        shell.cancelDeleteWorkspace()
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertEqual(shell.terminals.terminals(in: managedWorkspace.path).count, 2)
+    }
+
+    func testConfirmDeleteClosesTabKillsSessionsAndDropsRecord() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        fixture = await ShellContextFixture.make(workspaces: service)
+        let record = managedWorkspace
+        try await fixture.config.updateConfig { $0.workspaces = [record] }
+        await shell.workspaces.load()
+        shell.navigation.openTab("/other")
+        shell.navigation.openTab(managedWorkspace.path)
+        let meta = try await fixture.spawnTerminal(named: "a", in: managedWorkspace.path)
+        shell.requestDeleteWorkspace(managedWorkspace)
+        await shell.confirmDeleteWorkspace(force: false)
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertEqual(shell.navigation.openTabs, ["/other"])
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/other")
+        XCTAssertEqual(fixture.terminalService.killedIDs, [meta.id])
+        XCTAssertTrue(shell.workspaces.records.isEmpty)
+        let calls = await service.removeCalls
+        XCTAssertEqual(calls.map(\.1), [false])
+    }
+
+    func testFailedDeleteKeepsDialogOpenAndOffersForce() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        await service.setRemoveOutcome(.failure(WorkspaceFailure("dirty")))
+        fixture = await ShellContextFixture.make(workspaces: service)
+        let record = managedWorkspace
+        try await fixture.config.updateConfig { $0.workspaces = [record] }
+        await shell.workspaces.load()
+        shell.requestDeleteWorkspace(managedWorkspace)
+        await shell.confirmDeleteWorkspace(force: false)
+        XCTAssertNotNil(shell.dialogs.deleteWorkspaceDialog, "hata dialogu açık bırakır")
+        XCTAssertEqual(shell.workspaces.deleteError, "dirty")
+        XCTAssertTrue(shell.workspaces.canForceDelete)
+        XCTAssertEqual(shell.workspaces.records, [managedWorkspace])
+        await service.setRemoveOutcome(.success(()))
+        await shell.confirmDeleteWorkspace(force: true)
+        XCTAssertEqual(shell.dialogs.active, .none)
+        let calls = await service.removeCalls
+        XCTAssertEqual(calls.map(\.1), [false, true])
+    }
+
+    func testForgetWorkspaceClosesTabWithoutTouchingSCM() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        fixture = await ShellContextFixture.make(workspaces: service)
+        let record = managedWorkspace
+        try await fixture.config.updateConfig { $0.workspaces = [record] }
+        await shell.workspaces.load()
+        shell.navigation.openTab(managedWorkspace.path)
+        await shell.forgetWorkspace(managedWorkspace)
+        XCTAssertTrue(shell.navigation.openTabs.isEmpty)
+        XCTAssertTrue(shell.workspaces.records.isEmpty)
+        let calls = await service.removeCalls
+        XCTAssertTrue(calls.isEmpty)
+    }
+
+    func testFocusAgentOpensItsTabAndRestoresMinimizedTerminal() async throws {
+        shell.navigation.openTab("/r/alpha")
+        let meta = try await fixture.spawnTerminal(named: "agent", in: "/r/alpha")
+        shell.terminals.minimize(meta.id)
+        shell.navigation.openTab("/r/beta")
+        shell.focusAgent(meta)
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/r/alpha")
+        XCTAssertFalse(shell.terminals.isMinimized(meta.id))
+        XCTAssertEqual(shell.terminals.activeTerminalID, meta.id)
+    }
+
     // MARK: - Close-tab guard'ı (navigation sorar, dialogs sunar)
 
     func testCloseTabWithoutMinimizedTerminalsClosesImmediately() {

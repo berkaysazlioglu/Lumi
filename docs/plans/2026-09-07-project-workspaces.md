@@ -99,8 +99,8 @@ Kaynak: [Unity — Importing assets](https://docs.unity3d.com/cn/2023.1/Manual/I
 ## Kalıcılık ve kabuk entegrasyonu
 
 - Yeni panel ve popup `FeatureAssembly` + panel/overlay descriptor'ları ile eklenir; RootView/PanelHostView/HeaderBarView/ContentRouterView'a iş mantığı eklenmez.
-- Sol yerleşimde Projects üstte, Sessions altta kalır. Mevcut panel sıralaması ve kullanıcı görünürlük tercihleri korunarak yeni panel için tek seferlik migration gerekir.
-- `projects` hiçbir yuvada yoksa sol listenin başına eklenir; zaten varsa yeri değiştirilmez. Sol panel kullanıcı tarafından gizlenmişse zorla açılmaz. Yeni kurulum varsayılanı `[projects, sessions]` olur.
+- Sol yerleşimde Sessions üstte, Projects altta kalır (karar 47 düzeltmesi; ilk taslak tersiydi). Mevcut panel sıralaması ve kullanıcı görünürlük tercihleri korunarak yeni panel için tek seferlik migration gerekir.
+- `projects` hiçbir yuvada yoksa sol listenin başına eklenir; zaten varsa yeri değiştirilmez. Sol panel kullanıcı tarafından gizlenmişse zorla açılmaz. Yeni kurulum varsayılanı `[sessions, projects]` olur.
 - Workspace kayıtları mevcut ConfigCodec deseninde additive alanlarla yazılır; eski config/ui-state anahtarlarının anlamı değiştirilmez.
 - Bootstrap önce proje ve workspace kataloğunu yükler, sonra NavigationStore açık yolları geri yükler. Aksi hâlde projectsRoot dışındaki workspace sekmeleri açılışta düşer.
 - Silinmiş/ulaşılamayan workspace kaydı kullanıcıya eksik olarak gösterilir; otomatik disk silme yapılmaz.
@@ -153,3 +153,8 @@ Git oluşturma gerçek geçici repository'lerle; Plastic metadata kurulu CLI'nin
 ## Sidebar seçimi düzeltmesi (karar 48)
 
 “Eklediğim projeler”, additional paths girdileri anlamına gelmez. Projects `+` topbar'ın aynı repo seçme popup'ını kullanır; kullanıcı keşfedilen repolardan kendi sidebar listesini oluşturur. Seçim `sidebarProjectPaths` olarak bağımsız saklanır; Finder açılmaz, topbar'da açık repo yeniden seçilebilir ve sidebar'a ekleme topbar tab'larını değiştirmez.
+
+## Ek: ajan satırları, sağ tık ve silme (2026-09-07, karar 49)
+
+Codex'in yarım bıraktığı Orca-sadelik işi tamamlandı: checkout satırlarının altında canlı ajanlar durum glifi + kimlik + başlık + kısa zaman ile listelenir; proje/workspace/ajan satırlarına sağ tık menüleri geldi; workspace silme (`Delete Workspace…` → onay → kirli worktree'de `Force Delete`) ve eksik kayıt için `Remove from List` eklendi. Karar 46'daki "silme kapsam dışı" maddesi bu ekle kullanıcı isteğiyle açıldı.
+

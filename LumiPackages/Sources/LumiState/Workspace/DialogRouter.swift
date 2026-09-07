@@ -15,6 +15,18 @@ public struct CloseTabDialogState: Equatable, Sendable {
     }
 }
 
+/// Workspace silme onayının sunum verisi (karar 49).
+public struct DeleteWorkspaceDialogState: Equatable, Sendable {
+    public let workspace: ProjectWorkspace
+    /// Silmeyle birlikte kapanacak canlı terminal sayısı.
+    public let sessionCount: Int
+
+    public init(workspace: ProjectWorkspace, sessionCount: Int) {
+        self.workspace = workspace
+        self.sessionCount = sessionCount
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -30,6 +42,7 @@ public enum ActiveDialog: Equatable, Sendable {
     case settings
     case onboarding
     case closeTab(CloseTabDialogState)
+    case deleteWorkspace(DeleteWorkspaceDialogState)
     case quit(terminalCount: Int)
 
     public var isPresented: Bool { self != .none }
@@ -39,7 +52,8 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab, .quit: true
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab,
+             .deleteWorkspace, .quit: true
         }
     }
 }
@@ -65,6 +79,11 @@ public final class DialogRouter {
 
     public var closeTabDialog: CloseTabDialogState? {
         guard case .closeTab(let state) = active else { return nil }
+        return state
+    }
+
+    public var deleteWorkspaceDialog: DeleteWorkspaceDialogState? {
+        guard case .deleteWorkspace(let state) = active else { return nil }
         return state
     }
 
