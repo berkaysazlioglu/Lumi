@@ -184,7 +184,7 @@ final class PlasticServiceTests: XCTestCase {
         } catch { XCTFail("beklenmeyen hata: \(error)") }
     }
 
-    // MARK: Diff metni (karar 46)
+    // MARK: Diff metni (karar 47)
 
     func testWorkingTreeDiffTextUsesCMCatBaseAndRewritesHeaders() async throws {
         let runner = FakeProcessRunner()

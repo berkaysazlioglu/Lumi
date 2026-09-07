@@ -1,6 +1,6 @@
 import Foundation
 
-/// Commit/checkin mesajı üretim isteği (karar 46): VCS'den bağımsız — Git
+/// Commit/checkin mesajı üretim isteği (karar 47): VCS'den bağımsız — Git
 /// seçili dosyaların çalışma ağacı diff'ini, Plastic yalnız dosya listesini
 /// verir (Plastic'te çalışma alanı diff'i CLI'dan metin olarak alınamaz).
 public struct CommitMessageRequest: Sendable, Equatable {
@@ -27,7 +27,7 @@ public struct CommitMessageRequest: Sendable, Equatable {
     }
 }
 
-/// Commit mesajı üreticisi sınırı (karar 46). **Fırlatan sözleşme:** kullanıcı
+/// Commit mesajı üreticisi sınırı (karar 47). **Fırlatan sözleşme:** kullanıcı
 /// düğmeye bastı; CLI yok / oturum yok / boş yanıt görünür hatadır
 /// (`LumiError.cliNotFound` ya da `.commitMessageGenerationFailed`).
 ///

@@ -49,9 +49,9 @@ public final class ShellContext {
     public let repos: RepoStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
-    /// Plastic SCM panel store'u (karar 45).
+    /// Plastic SCM panel store'u (karar 46).
     public let plastic: PlasticStore
-    /// Commit mesajı üretimi (karar 46) — Git ve Plastic composer'ları paylaşır.
+    /// Commit mesajı üretimi (karar 47) — Git ve Plastic composer'ları paylaşır.
     public let commitAssistant: CommitMessageAssistant
     public let fileViewer: FileViewerStore
     public let settings: SettingsStore
@@ -165,7 +165,7 @@ public final class ShellContext {
         Task { await fileViewer.presentCommit(repoPath: repoPath, commit: commit) }
     }
 
-    /// Karar 46: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.
+    /// Karar 47: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.
     /// Kullanıcı bu arada yazmaya başladıysa yanıt onu EZMEZ.
     public func generateGitCommitMessage(_ repoPath: String) async {
         let draftBefore = git.commitMessage(for: repoPath)

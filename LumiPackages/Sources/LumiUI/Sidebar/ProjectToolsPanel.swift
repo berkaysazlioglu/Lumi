@@ -13,7 +13,7 @@ public struct ProjectToolsPanel: View {
         return shell.repos.capabilities[path]?.isGitRepo ?? shell.repos.repo(at: path)?.isGitRepo ?? false
     }
 
-    /// Karar 45: `.plastic/` kökü Source Control sekmesini Plastic sürümüyle açar.
+    /// Karar 46: `.plastic/` kökü Source Control sekmesini Plastic sürümüyle açar.
     private var isPlasticWorkspace: Bool {
         guard let path = shell.activeRepoPath else { return false }
         return shell.repos.capabilities[path]?.isPlasticWorkspace ?? false
@@ -55,7 +55,7 @@ public struct ProjectToolsPanel: View {
                 case .explorer: ExplorerView(repoPath: path)
                 case .agentHistory: AgentHistoryView(repoPath: path)
                 case .sourceControl:
-                    // Her iki VCS de varsa Git öncelikli (karar 45).
+                    // Her iki VCS de varsa Git öncelikli (karar 46).
                     if isGitRepo {
                         SourceControlView(repoPath: path)
                     } else if isPlasticWorkspace {

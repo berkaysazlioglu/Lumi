@@ -26,7 +26,7 @@ final class GitServiceTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: - Karar 46: ham diff metni
+    // MARK: - Karar 47: ham diff metni
 
     func testWorkingTreeDiffTextCoversTrackedAndUntrackedFiles() async throws {
         try "one\n".write(to: repoDir.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)

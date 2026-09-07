@@ -606,10 +606,10 @@ final class GitStoreBranchSummaryTests: XCTestCase {
     }
 }
 
-/// Karar 46: commit mesajı üretim isteğinin kurulumu.
+/// Karar 47: commit mesajı üretim isteğinin kurulumu.
 @MainActor
 final class GitStoreCommitMessageRequestTests: XCTestCase {
-    // MARK: - Commit mesajı üretimi (karar 46)
+    // MARK: - Commit mesajı üretimi (karar 47)
 
     func testCommitMessageRequestUsesSelectedFilesAndDiffText() async {
         let git = FakeGitService()

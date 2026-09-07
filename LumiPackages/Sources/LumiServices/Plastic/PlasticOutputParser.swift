@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// `cm` CLI çıktılarının saf parse'ı (I/O yok) — karar 45.
+/// `cm` CLI çıktılarının saf parse'ı (I/O yok) — karar 46.
 ///
 /// Girdi biçimleri gerçek `cm 11.0` çıktısından alınmıştır:
 /// - header: `STATUS|2105|sand_out|uncosoft@cloud`

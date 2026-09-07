@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Commit/checkin mesajı alanı (karar 46): çok satırlı metin + sağ altta
+/// Commit/checkin mesajı alanı (karar 47): çok satırlı metin + sağ altta
 /// "Claude ile üret" düğmesi. Git ve Plastic composer'ları aynı bileşeni
 /// kullanır; üretim mantığı bileşende değil, `ShellContext` intent'indedir.
 ///

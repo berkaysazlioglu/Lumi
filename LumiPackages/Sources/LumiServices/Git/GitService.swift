@@ -248,7 +248,7 @@ public struct GitService: GitServicing {
         return UnifiedDiffParser.parse(output.stdout, filePath: file)
     }
 
-    /// Karar 46: tracked dosyalar tek `git diff HEAD -- files` ile; untracked
+    /// Karar 47: tracked dosyalar tek `git diff HEAD -- files` ile; untracked
     /// olanlar (`ls-files --others`) `/dev/null`a karşı ayrı ayrı (`--no-index`
     /// exit 1 = fark var, hata değil). Guard ihlali ya da hata → boş metin.
     public func workingTreeDiffText(repoPath: String, files: [String]) async -> String {

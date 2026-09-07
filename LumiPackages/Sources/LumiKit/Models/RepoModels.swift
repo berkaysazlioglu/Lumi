@@ -35,7 +35,7 @@ public enum RepoEvent: Sendable, Equatable {
 public struct ProjectCapabilities: Sendable, Equatable {
     public let isGitRepo: Bool
     public let isUnityProject: Bool
-    /// Kökte `.plastic/` dizini var (karar 45). Git ile birlikte doğru
+    /// Kökte `.plastic/` dizini var (karar 46). Git ile birlikte doğru
     /// olabilir; Source Control sekmesi o durumda Git'i gösterir.
     public let isPlasticWorkspace: Bool
 

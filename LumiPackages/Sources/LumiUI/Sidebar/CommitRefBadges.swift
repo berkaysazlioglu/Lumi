@@ -8,7 +8,7 @@ struct CommitRefBadges: View {
     let refs: [GitRef]
     /// Rozetin ait olduğu düğümün lane rengi; `isCurrent` ref accent alır.
     let colorIndex: Int
-    /// Rozet metni (karar 45 eki: Plastic `…/parent/current` kısaltması);
+    /// Rozet metni (karar 46 eki: Plastic `…/parent/current` kısaltması);
     /// tooltip her zaman TAM adı gösterir.
     var displayName: (GitRef) -> String = { $0.name }
     /// Verilirse rozet bu genişliği aşamaz ve sığmayan metin rozet içinde

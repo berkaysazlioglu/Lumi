@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Commit/checkin mesajı üretim akışı (karar 46): Git ve Plastic composer'ları
+/// Commit/checkin mesajı üretim akışı (karar 47): Git ve Plastic composer'ları
 /// aynı asistanı kullanır. Store yalnız "uçuşta mı?" durumunu ve hata
 /// raporlamasını taşır; isteğin içeriğini VCS store'u kurar
 /// (`GitStore.commitMessageRequest` / `PlasticStore.checkinMessageRequest`),

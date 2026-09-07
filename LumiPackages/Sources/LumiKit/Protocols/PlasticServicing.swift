@@ -1,11 +1,11 @@
 import Foundation
 
-/// Plastic SCM okuma sınırı (karar 45). Git'in `GitReading`i gibi
+/// Plastic SCM okuma sınırı (karar 46). Git'in `GitReading`i gibi
 /// **sessiz-boş sözleşme**: hata → nil / boş koleksiyon + log. Plastic
 /// çalışma alanı olmayan dizinler ve `cm` kurulu olmayan makineler rutin
 /// durumdur; UI'ya hata sızmaz, panel boş kalır.
 ///
-/// Update/switch/merge kapsam dışıdır (karar 45 — "git gibi gelişmiş
+/// Update/switch/merge kapsam dışıdır (karar 46 — "git gibi gelişmiş
 /// olması gerekmez"). Tüm çağrılar `cm` CLI'sından geçer ve binary
 /// `BinaryLocating` ile çözülür; sabit path yoktur.
 public protocol PlasticReading: Sendable {
@@ -22,7 +22,7 @@ public protocol PlasticReading: Sendable {
     /// yoktur: `cm find`in tarih literali locale'e bağlıdır; pencereyi store
     /// uygular.
     func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset]
-    /// Karar 46: seçili öğelerin unified diff metni (commit mesajı üretimine
+    /// Karar 47: seçili öğelerin unified diff metni (commit mesajı üretimine
     /// girdi). Değişen dosya için taban `cm cat "rev:<path>#cs:<changesetID>"`
     /// ile alınıp yerel dosyayla `diff -u` yapılır; eklenen/private dosya
     /// `/dev/null`a karşı tamamı-ekleme, silinen dosya tek satır notla gelir.
@@ -30,7 +30,7 @@ public protocol PlasticReading: Sendable {
     func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String
 }
 
-/// **Yazma sözleşmesi** (karar 45 eki): çalışma alanını değiştiren iki
+/// **Yazma sözleşmesi** (karar 46 eki): çalışma alanını değiştiren iki
 /// operasyon; başarısızlık her zaman görünür hatadır (`LumiError.plasticFailed`).
 /// Dosya path'leri çalışma alanı köküne göre relative'dir ve kök-içi
 /// doğrulamasından geçer (karar 11).

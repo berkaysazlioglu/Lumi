@@ -155,7 +155,7 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
         branchSummaryToReturn
     }
 
-    /// `workingTreeDiffText` dönüşü (karar 46).
+    /// `workingTreeDiffText` dönüşü (karar 47).
     public var diffTextToReturn = ""
     public private(set) var diffTextCalls: [[String]] = []
 

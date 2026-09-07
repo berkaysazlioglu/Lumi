@@ -115,7 +115,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
                 await self.services.repo.watchFileTree(repoPath: current)
                 await self.repoStore.loadFileTree(current)
                 await self.gitStore.loadAll(current)
-                // Karar 45: `cm` yalnız `.plastic/` tanınan dizinde koşar.
+                // Karar 46: `cm` yalnız `.plastic/` tanınan dizinde koşar.
                 if self.isPlasticWorkspace(current) {
                     await self.plasticStore.loadAll(current)
                 }

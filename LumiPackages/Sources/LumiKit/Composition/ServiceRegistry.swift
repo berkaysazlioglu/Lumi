@@ -16,9 +16,9 @@ public protocol ServiceRegistry: AnyObject {
     var system: any SystemServicing { get }
     var repo: any RepoServicing { get }
     var git: any GitServicing { get }
-    /// Plastic SCM yüzeyi (karar 45): okuma + checkin/undo.
+    /// Plastic SCM yüzeyi (karar 46): okuma + checkin/undo.
     var plastic: any PlasticServicing { get }
-    /// Commit/checkin mesajı üreticisi (karar 46) — `claude -p` arka planda.
+    /// Commit/checkin mesajı üreticisi (karar 47) — `claude -p` arka planda.
     var commitMessages: any CommitMessageGenerating { get }
     var agentHistory: any AgentHistoryReading { get }
 

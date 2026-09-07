@@ -1,7 +1,7 @@
 import Foundation
 
 /// Plastic changeset'lerini `CommitGraph`in beklediği `GitCommit` biçimine
-/// çevirir (karar 45 eki) — lane/renk hesabı ve `CommitGraphLaneCanvas`
+/// çevirir (karar 46 eki) — lane/renk hesabı ve `CommitGraphLaneCanvas`
 /// aynen yeniden kullanılır; ikinci bir graph algoritması yazılmaz.
 ///
 /// - `hash` = changeset id'si (metin), `parentHashes` = tek parent (Plastic

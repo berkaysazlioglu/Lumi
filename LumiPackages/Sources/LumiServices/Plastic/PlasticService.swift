@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Plastic SCM `cm` CLI servisi (karar 45). Git gibi CLI yaklaşımı: kullanıcının
+/// Plastic SCM `cm` CLI servisi (karar 46). Git gibi CLI yaklaşımı: kullanıcının
 /// `cm` kimlik/sunucu yapılandırmasıyla otomatik uyumlu, Plastic'in .NET
 /// kütüphanelerine bağımlılık yok.
 ///
@@ -79,7 +79,7 @@ public actor PlasticService: PlasticServicing {
         return PlasticOutputParser.parseChangesets(stdout)
     }
 
-    // MARK: - Diff metni (karar 46)
+    // MARK: - Diff metni (karar 47)
 
     static let diffExecutable = "/usr/bin/diff"
 

@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Plastic SCM panel cache'leri + checkin akışı (karar 45): çalışma alanı
+/// Plastic SCM panel cache'leri + checkin akışı (karar 46): çalışma alanı
 /// başlığı, değişiklik listesi/seçimi, son changeset'ler.
 ///
 /// Tazeleme: aktif repo değişiminde `loadAll`, FSEvents köprüsünde yalnız
@@ -140,7 +140,7 @@ public final class PlasticStore {
 
     // MARK: - Checkin
 
-    /// Karar 46: seçili öğeler + çalışma alanı changeset'ine göre diff metni
+    /// Karar 47: seçili öğeler + çalışma alanı changeset'ine göre diff metni
     /// (`cm cat` tabanı ↔ yerel dosya). Başlık bilgisi yoksa yalnız liste gider.
     public func checkinMessageRequest(_ workspacePath: String) async -> CommitMessageRequest {
         let selected = selectedFiles[workspacePath] ?? []

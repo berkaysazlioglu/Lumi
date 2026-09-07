@@ -1,6 +1,6 @@
 import Foundation
 
-/// Plastic SCM çalışma alanının başlık bağlamı (karar 45): `cm status
+/// Plastic SCM çalışma alanının başlık bağlamı (karar 46): `cm status
 /// --header` çıktısındaki changeset + repo@server ve `cm showselector`'daki
 /// branch. Branch, seçici yalnız changeset'e sabitlenmişse nil olabilir.
 public struct PlasticWorkspaceInfo: Sendable, Equatable {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Plastic branch adlarının kısa gösterimi (karar 45 eki). Plastic branch'leri
+/// Plastic branch adlarının kısa gösterimi (karar 46 eki). Plastic branch'leri
 /// hiyerarşiktir (`/main/release/hotfix-ads`) ve dar sidebar'da tam ad yorumu
 /// eziyor. Gösterim son İKİ bileşendir; kırpılmışsa başa `…/` gelir:
 /// `/main/release/hotfix-ads` → `…/release/hotfix-ads`, `/main/release` ve

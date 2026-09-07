@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Commit mesajını `claude -p` ile üretir (karar 46). `SessionStarterService`
+/// Commit mesajını `claude -p` ile üretir (karar 47). `SessionStarterService`
 /// deseni: binary `BinaryLocating` ile çözülür, doğrudan spawn edilir —
 /// Lumi'nin terminal oturumlarına ve kullanıcının token kotası dışında hiçbir
 /// şeye dokunmaz. I/O ağırlıklı ve binary yolunu saklar → `actor`.

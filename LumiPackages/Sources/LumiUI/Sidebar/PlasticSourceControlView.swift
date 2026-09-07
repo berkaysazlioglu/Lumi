@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Source Control sekmesinin Plastic SCM sürümü (karar 45).
+/// Source Control sekmesinin Plastic SCM sürümü (karar 46).
 ///
 /// Başlık: branch + `cs:N` + repo@server + ↻. Gövde: Changes | History.
 /// Changes: mesaj kutusu + Check in butonu, seçim kutulu dosya listesi

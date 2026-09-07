@@ -332,7 +332,7 @@ Orca'nın 24px alt barı Lumi'ye taşındı; top bar'daki Settings dişlisi alt 
 - **Binary dosya önizlemesi (crash düzeltmesi):** explorer'da bir video dosyasına çift tıklamak dosyayı UTF-8 diye okuyup NSTextView'a basıyor ve uygulamayı çökertiyordu. `FilePreviewKind.binary` (video/ses/arşiv/font/belge/derlenmiş çıktı uzantıları) eklendi: view modunda dosya **hiç okunmaz**, `ViewerContent.unsupported(reason:)` ile "önizleme yok" yer tutucusu + "Reveal in Finder" gösterilir — bu bir hata değildir, toast düşmez (karar 5 hata yolu yalnız gerçek okuma hataları içindir). İkinci savunma hattı `GitService.readFile`: ilk 8 KB'de NUL varsa "binary" hatası, 8 MB üstü "too large" hatası (bunlar `LumiError` → toast). Diff yollarına dokunulmadı; git binary'yi kendi işaretler (`UnifiedDiff.isBinary`).
 
 
-### 45. Plastic SCM Source Control desteği (2026-09-07)
+### 46. Plastic SCM Source Control desteği (2026-09-07)
 Unity projelerinin çoğu Plastic SCM (Unity Version Control) çalışma alanıdır ve Git olmadığı için Source Control sekmesi hiç görünmüyordu. Sekme artık `.plastic/` kökü tanınan dizinlerde de açılır; kapsam bilinçli olarak **hafif** tutulur: checkin + tek öğe undo + son 7 günün lane graph'ı vardır; diff, update/switch/merge, shelve, PR hedeflenmez.
 
 - **Algı:** `ProjectCapabilities.isPlasticWorkspace` yalnız `<repo>/.plastic` dizininin varlığına bakar; `cm` süreci açılmaz. `ProjectToolsTab.available(isGitRepo:isPlasticWorkspace:)` — `hasSourceControl` ikisinin OR'udur. Bir dizin hem Git hem Plastic ise **Git öncelikli** gösterilir.
@@ -343,7 +343,7 @@ Unity projelerinin çoğu Plastic SCM (Unity Version Control) çalışma alanıd
 - **Persistence değişmez;** yeni servis `ServiceRegistry.plastic` (`PlasticServicing = PlasticReading & PlasticWriting`) + `LiveServiceRegistry`'de tek satır, fake'i `FakePlasticService`, store `ShellContext.plastic` (`PlasticStore`: cache + seçim + checkin akışı, hatalar `ToastStore.reporting`).
 
 
-### 46. Composer'da Claude ile commit/checkin mesajı üretimi (2026-09-07)
+### 47. Composer'da Claude ile commit/checkin mesajı üretimi (2026-09-07)
 Git ve Plastic mesaj alanının sağ altında ✨ düğmesi: seçili değişikliklerden arka planda tek satırlık, **İngilizce**, davranışı/içeriği anlatan bir mesaj üretir ve alana yazar.
 
 - **Agent SDK yerine `claude` CLI alt süreci — bilinçli karar.** Agent SDK yalnız Python/TypeScript kütüphanesidir; dokümantasyonu diğer dillere açıkça "CLI'ı `-p --output-format json` ile alt süreç olarak koştur" der ve SDK'nın kendisi de aynı CLI'ı spawn eder — Swift'ten SDK'ya gitmek Node çalışma zamanı + global npm paketi bağımlılığı eklerdi, yetenek katmazdı. Kimlik doğrulama iki yolda da aynıdır: CLI'ın keychain'deki oturumu (API anahtarı istenmez). Not: SDK dokümanı, üçüncü taraf ürünlerin claude.ai oturumuyla çalışmasının ön onay gerektirdiğini söyler; Lumi kullanıcının kendi Claude Code kurulumunu yöneten kişisel araç olduğu için `SessionStarterService` ile aynı kalıp sürdürülür.

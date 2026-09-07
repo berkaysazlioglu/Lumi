@@ -7,9 +7,9 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case spawnFailed(reason: String)
     case terminalNotFound(TerminalID)
     case gitFailed(operation: String, detail: String)
-    /// Plastic SCM `cm` yazma operasyonu (checkin/undo) başarısız (karar 45).
+    /// Plastic SCM `cm` yazma operasyonu (checkin/undo) başarısız (karar 46).
     case plasticFailed(operation: String, detail: String)
-    /// Commit mesajı üretimi (`claude -p`) başarısız ya da boş yanıt (karar 46).
+    /// Commit mesajı üretimi (`claude -p`) başarısız ya da boş yanıt (karar 47).
     case commitMessageGenerationFailed(detail: String)
     case pathOutsideRepo(path: String)
     case fileOperationFailed(path: String, detail: String)

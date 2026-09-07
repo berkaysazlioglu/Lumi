@@ -241,7 +241,7 @@ public final class GitStore {
             .isEmpty
     }
 
-    // MARK: - Commit mesajı üretimi (karar 46)
+    // MARK: - Commit mesajı üretimi (karar 47)
 
     /// Seçili dosyalar + HEAD'e göre diff metni. Seçim boşsa diff okunmaz.
     public func commitMessageRequest(_ repoPath: String) async -> CommitMessageRequest {
