@@ -9,7 +9,7 @@ final class PanelLayoutTests: XCTestCase {
 
     func testDefaultsMatchTodaysShell() {
         let layout = PanelLayout.defaults
-        XCTAssertEqual(layout.items(in: .left), [.sessions])
+        XCTAssertEqual(layout.items(in: .left), [.projects, .sessions])
         XCTAssertEqual(layout.items(in: .right), [.projectTools])
         XCTAssertEqual(layout.items(in: .bottom), [])
         XCTAssertEqual(layout.visibleSlots, [.left], "sol açık, sağ kapalı (bugünkü default)")
@@ -58,7 +58,7 @@ final class PanelLayoutTests: XCTestCase {
 
     func testMovingItemLeftToRightRemovesItFromSource() {
         let moved = PanelLayout.defaults.moving(.sessions, to: .right, index: 0)
-        XCTAssertEqual(moved.items(in: .left), [])
+        XCTAssertEqual(moved.items(in: .left), [.projects])
         XCTAssertEqual(moved.items(in: .right), [.sessions, .projectTools])
         XCTAssertEqual(moved.slot(of: .sessions), .right)
     }
@@ -78,14 +78,14 @@ final class PanelLayoutTests: XCTestCase {
     func testMovingWithinSameSlotReorders() {
         let layout = PanelLayout.defaults.moving(.projectTools, to: .left)
         let moved = layout.moving(.projectTools, to: .left, index: 0)
-        XCTAssertEqual(moved.items(in: .left), [.projectTools, .sessions])
+        XCTAssertEqual(moved.items(in: .left), [.projectTools, .projects, .sessions])
     }
 
     func testMovingNeverDuplicatesAcrossSlots() {
         let moved = PanelLayout.defaults
             .moving(.sessions, to: .right)
             .moving(.sessions, to: .bottom)
-        XCTAssertEqual(moved.items(in: .left), [])
+        XCTAssertEqual(moved.items(in: .left), [.projects])
         XCTAssertEqual(moved.items(in: .right), [.projectTools])
         XCTAssertEqual(moved.items(in: .bottom), [.sessions])
     }

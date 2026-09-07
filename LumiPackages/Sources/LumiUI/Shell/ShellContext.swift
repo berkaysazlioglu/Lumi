@@ -47,6 +47,7 @@ public final class ShellContext {
     public let dialogs: DialogRouter
     public let terminals: TerminalListStore
     public let repos: RepoStore
+    public let workspaces: ProjectWorkspaceStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
     public let fileViewer: FileViewerStore
@@ -73,6 +74,7 @@ public final class ShellContext {
         dialogs: DialogRouter,
         terminals: TerminalListStore,
         repos: RepoStore,
+        workspaces: ProjectWorkspaceStore,
         git: GitStore,
         agentHistory: AgentHistoryStore,
         fileViewer: FileViewerStore,
@@ -93,6 +95,7 @@ public final class ShellContext {
         self.dialogs = dialogs
         self.terminals = terminals
         self.repos = repos
+        self.workspaces = workspaces
         self.git = git
         self.agentHistory = agentHistory
         self.fileViewer = fileViewer
@@ -117,6 +120,21 @@ public final class ShellContext {
     public var isFocusMode: Bool { layout.isFocusMode }
 
     // MARK: - Koordinasyon intent'leri (birden fazla store'a dokunanlar)
+
+    public func openCreatedWorkspace(_ workspace: ProjectWorkspace, agent: WorkspaceAgent) {
+        dialogs.dismiss()
+        navigation.openTab(workspace.path)
+        if agent != .none {
+            terminals.spawn(in: workspace.path, command: agent.command, task: workspace.name)
+        }
+    }
+
+    public func addProject() async {
+        guard let path = await actions.chooseFolder() else { return }
+        if await workspaces.addProject(path: path) {
+            navigation.openTab(path)
+        }
+    }
 
     /// Close-tab guard'ı: minimize edilmiş terminali olan tab dialog'suz
     /// kapanmaz (navigation sorar, dialogs sunar).

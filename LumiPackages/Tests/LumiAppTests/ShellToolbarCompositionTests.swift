@@ -137,12 +137,14 @@ private struct ShellFixture {
         )
         let git = FakeGitService()
         let toasts = shared.toasts
+        let repos = RepoStore(service: FakeRepoService())
         let context = ShellContext(
             navigation: shared.navigation,
             layout: shared.layout,
             dialogs: shared.dialogs,
             terminals: shared.terminals,
-            repos: RepoStore(service: FakeRepoService()),
+            repos: repos,
+            workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts),
             git: GitStore(git: git, toasts: toasts),
             agentHistory: AgentHistoryStore(service: FakeAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: toasts),

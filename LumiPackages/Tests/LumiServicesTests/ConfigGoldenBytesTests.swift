@@ -158,7 +158,10 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "usageIndicators" : {
         "claude" : false,
         "codex" : true
-      }
+      },
+      "workspaces" : [
+
+      ]
     }
     """
     private static let expectedUIStateJSON = """
@@ -181,6 +184,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
           ],
           "left" : [
+            "projects",
             "sessions"
           ],
           "right" : [

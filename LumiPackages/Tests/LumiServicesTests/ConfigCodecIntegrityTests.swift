@@ -157,7 +157,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 15),
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
-        agentHooksEnabled: false
+        agentHooksEnabled: false,
+        workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)]
     )
 
     private static let fullyPopulatedUIState = UIState(

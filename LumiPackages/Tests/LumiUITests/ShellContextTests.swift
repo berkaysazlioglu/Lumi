@@ -116,6 +116,7 @@ final class ShellContextTests: XCTestCase {
             dialogs: context.dialogs,
             terminals: context.terminals,
             repos: context.repos,
+            workspaces: context.workspaces,
             git: context.git,
             agentHistory: context.agentHistory,
             fileViewer: context.fileViewer,

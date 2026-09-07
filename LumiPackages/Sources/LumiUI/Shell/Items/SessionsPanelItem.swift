@@ -37,7 +37,7 @@ public struct SessionsPanelItem: View {
             }
         }
         .padding(Theme.Spacing.lg)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(alignment: .top)
     }
 
     private func sessionList(_ repoTerminals: [TerminalMeta]) -> some View {

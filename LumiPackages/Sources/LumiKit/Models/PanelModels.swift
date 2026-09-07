@@ -30,6 +30,7 @@ public struct PanelItemID: RawRepresentable, Hashable, Sendable, Codable {
 }
 
 public extension PanelItemID {
+    static let projects = PanelItemID("projects")
     static let projectTools = PanelItemID("projectTools")
 
     /// Aktif repo'nun terminal oturumları listesi.
@@ -89,7 +90,7 @@ public struct PanelLayout: Equatable, Sendable {
     /// Sol = Sessions, sağ = sekmeli Project Tools; sol açık, sağ kapalı.
     public static let defaults = PanelLayout(
         slots: [
-            .left: [.sessions],
+            .left: [.projects, .sessions],
             .right: [.projectTools],
             .bottom: [],
         ],

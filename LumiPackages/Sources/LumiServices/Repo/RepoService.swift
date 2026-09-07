@@ -16,6 +16,7 @@ public actor RepoService: RepoServicing {
     private let broadcaster = EventBroadcaster<RepoEvent>()
     private let watchQueue = DispatchQueue(label: "lumi.repo.watch", qos: .utility)
     private let watchDebounce: TimeInterval
+    private let managedWorkspaceRoot: String
 
     private var projectsRoot = ""
     private var additionalPaths: [AdditionalPath] = []
@@ -24,10 +25,12 @@ public actor RepoService: RepoServicing {
 
     public init(
         watchDebounce: TimeInterval = RepoService.rootWatchDebounce,
-        runner: any ProcessRunning = SystemProcessRunner()
+        runner: any ProcessRunning = SystemProcessRunner(),
+        managedWorkspaceRoot: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("lumi/workspaces")
     ) {
         self.watchDebounce = watchDebounce
         self.runner = runner
+        self.managedWorkspaceRoot = managedWorkspaceRoot.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     public func setRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) {
@@ -144,12 +147,14 @@ public actor RepoService: RepoServicing {
     // MARK: - Keşif
 
     private func scanRoot(_ root: String, source: RepoSource) -> [Repo] {
+        guard !isManagedWorkspacePath(root) else { return [] }
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root) else {
             return [] // var olmayan kök sessizce atlanır
         }
         return entries.sorted().compactMap { name in
             guard !name.hasPrefix(".") else { return nil }
             let fullPath = root + "/" + name
+            guard !isManagedWorkspacePath(fullPath) else { return nil }
             guard isDirectory(fullPath) else { return nil }
             return Repo(
                 name: name,
@@ -158,6 +163,11 @@ public actor RepoService: RepoServicing {
                 source: source
             )
         }
+    }
+
+    private func isManagedWorkspacePath(_ path: String) -> Bool {
+        let canonical = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
+        return canonical == managedWorkspaceRoot || canonical.hasPrefix(managedWorkspaceRoot + "/")
     }
 
     /// Yalnız baştaki `~` home'a açılır; `~user` desteklenmez (Electron paritesi).

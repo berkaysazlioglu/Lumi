@@ -37,6 +37,7 @@ final class DialogRouterTests: XCTestCase {
     func testEveryDialogBlocksTerminalInput() {
         let dialogs: [ActiveDialog] = [
             .repoSelector,
+            .createWorkspace(projectPath: "/r"),
             .settings,
             .onboarding,
             .closeTab(CloseTabDialogState(repoPath: "/r", repoName: "r", minimizedCount: 1)),

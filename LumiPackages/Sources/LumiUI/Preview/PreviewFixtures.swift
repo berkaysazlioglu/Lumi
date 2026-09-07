@@ -26,12 +26,14 @@ public extension ShellContext {
         let viewProvider = PreviewTerminalViewProvider()
         let git = PreviewGitService()
         let shared = SharedStores.make(config: config, terminal: terminal, viewProvider: viewProvider)
+        let repos = RepoStore(service: PreviewRepoService())
         let context = ShellContext(
             navigation: shared.navigation,
             layout: shared.layout,
             dialogs: shared.dialogs,
             terminals: shared.terminals,
-            repos: RepoStore(service: PreviewRepoService()),
+            repos: repos,
+            workspaces: ProjectWorkspaceStore(service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts),
             git: GitStore(git: git, toasts: shared.toasts),
             agentHistory: AgentHistoryStore(service: PreviewAgentHistoryService()),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
@@ -86,6 +88,17 @@ struct SettingsTabPreview: View {
 }
 
 // MARK: - Minimal in-module fake'ler
+
+private actor PreviewWorkspaceService: WorkspaceServicing {
+    func inspect(project: Repo) async throws -> WorkspaceSource {
+        WorkspaceSource(projectPath: project.path, scm: .git, branch: "main", revision: "abc123",
+                        destinationDirectory: "/Users/preview/lumi/workspaces/\(project.name)")
+    }
+    func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
+        throw WorkspaceFailure("Creation is unavailable in previews.")
+    }
+    func copyLibrary(sourcePath: String, workspacePath: String) async throws {}
+}
 
 /// Diskte hiçbir şey yoktur; değerler bellekte tutulur.
 private actor PreviewConfigService: ConfigServicing {

@@ -43,6 +43,7 @@ enum AppConfigCodec {
         if let value = JSONValue.bool(dict["agentHooksEnabled"]) {
             config.agentHooksEnabled = value
         }
+        config.workspaces = ProjectWorkspaceCodec.decodeList(dict["workspaces"])
         return config
     }
 
@@ -63,6 +64,7 @@ enum AppConfigCodec {
             "usageIndicators": UsageIndicatorsCodec.overlay(config.usageIndicators),
             "computerAwakeMode": config.computerAwakeMode.rawValue,
             "agentHooksEnabled": config.agentHooksEnabled,
+            "workspaces": ProjectWorkspaceCodec.overlayList(config.workspaces),
         ]
     }
 

@@ -220,7 +220,7 @@ Enjeksiyon tek noktadadır: `EnvironmentValues.shell` (opsiyonel) + `@Shell` pro
 
 ### 7.2 Panel yuvaları (K33/K34)
 
-**Yuva sayısı kapalı, öğe kümesi açık.** `LumiKit.PanelSlot` = `left` / `right` / `bottom` (bir pencere kabuğunun coğrafyası); `PanelItemID` string id'dir ve kayıtlı öğeler bugün `sessions` ve `projectTools`'tur (karar 39). Eski `fileTree`, `gitCommits`, `gitChanges` kimlikleri kayıtlı değildir; eski yerleşimlerden sessizce atlanırlar.
+**Yuva sayısı kapalı, öğe kümesi açık.** `LumiKit.PanelSlot` = `left` / `right` / `bottom` (bir pencere kabuğunun coğrafyası); `PanelItemID` string id'dir ve kayıtlı öğeler bugün `projects`, `sessions` ve `projectTools`'tur (kararlar 39, 46). Eski `fileTree`, `gitCommits`, `gitChanges` kimlikleri kayıtlı değildir; eski yerleşimlerden sessizce atlanırlar.
 
 `PanelLayout` **değişmezdir** — `slots: [PanelSlot: [PanelItemID]]`, `visibleSlots: Set<PanelSlot>`, `widths: [PanelSlot: Double]`; her mutasyon (`settingVisible`, `togglingVisible`, `settingWidth`, `moving(_:to:index:)`) **yeni bir değer** döndürür. Genişlik `minWidth 180 … maxWidth 640` aralığına kırpılır, `defaultWidth = 280`. Varsayılan yerleşim: sol = `sessions` (açık), sağ = `projectTools` (kapalı). `projectTools` üstte Explorer / Agent History / yalnız Git projesinde Source Control sekmeleri sunar. Source Control'ün History sekmesi tek `git log HEAD --topo-order` sonucundan lane'li bir commit graph'ı çizer (`CommitGraph` + `CommitGraphLaneCanvas`, karar 40); başlıktaki Create PR butonu GitHub remote'lu ve default branch dışındaki branch'lerde `gh pr create --web` komutunu yeni bir terminal oturumunda koşar. Unity projelerinde Explorer isteğe bağlı yalnız Assets içeriğini gösterir ve `.meta` dosyalarını gizler.
 
@@ -346,3 +346,9 @@ Katkı vermeyen assembly protokolü hiç uygulamaz. `ShellComposition.makeRegist
 4. **Komut gerekiyorsa** `AppCommands.all`'a bir satır + `MenuActionDispatcher`'a bir `register` (menü ve Shortcuts tablosu otomatik türer, §2).
 5. **Assembly'yi listeye ekle:** `AppComposition.live` içinde `assemblies` dizisine (ve kabuğa katkı veriyorsa `contributors` dizisine) adını yaz. Kabuk dosyalarının (`RootView`, `AppShellView`, `HeaderBarView`, `PanelHostView`, `ContentRouterView`, `OverlayHost`, `AppDelegate`) hiçbirine dokunulmaz.
 6. **Testi saf tarafta yaz:** registry çözümlemesi (`resolved`/`items(in:)`/`resolve`) view render etmeden test edilir; route terminal yüzeyine dokunuyorsa geçiş sözleşmesini (§7.3) de kilitle.
+
+## Projects ve yerel workspace oluşturma (karar 46)
+
+`RepoFeatureAssembly` Projects paneli ve `createWorkspace` overlay descriptor'ını kaydeder; generic shell değişmez. `ProjectWorkspaceStore` inspection generation, form, oluşturma kilidi, kayıtlar ve Library/config kurtarma durumlarını yönetir. `ProjectsPanel` yalnız state gösterir; dosya varlığı kontrolleri UI dışında store'da yapılır. `CreateWorkspaceOverlay` pencere boyuna göre kayar, Name odağı alır, oluşturma sürerken yeniden oluşturma/dismiss engellenir. Tamamlanınca `ShellContext.openCreatedWorkspace` hedef yolunu açar ve seçilen ajanı o yolda başlatır.
+
+Workspace kayıtları repo keşfinden sonra, navigation restore'dan önce yüklenir. `RepoStore` keşfedilen projeler ve kayıtlı workspace'leri path bazında birleştirir; sidebar workspace'i tekrar üst seviye proje olarak göstermez. Sessions etkin workspace'e ait mevcut listeyi korur. Sidebar hiyerarşisi yalnız görseldir; fiziksel kaynak `~/lumi/workspaces` altındadır.

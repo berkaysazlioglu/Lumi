@@ -16,6 +16,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let config: any ConfigServicing
     let system: any SystemServicing
     let repo: any RepoServicing
+    let workspaces: any WorkspaceServicing
     let agentHistory: any AgentHistoryReading
     let git: any GitServicing
     let terminal: any TerminalServicing
@@ -49,6 +50,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         let allowedRoots: @Sendable () async -> [String] = {
             let current = await configService.config()
             return [current.projectsRoot] + current.additionalPaths.map(\.path)
+                + current.workspaces.map(\.path)
         }
         system = SystemService(
             checks: SystemService.defaultChecks(smokeTester: PTYSmokeTester()),
@@ -58,6 +60,7 @@ final class LiveServiceRegistry: ServiceRegistry {
             folderChooser: FolderChooser()
         )
         repo = RepoService()
+        workspaces = WorkspaceService()
         git = GitService()
         agentHistory = AgentHistoryService()
         highlighter = HighlightrEngine(style: HighlightrStyle(

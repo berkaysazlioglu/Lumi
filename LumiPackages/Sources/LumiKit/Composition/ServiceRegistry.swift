@@ -15,6 +15,7 @@ public protocol ServiceRegistry: AnyObject {
     var config: any ConfigServicing { get }
     var system: any SystemServicing { get }
     var repo: any RepoServicing { get }
+    var workspaces: any WorkspaceServicing { get }
     var git: any GitServicing { get }
     var agentHistory: any AgentHistoryReading { get }
 

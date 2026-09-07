@@ -93,6 +93,10 @@ public final class LayoutStore {
             leftOpen: state.leftSidebarOpen,
             rightOpen: state.rightSidebarOpen
         )
+        if panelLayout.slot(of: .projects) == nil {
+            panelLayout = panelLayout.moving(.projects, to: .left, index: 0)
+            persist()
+        }
     }
 
     // MARK: - Focus mode

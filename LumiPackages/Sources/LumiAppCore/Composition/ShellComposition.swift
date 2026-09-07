@@ -46,6 +46,7 @@ struct ShellComposition {
             dialogs: shared.dialogs,
             terminals: shared.terminals,
             repos: repo.repoStore,
+            workspaces: repo.workspaceStore,
             git: repo.gitStore,
             agentHistory: repo.agentHistory,
             fileViewer: repo.fileViewer,

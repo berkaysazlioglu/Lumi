@@ -13,6 +13,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var config: any ConfigServicing
     public var system: any SystemServicing
     public var repo: any RepoServicing
+    public var workspaces: any WorkspaceServicing = FakeWorkspaceService()
     public var agentHistory: any AgentHistoryReading = FakeAgentHistoryService()
     public var git: any GitServicing
     public var terminal: any TerminalServicing
