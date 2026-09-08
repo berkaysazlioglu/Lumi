@@ -134,6 +134,21 @@ public final class PlasticStore {
         selectedFiles.replace(current.count == all.count ? [] : all, in: workspacePath)
     }
 
+    /// Grup başlığı kutusu: grup tamamen seçiliyse hepsi kalkar, aksi halde
+    /// (kısmi/boş) hepsi seçilir. Diğer grupların seçimi değişmez.
+    public func toggleSelection(_ workspacePath: String, paths: [String]) {
+        reposWithUserSelection.insert(workspacePath)
+        var current = selectedFiles[workspacePath] ?? []
+        let set = Set(paths)
+        if set.isSubset(of: current) { current.subtract(set) } else { current.formUnion(set) }
+        selectedFiles.replace(current, in: workspacePath)
+    }
+
+    /// Changes listesinin gruplu görünümü (arama dahil).
+    public func changeGroups(_ workspacePath: String, query: String = "") -> [PlasticChangeGroup] {
+        PlasticChangeGroup.group(changes[workspacePath] ?? [], selected: selectedFiles[workspacePath] ?? [], query: query)
+    }
+
     public func isSelected(_ workspacePath: String, path: String) -> Bool {
         selectedFiles.contains(path, in: workspacePath)
     }
@@ -190,11 +205,32 @@ public final class PlasticStore {
         }
     }
 
-    /// Tek öğenin yerel değişikliğini atar; başarıda yalnız durum tazelenir
-    /// (changeset listesi değişmez).
-    public func undo(_ workspacePath: String, path: String) async {
+    /// Verilen öğelerin yerel değişikliğini tek `cm undo` ile atar; başarıda
+    /// yalnız durum tazelenir (changeset listesi değişmez). Private öğeler
+    /// `cm undo` için anlamsızdır ve çağrıdan düşer.
+    public func undo(_ workspacePath: String, paths: [String]) async {
+        let untracked = Set((changes[workspacePath] ?? []).filter { $0.status == .untracked }.map(\.path))
+        let files = paths.filter { !untracked.contains($0) }.sorted()
+        guard !files.isEmpty else { return }
         let succeeded = await toasts.reporting {
-            try await self.service.undo(workspacePath: workspacePath, files: [path])
+            try await self.service.undo(workspacePath: workspacePath, files: files)
+        }
+        if succeeded { await refreshStatus(workspacePath) }
+    }
+
+    public func undo(_ workspacePath: String, path: String) async {
+        await undo(workspacePath, paths: [path])
+    }
+
+    /// Seçili (işaretli) öğelerin tümünü geri alır.
+    public func undoSelected(_ workspacePath: String) async {
+        await undo(workspacePath, paths: Array(selectedFiles[workspacePath] ?? []))
+    }
+
+    /// İçeriği değişmemiş checkout'ları çalışma alanı genelinde geri alır.
+    public func undoUnchanged(_ workspacePath: String) async {
+        let succeeded = await toasts.reporting {
+            try await self.service.undoUnchanged(workspacePath: workspacePath)
         }
         if succeeded { await refreshStatus(workspacePath) }
     }

@@ -216,4 +216,68 @@ final class PlasticStoreTests: XCTestCase {
         let calls = await service.diffTextCalls
         XCTAssertTrue(calls.isEmpty)
     }
+
+    // MARK: Grup seçimi + toplu undo
+
+    func testToggleSelectionSelectsWholeGroupThenClearsIt() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "a", status: .modified), PlasticFileChange(path: "b", status: .modified), PlasticFileChange(path: "c", status: .added)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+        store.toggleSelectAll(path)  // hepsi kalkar
+
+        store.toggleSelection(path, paths: ["a", "b"])
+        XCTAssertEqual(store.selectedFiles[path], ["a", "b"], "kısmi/boş → grup tamamen seçilir")
+        store.toggleFile(path, path: "b")
+        store.toggleSelection(path, paths: ["a", "b"])
+        XCTAssertEqual(store.selectedFiles[path], ["a", "b"], "kısmi seçim tamamlanır, kaldırılmaz")
+        store.toggleSelection(path, paths: ["a", "b"])
+        XCTAssertEqual(store.selectedFiles[path], [], "tam seçili grup boşalır; diğer gruplar (c) etkilenmez")
+
+        let groups = store.changeGroups(path)
+        XCTAssertEqual(groups.map(\.kind), [.changed, .addedAndPrivate])
+        XCTAssertEqual(store.changeGroups(path, query: "c").map(\.kind), [.addedAndPrivate])
+    }
+
+    func testUndoSelectedSendsOneCommandAndSkipsPrivateItems() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "b", status: .modified), PlasticFileChange(path: "a", status: .renamed), PlasticFileChange(path: "p", status: .untracked)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+
+        await store.undoSelected(path)
+
+        let calls = await service.undoCalls
+        XCTAssertEqual(calls, [["a", "b"]], "private öğe cm undo'ya gitmez; sıra deterministik")
+        XCTAssertEqual(store.changes[path]?.map(\.path), ["p"])
+    }
+
+    func testUndoWithOnlyPrivateItemsDoesNothing() async {
+        let service = FakePlasticService()
+        await service.setStatus([PlasticFileChange(path: "p", status: .untracked)])
+        let store = makeStore(service)
+        await store.refreshStatus(path)
+
+        await store.undo(path, paths: ["p"])
+
+        let calls = await service.undoCalls
+        XCTAssertTrue(calls.isEmpty)
+    }
+
+    func testUndoUnchangedRefreshesStatusAndReportsErrors() async {
+        let service = FakePlasticService()
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let now = self.now
+        let store = PlasticStore(service: service, toasts: toasts, now: { now })
+
+        await store.undoUnchanged(path)
+        let calls = await service.undoUnchangedCalls
+        XCTAssertEqual(calls, [path])
+        let statusCalls = await service.statusCalls
+        XCTAssertEqual(statusCalls.count, 1)
+
+        await service.setErrorToThrow(.plasticFailed(operation: "undo --unchanged", detail: "x"))
+        await store.undoUnchanged(path)
+        XCTAssertEqual(toasts.toasts.count, 1)
+    }
 }

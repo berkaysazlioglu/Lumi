@@ -188,6 +188,7 @@ private actor PreviewRepoService: RepoServicing {
 private struct PreviewPlasticService: PlasticServicing {
     func checkin(workspacePath: String, message: String, files: [String]) async throws {}
     func undo(workspacePath: String, files: [String]) async throws {}
+    func undoUnchanged(workspacePath: String) async throws {}
     func isCLIAvailable() async -> Bool { false }
     func workspaceInfo(workspacePath: String) async -> PlasticWorkspaceInfo? { nil }
     func status(workspacePath: String) async -> [PlasticFileChange] { [] }

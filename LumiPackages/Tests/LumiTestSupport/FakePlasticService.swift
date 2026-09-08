@@ -30,6 +30,7 @@ public actor FakePlasticService: PlasticReading, PlasticWriting {
     public private(set) var changesetCalls: [(path: String, limit: Int)] = []
     public private(set) var checkinCalls: [CheckinCall] = []
     public private(set) var undoCalls: [[String]] = []
+    public private(set) var undoUnchangedCalls: [String] = []
 
     public init() {}
 
@@ -74,6 +75,11 @@ public actor FakePlasticService: PlasticReading, PlasticWriting {
         if let errorToThrow { throw errorToThrow }
         // Başarılı checkin: gönderilen dosyalar durumdan düşer.
         statusToReturn.removeAll { files.contains($0.path) }
+    }
+
+    public func undoUnchanged(workspacePath: String) async throws {
+        undoUnchangedCalls.append(workspacePath)
+        if let errorToThrow { throw errorToThrow }
     }
 
     public func undo(workspacePath: String, files: [String]) async throws {

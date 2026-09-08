@@ -248,4 +248,17 @@ final class PlasticServiceTests: XCTestCase {
         let peak = await runner.maxConcurrentInvocations
         XCTAssertLessThanOrEqual(peak, PlasticService.maxConcurrentDiffs + 1)
     }
+
+    func testUndoUnchangedTargetsWorkspaceRootRecursively() async throws {
+        let runner = FakeProcessRunner()
+        let root = try makeTemporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, _) = makeService(runner: runner)
+
+        try await service.undoUnchanged(workspacePath: root.path)
+
+        let invocation = await runner.invocations.first
+        XCTAssertEqual(invocation?.arguments, ["undo", root.resolvingSymlinksInPath().path, "-r", "--unchanged"])
+        XCTAssertEqual(invocation?.currentDirectory, root.path)
+    }
 }

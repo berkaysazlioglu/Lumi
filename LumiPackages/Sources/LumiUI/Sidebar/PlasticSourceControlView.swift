@@ -19,6 +19,8 @@ struct PlasticSourceControlView: View {
     let repoPath: String
     @Shell private var shell
     @State private var section: Section = .changes
+    @State private var changesQuery = ""
+    @State private var collapsedGroups: Set<PlasticChangeGroup.Kind> = []
 
     private var info: PlasticWorkspaceInfo? { shell.plastic.workspaces[repoPath] }
     private var changes: [PlasticFileChange] { shell.plastic.changes[repoPath] ?? [] }
@@ -98,7 +100,8 @@ struct PlasticSourceControlView: View {
     // MARK: - Changes
 
     private var changesBody: some View {
-        VStack(spacing: 0) {
+        let groups = shell.plastic.changeGroups(repoPath, query: changesQuery)
+        return VStack(spacing: 0) {
             composer
                 .padding(.horizontal, Theme.Spacing.md)
             // `trailing:` etiketi ZORUNLU: etiketsiz trailing closure ilk closure
@@ -119,6 +122,11 @@ struct PlasticSourceControlView: View {
                     }
                 }
             )
+            if !changes.isEmpty {
+                searchField
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.bottom, Theme.Spacing.sm)
+            }
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if changes.isEmpty {
@@ -126,11 +134,93 @@ struct PlasticSourceControlView: View {
                             shell.plastic.isLoading(repoPath) ? "Loading…" : "No changes — workspace clean",
                             density: .inline
                         )
+                    } else if groups.isEmpty {
+                        EmptyStatePlaceholder("No items match “\(changesQuery)”", density: .inline)
                     }
-                    ForEach(changes) { change in changeRow(change) }
+                    ForEach(groups) { group in
+                        groupHeader(group)
+                        if !collapsedGroups.contains(group.kind) {
+                            ForEach(group.items) { change in changeRow(change) }
+                        }
+                    }
                 }
             }
         }
+    }
+
+    /// Ad VEYA yol üzerinde alt dize araması (Explorer'daki alan biçimi).
+    private var searchField: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(Theme.Typography.ui(.body))
+                .foregroundStyle(Theme.textMuted)
+                .accessibilityHidden(true)
+            TextField("Filter by name or path…", text: $changesQuery)
+                .textFieldStyle(.plain)
+                .foregroundStyle(Theme.textPrimary)
+                .font(Theme.Typography.ui(.body))
+            if !changesQuery.isEmpty {
+                IconButton(systemName: "xmark", label: "Clear filter", size: .caption) { changesQuery = "" }
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .frame(height: Theme.Spacing.xxxl - Theme.Spacing.xs)
+        .background(Theme.bgDeep)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+        )
+    }
+
+    /// Plastic GUI grup satırı: `› [☑] [C] Changed items - 12 of 13 items selected`.
+    /// Kutu üç durumlu (hepsi / kısmi / hiçbiri); tıklama grubun tamamını çevirir.
+    private func groupHeader(_ group: PlasticChangeGroup) -> some View {
+        let color = Theme.fileChangeColor(for: group.kind.representativeStatus)
+        let isCollapsed = collapsedGroups.contains(group.kind)
+        return HoverReader { hovering in
+            HStack(spacing: Theme.Spacing.sm) {
+                Button {
+                    if isCollapsed { collapsedGroups.remove(group.kind) } else { collapsedGroups.insert(group.kind) }
+                } label: {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(Theme.Typography.ui(.caption, weight: .bold))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(width: Theme.Spacing.lg)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isCollapsed ? "Expand \(group.kind.title)" : "Collapse \(group.kind.title)")
+                .accessibilityLabel(isCollapsed ? "Expand \(group.kind.title)" : "Collapse \(group.kind.title)")
+                Button { shell.plastic.toggleSelection(repoPath, paths: group.paths) } label: {
+                    Image(systemName: group.isFullySelected ? "checkmark.square.fill" : (group.isPartiallySelected ? "minus.square.fill" : "square"))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(group.isFullySelected ? "Deselect all \(group.kind.title.lowercased())" : "Select all \(group.kind.title.lowercased())")
+                .accessibilityLabel("Select all \(group.kind.title.lowercased())")
+                Badge(text: group.kind.badgeLetter, color: color, size: .caption, weight: .bold)
+                Text("\(group.kind.title) - \(group.selectedCount) of \(group.items.count) items selected")
+                    .font(Theme.Typography.ui(.body, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .frame(height: Theme.Row.control)
+            .background(hovering ? Theme.bgElevated : .clear)
+            .contentShape(Rectangle())
+            .contextMenu { groupContextMenu(group) }
+        }
+    }
+
+    @ViewBuilder
+    private func groupContextMenu(_ group: PlasticChangeGroup) -> some View {
+        Button(group.isFullySelected ? "Deselect All in Group" : "Select All in Group") {
+            shell.plastic.toggleSelection(repoPath, paths: group.paths)
+        }
+        Divider()
+        undoMenuItems
     }
 
     private var composer: some View {
@@ -198,7 +288,8 @@ struct PlasticSourceControlView: View {
                 } label: {
                     HStack(spacing: Theme.Spacing.sm) {
                         FileKindIcon(kind: FileKind.classify(name: name, isFolder: false, isExpanded: false))
-                        Text(name).foregroundStyle(color).lineLimit(1)
+                        // Ad önce yer alır (layoutPriority): daralan alanı yol kısaltır, ad değil.
+                        Text(name).foregroundStyle(color).lineLimit(1).layoutPriority(1)
                         Text((change.path as NSString).deletingLastPathComponent)
                             .font(Theme.Typography.ui(.caption))
                             .foregroundStyle(Theme.textMuted).lineLimit(1).truncationMode(.head)
@@ -214,7 +305,8 @@ struct PlasticSourceControlView: View {
                 .contextMenu { changeContextMenu(change) }
             }
             .font(Theme.Typography.ui(.body))
-            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.leading, Theme.Spacing.md + Theme.Spacing.lg + Theme.Spacing.sm)  // grup chevron'unun altına hizalı
+            .padding(.trailing, Theme.Spacing.md)
             .frame(height: Theme.Row.compact)
             .background(hovering ? Theme.bgElevated : .clear)
         }
@@ -222,7 +314,8 @@ struct PlasticSourceControlView: View {
 
     /// Private (kontrolsüz) öğede `cm undo` etkisizdir → çöpe taşıma sunulur;
     /// diğerlerinde Undo Changes yerel değişikliği atar (geri alınamaz, Plastic
-    /// uyarısı) — bu yüzden `.destructive` rol.
+    /// uyarısı) — bu yüzden `.destructive` rol. Seçim birden fazlaysa toplu
+    /// undo ve çalışma alanı geneli "Undo Unchanged" de sunulur.
     @ViewBuilder
     private func changeContextMenu(_ change: PlasticFileChange) -> some View {
         if change.status != .deleted { Button("Open File") { shell.presentFile(change.path) } }
@@ -236,6 +329,24 @@ struct PlasticSourceControlView: View {
                 Task { await shell.plastic.undo(repoPath, path: path) }
             }
         }
+        undoMenuItems
+    }
+
+    /// Seçili öğeler için toplu eylemler — hem satır hem grup menüsünde.
+    @ViewBuilder
+    private var undoMenuItems: some View {
+        let selectedUndoable = (shell.plastic.changes[repoPath] ?? [])
+            .filter { $0.status != .untracked && shell.plastic.isSelected(repoPath, path: $0.path) }
+            .count
+        if selectedUndoable > 0 {
+            Button("Undo Changes of \(selectedUndoable) Selected Item\(selectedUndoable == 1 ? "" : "s")", role: .destructive) {
+                Task { await shell.plastic.undoSelected(repoPath) }
+            }
+        }
+        Button("Undo Unchanged Checkouts") {
+            Task { await shell.plastic.undoUnchanged(repoPath) }
+        }
+        .help("Release checked-out files whose content did not change (whole workspace)")
     }
 
     // MARK: - History

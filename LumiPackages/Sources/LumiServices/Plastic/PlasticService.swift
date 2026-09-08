@@ -178,6 +178,11 @@ public actor PlasticService: PlasticServicing {
         try await runThrowing(["undo"] + paths, in: workspacePath, operation: "undo")
     }
 
+    public func undoUnchanged(workspacePath: String) async throws {
+        let root = try guardian.resolve(repoPath: workspacePath, relativePath: ".")
+        try await runThrowing(["undo", root, "-r", "--unchanged"], in: workspacePath, operation: "undo --unchanged")
+    }
+
     /// Yazma yolu: `cm` yoksa `cliNotFound`, exit ≠ 0 ise `plasticFailed`
     /// (detay stderr, boşsa stdout; 500 karakter). `cm` hatayı stderr'e
     /// `Error: …` önekiyle yazar ve exit 1 döner.

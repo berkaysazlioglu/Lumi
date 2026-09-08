@@ -42,6 +42,10 @@ public protocol PlasticWriting: Sendable {
     /// atar (Plastic'in kendi uyarısı). Private öğede etkisizdir; UI o durumda
     /// undo yerine çöpe taşımayı sunar.
     func undo(workspacePath: String, files: [String]) async throws
+    /// `cm undo <workspace> -r --unchanged`: içeriği değişmemiş checkout'ları
+    /// çalışma alanı genelinde geri alır (Plastic GUI "Undo unchanged").
+    /// Yerel değişikliğe dokunmaz.
+    func undoUnchanged(workspacePath: String) async throws
 }
 
 /// Tam Plastic yüzeyi — composition root ve `PlasticService` bunu kullanır.
