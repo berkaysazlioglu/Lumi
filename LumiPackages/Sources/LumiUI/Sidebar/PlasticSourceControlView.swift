@@ -208,7 +208,9 @@ struct PlasticSourceControlView: View {
             }
             .padding(.horizontal, Theme.Spacing.md)
             .frame(height: Theme.Row.control)
-            .background(hovering ? Theme.bgElevated : .clear)
+            // Grup başlığı hover'dan bağımsız yükseltilmiş zemin alır: dosya
+            // satırlarından hiyerarşi olarak ayrılsın (genişlik maliyeti yok).
+            .background(hovering ? Theme.border : Theme.bgElevated)
             .contentShape(Rectangle())
             .contextMenu { groupContextMenu(group) }
         }
@@ -294,21 +296,28 @@ struct PlasticSourceControlView: View {
                             .font(Theme.Typography.ui(.caption))
                             .foregroundStyle(Theme.textMuted).lineLimit(1).truncationMode(.head)
                         Spacer(minLength: 0)
-                        Text(change.status.badgeText)
-                            .font(Theme.Typography.mono(.caption, weight: .medium))
-                            .foregroundStyle(color)
+                        // Durum harfi YOK: grup başlığı zaten söylüyor; kazanılan
+                        // genişlik yola kalır (renk adda sürer).
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(change.path)
+                .help("\(change.path) (\(change.status.badgeText))")
                 .contextMenu { changeContextMenu(change) }
             }
             .font(Theme.Typography.ui(.body))
-            .padding(.leading, Theme.Spacing.md + Theme.Spacing.lg + Theme.Spacing.sm)  // grup chevron'unun altına hizalı
+            .padding(.leading, Self.fileRowIndent)
             .padding(.trailing, Theme.Spacing.md)
             .frame(height: Theme.Row.compact)
             .background(hovering ? Theme.bgElevated : .clear)
+            // Girinti kılavuzu: grup chevron'unun merkezinden inen hairline —
+            // dosya/grup ayrımını genişlik harcamadan gösterir.
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Theme.border)
+                    .frame(width: Theme.Stroke.hairline)
+                    .padding(.leading, Self.indentGuideOffset)
+            }
         }
     }
 
@@ -348,6 +357,12 @@ struct PlasticSourceControlView: View {
         }
         .help("Release checked-out files whose content did not change (whole workspace)")
     }
+
+    /// Dosya satırı girintisi: grup chevron'u (md + lg) + iki küçük adım —
+    /// kutu grubun kutusundan belirgin içeride durur ama yol alanı korunur.
+    private static let fileRowIndent = Theme.Spacing.md + Theme.Spacing.lg + Theme.Spacing.sm + Theme.Spacing.xs
+    /// Kılavuz çizgi chevron'un ortasından iner.
+    private static let indentGuideOffset = Theme.Spacing.md + Theme.Spacing.lg / 2
 
     // MARK: - History
 
