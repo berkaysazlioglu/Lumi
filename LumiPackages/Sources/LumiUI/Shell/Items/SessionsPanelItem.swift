@@ -8,8 +8,9 @@ import SwiftUI
 /// Parent closure'ı YOK: bağlamını `@Environment(\.shell)`'den okur, tıklamayı
 /// doğrudan `TerminalListStore` intent'ine çevirir.
 public struct SessionsPanelItem: View {
-    /// Liste kabının üst sınırı (v1 paritesi).
-    private static let maxListHeight: CGFloat = 180
+    /// Liste kabının SABİT yüksekliği: tab değişiminde oturum sayısı ne olursa
+    /// olsun altındaki Projects paneli yerinden oynamaz (kullanıcı düzeltmesi).
+    private static let listHeight: CGFloat = 180
 
     @Shell private var shell
 
@@ -29,15 +30,18 @@ public struct SessionsPanelItem: View {
                 icon: "square.stack.3d.up",
                 count: repoTerminals.isEmpty ? nil : .neutral(repoTerminals.count)
             )
-            .padding(.bottom, repoTerminals.isEmpty ? Theme.Spacing.xs : Theme.Spacing.md)
-            if repoTerminals.isEmpty {
-                EmptyStatePlaceholder("No active sessions")
-            } else {
-                sessionList(repoTerminals)
+            .padding(.bottom, Theme.Spacing.md)
+            Group {
+                if repoTerminals.isEmpty {
+                    EmptyStatePlaceholder("No active sessions")
+                } else {
+                    sessionList(repoTerminals)
+                }
             }
+            .frame(height: Self.listHeight, alignment: .top)
         }
         .padding(Theme.Spacing.lg)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(alignment: .top)
     }
 
     private func sessionList(_ repoTerminals: [TerminalMeta]) -> some View {
@@ -59,8 +63,6 @@ public struct SessionsPanelItem: View {
                 }
             }
         }
-        .frame(maxHeight: Self.maxListHeight)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

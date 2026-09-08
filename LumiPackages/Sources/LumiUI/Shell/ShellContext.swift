@@ -13,15 +13,19 @@ public struct ShellActions {
     public let reveal: @MainActor (String, String) -> Void
     /// (repoPath, göreli yol) → çöp kutusuna taşı.
     public let trash: @MainActor (String, String) -> Void
+    /// Mutlak proje/workspace yolunu Finder'da göster (karar 51).
+    public let revealPath: @MainActor (String) -> Void
 
     public init(
         chooseFolder: @escaping @MainActor () async -> String?,
         reveal: @escaping @MainActor (String, String) -> Void,
-        trash: @escaping @MainActor (String, String) -> Void
+        trash: @escaping @MainActor (String, String) -> Void,
+        revealPath: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.chooseFolder = chooseFolder
         self.reveal = reveal
         self.trash = trash
+        self.revealPath = revealPath
     }
 }
 
@@ -47,6 +51,7 @@ public final class ShellContext {
     public let dialogs: DialogRouter
     public let terminals: TerminalListStore
     public let repos: RepoStore
+    public let workspaces: ProjectWorkspaceStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
     /// Plastic SCM panel store'u (karar 46).
@@ -77,6 +82,7 @@ public final class ShellContext {
         dialogs: DialogRouter,
         terminals: TerminalListStore,
         repos: RepoStore,
+        workspaces: ProjectWorkspaceStore,
         git: GitStore,
         plastic: PlasticStore,
         commitAssistant: CommitMessageAssistant,
@@ -99,6 +105,7 @@ public final class ShellContext {
         self.dialogs = dialogs
         self.terminals = terminals
         self.repos = repos
+        self.workspaces = workspaces
         self.git = git
         self.plastic = plastic
         self.commitAssistant = commitAssistant
@@ -125,6 +132,83 @@ public final class ShellContext {
     public var isFocusMode: Bool { layout.isFocusMode }
 
     // MARK: - Koordinasyon intent'leri (birden fazla store'a dokunanlar)
+
+    public func startWorkspaceCreation() {
+        guard workspaces.startCreation(projects: repos.repos) else { return }
+        if case .createWorkspace = dialogs.active { dialogs.dismiss() }
+    }
+
+    public func openCreatedWorkspace(_ workspace: ProjectWorkspace, agent: WorkspaceAgent) {
+        if case .createWorkspace = dialogs.active { dialogs.dismiss() }
+        navigation.openTab(workspace.path)
+        if agent != .none {
+            terminals.spawn(in: workspace.path, command: agent.command, task: workspace.name)
+        }
+    }
+
+    public func addSidebarProject(_ project: Repo) async {
+        if await workspaces.addProject(project) {
+            dialogs.dismiss(.sidebarProjectSelector)
+        }
+    }
+
+    // MARK: - Projects paneli ajan satırları ve silme (karar 51)
+
+    /// Sidebar ajan satırı: terminalin sekmesi açık değilse açılır, sonra
+    /// minimize edilmişse geri getirilip odaklanır.
+    public func focusAgent(_ meta: TerminalMeta) {
+        if navigation.activeRepoPath != meta.repoPath { navigation.openTab(meta.repoPath) }
+        terminals.restoreAndFocus(meta.id)
+    }
+
+    /// Silme onayı: canlı oturum sayısı dialogda gösterilir; store'un önceki
+    /// hata/force durumu sıfırlanır.
+    public func requestDeleteWorkspace(_ workspace: ProjectWorkspace) {
+        workspaces.beginDeleteFlow()
+        dialogs.present(.deleteWorkspace(DeleteWorkspaceDialogState(
+            workspace: workspace, sessionCount: terminals.terminals(in: workspace.path).count
+        )))
+    }
+
+    /// Onay: önce sekme kapanır (terminaller ölür, cache'ler boşalır), sonra
+    /// SCM/klasör/kayıt silinir. Hata dialogu açık bırakır ve kullanıcı
+    /// ikinci denemede `Force Delete` görebilir.
+    public func confirmDeleteWorkspace(force: Bool) async {
+        guard let dialog = dialogs.deleteWorkspaceDialog else { return }
+        let path = dialog.workspace.path
+        // closeTab terminalleri zaten öldürür; sekme yoksa yalnız terminaller.
+        if navigation.openTabs.contains(path) { navigation.closeTab(path) } else { terminals.closeAll(in: path) }
+        if await workspaces.deleteWorkspace(dialog.workspace, force: force) {
+            dialogs.dismiss(.deleteWorkspace(dialog))
+        }
+    }
+
+    public func cancelDeleteWorkspace() {
+        if case .deleteWorkspace = dialogs.active { dialogs.dismiss() }
+    }
+
+    // MARK: - Agent History oturum silme (karar 53)
+
+    public func requestDeleteAgentSession(_ entry: AgentHistoryEntry, projectPath: String) {
+        dialogs.present(.deleteAgentSession(DeleteAgentSessionDialogState(entry: entry, projectPath: projectPath)))
+    }
+
+    public func confirmDeleteAgentSession() async {
+        guard let dialog = dialogs.deleteAgentSessionDialog else { return }
+        if await agentHistory.deleteSession(dialog.entry, projectPath: dialog.projectPath) {
+            dialogs.dismiss(.deleteAgentSession(dialog))
+        }
+    }
+
+    public func cancelDeleteAgentSession() {
+        if case .deleteAgentSession = dialogs.active { dialogs.dismiss() }
+    }
+
+    /// Eksik (diskte olmayan) workspace kaydını listeden düşürür.
+    public func forgetWorkspace(_ workspace: ProjectWorkspace) async {
+        if navigation.openTabs.contains(workspace.path) { navigation.closeTab(workspace.path) }
+        await workspaces.forgetWorkspace(workspace)
+    }
 
     /// Close-tab guard'ı: minimize edilmiş terminali olan tab dialog'suz
     /// kapanmaz (navigation sorar, dialogs sunar).

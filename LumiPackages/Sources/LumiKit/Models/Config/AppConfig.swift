@@ -11,6 +11,9 @@ import Foundation
 public struct AppConfig: Sendable, Equatable {
     public var projectsRoot: String
     public var additionalPaths: [AdditionalPath]
+    /// Independently selected projects shown in the sidebar. Additive (karar
+    /// 9): yoksa boş; `additionalPaths` ile migration yapılmaz.
+    public var sidebarProjectPaths: [String]
     public var aiProvider: AgentProvider
     public var theme: String
     public var terminalFontSize: Int
@@ -43,6 +46,7 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
     /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
     public var agentHooksEnabled: Bool
+    public var workspaces: [ProjectWorkspace]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -70,7 +74,9 @@ public struct AppConfig: Sendable, Equatable {
         usageAutoRefresh: .defaults,
         usageIndicators: .defaults,
         computerAwakeMode: .default,
-        agentHooksEnabled: true
+        agentHooksEnabled: true,
+        workspaces: [],
+        sidebarProjectPaths: []
     )
 
     public init(
@@ -88,10 +94,13 @@ public struct AppConfig: Sendable, Equatable {
         usageAutoRefresh: UsageAutoRefresh = .defaults,
         usageIndicators: UsageIndicators = .defaults,
         computerAwakeMode: ComputerAwakeMode = .default,
-        agentHooksEnabled: Bool = true
+        agentHooksEnabled: Bool = true,
+        workspaces: [ProjectWorkspace] = [],
+        sidebarProjectPaths: [String] = []
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
+        self.sidebarProjectPaths = sidebarProjectPaths
         self.aiProvider = aiProvider
         self.theme = theme
         self.terminalFontSize = terminalFontSize
@@ -105,5 +114,6 @@ public struct AppConfig: Sendable, Equatable {
         self.usageIndicators = usageIndicators
         self.computerAwakeMode = computerAwakeMode
         self.agentHooksEnabled = agentHooksEnabled
+        self.workspaces = workspaces
     }
 }

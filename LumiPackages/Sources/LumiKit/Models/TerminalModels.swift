@@ -70,6 +70,9 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// çıkarımı ve hook olaylarından türetilir; ajan çıkınca (`SessionEnd`)
     /// `nil`e döner = düz shell. Kart header'ındaki kimlik ikonunun kaynağı.
     public var provider: AgentProvider?
+    /// Son durum değişiminin zamanı (karar 51): sidebar ajan satırındaki
+    /// "9m / 2h" etiketi buradan türer; hiç değişmediyse `createdAt` geçer.
+    public var statusChangedAt: Date?
 
     public init(
         id: TerminalID,
@@ -80,7 +83,8 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         oscTitle: String? = nil,
         status: TerminalStatus = .idle,
         claudeSessionID: String? = nil,
-        provider: AgentProvider? = nil
+        provider: AgentProvider? = nil,
+        statusChangedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -91,7 +95,11 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.status = status
         self.claudeSessionID = claudeSessionID
         self.provider = provider
+        self.statusChangedAt = statusChangedAt
     }
+
+    /// Sidebar'daki göreli zaman kaynağı: son durum değişimi, yoksa doğum anı.
+    public var lastActivityAt: Date { statusChangedAt ?? createdAt }
 
     /// Kullanıcıya gösterilen başlık — TEK kaynak (refactor 6.7).
     /// Öncelik: emülatörün OSC başlığı > spawn görevi > üretilen ad.

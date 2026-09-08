@@ -19,6 +19,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case cliNotFound(binary: String)
     case usageUnavailable(detail: String)
     case sessionStartFailed(detail: String)
+    /// Agent History oturumu dışa/içe aktarımı (karar 52) başarısız.
+    case sessionTransferFailed(detail: String)
     case underlying(domain: String, message: String)
 
     public var errorDescription: String? {
@@ -49,6 +51,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Could not read usage: \(detail)"
         case .sessionStartFailed(let detail):
             return "Could not start session: \(detail)"
+        case .sessionTransferFailed(let detail):
+            return "Session transfer failed: \(detail)"
         case .underlying(let domain, let message):
             return "\(domain): \(message)"
         }

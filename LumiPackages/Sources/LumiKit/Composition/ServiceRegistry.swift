@@ -15,12 +15,15 @@ public protocol ServiceRegistry: AnyObject {
     var config: any ConfigServicing { get }
     var system: any SystemServicing { get }
     var repo: any RepoServicing { get }
+    var workspaces: any WorkspaceServicing { get }
     var git: any GitServicing { get }
     /// Plastic SCM yüzeyi (karar 46): okuma + checkin/undo.
     var plastic: any PlasticServicing { get }
     /// Commit/checkin mesajı üreticisi (karar 47) — `claude -p` arka planda.
     var commitMessages: any CommitMessageGenerating { get }
-    var agentHistory: any AgentHistoryReading { get }
+    var agentHistory: any AgentHistoryServicing { get }
+    /// Agent History oturumu dışa/içe aktarımı (karar 52).
+    var agentSessionTransfer: any AgentSessionTransferring { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

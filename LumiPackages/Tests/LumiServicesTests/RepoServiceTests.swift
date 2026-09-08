@@ -24,6 +24,20 @@ final class RepoServiceTests: XCTestCase {
         return url.path
     }
 
+    func testManagedWorkspaceRootIsNotDiscoveredAsAnotherProject() async throws {
+        let managed = try makeDir("workspaces", "Game", "Review", ".git")
+        _ = try makeDir("ordinary", ".git")
+        let managedRoot = tempRoot.appendingPathComponent("workspaces")
+        let service = RepoService(managedWorkspaceRoot: managedRoot)
+        await service.setRoots(projectsRoot: tempRoot.path, additionalPaths: [])
+        let roots = await service.repos()
+        XCTAssertEqual(roots.map(\.name), ["ordinary"])
+        await service.setRoots(projectsRoot: managedRoot.path, additionalPaths: [])
+        let nested = await service.repos()
+        XCTAssertTrue(nested.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: managed))
+    }
+
     func testDiscoveryRules() async throws {
         // .git dizinli repo
         _ = try makeDir("projects", "repoA", ".git")

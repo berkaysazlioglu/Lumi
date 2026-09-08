@@ -283,7 +283,13 @@ public final class TerminalListStore: StoreLifecycle {
                 toasts.show(.error, title: name, message: "Terminal exited with code \(code)")
             }
         case .statusChanged(let id, let status):
-            update(id) { $0.status = status }
+            // Karar 49: sidebar ajan satırındaki "9m / 2h" etiketi son durum
+            // değişiminden ölçülür; aynı durumun tekrarı saati ilerletmez.
+            let now = Date()
+            update(id) { meta in
+                if meta.status != status { meta.statusChangedAt = now }
+                meta.status = status
+            }
             applyAutoMinimize(id, status: status)
         case .titleChanged(let id, let title):
             update(id) { $0.oscTitle = title }

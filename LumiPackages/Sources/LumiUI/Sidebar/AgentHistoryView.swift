@@ -5,7 +5,7 @@ import SwiftUI
 /// Agent History sekmesi (karar 39): Claude/Codex oturum geçmişi.
 ///
 /// Satır düzeni Orca `AiVaultSessionRow`u izler: başlık + sağda aç/kapa oku
-/// ve `⋯` menüsü; altında metadata ("Claude · 52 msgs · 3 subagents · 1h ago ·
+/// ve `⋯` menüsü (sağ tık da aynı `PopoverMenu`yu açar, karar 53); altında metadata ("Claude · 52 msgs · 3 subagents · 1h ago ·
 /// model") ve branch rozeti; açıkken `AgentHistoryDetailCard`.
 struct AgentHistoryView: View {
     let repoPath: String
@@ -50,6 +50,10 @@ struct AgentHistoryView: View {
             Text((repoPath as NSString).lastPathComponent)
                 .font(Theme.Typography.ui(.body, weight: .medium)).lineLimit(1)
             Spacer(minLength: 0)
+            IconButton(systemName: "square.and.arrow.down", label: "Import session from file") {
+                importSession()
+            }
+            .disabled(shell.agentHistory.isTransferring)
             IconButton(systemName: "arrow.clockwise", label: "Refresh agent history") {
                 Task { await shell.agentHistory.refresh(repoPath) }
             }
@@ -134,13 +138,14 @@ struct AgentHistoryView: View {
                     entry: entry,
                     onResume: { resume(entry) },
                     onCopyCommand: { if let command = entry.resumeCommand { copy(command) } },
-                    onRevealLog: { revealLog(entry) }
+                    onRevealLog: { revealLog(entry) },
+                    onExport: { exportSession(entry) }
                 )
             }
         }
         .padding(Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contextMenu { contextMenu(entry) }
+        .onRightClick { menuEntryID = entry.id }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline) }
     }
 
@@ -221,16 +226,15 @@ struct AgentHistoryView: View {
             .action("Copy Session ID", icon: "number") { copy(entry.sessionID) },
             .action("Copy Log Path", icon: "doc.on.doc") { copy(entry.logPath) },
             .action("Reveal Log in Finder", icon: "folder") { revealLog(entry) },
+            .divider,
+            .action("Export Session…", icon: "square.and.arrow.up", isEnabled: !shell.agentHistory.isTransferring) {
+                exportSession(entry)
+            },
+            .divider,
+            .action("Delete Session…", icon: "trash", isDestructive: true, isEnabled: !shell.agentHistory.isTransferring) {
+                shell.requestDeleteAgentSession(entry, projectPath: repoPath)
+            },
         ]
-    }
-
-    @ViewBuilder
-    private func contextMenu(_ entry: AgentHistoryEntry) -> some View {
-        Button("Resume Session") { resume(entry) }.disabled(entry.resumeCommand == nil)
-        Button("Copy Session ID") { copy(entry.sessionID) }
-        Button("Copy Log Path") { copy(entry.logPath) }
-        Button("Copy Resume Command") { if let command = entry.resumeCommand { copy(command) } }
-            .disabled(entry.resumeCommand == nil)
     }
 
     private func toggle(_ id: String) {
@@ -245,6 +249,18 @@ struct AgentHistoryView: View {
     private func resume(_ entry: AgentHistoryEntry) {
         guard let command = entry.resumeCommand else { return }
         shell.terminals.spawn(in: repoPath, command: command)
+    }
+
+    /// Karar 52: paket dosyası seçilir, yazım store/servis'te; sonuç toast'la gelir.
+    private func exportSession(_ entry: AgentHistoryEntry) {
+        menuEntryID = nil
+        guard let destination = AgentSessionFilePanels.chooseExportDestination(for: entry) else { return }
+        Task { await shell.agentHistory.exportSession(entry, to: destination) }
+    }
+
+    private func importSession() {
+        guard let source = AgentSessionFilePanels.chooseImportSource() else { return }
+        Task { await shell.agentHistory.importSession(from: source, projectPath: repoPath) }
     }
 
     private func copy(_ value: String) {

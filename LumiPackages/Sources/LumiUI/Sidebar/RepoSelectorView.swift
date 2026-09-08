@@ -8,7 +8,7 @@ import SwiftUI
 /// navigasyonu (yalnız açık grupların düz listesi), git badge'i, boş durumlar.
 struct RepoSelectorView: View {
     let groups: [RepoStore.RepoGroup]
-    let openTabPaths: Set<String>
+    let excludedRepoPaths: Set<String>
     @Binding var collapsedGroups: Set<String>
     let onSelect: (Repo) -> Void
 
@@ -30,7 +30,7 @@ struct RepoSelectorView: View {
     var body: some View {
         let visible = RepoStore.filteredGroups(
             groups,
-            excluding: openTabPaths,
+            excluding: excludedRepoPaths,
             matching: searchText
         )
         let flat = RepoStore.flatRepos(visible, collapsed: collapsedGroups)
@@ -218,7 +218,7 @@ private struct RepoSelectorRow: View {
 #Preview("RepoSelectorView") {
     RepoSelectorView(
         groups: RepoStore.RepoGroup.previewGroups,
-        openTabPaths: ["/Users/preview/Projects/lumi"],
+        excludedRepoPaths: ["/Users/preview/Projects/lumi"],
         collapsedGroups: .constant(["standalone"]),
         onSelect: { _ in }
     )

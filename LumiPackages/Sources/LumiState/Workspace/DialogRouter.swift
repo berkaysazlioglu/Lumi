@@ -15,6 +15,30 @@ public struct CloseTabDialogState: Equatable, Sendable {
     }
 }
 
+/// Workspace silme onayının sunum verisi (karar 51).
+public struct DeleteWorkspaceDialogState: Equatable, Sendable {
+    public let workspace: ProjectWorkspace
+    /// Silmeyle birlikte kapanacak canlı terminal sayısı.
+    public let sessionCount: Int
+
+    public init(workspace: ProjectWorkspace, sessionCount: Int) {
+        self.workspace = workspace
+        self.sessionCount = sessionCount
+    }
+}
+
+/// Agent History oturum silme onayının sunum verisi (karar 53).
+public struct DeleteAgentSessionDialogState: Equatable, Sendable {
+    public let entry: AgentHistoryEntry
+    /// Listenin yenileneceği proje.
+    public let projectPath: String
+
+    public init(entry: AgentHistoryEntry, projectPath: String) {
+        self.entry = entry
+        self.projectPath = projectPath
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -25,9 +49,13 @@ public struct CloseTabDialogState: Equatable, Sendable {
 public enum ActiveDialog: Equatable, Sendable {
     case none
     case repoSelector
+    case sidebarProjectSelector
+    case createWorkspace(projectPath: String)
     case settings
     case onboarding
     case closeTab(CloseTabDialogState)
+    case deleteWorkspace(DeleteWorkspaceDialogState)
+    case deleteAgentSession(DeleteAgentSessionDialogState)
     case quit(terminalCount: Int)
 
     public var isPresented: Bool { self != .none }
@@ -37,7 +65,8 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .settings, .onboarding, .closeTab, .quit: true
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab,
+             .deleteWorkspace, .deleteAgentSession, .quit: true
         }
     }
 }
@@ -63,6 +92,16 @@ public final class DialogRouter {
 
     public var closeTabDialog: CloseTabDialogState? {
         guard case .closeTab(let state) = active else { return nil }
+        return state
+    }
+
+    public var deleteWorkspaceDialog: DeleteWorkspaceDialogState? {
+        guard case .deleteWorkspace(let state) = active else { return nil }
+        return state
+    }
+
+    public var deleteAgentSessionDialog: DeleteAgentSessionDialogState? {
+        guard case .deleteAgentSession(let state) = active else { return nil }
         return state
     }
 

@@ -50,7 +50,7 @@ struct RepoTabStrip: View {
         )) {
             RepoSelectorView(
                 groups: shell.repos.groupedRepos,
-                openTabPaths: Set(shell.navigation.openTabs),
+                excludedRepoPaths: Set(shell.navigation.openTabs),
                 collapsedGroups: Binding(
                     get: { shell.dialogs.collapsedRepoGroups },
                     set: { shell.dialogs.collapsedRepoGroups = $0 }

@@ -13,7 +13,9 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var config: any ConfigServicing
     public var system: any SystemServicing
     public var repo: any RepoServicing
-    public var agentHistory: any AgentHistoryReading = FakeAgentHistoryService()
+    public var workspaces: any WorkspaceServicing = FakeWorkspaceService()
+    public var agentHistory: any AgentHistoryServicing = FakeAgentHistoryService()
+    public var agentSessionTransfer: any AgentSessionTransferring = FakeAgentSessionTransferService()
     public var git: any GitServicing
     public var plastic: any PlasticServicing = FakePlasticService()
     public var commitMessages: any CommitMessageGenerating = FakeCommitMessageGenerator()

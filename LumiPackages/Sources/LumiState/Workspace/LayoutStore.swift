@@ -93,6 +93,17 @@ public final class LayoutStore {
             leftOpen: state.leftSidebarOpen,
             rightOpen: state.rightSidebarOpen
         )
+
+        let migratedOrder = panelLayout.migratingProjectsAfterSessions()
+        if migratedOrder != panelLayout {
+            panelLayout = migratedOrder
+            persist()
+        }
+        if panelLayout.slot(of: .projects) == nil {
+            let insertionIndex = panelLayout.items(in: .left).firstIndex(of: .sessions).map { $0 + 1 } ?? 0
+            panelLayout = panelLayout.moving(.projects, to: .left, index: insertionIndex)
+            persist()
+        }
     }
 
     // MARK: - Focus mode

@@ -16,6 +16,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.repo
 
     private(set) var repoStore: RepoStore!
+    private(set) var workspaceStore: ProjectWorkspaceStore!
     private(set) var gitStore: GitStore!
     private(set) var plasticStore: PlasticStore!
     private(set) var commitAssistant: CommitMessageAssistant!
@@ -33,7 +34,13 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         self.services = services
         self.shared = shared
         repoStore = RepoStore(service: services.repo)
-        agentHistory = AgentHistoryStore(service: services.agentHistory)
+        workspaceStore = ProjectWorkspaceStore(
+            service: services.workspaces, config: services.config,
+            repos: repoStore, toasts: shared.toasts
+        )
+        agentHistory = AgentHistoryStore(
+            service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts
+        )
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
         plasticStore = PlasticStore(service: services.plastic, toasts: shared.toasts)
         commitAssistant = CommitMessageAssistant(generator: services.commitMessages, toasts: shared.toasts)
@@ -42,6 +49,29 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
 
     /// Faz 6.6: repo'ya bağlı panel öğeleri BU assembly'nin katkısıdır.
     func registerShellItems(into registries: ShellRegistries) {
+        registries.panels.register(PanelItemDescriptor(
+            id: .projects, title: "Projects", icon: "folder",
+            defaultSlot: .left,
+            makeView: { AnyView(ProjectsPanel()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .createWorkspace,
+            isPresented: {
+                if case .createWorkspace = $0.dialogs.active { return true }
+                return false
+            },
+            makeView: { AnyView(CreateWorkspaceOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .deleteWorkspaceDialog,
+            isPresented: { $0.dialogs.deleteWorkspaceDialog != nil },
+            makeView: { AnyView(DeleteWorkspaceDialogOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .deleteAgentSessionDialog,
+            isPresented: { $0.dialogs.deleteAgentSessionDialog != nil },
+            makeView: { AnyView(DeleteAgentSessionDialogOverlay()) }
+        ))
         registries.panels.register(PanelItemDescriptor(
             id: .projectTools,
             title: "Project Tools",
@@ -63,6 +93,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
 
         repoStore.start()
         await repoStore.reload()
+        await workspaceStore.load()
         // SIRA: workspace yüklemesi repoStore.reload'dan SONRA (migration repo
         // listesini okur); tek ui-state okumasıyla önce navigation, sonra layout.
         let uiState = await services.config.uiState()
@@ -74,6 +105,12 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func configDidChange(old: AppConfig, new: AppConfig) {
+        if old.sidebarProjectPaths != new.sidebarProjectPaths {
+            workspaceStore.updateSidebarProjects(new.sidebarProjectPaths)
+        }
+        if old.workspaces != new.workspaces {
+            workspaceStore.updateRecords(new.workspaces)
+        }
         guard old.projectsRoot != new.projectsRoot
             || old.additionalPaths != new.additionalPaths else { return }
         repoStore.setAdditionalPaths(new.additionalPaths)

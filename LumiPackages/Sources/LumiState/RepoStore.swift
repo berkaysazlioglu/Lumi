@@ -8,6 +8,7 @@ import Observation
 @MainActor
 public final class RepoStore: StoreLifecycle {
     public private(set) var repos: [Repo] = []
+    private var discoveredRepos: [Repo] = []
     /// Gruplamanın "boş root grupları da göster" kuralı için config sırasıyla
     /// tutulur. Kapsülleme (refactor 5.4): iki yazar vardı (assembly bootstrap +
     /// `configDidChange`); ikisi de artık `setAdditionalPaths(_:)` çağırır.
@@ -48,7 +49,30 @@ public final class RepoStore: StoreLifecycle {
     }
 
     public func reload() async {
-        repos = await service.repos()
+        let discovered = await service.repos()
+        discoveredRepos = discovered
+        let managed = managedWorkspaces.map(\.repo)
+        var merged = discovered
+        let paths = Set(discovered.map(\.path))
+        merged.append(contentsOf: managed.filter { !paths.contains($0.path) })
+        repos = merged
+    }
+
+    private var managedWorkspaces: [ProjectWorkspace] = []
+
+    /// Keeps restored managed workspaces visible even if their directory is
+    /// currently missing from the provider's scan.
+    public func setWorkspaces(_ records: [ProjectWorkspace]) {
+        managedWorkspaces = records
+        let discoveredPaths = Set(discoveredRepos.map(\.path))
+        repos = discoveredRepos + records.map(\.repo).filter { !discoveredPaths.contains($0.path) }
+    }
+
+    /// Applies roots immediately for settings and workspace creation flows.
+    public func applyRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) async {
+        setAdditionalPaths(additionalPaths)
+        await service.setRoots(projectsRoot: projectsRoot, additionalPaths: additionalPaths)
+        await reload()
     }
 
     /// Config aynası (bootstrap + `configDidChange`).

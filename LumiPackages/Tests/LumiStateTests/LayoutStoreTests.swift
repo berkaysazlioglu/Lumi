@@ -225,7 +225,7 @@ final class LayoutStoreTests: XCTestCase {
     // MARK: - Panel yerleşimi (Faz 6.2)
 
     func testDefaultLayoutPlacesSessionsLeftAndGitRight() {
-        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
         XCTAssertEqual(store.items(in: .right), [.projectTools])
         XCTAssertEqual(store.width(for: .left), PanelLayout.defaultWidth)
         XCTAssertEqual(store.visibleSlots, [.left], "sağ panel default kapalı")
@@ -235,7 +235,7 @@ final class LayoutStoreTests: XCTestCase {
     func testMovingItemFromLeftToRightIsASingleMutation() async throws {
         store.move(item: .sessions, to: .right, index: 0)
 
-        XCTAssertEqual(store.items(in: .left), [])
+        XCTAssertEqual(store.items(in: .left), [.projects])
         XCTAssertEqual(store.items(in: .right), [.sessions, .projectTools])
         try await waitForPersist()
         let persisted = await config.uiState()
@@ -273,7 +273,7 @@ final class LayoutStoreTests: XCTestCase {
             openTabs: []
         )
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions], "yerleşim default'tan gelir")
+        XCTAssertEqual(store.items(in: .left), [.sessions, .projects], "yerleşim default'tan gelir")
     }
 
     /// Yeni anahtar VARSA otoritedir (eski bool'lar yok sayılır).
@@ -286,11 +286,56 @@ final class LayoutStoreTests: XCTestCase {
         store.load(state: state, openTabs: [])
 
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
         XCTAssertEqual(store.items(in: .right), [.fileTree, .projectTools])
     }
 
     // MARK: - Eviction (5.5)
+
+    func testProjectsMigrationPreservesHiddenSidebarAndCustomLayout() async throws {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout(
+            slots: [.left: [.sessions], .right: [.projectTools]],
+            visibleSlots: [.right], widths: [.left: 310], autoRevealSlots: [.left]
+        )
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.visibleSlots, [.right])
+        XCTAssertEqual(store.width(for: .left), 310)
+        XCTAssertTrue(store.panelLayout.isAutoReveal(.left))
+        try await waitForPersist()
+        let saved = await config.uiState()
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.sessions, .projects])
+    }
+
+    func testProjectsMigrationReordersLegacyDefaultWithoutChangingMetadata() async throws {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout(
+            slots: [.left: [.projects, .sessions], .right: [.projectTools]],
+            visibleSlots: [.right],
+            widths: [.left: 315, .right: 405],
+            autoRevealSlots: [.left]
+        )
+
+        store.load(state: state, openTabs: [])
+
+        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.visibleSlots, [.right])
+        XCTAssertEqual(store.width(for: .left), 315)
+        XCTAssertEqual(store.width(for: .right), 405)
+        XCTAssertTrue(store.panelLayout.isAutoReveal(.left))
+        try await waitForPersist()
+        let saved = await config.uiState()
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.sessions, .projects])
+    }
+
+    func testProjectsMigrationRespectsAnExistingUserMove() {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout.defaults.moving(.projects, to: .right, index: 1)
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .right), [.projectTools, .projects])
+    }
 
     func testEvictDropsMaximizeButKeepsPersistedGridLayout() {
         let id = TerminalID()

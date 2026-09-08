@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import LumiState
+import LumiTestSupport
 import SwiftUI
 import XCTest
 @testable import LumiUI
@@ -20,6 +21,145 @@ final class ShellContextTests: XCTestCase {
 
     override func setUp() async throws {
         fixture = await ShellContextFixture.make()
+    }
+
+    func testSidebarSelectionDoesNotOpenTopbarTabOrAlterDiscoveryPaths() async throws {
+        fixture.stop()
+        let service = FakeRepoService()
+        let repo = Repo(name: "Game", path: "/projects/game", isGitRepo: true, source: .projectsRoot)
+        await service.setRepos([repo])
+        fixture = await ShellContextFixture.make(repo: service)
+        await shell.repos.reload()
+        shell.navigation.openTab(repo.path)
+        shell.navigation.openTab("/already-open")
+        shell.dialogs.present(.sidebarProjectSelector)
+        await shell.addSidebarProject(repo)
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertEqual(shell.workspaces.addedProjects, [repo])
+        XCTAssertEqual(shell.navigation.openTabs, [repo.path, "/already-open"])
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/already-open")
+        let saved = await fixture.config.config()
+        XCTAssertEqual(saved.sidebarProjectPaths, [repo.path])
+        XCTAssertTrue(saved.additionalPaths.isEmpty)
+        shell.navigation.openTab(repo.path)
+        await shell.workspaces.removeProject(repo)
+        XCTAssertTrue(shell.navigation.openTabs.contains(repo.path), "Removing from sidebar does not close a topbar tab")
+    }
+
+    func testWorkspaceCreationDismissesModalAndDoesNotInterruptLaterNavigation() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        let repoService = FakeRepoService()
+        let project = Repo(name: "Game", path: "/p", isGitRepo: false, source: .standalone)
+        let result = ProjectWorkspace(projectPath: "/p", path: "/w/review", name: "Review", branch: "/main", scm: .plastic)
+        await repoService.setRepos([project])
+        await service.setDefaultInspection(.success(WorkspaceSource(projectPath: "/p", scm: .plastic, branch: "/main", destinationDirectory: "/w")))
+        await service.setCreateOutcome(.success(WorkspaceCreateResult(workspace: result)))
+        await service.setCreateDelay(.milliseconds(80))
+        fixture = await ShellContextFixture.make(repo: repoService, workspaces: service)
+        await shell.repos.reload()
+        await shell.workspaces.selectProject(project)
+        shell.workspaces.name = "Review"
+        shell.dialogs.present(.createWorkspace(projectPath: project.path))
+        shell.startWorkspaceCreation()
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertTrue(shell.workspaces.isCreating)
+        XCTAssertFalse(shell.dialogs.isInputBlockingOverlayOpen)
+        shell.navigation.openTab("/another-project")
+        shell.dialogs.present(.settings)
+        let deadline = Date().addingTimeInterval(2)
+        while shell.workspaces.isCreating, Date() < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(shell.workspaces.lastCreated, result)
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/another-project")
+        XCTAssertEqual(shell.dialogs.active, .settings)
+    }
+
+    // MARK: - Workspace silme ve ajan odağı (karar 51)
+
+    private let managedWorkspace = ProjectWorkspace(
+        projectPath: "/p", path: "/w/review", name: "Review", branch: "review", scm: .git
+    )
+
+    func testRequestDeletePresentsDialogWithLiveSessionCount() async throws {
+        shell.navigation.openTab(managedWorkspace.path)
+        _ = try await fixture.spawnTerminal(named: "a", in: managedWorkspace.path)
+        _ = try await fixture.spawnTerminal(named: "b", in: managedWorkspace.path)
+        shell.requestDeleteWorkspace(managedWorkspace)
+        XCTAssertEqual(shell.dialogs.deleteWorkspaceDialog, DeleteWorkspaceDialogState(workspace: managedWorkspace, sessionCount: 2))
+        XCTAssertTrue(shell.dialogs.isInputBlockingOverlayOpen)
+        XCTAssertEqual(shell.navigation.openTabs, [managedWorkspace.path], "onaydan önce hiçbir şey kapanmaz")
+        XCTAssertTrue(fixture.terminalService.killedIDs.isEmpty)
+        shell.cancelDeleteWorkspace()
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertEqual(shell.terminals.terminals(in: managedWorkspace.path).count, 2)
+    }
+
+    func testConfirmDeleteClosesTabKillsSessionsAndDropsRecord() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        fixture = await ShellContextFixture.make(workspaces: service)
+        let record = managedWorkspace
+        try await fixture.config.updateConfig { $0.workspaces = [record] }
+        await shell.workspaces.load()
+        shell.navigation.openTab("/other")
+        shell.navigation.openTab(managedWorkspace.path)
+        let meta = try await fixture.spawnTerminal(named: "a", in: managedWorkspace.path)
+        shell.requestDeleteWorkspace(managedWorkspace)
+        await shell.confirmDeleteWorkspace(force: false)
+        XCTAssertEqual(shell.dialogs.active, .none)
+        XCTAssertEqual(shell.navigation.openTabs, ["/other"])
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/other")
+        XCTAssertEqual(fixture.terminalService.killedIDs, [meta.id])
+        XCTAssertTrue(shell.workspaces.records.isEmpty)
+        let calls = await service.removeCalls
+        XCTAssertEqual(calls.map(\.1), [false])
+    }
+
+    func testFailedDeleteKeepsDialogOpenAndOffersForce() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        await service.setRemoveOutcome(.failure(WorkspaceFailure("dirty")))
+        fixture = await ShellContextFixture.make(workspaces: service)
+        let record = managedWorkspace
+        try await fixture.config.updateConfig { $0.workspaces = [record] }
+        await shell.workspaces.load()
+        shell.requestDeleteWorkspace(managedWorkspace)
+        await shell.confirmDeleteWorkspace(force: false)
+        XCTAssertNotNil(shell.dialogs.deleteWorkspaceDialog, "hata dialogu açık bırakır")
+        XCTAssertEqual(shell.workspaces.deleteError, "dirty")
+        XCTAssertTrue(shell.workspaces.canForceDelete)
+        XCTAssertEqual(shell.workspaces.records, [managedWorkspace])
+        await service.setRemoveOutcome(.success(()))
+        await shell.confirmDeleteWorkspace(force: true)
+        XCTAssertEqual(shell.dialogs.active, .none)
+        let calls = await service.removeCalls
+        XCTAssertEqual(calls.map(\.1), [false, true])
+    }
+
+    func testForgetWorkspaceClosesTabWithoutTouchingSCM() async throws {
+        fixture.stop()
+        let service = FakeWorkspaceService()
+        fixture = await ShellContextFixture.make(workspaces: service)
+        let record = managedWorkspace
+        try await fixture.config.updateConfig { $0.workspaces = [record] }
+        await shell.workspaces.load()
+        shell.navigation.openTab(managedWorkspace.path)
+        await shell.forgetWorkspace(managedWorkspace)
+        XCTAssertTrue(shell.navigation.openTabs.isEmpty)
+        XCTAssertTrue(shell.workspaces.records.isEmpty)
+        let calls = await service.removeCalls
+        XCTAssertTrue(calls.isEmpty)
+    }
+
+    func testFocusAgentOpensItsTabAndRestoresMinimizedTerminal() async throws {
+        shell.navigation.openTab("/r/alpha")
+        let meta = try await fixture.spawnTerminal(named: "agent", in: "/r/alpha")
+        shell.terminals.minimize(meta.id)
+        shell.navigation.openTab("/r/beta")
+        shell.focusAgent(meta)
+        XCTAssertEqual(shell.navigation.activeRepoPath, "/r/alpha")
+        XCTAssertFalse(shell.terminals.isMinimized(meta.id))
+        XCTAssertEqual(shell.terminals.activeTerminalID, meta.id)
     }
 
     // MARK: - Close-tab guard'ı (navigation sorar, dialogs sunar)
@@ -116,6 +256,7 @@ final class ShellContextTests: XCTestCase {
             dialogs: context.dialogs,
             terminals: context.terminals,
             repos: context.repos,
+            workspaces: context.workspaces,
             git: context.git,
             plastic: context.plastic,
             commitAssistant: context.commitAssistant,

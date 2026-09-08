@@ -4,9 +4,9 @@ import LumiUI
 
 @MainActor
 final class RepoFeatureAssemblyPanelTests: XCTestCase {
-    func testRegistersOnlyProjectToolsPanel() {
+    func testRegistersProjectsAndProjectToolsPanels() {
         let registries = ShellRegistries()
         RepoFeatureAssembly().registerShellItems(into: registries)
-        XCTAssertEqual(registries.panels.all.map(\.id), [.projectTools])
+        XCTAssertEqual(registries.panels.all.map(\.id), [.projects, .projectTools])
     }
 }

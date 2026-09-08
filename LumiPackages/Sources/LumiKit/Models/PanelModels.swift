@@ -30,6 +30,7 @@ public struct PanelItemID: RawRepresentable, Hashable, Sendable, Codable {
 }
 
 public extension PanelItemID {
+    static let projects = PanelItemID("projects")
     static let projectTools = PanelItemID("projectTools")
 
     /// Aktif repo'nun terminal oturumları listesi.
@@ -89,7 +90,7 @@ public struct PanelLayout: Equatable, Sendable {
     /// Sol = Sessions, sağ = sekmeli Project Tools; sol açık, sağ kapalı.
     public static let defaults = PanelLayout(
         slots: [
-            .left: [.sessions],
+            .left: [.sessions, .projects],
             .right: [.projectTools],
             .bottom: [],
         ],
@@ -186,6 +187,29 @@ public struct PanelLayout: Equatable, Sendable {
         let position = min(max(index ?? target.count, 0), target.count)
         target.insert(item, at: position)
         copy.slots[slot] = target
+        return copy
+    }
+
+    /// Projects/Sessions sırasının ilk sürümden yeni varsayılan sıraya geçişi.
+    /// Projects sol yuvada Sessions'ın önündeyse, Sessions'ın hemen arkasına
+    /// taşınır. Diğer yuvalar ve yerleşim metadatası değişmez.
+    public func migratingProjectsAfterSessions() -> PanelLayout {
+        guard let left = slots[.left],
+              let projectsIndex = left.firstIndex(of: .projects),
+              let sessionsIndex = left.firstIndex(of: .sessions),
+              projectsIndex < sessionsIndex else {
+            return self
+        }
+
+        var reordered = left
+        reordered.remove(at: projectsIndex)
+        guard let updatedSessionsIndex = reordered.firstIndex(of: .sessions) else {
+            return self
+        }
+        reordered.insert(.projects, at: updatedSessionsIndex + 1)
+
+        var copy = self
+        copy.slots[.left] = reordered
         return copy
     }
 }

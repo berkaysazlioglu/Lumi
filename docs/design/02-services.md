@@ -419,3 +419,17 @@ Kurallar:
 - **`events()` her zaman `nonisolated`** — actor hop'u boot penceresinde event kaybettirir (refactor 5.6).
 - **`@MainActor` bir servis PTY/dosya I/O yapmaz;** implementasyonun içindeki io queue'ları protokol sızdırmaz (`TerminalSessionManager` MainActor'dır, `PTYProcess` kendi `DispatchSource`'unda koşar).
 - **Kilit (`NSLock`) yalnız iki farklı yürütme bağlamının (io queue + MainActor) aynı alanı gördüğü yerlerde** kullanılır ve `@unchecked Sendable` gerekçesi dosyada yazılır (`EventBroadcaster`, `FeedWatchdog`, `AdaptiveBatchBudget`, `PTYProcess`).
+
+## Yerel workspace servisi (karar 46)
+
+`WorkspaceServicing` → `WorkspaceService` actor, `ProcessRunning` + `BinaryLocating` enjeksiyonuyla Git/Plastic inspection ve oluşturmayı yürütür; `ServiceRegistry.workspaces` üzerinden bağlanır. Oluşturmalar sıralanır, komutlar shell interpolation olmadan argv ile yürür. Git mevcut HEAD commit'ine; Plastic machine-readable STATUS değişiklik kümesine sabitlenir. Hedef `~/lumi/workspaces/{project}/{workspace}` olup kanonik containment, repository ancestor, mevcut dosya ve symlink kontrollerinden geçer. Proje klasöründeki `.lumi-project` kaynak yolunun sahiplik kaydıdır; aynı isimli projeler hash ekiyle ayrılır.
+
+`UnityLibraryCopier` kaynak Editor lock'larını denetler; Library'yi hedefte benzersiz staging dizinine bağımsız dosyalarla kopyalar, Temp/Logs ve symlink'leri dışlar (symlink hata üretir). Başarılı staging atomik move ile kurulur, hata yalnız operasyona ait staging'i temizler. Önceden var olan hedef Library ezilmez. Library hatası başarılı SCM workspace sonucunu warning ile döndürür; SCM kısmi hatasında kalmış branch/workspace konumu belirtilir ve otomatik silinmez.
+
+`ProjectWorkspaceCodec`, config'in additive `workspaces` alanını manual sözlük codec'iyle taşır. Malformed ve yinelenen kayıtlar elenir; mevcut config anahtarlarının ham sözlük korunması devam eder. `FakeWorkspaceService` state testlerinde; gerçek geçici Git repoları ve fake Plastic process zinciri servis testlerinde kullanılır.
+
+Karar 47: `WorkspaceCreateRequest.createNewBranch` Plastic'te false olduğunda gerçek kaynak branch'i kullanılır, branch create atlanır ve yalnız yeni workspace'te switch yapılır. Bu seçenek branch'in güncel içeriğini alır; yeni branch modu kaynak changeset'ine sabitlenir. Git oluşturma davranışı değişmez. Oluşturma task'ının UI yaşam döngüsünden bağımsız sahibi `ProjectWorkspaceStore`'dur.
+
+Karar 49: `WorkspaceServicing.remove(_:force:)` — hedef kanonik yolla `workspaceRoot` içinde ve kaynak projeyi kapsamıyor olmalı; aksi hâlde komut çalışmadan `WorkspaceFailure`. Git: klasör varsa `git worktree remove [--force] <path>` (kaynak projede), yoksa `git worktree prune`; Plastic: `cm workspace delete <path>` (`cm` yoksa yalnız force klasörü çöpe taşır); ardından artık klasör `FileManager.trashItem` ile çöpe gider ve `ownedDestinations`'tan düşer. Branch silinmez. `ProjectWorkspaceStore.deleteWorkspace` başarıda config kaydını düşürür, hatada `deleteError` + `canForceDelete = !force` yazar; `forgetWorkspace` yalnız kaydı siler. `TerminalListStore` `statusChanged`'de durum gerçekten değişmişse `TerminalMeta.statusChangedAt`'i damgalar.
+
+Karar 48: `sidebarProjectPaths` additive config dizisi sidebar seçimini tutar; codec mutlak string yolları sıra koruyarak tekilleştirir, yoksa boş liste okur. Bu alan `additionalPaths` ve `workspaces` kayıtlarından bağımsızdır, keşif köklerinde değişiklik yaratmaz.

@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import LumiKit
 @testable import LumiState
 
 /// `DialogRouter` birim testleri — beş bağımsız bayrağın yerini alan tek
@@ -37,9 +38,16 @@ final class DialogRouterTests: XCTestCase {
     func testEveryDialogBlocksTerminalInput() {
         let dialogs: [ActiveDialog] = [
             .repoSelector,
+            .sidebarProjectSelector,
+            .createWorkspace(projectPath: "/r"),
             .settings,
             .onboarding,
             .closeTab(CloseTabDialogState(repoPath: "/r", repoName: "r", minimizedCount: 1)),
+            .deleteWorkspace(DeleteWorkspaceDialogState(
+                workspace: ProjectWorkspace(projectPath: "/r", path: "/w", name: "w", branch: "w", scm: .git), sessionCount: 1)),
+            .deleteAgentSession(DeleteAgentSessionDialogState(
+                entry: AgentHistoryEntry(provider: .claude, sessionID: "s", title: "t", updatedAt: .now, logPath: "/l"),
+                projectPath: "/r")),
             .quit(terminalCount: 2),
         ]
         for dialog in dialogs {
@@ -49,6 +57,17 @@ final class DialogRouterTests: XCTestCase {
         }
         router.dismiss()
         XCTAssertFalse(router.isInputBlockingOverlayOpen)
+    }
+
+    func testDeleteAgentSessionProjectionIsStructural() {
+        let state = DeleteAgentSessionDialogState(
+            entry: AgentHistoryEntry(provider: .codex, sessionID: "s", title: "t", updatedAt: .now, logPath: "/l"),
+            projectPath: "/r")
+        router.present(.deleteAgentSession(state))
+        XCTAssertEqual(router.deleteAgentSessionDialog, state)
+        XCTAssertNil(router.deleteWorkspaceDialog)
+        router.dismiss(.deleteAgentSession(state))
+        XCTAssertNil(router.deleteAgentSessionDialog)
     }
 
     func testCloseTabProjectionIsStructural() {

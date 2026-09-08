@@ -19,7 +19,7 @@ struct ShellContextFixture {
 
     /// Terminal event stream'i tüketen store başlatılır: fixture gerçek
     /// `spawn` yolundan terminal üretebilsin diye (`apply` LumiState-internal).
-    static func make(repo: FakeRepoService = FakeRepoService(), git: FakeGitService = FakeGitService()) async -> ShellContextFixture {
+    static func make(repo: FakeRepoService = FakeRepoService(), git: FakeGitService = FakeGitService(), workspaces: FakeWorkspaceService = FakeWorkspaceService()) async -> ShellContextFixture {
         let config = FakeConfigService()
         let terminalService = FakeTerminalService()
         let viewProvider = FakeTerminalViewProvider()
@@ -31,16 +31,18 @@ struct ShellContextFixture {
         )
         let system = FakeSystemService()
         let toasts = shared.toasts
+        let repos = RepoStore(service: repo)
         let context = ShellContext(
             navigation: shared.navigation,
             layout: shared.layout,
             dialogs: shared.dialogs,
             terminals: shared.terminals,
-            repos: RepoStore(service: repo),
+            repos: repos,
+            workspaces: ProjectWorkspaceStore(service: workspaces, config: config, repos: repos, toasts: toasts),
             git: GitStore(git: git, toasts: toasts),
             plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
             commitAssistant: CommitMessageAssistant(generator: FakeCommitMessageGenerator(), toasts: toasts),
-            agentHistory: AgentHistoryStore(service: FakeAgentHistoryService()),
+            agentHistory: AgentHistoryStore(service: FakeAgentHistoryService(), transfer: FakeAgentSessionTransferService(), toasts: toasts),
             fileViewer: FileViewerStore(git: git, toasts: toasts),
             settings: shared.settings,
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),

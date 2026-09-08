@@ -17,4 +17,16 @@ public enum RelativeTimeFormatter {
         if hours < 24 { return "\(hours)h ago" }
         return "\(hours / 24)d ago"
     }
+
+    /// Sidebar ajan satırının sıkışık bandı (Orca `formatShortTimeAgo`):
+    /// 1 dk altı `now`, sonra `9m` / `3h` / `2d`.
+    public static func shortLabel(_ date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, now.timeIntervalSince(date))
+        let minutes = Int(seconds / 60)
+        if minutes < 1 { return "now" }
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)h" }
+        return "\(hours / 24)d"
+    }
 }

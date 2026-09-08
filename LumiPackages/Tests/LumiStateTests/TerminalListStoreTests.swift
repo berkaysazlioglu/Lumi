@@ -440,3 +440,22 @@ final class TerminalListStoreTests: XCTestCase {
         XCTAssertEqual(toasts.toasts.first?.message, "Write failed (errno 32)")
     }
 }
+
+// MARK: - Sidebar etkinlik zamanı (karar 51)
+
+extension TerminalListStoreTests {
+    func testStatusChangeStampsActivityOnlyWhenStatusDiffers() {
+        let terminal = makeTerminal("t1")
+        XCTAssertNil(store.meta(for: terminal.id)?.statusChangedAt)
+
+        store.apply(.statusChanged(terminal.id, .working))
+        let first = store.meta(for: terminal.id)?.statusChangedAt
+        XCTAssertNotNil(first)
+
+        store.apply(.statusChanged(terminal.id, .working))
+        XCTAssertEqual(store.meta(for: terminal.id)?.statusChangedAt, first, "aynı durumun tekrarı saati ilerletmez")
+
+        store.apply(.statusChanged(terminal.id, .waitingUnseen))
+        XCTAssertNotEqual(store.meta(for: terminal.id)?.statusChangedAt, first)
+    }
+}

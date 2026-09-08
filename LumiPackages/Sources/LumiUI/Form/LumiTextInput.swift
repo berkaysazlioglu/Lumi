@@ -7,6 +7,7 @@ struct LumiTextInput: View {
     @Binding var text: String
     var placeholder = ""
     var width: CGFloat?
+    var autofocus = false
     var onSubmit: (() -> Void)?
 
     @FocusState private var isFocused: Bool
@@ -17,6 +18,7 @@ struct LumiTextInput: View {
             .font(Theme.Typography.bodyMono)
             .foregroundStyle(Theme.textPrimary)
             .focused($isFocused)
+            .onAppear { if autofocus { isFocused = true } }
             .onSubmit { onSubmit?() }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)

@@ -26,16 +26,20 @@ public extension ShellContext {
         let viewProvider = PreviewTerminalViewProvider()
         let git = PreviewGitService()
         let shared = SharedStores.make(config: config, terminal: terminal, viewProvider: viewProvider)
+        let repos = RepoStore(service: PreviewRepoService())
         let context = ShellContext(
             navigation: shared.navigation,
             layout: shared.layout,
             dialogs: shared.dialogs,
             terminals: shared.terminals,
-            repos: RepoStore(service: PreviewRepoService()),
+            repos: repos,
+            workspaces: ProjectWorkspaceStore(service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts),
             git: GitStore(git: git, toasts: shared.toasts),
             plastic: PlasticStore(service: PreviewPlasticService(), toasts: shared.toasts),
             commitAssistant: CommitMessageAssistant(generator: PreviewCommitMessageGenerator(), toasts: shared.toasts),
-            agentHistory: AgentHistoryStore(service: PreviewAgentHistoryService()),
+            agentHistory: AgentHistoryStore(
+                service: PreviewAgentHistoryService(), transfer: PreviewAgentSessionTransfer(), toasts: shared.toasts
+            ),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
             settings: shared.settings,
             sessionSchedule: SessionScheduleStore(starter: PreviewSessionStarterService()),
@@ -88,6 +92,18 @@ struct SettingsTabPreview: View {
 }
 
 // MARK: - Minimal in-module fake'ler
+
+private actor PreviewWorkspaceService: WorkspaceServicing {
+    func inspect(project: Repo) async throws -> WorkspaceSource {
+        WorkspaceSource(projectPath: project.path, scm: .git, branch: "main", revision: "abc123",
+                        destinationDirectory: "/Users/preview/lumi/workspaces/\(project.name)")
+    }
+    func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
+        throw WorkspaceFailure("Creation is unavailable in previews.")
+    }
+    func copyLibrary(sourcePath: String, workspacePath: String) async throws {}
+    func remove(_ workspace: ProjectWorkspace, force: Bool) async throws {}
+}
 
 /// Diskte hiçbir şey yoktur; değerler bellekte tutulur.
 private actor PreviewConfigService: ConfigServicing {
@@ -169,7 +185,15 @@ private final class PreviewTerminalViewProvider: TerminalViewProviding {
     func refreshAttachedViews() {}
 }
 
-private struct PreviewAgentHistoryService: AgentHistoryReading {
+private struct PreviewAgentSessionTransfer: AgentSessionTransferring {
+    func exportSession(_ entry: AgentHistoryEntry, to destination: URL) async throws {}
+    func importSession(from source: URL, projectPath: String) async throws -> AgentSessionImportResult {
+        AgentSessionImportResult(provider: .claude, sessionID: "preview", logPath: "/tmp/preview.jsonl", subagentCount: 0, didRenameSession: false)
+    }
+}
+
+private struct PreviewAgentHistoryService: AgentHistoryServicing {
+    func deleteSession(_ entry: AgentHistoryEntry) async throws {}
     func entries(projectPath: String) async throws -> [AgentHistoryEntry] { [] }
 }
 

@@ -17,7 +17,7 @@ enum FileTreeBuilder {
     /// üzerine eklenir. Unity (`Library`, `Temp`, `Logs`, `obj`) ve Xcode
     /// (`DerivedData`) çıktıları FSEvents gürültüsünün ana kaynağıdır.
     static let excludedNames: Set<String> = [
-        ".git", "node_modules", "dist", "build", ".DS_Store",
+        ".git", ".plastic", "node_modules", "dist", "build", ".DS_Store",
         "coverage", ".next", ".nuxt", ".cache",
         "__pycache__", ".pytest_cache", "venv", ".venv",
         "Library", "Temp", "Logs", "obj", "DerivedData", ".build", "Pods",
@@ -122,7 +122,7 @@ enum FileTreeBuilder {
 
         var nodes: [FileTreeNode] = []
         nodes.reserveCapacity(entries.count)
-        for name in entries where name != ".git" {
+        for name in entries where name != ".git" && name != ".plastic" {
             let absolutePath = directory + "/" + name
             let kind = entryKind(at: absolutePath)
             guard kind != .missing else { continue }
