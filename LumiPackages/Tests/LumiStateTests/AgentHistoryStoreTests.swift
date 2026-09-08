@@ -98,3 +98,35 @@ final class AgentHistoryStoreTransferTests: XCTestCase {
         XCTAssertEqual(toasts.toasts.map(\.kind), [.error])
     }
 }
+
+@MainActor
+final class AgentHistoryStoreDeleteTests: XCTestCase {
+    private func entry(_ id: String) -> AgentHistoryEntry {
+        AgentHistoryEntry(provider: .claude, sessionID: id, title: "Title \(id)", updatedAt: .now, logPath: "/tmp/\(id)")
+    }
+
+    func testDeleteRemovesEntryAndRefreshes() async {
+        let service = FakeAgentHistoryService(result: [entry("a"), entry("b")])
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let store = AgentHistoryStore(service: service, transfer: FakeAgentSessionTransferService(), toasts: toasts)
+        await store.refresh("/repo")
+        let ok = await store.deleteSession(entry("a"), projectPath: "/repo")
+        XCTAssertTrue(ok)
+        XCTAssertEqual(store.entries["/repo"]?.map(\.sessionID), ["b"])
+        XCTAssertEqual(toasts.toasts.map(\.kind), [.success])
+        let deleted = await service.deleted
+        XCTAssertEqual(deleted.map(\.sessionID), ["a"])
+    }
+
+    func testDeleteFailureShowsErrorAndKeepsList() async {
+        let service = FakeAgentHistoryService(result: [entry("a")])
+        await service.setDeleteFailure(LumiError.fileOperationFailed(path: "/tmp/a", detail: "locked"))
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let store = AgentHistoryStore(service: service, transfer: FakeAgentSessionTransferService(), toasts: toasts)
+        await store.refresh("/repo")
+        let ok = await store.deleteSession(entry("a"), projectPath: "/repo")
+        XCTAssertFalse(ok)
+        XCTAssertEqual(store.entries["/repo"]?.map(\.sessionID), ["a"])
+        XCTAssertEqual(toasts.toasts.map(\.kind), [.error])
+    }
+}

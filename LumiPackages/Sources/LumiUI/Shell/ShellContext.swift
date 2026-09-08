@@ -187,6 +187,23 @@ public final class ShellContext {
         if case .deleteWorkspace = dialogs.active { dialogs.dismiss() }
     }
 
+    // MARK: - Agent History oturum silme (karar 53)
+
+    public func requestDeleteAgentSession(_ entry: AgentHistoryEntry, projectPath: String) {
+        dialogs.present(.deleteAgentSession(DeleteAgentSessionDialogState(entry: entry, projectPath: projectPath)))
+    }
+
+    public func confirmDeleteAgentSession() async {
+        guard let dialog = dialogs.deleteAgentSessionDialog else { return }
+        if await agentHistory.deleteSession(dialog.entry, projectPath: dialog.projectPath) {
+            dialogs.dismiss(.deleteAgentSession(dialog))
+        }
+    }
+
+    public func cancelDeleteAgentSession() {
+        if case .deleteAgentSession = dialogs.active { dialogs.dismiss() }
+    }
+
     /// Eksik (diskte olmayan) workspace kaydını listeden düşürür.
     public func forgetWorkspace(_ workspace: ProjectWorkspace) async {
         if navigation.openTabs.contains(workspace.path) { navigation.closeTab(workspace.path) }

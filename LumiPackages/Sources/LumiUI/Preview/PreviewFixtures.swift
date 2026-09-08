@@ -192,7 +192,8 @@ private struct PreviewAgentSessionTransfer: AgentSessionTransferring {
     }
 }
 
-private struct PreviewAgentHistoryService: AgentHistoryReading {
+private struct PreviewAgentHistoryService: AgentHistoryServicing {
+    func deleteSession(_ entry: AgentHistoryEntry) async throws {}
     func entries(projectPath: String) async throws -> [AgentHistoryEntry] { [] }
 }
 

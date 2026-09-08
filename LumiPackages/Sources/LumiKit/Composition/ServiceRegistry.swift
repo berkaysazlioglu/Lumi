@@ -21,7 +21,7 @@ public protocol ServiceRegistry: AnyObject {
     var plastic: any PlasticServicing { get }
     /// Commit/checkin mesajı üreticisi (karar 47) — `claude -p` arka planda.
     var commitMessages: any CommitMessageGenerating { get }
-    var agentHistory: any AgentHistoryReading { get }
+    var agentHistory: any AgentHistoryServicing { get }
     /// Agent History oturumu dışa/içe aktarımı (karar 52).
     var agentSessionTransfer: any AgentSessionTransferring { get }
 

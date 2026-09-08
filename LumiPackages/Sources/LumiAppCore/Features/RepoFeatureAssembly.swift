@@ -67,6 +67,11 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             isPresented: { $0.dialogs.deleteWorkspaceDialog != nil },
             makeView: { AnyView(DeleteWorkspaceDialogOverlay()) }
         ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .deleteAgentSessionDialog,
+            isPresented: { $0.dialogs.deleteAgentSessionDialog != nil },
+            makeView: { AnyView(DeleteAgentSessionDialogOverlay()) }
+        ))
         registries.panels.register(PanelItemDescriptor(
             id: .projectTools,
             title: "Project Tools",

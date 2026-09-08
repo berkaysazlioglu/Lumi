@@ -1,9 +1,11 @@
 import Foundation
 import LumiKit
 
-public actor AgentHistoryService: AgentHistoryReading {
+public actor AgentHistoryService: AgentHistoryServicing {
     private let home: URL
     private let environment: [String: String]
+    /// `true`: silinen kayıtlar çöp kutusuna taşınır; testler kalıcı silme kullanır.
+    private let usesTrash: Bool
     private let maxFiles = 2_000
     private let maxEntries = 200
     private let maxEnumeratedItems = 20_000
@@ -15,10 +17,55 @@ public actor AgentHistoryService: AgentHistoryReading {
 
     public init(
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        usesTrash: Bool = true
     ) {
         self.home = home
         self.environment = environment
+        self.usesTrash = usesTrash
+    }
+
+    // MARK: - Silme (karar 53)
+
+    /// Log dosyasını ve Claude'da `<id>/` yan dizinini (subagents, tool-results)
+    /// kaldırır. Yol sağlayıcının kendi kökü altında olmalıdır — panelden gelen
+    /// girdi bile olsa dışarıya dokunulmaz.
+    public func deleteSession(_ entry: AgentHistoryEntry) async throws {
+        let roots = AgentDataRoots(home: home, environment: environment)
+        let log = URL(fileURLWithPath: entry.logPath).standardizedFileURL
+        let allowed = entry.provider == .claude ? roots.claude.appendingPathComponent("projects") : roots.codexSessions
+        guard log.pathExtension == "jsonl", Self.isInside(log, root: allowed) else {
+            throw LumiError.sessionTransferFailed(detail: "Refusing to delete a log outside \(allowed.path).")
+        }
+        guard FileManager.default.fileExists(atPath: log.path) else {
+            throw LumiError.sessionTransferFailed(detail: "Log no longer exists: \(log.lastPathComponent)")
+        }
+        try remove(log)
+        if entry.provider == .claude {
+            let sidecar = log.deletingPathExtension()
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: sidecar.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                try remove(sidecar)
+            }
+        }
+    }
+
+    private func remove(_ url: URL) throws {
+        do {
+            if usesTrash {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } else {
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            throw LumiError.fileOperationFailed(path: url.path, detail: error.localizedDescription)
+        }
+    }
+
+    static func isInside(_ url: URL, root: URL) -> Bool {
+        let path = url.resolvingSymlinksInPath().path
+        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+        return path.hasPrefix(rootPath + "/")
     }
 
     public func entries(projectPath: String) async throws -> [AgentHistoryEntry] {

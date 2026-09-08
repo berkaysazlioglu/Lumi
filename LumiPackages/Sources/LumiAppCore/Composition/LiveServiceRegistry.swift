@@ -17,7 +17,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let system: any SystemServicing
     let repo: any RepoServicing
     let workspaces: any WorkspaceServicing
-    let agentHistory: any AgentHistoryReading
+    let agentHistory: any AgentHistoryServicing
     let agentSessionTransfer: any AgentSessionTransferring
     let git: any GitServicing
     let plastic: any PlasticServicing

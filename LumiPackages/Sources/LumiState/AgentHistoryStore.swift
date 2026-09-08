@@ -10,13 +10,13 @@ public final class AgentHistoryStore {
     public private(set) var errors: [String: String] = [:]
     /// Dışa/içe aktarım sürüyor (düğmeler kapanır).
     public private(set) var isTransferring = false
-    @ObservationIgnored private let service: any AgentHistoryReading
+    @ObservationIgnored private let service: any AgentHistoryServicing
     @ObservationIgnored private let transfer: any AgentSessionTransferring
     @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private var generations: [String: UUID] = [:]
 
     public init(
-        service: any AgentHistoryReading,
+        service: any AgentHistoryServicing,
         transfer: any AgentSessionTransferring,
         toasts: ToastStore
     ) {
@@ -49,6 +49,21 @@ public final class AgentHistoryStore {
         entries.removeValue(forKey: projectPath)
         errors.removeValue(forKey: projectPath)
         loading.remove(projectPath)
+    }
+
+    // MARK: - Silme (karar 53)
+
+    /// Oturumu diskten kaldırır ve listeyi yeniler. Onay dialogu çağırandadır.
+    @discardableResult
+    public func deleteSession(_ entry: AgentHistoryEntry, projectPath: String) async -> Bool {
+        guard !isTransferring else { return false }
+        isTransferring = true
+        let succeeded = await toasts.reporting { try await service.deleteSession(entry) }
+        isTransferring = false
+        guard succeeded else { return false }
+        toasts.show(.success, title: "Session deleted", message: entry.title)
+        await refresh(projectPath)
+        return true
     }
 
     // MARK: - Dışa / içe aktarım (karar 52)

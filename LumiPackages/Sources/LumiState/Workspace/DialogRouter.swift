@@ -27,6 +27,18 @@ public struct DeleteWorkspaceDialogState: Equatable, Sendable {
     }
 }
 
+/// Agent History oturum silme onayının sunum verisi (karar 53).
+public struct DeleteAgentSessionDialogState: Equatable, Sendable {
+    public let entry: AgentHistoryEntry
+    /// Listenin yenileneceği proje.
+    public let projectPath: String
+
+    public init(entry: AgentHistoryEntry, projectPath: String) {
+        self.entry = entry
+        self.projectPath = projectPath
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -43,6 +55,7 @@ public enum ActiveDialog: Equatable, Sendable {
     case onboarding
     case closeTab(CloseTabDialogState)
     case deleteWorkspace(DeleteWorkspaceDialogState)
+    case deleteAgentSession(DeleteAgentSessionDialogState)
     case quit(terminalCount: Int)
 
     public var isPresented: Bool { self != .none }
@@ -53,7 +66,7 @@ public enum ActiveDialog: Equatable, Sendable {
         switch self {
         case .none: false
         case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab,
-             .deleteWorkspace, .quit: true
+             .deleteWorkspace, .deleteAgentSession, .quit: true
         }
     }
 }
@@ -84,6 +97,11 @@ public final class DialogRouter {
 
     public var deleteWorkspaceDialog: DeleteWorkspaceDialogState? {
         guard case .deleteWorkspace(let state) = active else { return nil }
+        return state
+    }
+
+    public var deleteAgentSessionDialog: DeleteAgentSessionDialogState? {
+        guard case .deleteAgentSession(let state) = active else { return nil }
         return state
     }
 
