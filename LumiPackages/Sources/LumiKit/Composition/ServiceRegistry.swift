@@ -22,6 +22,8 @@ public protocol ServiceRegistry: AnyObject {
     /// Commit/checkin mesajı üreticisi (karar 47) — `claude -p` arka planda.
     var commitMessages: any CommitMessageGenerating { get }
     var agentHistory: any AgentHistoryReading { get }
+    /// Agent History oturumu dışa/içe aktarımı (karar 52).
+    var agentSessionTransfer: any AgentSessionTransferring { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

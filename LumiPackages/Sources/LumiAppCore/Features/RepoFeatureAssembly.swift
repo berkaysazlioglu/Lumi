@@ -38,7 +38,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             service: services.workspaces, config: services.config,
             repos: repoStore, toasts: shared.toasts
         )
-        agentHistory = AgentHistoryStore(service: services.agentHistory)
+        agentHistory = AgentHistoryStore(
+            service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts
+        )
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
         plasticStore = PlasticStore(service: services.plastic, toasts: shared.toasts)
         commitAssistant = CommitMessageAssistant(generator: services.commitMessages, toasts: shared.toasts)

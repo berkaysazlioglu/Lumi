@@ -37,7 +37,9 @@ public extension ShellContext {
             git: GitStore(git: git, toasts: shared.toasts),
             plastic: PlasticStore(service: PreviewPlasticService(), toasts: shared.toasts),
             commitAssistant: CommitMessageAssistant(generator: PreviewCommitMessageGenerator(), toasts: shared.toasts),
-            agentHistory: AgentHistoryStore(service: PreviewAgentHistoryService()),
+            agentHistory: AgentHistoryStore(
+                service: PreviewAgentHistoryService(), transfer: PreviewAgentSessionTransfer(), toasts: shared.toasts
+            ),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
             settings: shared.settings,
             sessionSchedule: SessionScheduleStore(starter: PreviewSessionStarterService()),
@@ -181,6 +183,13 @@ private final class PreviewTerminalViewProvider: TerminalViewProviding {
     func isAttached(_ id: TerminalID) -> Bool { false }
     func detachAll() {}
     func refreshAttachedViews() {}
+}
+
+private struct PreviewAgentSessionTransfer: AgentSessionTransferring {
+    func exportSession(_ entry: AgentHistoryEntry, to destination: URL) async throws {}
+    func importSession(from source: URL, projectPath: String) async throws -> AgentSessionImportResult {
+        AgentSessionImportResult(provider: .claude, sessionID: "preview", logPath: "/tmp/preview.jsonl", subagentCount: 0, didRenameSession: false)
+    }
 }
 
 private struct PreviewAgentHistoryService: AgentHistoryReading {

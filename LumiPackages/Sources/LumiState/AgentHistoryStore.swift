@@ -8,10 +8,22 @@ public final class AgentHistoryStore {
     public private(set) var entries: [String: [AgentHistoryEntry]] = [:]
     public private(set) var loading: Set<String> = []
     public private(set) var errors: [String: String] = [:]
+    /// Dışa/içe aktarım sürüyor (düğmeler kapanır).
+    public private(set) var isTransferring = false
     @ObservationIgnored private let service: any AgentHistoryReading
+    @ObservationIgnored private let transfer: any AgentSessionTransferring
+    @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private var generations: [String: UUID] = [:]
 
-    public init(service: any AgentHistoryReading) { self.service = service }
+    public init(
+        service: any AgentHistoryReading,
+        transfer: any AgentSessionTransferring,
+        toasts: ToastStore
+    ) {
+        self.service = service
+        self.transfer = transfer
+        self.toasts = toasts
+    }
 
     public func refresh(_ projectPath: String) async {
         guard !loading.contains(projectPath) else { return }
@@ -37,5 +49,38 @@ public final class AgentHistoryStore {
         entries.removeValue(forKey: projectPath)
         errors.removeValue(forKey: projectPath)
         loading.remove(projectPath)
+    }
+
+    // MARK: - Dışa / içe aktarım (karar 52)
+
+    /// Oturumu `destination`a paketler; sonuç toast'la bildirilir.
+    @discardableResult
+    public func exportSession(_ entry: AgentHistoryEntry, to destination: URL) async -> Bool {
+        guard !isTransferring else { return false }
+        isTransferring = true
+        defer { isTransferring = false }
+        let succeeded = await toasts.reporting { try await transfer.exportSession(entry, to: destination) }
+        if succeeded {
+            toasts.show(.success, title: "Session exported", message: destination.lastPathComponent)
+        }
+        return succeeded
+    }
+
+    /// Paketi `projectPath` için içe alır ve listeyi yeniler.
+    @discardableResult
+    public func importSession(from source: URL, projectPath: String) async -> AgentSessionImportResult? {
+        guard !isTransferring else { return nil }
+        isTransferring = true
+        var result: AgentSessionImportResult?
+        let succeeded = await toasts.reporting {
+            result = try await transfer.importSession(from: source, projectPath: projectPath)
+        }
+        isTransferring = false
+        guard succeeded, let result else { return nil }
+        let renamed = result.didRenameSession ? " (renamed: a session with the same ID already existed)" : ""
+        let subagents = result.subagentCount > 0 ? " with \(result.subagentCount) subagent(s)" : ""
+        toasts.show(.success, title: "Session imported", message: "\(result.provider.rawValue.capitalized) session\(subagents)\(renamed)")
+        await refresh(projectPath)
+        return result
     }
 }

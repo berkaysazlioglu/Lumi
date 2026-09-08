@@ -5,7 +5,7 @@ import SwiftUI
 /// Agent History satırı açıldığında görünen detay kartı (Orca
 /// `SessionInlineDetails` paritesi).
 ///
-/// Üstte tonlu aksiyon şeridi (Resume / Copy Command / View Log), altında
+/// Üstte tonlu aksiyon şeridi (Resume / Copy Command / View Log / Export), altında
 /// bölümler: FIRST PROMPT ("You" kartı + Copy), LATEST TURNS (rol etiketli
 /// kartlar), SUBAGENTS (N) ve WORKTREE (branch + kompakt yol).
 struct AgentHistoryDetailCard: View {
@@ -13,6 +13,7 @@ struct AgentHistoryDetailCard: View {
     let onResume: () -> Void
     let onCopyCommand: () -> Void
     let onRevealLog: () -> Void
+    let onExport: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -62,6 +63,7 @@ struct AgentHistoryDetailCard: View {
             action("Copy Command", icon: "doc.on.doc", action: onCopyCommand)
                 .disabled(entry.resumeCommand == nil)
             action("View Log", icon: "doc.text", action: onRevealLog)
+            action("Export", icon: "square.and.arrow.up", action: onExport)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.Spacing.lg)
@@ -239,7 +241,8 @@ struct AgentHistoryBranchBadge: View {
                 AgentHistorySubagent(id: "a2", name: "Faz 1: Explorer yenileme", kind: "general-purpose", messageCount: 145, logPath: "/tmp/a2"),
             ]
         ),
-        onResume: {}, onCopyCommand: {}, onRevealLog: {}
+        onResume: {}, onCopyCommand: {}, onRevealLog: {},
+        onExport: {}
     )
     .padding(Theme.Spacing.lg)
     .frame(width: 340)

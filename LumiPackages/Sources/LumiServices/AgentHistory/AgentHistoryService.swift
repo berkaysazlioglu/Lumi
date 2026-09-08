@@ -23,12 +23,10 @@ public actor AgentHistoryService: AgentHistoryReading {
 
     public func entries(projectPath: String) async throws -> [AgentHistoryEntry] {
         let project = URL(fileURLWithPath: projectPath).standardizedFileURL.resolvingSymlinksInPath().path
-        let claude = directory("CLAUDE_CONFIG_DIR", fallback: ".claude")
-        let codex = directory("CODEX_HOME", fallback: ".codex")
-        let encoded = projectPath.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "-", options: .regularExpression)
+        let dataRoots = AgentDataRoots(home: home, environment: environment)
         let roots: [(URL, AgentProvider)] = [
-            (claude.appendingPathComponent("projects/" + encoded), .claude),
-            (codex.appendingPathComponent("sessions"), .codex),
+            (dataRoots.claudeProjectDirectory(projectPath), .claude),
+            (dataRoots.codexSessions, .codex),
         ]
         let candidates = try roots.flatMap { try files(in: $0.0, provider: $0.1) }
             .sorted { $0.date > $1.date }
@@ -47,11 +45,6 @@ public actor AgentHistoryService: AgentHistoryReading {
         let url: URL
         let provider: AgentProvider
         let date: Date
-    }
-
-    private func directory(_ key: String, fallback: String) -> URL {
-        guard let path = environment[key], !path.isEmpty else { return home.appendingPathComponent(fallback) }
-        return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
     }
 
     private func files(in root: URL, provider: AgentProvider) throws -> [Candidate] {

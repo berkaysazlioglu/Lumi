@@ -18,6 +18,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let repo: any RepoServicing
     let workspaces: any WorkspaceServicing
     let agentHistory: any AgentHistoryReading
+    let agentSessionTransfer: any AgentSessionTransferring
     let git: any GitServicing
     let plastic: any PlasticServicing
     let commitMessages: any CommitMessageGenerating
@@ -67,6 +68,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         plastic = PlasticService()
         commitMessages = ClaudeCommitMessageService()
         agentHistory = AgentHistoryService()
+        agentSessionTransfer = AgentSessionTransferService()
         highlighter = HighlightrEngine(style: HighlightrStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }
