@@ -55,18 +55,19 @@ public enum PlasticOutputParser {
         }
     }
 
-    /// Plastic durum kodu → ortak `FileChangeStatus`. `CO+CH` gibi bileşik
-    /// kodlar (`--iscochanged`) ilk parçasıyla değerlendirilir.
+    /// Plastic durum kodu → ortak `FileChangeStatus`. Bileşik kodlarda
+    /// (`CO+MV`, `CO+RP`, `CO+CH`) en anlamlı parça kazanır: taşıma/silme/
+    /// ekleme, checkout'un (CO) önündedir — gerçek çalışma alanında
+    /// `CO+MV` "Moved items" grubuna düşmelidir. RP (replaced) tek başına ya da
+    /// CO ile birlikte içerik değişikliği sayılır.
     public static func status(forCode rawCode: String) -> FileChangeStatus? {
-        let code = rawCode.split(separator: "+").first.map(String.init) ?? rawCode
-        switch code {
-        case "CH", "CO": return .modified
-        case "AD", "CP": return .added
-        case "DE", "LD": return .deleted
-        case "MV", "LM", "RP": return .renamed
-        case "PR": return .untracked
-        default: return nil
-        }
+        let codes = Set(rawCode.split(separator: "+").map(String.init))
+        if !codes.isDisjoint(with: ["MV", "LM"]) { return .renamed }
+        if !codes.isDisjoint(with: ["DE", "LD"]) { return .deleted }
+        if !codes.isDisjoint(with: ["AD", "CP"]) { return .added }
+        if codes.contains("PR") { return .untracked }
+        if !codes.isDisjoint(with: ["CH", "CO", "RP"]) { return .modified }
+        return nil
     }
 
     // MARK: - Changesets

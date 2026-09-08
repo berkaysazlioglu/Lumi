@@ -55,6 +55,23 @@ final class PlasticOutputParserTests: XCTestCase {
         ])
     }
 
+    func testCompoundCodesPreferMoveDeleteAddOverCheckout() {
+        // Gerçek word-puzzle çalışma alanı çıktısı: CO+MV, CO+RP, CO+CH, CO
+        XCTAssertEqual(PlasticOutputParser.status(forCode: "CO+MV"), .renamed)
+        XCTAssertEqual(PlasticOutputParser.status(forCode: "CO+RP"), .modified)
+        XCTAssertEqual(PlasticOutputParser.status(forCode: "RP"), .modified)
+        XCTAssertEqual(PlasticOutputParser.status(forCode: "CO+CH"), .modified)
+        XCTAssertEqual(PlasticOutputParser.status(forCode: "CO"), .modified)
+        XCTAssertEqual(PlasticOutputParser.status(forCode: "CO+DE"), .deleted)
+        XCTAssertNil(PlasticOutputParser.status(forCode: "IG"))
+        XCTAssertNil(PlasticOutputParser.status(forCode: "XX+YY"))
+    }
+
+    func testParseStatusAcceptsLinesWithoutMergeField() {
+        let stdout = "CO+RP|\(root)/Assets/Include.cginc|False\n"
+        XCTAssertEqual(PlasticOutputParser.parseStatus(stdout, workspacePath: root), [PlasticFileChange(path: "Assets/Include.cginc", status: .modified)])
+    }
+
     func testParseStatusSkipsPathsOutsideWorkspaceAndMalformedLines() {
         let stdout = "CH|/elsewhere/file.cs|False|NO_MERGES\nCH\n\n"
         XCTAssertEqual(PlasticOutputParser.parseStatus(stdout, workspacePath: root), [])
