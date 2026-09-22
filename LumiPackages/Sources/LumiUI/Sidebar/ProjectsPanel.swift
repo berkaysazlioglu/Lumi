@@ -167,6 +167,9 @@ public struct ProjectsPanel: View {
             .action("Create Workspace…", icon: "plus", isEnabled: !shell.workspaces.isCreating) {
                 shell.dialogs.present(.createWorkspace(projectPath: project.path))
             },
+            .action("Actions…", icon: "bolt") {
+                shell.dialogs.present(.quickCommands(projectPath: project.path))
+            },
             .divider,
             .action("Open CLAUDE.md", icon: "doc.text", isEnabled: hasClaudeInstructions(project)) {
                 Task { await shell.fileViewer.presentView(repoPath: project.path, filePath: Self.claudeInstructionsFile) }

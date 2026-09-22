@@ -52,6 +52,7 @@ struct ShellComposition {
             terminals: shared.terminals,
             repos: repo.repoStore,
             workspaces: repo.workspaceStore,
+            quickCommands: repo.quickCommands,
             git: repo.gitStore,
             plastic: repo.plasticStore,
             commitAssistant: repo.commitAssistant,

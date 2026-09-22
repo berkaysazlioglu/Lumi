@@ -8,12 +8,14 @@ import LumiTestSupport
 final class QuickCommandStoreTests: XCTestCase {
     private var config: FakeConfigService!
     private var toasts: ToastStore!
+    private var generator: FakeQuickCommandGenerator!
     private var store: QuickCommandStore!
 
     override func setUp() async throws {
         config = FakeConfigService()
         toasts = ToastStore()
-        store = QuickCommandStore(config: config, toasts: toasts)
+        generator = FakeQuickCommandGenerator()
+        store = QuickCommandStore(config: config, generator: generator, toasts: toasts)
     }
 
     func testSaveAppendsThenUpdatesInPlace() async {
@@ -62,6 +64,34 @@ final class QuickCommandStoreTests: XCTestCase {
         let saved = await store.save(ProjectQuickCommand(projectPath: "/a", name: "A", script: "ls"))
         XCTAssertFalse(saved)
         XCTAssertTrue(store.commands.isEmpty)
+        XCTAssertFalse(toasts.toasts.isEmpty)
+    }
+
+    func testGenerateReturnsScriptWithoutSavingAndTracksFlight() async {
+        await generator.setScript("make\n")
+        await generator.setDelay(.milliseconds(50))
+        let request = QuickCommandGenerationRequest(projectPath: "/a", projectName: "A", description: "build")
+        let flight = Task { await store.generate(draftID: "d", request: request) }
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertTrue(store.isGenerating("d"))
+        let duplicate = await store.generate(draftID: "d", request: request)
+        XCTAssertNil(duplicate, "second request for the same draft is ignored")
+
+        let script = await flight.value
+        XCTAssertEqual(script, "make\n")
+        XCTAssertFalse(store.isGenerating("d"))
+        let writes = await config.configUpdateCount
+        XCTAssertEqual(writes, 0, "generation never persists by itself")
+        let requests = await generator.requests
+        XCTAssertEqual(requests, [request])
+    }
+
+    func testGenerateFailureShowsToast() async {
+        await generator.setError(.quickCommandGenerationFailed(detail: "boom"))
+        let script = await store.generate(
+            draftID: "d", request: .init(projectPath: "/a", projectName: "A", description: "x")
+        )
+        XCTAssertNil(script)
         XCTAssertFalse(toasts.toasts.isEmpty)
     }
 }

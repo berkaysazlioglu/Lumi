@@ -104,3 +104,22 @@ public enum QuickCommandTemplate {
         return try? NSRegularExpression(pattern: "(?<!\\$)\\{(\(keys))\\}")
     }()
 }
+
+public enum QuickCommandNaming {
+    public static let maxNameLength = 40
+
+    /// Adı boş bırakılmış komuta Claude tarifinden ad önerisi: ilk dolu
+    /// satır, sondaki noktalama atılır, uzunsa kelime sınırında kesilir.
+    public static func suggestedName(from request: String) -> String {
+        let line = request.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+        let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: ".!?:;,"))
+        guard trimmed.count > maxNameLength else { return trimmed }
+        let prefix = String(trimmed.prefix(maxNameLength))
+        // Kesim noktası zaten kelime sınırıysa son kelime tamdır.
+        let endsAtWord = trimmed.dropFirst(maxNameLength).first == " "
+        let cut = endsAtWord ? prefix : (prefix.lastIndex(of: " ").map { String(prefix[..<$0]) } ?? prefix)
+        return cut + "…"
+    }
+}

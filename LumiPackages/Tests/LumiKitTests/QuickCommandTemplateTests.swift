@@ -30,3 +30,16 @@ final class QuickCommandTemplateTests: XCTestCase {
         XCTAssertTrue(ProjectQuickCommand(projectPath: "/p", name: "List", script: "ls").isValid)
     }
 }
+
+final class QuickCommandNamingTests: XCTestCase {
+    func testSuggestedNameUsesFirstLineWithoutTrailingPunctuation() {
+        XCTAssertEqual(QuickCommandNaming.suggestedName(from: "\n  Open Unity here.\nmore"), "Open Unity here")
+        XCTAssertEqual(QuickCommandNaming.suggestedName(from: ""), "")
+    }
+
+    func testLongNameIsCutAtWordBoundary() {
+        let name = QuickCommandNaming.suggestedName(from: "Build the release app bundle and install it into the Applications folder")
+        XCTAssertEqual(name, "Build the release app bundle and install…")
+        XCTAssertLessThanOrEqual(name.count, QuickCommandNaming.maxNameLength + 1)
+    }
+}

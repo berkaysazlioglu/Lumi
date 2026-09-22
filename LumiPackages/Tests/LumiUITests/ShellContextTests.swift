@@ -293,6 +293,7 @@ final class ShellContextTests: XCTestCase {
             terminals: context.terminals,
             repos: context.repos,
             workspaces: context.workspaces,
+            quickCommands: context.quickCommands,
             git: context.git,
             plastic: context.plastic,
             commitAssistant: context.commitAssistant,

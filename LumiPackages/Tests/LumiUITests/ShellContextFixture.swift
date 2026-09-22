@@ -50,6 +50,7 @@ struct ShellContextFixture {
             terminals: shared.terminals,
             repos: repos,
             workspaces: ProjectWorkspaceStore(service: workspaces, config: config, repos: repos, toasts: toasts),
+            quickCommands: QuickCommandStore(config: config, generator: FakeQuickCommandGenerator(), toasts: toasts),
             git: GitStore(git: git, toasts: toasts),
             plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
             commitAssistant: CommitMessageAssistant(generator: FakeCommitMessageGenerator(), toasts: toasts),

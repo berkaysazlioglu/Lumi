@@ -11,11 +11,15 @@ import Observation
 @MainActor
 public final class QuickCommandStore {
     public private(set) var commands: [ProjectQuickCommand] = []
+    /// Claude'un script yazdığı taslakların kimlikleri (karar 92).
+    public private(set) var generatingIDs: Set<String> = []
     @ObservationIgnored private let config: any ConfigServicing
+    @ObservationIgnored private let generator: any QuickCommandGenerating
     @ObservationIgnored private let toasts: ToastStore
 
-    public init(config: any ConfigServicing, toasts: ToastStore) {
+    public init(config: any ConfigServicing, generator: any QuickCommandGenerating, toasts: ToastStore) {
         self.config = config
+        self.generator = generator
         self.toasts = toasts
     }
 
@@ -55,6 +59,25 @@ public final class QuickCommandStore {
         await write(failureTitle: "Command could not be deleted") { config in
             config.projectQuickCommands.removeAll { $0.id == id }
         }
+    }
+
+    public func isGenerating(_ draftID: String) -> Bool {
+        generatingIDs.contains(draftID)
+    }
+
+    /// Taslak için Claude'dan script ister. Aynı taslak için ikinci istek
+    /// uçuştaki bitmeden başlamaz (nil döner); hata toast olarak görünür.
+    /// Sonuç KAYDEDİLMEZ — kullanıcı script'i görüp Save'e basar.
+    public func generate(draftID: String, request: QuickCommandGenerationRequest) async -> String? {
+        guard !generatingIDs.contains(draftID) else { return nil }
+        generatingIDs.insert(draftID)
+        defer { generatingIDs.remove(draftID) }
+
+        var script: String?
+        await toasts.reporting {
+            script = try await self.generator.generate(request)
+        }
+        return script
     }
 
     private func write(failureTitle: String, _ mutate: @escaping @Sendable (inout AppConfig) -> Void) async -> Bool {

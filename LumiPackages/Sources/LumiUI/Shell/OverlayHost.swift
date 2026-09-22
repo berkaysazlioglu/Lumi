@@ -24,6 +24,8 @@ public extension OverlayID {
     /// Karar 46/49: Projects paneline ait modal ve onay dialogu.
     static let createWorkspace = OverlayID("createWorkspace")
     static let deleteWorkspaceDialog = OverlayID("deleteWorkspaceDialog")
+    /// Karar 92: projenin hızlı komut düzenleyicisi.
+    static let quickCommands = OverlayID("quickCommands")
     /// Karar 53: Agent History oturum silme onayı.
     static let deleteAgentSessionDialog = OverlayID("deleteAgentSessionDialog")
     /// Karar 56: Claude hesabı silme onayı (geri alınamaz).

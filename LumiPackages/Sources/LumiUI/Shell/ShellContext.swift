@@ -60,6 +60,8 @@ public final class ShellContext {
     public let terminals: TerminalListStore
     public let repos: RepoStore
     public let workspaces: ProjectWorkspaceStore
+    /// Proje hızlı komutları (karar 92).
+    public let quickCommands: QuickCommandStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
     /// Plastic SCM panel store'u (karar 46).
@@ -102,6 +104,7 @@ public final class ShellContext {
         terminals: TerminalListStore,
         repos: RepoStore,
         workspaces: ProjectWorkspaceStore,
+        quickCommands: QuickCommandStore,
         git: GitStore,
         plastic: PlasticStore,
         commitAssistant: CommitMessageAssistant,
@@ -131,6 +134,7 @@ public final class ShellContext {
         self.terminals = terminals
         self.repos = repos
         self.workspaces = workspaces
+        self.quickCommands = quickCommands
         self.git = git
         self.plastic = plastic
         self.commitAssistant = commitAssistant

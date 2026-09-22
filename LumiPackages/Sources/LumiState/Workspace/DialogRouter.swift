@@ -82,6 +82,8 @@ public enum ActiveDialog: Equatable, Sendable {
     case repoSelector
     case sidebarProjectSelector
     case createWorkspace(projectPath: String)
+    /// Projenin hızlı komut düzenleyicisi (karar 92).
+    case quickCommands(projectPath: String)
     case settings
     case onboarding
     case closeTab(CloseTabDialogState)
@@ -98,7 +100,7 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab,
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .settings, .onboarding, .closeTab,
              .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .removeCodexAccount,
              .quit: true
         }

@@ -39,7 +39,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             service: services.workspaces, config: services.config,
             repos: repoStore, toasts: shared.toasts
         )
-        quickCommands = QuickCommandStore(config: services.config, toasts: shared.toasts)
+        quickCommands = QuickCommandStore(
+            config: services.config, generator: services.quickCommandGenerator, toasts: shared.toasts
+        )
         agentHistory = AgentHistoryStore(
             service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts
         )
@@ -63,6 +65,14 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
                 return false
             },
             makeView: { AnyView(CreateWorkspaceOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .quickCommands,
+            isPresented: {
+                if case .quickCommands = $0.dialogs.active { return true }
+                return false
+            },
+            makeView: { AnyView(QuickCommandsOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
             id: .deleteWorkspaceDialog,

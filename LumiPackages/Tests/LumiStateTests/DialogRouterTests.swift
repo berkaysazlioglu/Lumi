@@ -40,6 +40,7 @@ final class DialogRouterTests: XCTestCase {
             .repoSelector,
             .sidebarProjectSelector,
             .createWorkspace(projectPath: "/r"),
+            .quickCommands(projectPath: "/r"),
             .settings,
             .onboarding,
             .closeTab(CloseTabDialogState(repoPath: "/r", repoName: "r", minimizedCount: 1)),
