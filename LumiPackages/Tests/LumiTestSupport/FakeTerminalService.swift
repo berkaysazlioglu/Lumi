@@ -135,6 +135,17 @@ public final class FakeTerminalService: TerminalServicing {
         killAllCount += 1
     }
 
+    /// Karar 90 testleri: gerçek serviste hook/exit'in `terminals`'a yaptığı
+    /// değişikliği taklit eder — event'i yayınlamaz, çağıran `emit` eder.
+    public func replaceSpawnedMeta(_ meta: TerminalMeta) {
+        guard let index = spawnedMetas.firstIndex(where: { $0.id == meta.id }) else { return }
+        spawnedMetas[index] = meta
+    }
+
+    public func removeSpawnedMeta(_ id: TerminalID) {
+        spawnedMetas.removeAll { $0.id == id }
+    }
+
     /// Gerçek servis global NSEvent monitörlerini bırakır; fake yalnız sayar.
     public func shutdown() {
         shutdownCount += 1

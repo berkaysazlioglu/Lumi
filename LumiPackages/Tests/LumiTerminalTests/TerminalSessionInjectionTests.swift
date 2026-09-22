@@ -71,6 +71,8 @@ final class TerminalSessionInjectionTests: XCTestCase {
             font: .monospacedSystemFont(ofSize: 13, weight: .regular),
             ptySpawner: FakePTYSpawner(pty: FakePTY())
         )
+        let spy = SpyDelegate()
+        session.delegate = spy
 
         session.applyHookEvent(AgentHookEvent(
             provider: .codex,
@@ -82,6 +84,14 @@ final class TerminalSessionInjectionTests: XCTestCase {
         let captured = await waitUntil { session.meta.codexSessionID == "thread-123" }
         XCTAssertTrue(captured)
         XCTAssertEqual(session.meta.codexHome, "/tmp/codex-home")
+        // Karar 90: kimlik değişimi delegate'e akar (resume checkpoint'i bunu bekler);
+        // aynı kimliğin tekrarı yeniden bildirilmez.
+        XCTAssertEqual(spy.codexSessionIDs, ["thread-123"])
+        session.applyHookEvent(AgentHookEvent(
+            provider: .codex, terminalID: session.id, kind: .sessionStart, sessionID: "thread-123"
+        ))
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(spy.codexSessionIDs, ["thread-123"])
     }
 
     func testCodexSubagentHookDoesNotReplaceLeadThreadID() async throws {
@@ -197,11 +207,16 @@ final class SpyDelegate: TerminalSessionDelegate {
     private(set) var bells = 0
     private(set) var stalls: [Bool] = []
     private(set) var linkActivations: [TerminalLinkActivation] = []
+    private(set) var codexSessionIDs: [String] = []
 
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus) {}
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool) {}
     func session(_ session: TerminalSession, didChangeTitle title: String) {}
     func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?) {}
+    func session(_ session: TerminalSession, didChangeCodexSessionID sessionID: String) {
+        codexSessionIDs.append(sessionID)
+    }
+
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {
         stalls.append(stalled)
     }

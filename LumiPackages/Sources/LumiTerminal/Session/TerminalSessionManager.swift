@@ -295,6 +295,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.providerChanged(session.id, provider))
     }
 
+    func session(_ session: TerminalSession, didChangeCodexSessionID sessionID: String) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.codexSessionIDChanged(session.id, sessionID))
+    }
+
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {
         guard isRegistered(session) else { return }
         broadcaster.send(.stalled(session.id, stalled))

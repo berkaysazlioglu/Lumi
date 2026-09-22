@@ -13,6 +13,8 @@ protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool)
     func session(_ session: TerminalSession, didChangeTitle title: String)
     func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?)
+    /// Karar 90: doğrulanmış lider Codex hook'undan thread kimliği geldi.
+    func session(_ session: TerminalSession, didChangeCodexSessionID sessionID: String)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)
@@ -266,6 +268,7 @@ final class TerminalSession {
     private func applyCodexSessionID(_ sessionID: String) {
         guard !isTerminated, meta.codexSessionID != sessionID else { return }
         meta.codexSessionID = sessionID
+        delegate?.session(self, didChangeCodexSessionID: sessionID)
     }
 
     // MARK: - Remote mirror

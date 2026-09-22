@@ -133,6 +133,10 @@ public enum TerminalEvent: Sendable, Equatable {
     case titleChanged(TerminalID, String)
     /// Terminaldeki ajan kimliği değişti (karar 45): `nil` = düz shell.
     case providerChanged(TerminalID, AgentProvider?)
+    /// Karar 90: Codex lider hook'u thread kimliğini bildirdi. Resume
+    /// checkpoint'i bunu görünce `ui-state.json`'ı yeniler — kimlik spawn'da
+    /// bilinmediği için `.spawned` tek başına yetmez.
+    case codexSessionIDChanged(TerminalID, String)
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)

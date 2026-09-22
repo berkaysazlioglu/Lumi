@@ -305,6 +305,8 @@ public final class TerminalListStore: StoreLifecycle {
             return "title \(LumiLog.short(id))"
         case .providerChanged(let id, let provider):
             return "provider \(LumiLog.short(id)) \(provider.map { $0.rawValue } ?? "nil")"
+        case .codexSessionIDChanged(let id, _):
+            return "codexSessionID \(LumiLog.short(id))"
         case .awaitingDecisionChanged(let id, let awaiting):
             return "awaitingDecision \(LumiLog.short(id)) \(awaiting)"
         case .bell(let id):
@@ -353,6 +355,9 @@ public final class TerminalListStore: StoreLifecycle {
         case .providerChanged(let id, let provider):
             // Karar 45: kart header'ındaki kimlik ikonu (Claude / Codex / shell).
             update(id) { $0.provider = provider }
+        case .codexSessionIDChanged(let id, let sessionID):
+            // Karar 90: store'daki meta kopyası servisle aynı thread kimliğini taşısın.
+            update(id) { $0.codexSessionID = sessionID }
         case .awaitingDecisionChanged(let id, let awaiting):
             if awaiting {
                 awaitingDecisionIDs.insert(id)
