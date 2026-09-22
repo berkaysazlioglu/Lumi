@@ -34,18 +34,3 @@ final class QuickCommandPromptTests: XCTestCase {
         XCTAssertEqual(QuickCommandPrompt.extractScript(from: reply), "make\n")
     }
 }
-
-final class QuickCommandBackgroundPromptTests: XCTestCase {
-    func testBackgroundPromptForbidsInputAndMentionsLog() {
-        let prompt = QuickCommandPrompt.systemPrompt(projectPath: "/p", runsInBackground: true)
-        XCTAssertTrue(prompt.contains("BACKGROUND"))
-        XCTAssertTrue(prompt.contains("Never prompt for input"))
-        XCTAssertFalse(QuickCommandPrompt.systemPrompt(projectPath: "/p").contains("BACKGROUND"))
-    }
-
-    func testServicePassesBackgroundFlagIntoSystemPrompt() {
-        let arguments = ClaudeQuickCommandService.arguments(projectPath: "/p", runsInBackground: true)
-        let index = arguments.firstIndex(of: "--append-system-prompt").map { $0 + 1 }
-        XCTAssertEqual(index.map { arguments[$0] }, QuickCommandPrompt.systemPrompt(projectPath: "/p", runsInBackground: true))
-    }
-}

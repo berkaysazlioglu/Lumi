@@ -230,7 +230,7 @@ struct CheckoutRow: View {
         return [
             .action(QuickCommandRole.startAppName, icon: "play.fill", isEnabled: !isMissing) {
                 let context = quickCommandContext
-                Task { await shell.startApp(startApp, context: context) }
+                Task { await shell.runQuickCommand(startApp, context: context) }
             },
             .divider,
         ]

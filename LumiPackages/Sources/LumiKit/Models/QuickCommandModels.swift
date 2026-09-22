@@ -47,12 +47,10 @@ public enum QuickCommandRole: String, Sendable, Equatable {
     /// Checkout menüsünün `Actions` alt menüsünde listelenir, terminalde koşar.
     case action
     /// Proje başına en fazla bir tane: gövdesi doluysa checkout menüsünün en
-    /// başında durur ve terminal açmadan arka planda koşar.
+    /// başında durur; diğer action'lar gibi yeni bir Lumi terminalinde koşar.
     case startApp
 
     public static let startAppName = "Start App"
-
-    public var runsInBackground: Bool { self == .startApp }
 }
 
 /// Komut gövdesinde kullanılabilen anahtarlar (karar 92).
@@ -166,11 +164,6 @@ public enum QuickCommandRun {
         let body = QuickCommandTemplate.resolve(command.script, context: context)
         let header = "# Lumi action: \(command.name.replacingOccurrences(of: "\n", with: " "))\n"
         return header + (body.hasSuffix("\n") ? body : body + "\n")
-    }
-
-    /// Arka plan çalıştırmasının (karar 93) çıktı dosyası: script'in yanında `.log`.
-    public static func logPath(scriptPath: String) -> String {
-        (scriptPath as NSString).deletingPathExtension + ".log"
     }
 
     /// Terminale yazılan satır: yol tek tırnaklanır (içindeki `'` kaçırılır).

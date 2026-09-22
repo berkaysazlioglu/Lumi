@@ -25,7 +25,6 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var commitMessages: any CommitMessageGenerating = FakeCommitMessageGenerator()
     public var quickCommandGenerator: any QuickCommandGenerating = FakeQuickCommandGenerator()
     public var quickCommandScripts: any QuickCommandScriptWriting = FakeQuickCommandScriptWriter()
-    public var quickCommandLauncher: any QuickCommandBackgroundLaunching = FakeQuickCommandBackgroundLauncher()
     public var terminal: any TerminalServicing
     public var viewProvider: any TerminalViewProviding
     public var highlighter: any SyntaxHighlighting

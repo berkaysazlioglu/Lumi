@@ -34,12 +34,13 @@ final class QuickCommandRunTests: XCTestCase {
         XCTAssertEqual(call?.2, "sh '/lumi/quick-commands/cmd-review.sh'")
     }
 
-    func testStartAppRunsInBackgroundWithoutATerminal() async {
+    func testStartAppRunsInANewTerminalLikeOtherActions() async {
         let command = ProjectQuickCommand(id: "s", projectPath: "/projects/game", name: "Start App", script: "open .", role: .startApp)
         let context = QuickCommandContext(path: "/projects/game", projectPath: "/projects/game", name: "game", branch: "main")
-        let spawnsBefore = fixture.terminalService.spawnCalls.count
-        await shell.startApp(command, context: context)
-        XCTAssertEqual(fixture.terminalService.spawnCalls.count, spawnsBefore, "no Lumi terminal is opened")
-        XCTAssertEqual(shell.toasts.toasts.last?.title, "Starting game")
+        await shell.runQuickCommand(command, context: context)
+        let call = fixture.terminalService.spawnCalls.last
+        XCTAssertEqual(call?.0, "/projects/game")
+        XCTAssertEqual(call?.1, "Start App")
+        XCTAssertEqual(call?.2, "sh '/lumi/quick-commands/s-game.sh'")
     }
 }

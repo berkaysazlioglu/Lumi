@@ -35,7 +35,7 @@ public extension ShellContext {
             repos: repos,
             workspaces: ProjectWorkspaceStore(service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts),
             quickCommands: QuickCommandStore(config: config, generator: PreviewQuickCommandGenerator(),
-                scripts: PreviewQuickCommandScripts(), launcher: PreviewQuickCommandLauncher(), toasts: shared.toasts),
+                scripts: PreviewQuickCommandScripts(), toasts: shared.toasts),
             git: GitStore(git: git, toasts: shared.toasts),
             plastic: PlasticStore(service: PreviewPlasticService(), toasts: shared.toasts),
             commitAssistant: CommitMessageAssistant(generator: PreviewCommitMessageGenerator(), toasts: shared.toasts),
@@ -323,10 +323,6 @@ private struct PreviewPlasticService: PlasticServicing {
     func status(workspacePath: String) async -> [PlasticFileChange] { [] }
     func recentChangesets(workspacePath: String, limit: Int) async -> [PlasticChangeset] { [] }
     func workingTreeDiffText(workspacePath: String, changesetID: Int, changes: [PlasticFileChange]) async -> String { "" }
-}
-
-private struct PreviewQuickCommandLauncher: QuickCommandBackgroundLaunching {
-    func launch(scriptPath: String, workingDirectory: String, logPath: String) async throws {}
 }
 
 private struct PreviewQuickCommandScripts: QuickCommandScriptWriting {

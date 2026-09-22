@@ -59,9 +59,8 @@ struct QuickCommandEditorView: View {
     private var isStartApp: Bool { command.role == .startApp }
 
     private var scriptHint: String {
-        isStartApp
-            ? "Runs with sh in the background — no terminal; output goes to a log file. Leave empty to hide Start App."
-            : "Runs with sh in a new terminal; the working directory is the checkout."
+        let base = "Runs with sh in a new terminal; the working directory is the checkout."
+        return isStartApp ? base + " Leave empty to hide Start App." : base
     }
 
     private var startAppIntro: some View {

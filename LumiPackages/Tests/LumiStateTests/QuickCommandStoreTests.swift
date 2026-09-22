@@ -10,7 +10,6 @@ final class QuickCommandStoreTests: XCTestCase {
     private var toasts: ToastStore!
     private var generator: FakeQuickCommandGenerator!
     private var scripts: FakeQuickCommandScriptWriter!
-    private var launcher: FakeQuickCommandBackgroundLauncher!
     private var store: QuickCommandStore!
 
     override func setUp() async throws {
@@ -18,8 +17,7 @@ final class QuickCommandStoreTests: XCTestCase {
         toasts = ToastStore()
         generator = FakeQuickCommandGenerator()
         scripts = FakeQuickCommandScriptWriter()
-        launcher = FakeQuickCommandBackgroundLauncher()
-        store = QuickCommandStore(config: config, generator: generator, scripts: scripts, launcher: launcher, toasts: toasts)
+        store = QuickCommandStore(config: config, generator: generator, scripts: scripts, toasts: toasts)
     }
 
     func testSaveAppendsThenUpdatesInPlace() async {
@@ -144,28 +142,5 @@ final class QuickCommandStoreTests: XCTestCase {
         await store.save(ProjectQuickCommand(id: "s1", projectPath: "/p", name: "Start App", script: "a", role: .startApp))
         await store.save(ProjectQuickCommand(id: "s2", projectPath: "/p", name: "Start App", script: "b", role: .startApp))
         XCTAssertEqual(store.commands.filter { $0.role == .startApp }.map(\.id), ["s2"])
-    }
-
-    func testLaunchInBackgroundWritesScriptAndLaunchesWithLogNextToIt() async {
-        let command = ProjectQuickCommand(id: "s", projectPath: "/p", name: "Start App", script: "open \"{path}\"", role: .startApp)
-        let context = QuickCommandContext(path: "/w/review", projectPath: "/p", name: "review", branch: "")
-        let log = await store.launchInBackground(command, context: context)
-        XCTAssertEqual(log, "/lumi/quick-commands/s-review.log")
-        let launches = await launcher.launches
-        XCTAssertEqual(launches.first?.script, "/lumi/quick-commands/s-review.sh")
-        XCTAssertEqual(launches.first?.directory, "/w/review")
-        XCTAssertEqual(launches.first?.log, "/lumi/quick-commands/s-review.log")
-        let writes = await scripts.writes
-        XCTAssertEqual(writes.first?.contents, "# Lumi action: Start App\nopen \"/w/review\"\n")
-    }
-
-    func testLaunchFailureShowsToast() async {
-        await launcher.setError(.spawnFailed(reason: "nope"))
-        let log = await store.launchInBackground(
-            ProjectQuickCommand(projectPath: "/p", name: "Start App", script: "x", role: .startApp),
-            context: QuickCommandContext(path: "/p", projectPath: "/p", name: "p", branch: "")
-        )
-        XCTAssertNil(log)
-        XCTAssertFalse(toasts.toasts.isEmpty)
     }
 }
