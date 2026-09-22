@@ -9,12 +9,18 @@ public struct QuickCommandGenerationRequest: Sendable, Equatable {
     public let description: String
     /// Düzenlenen komutun mevcut gövdesi; varsa Claude onu iyileştirir.
     public let currentScript: String
+    /// Karar 93: `Start App` gibi terminalsiz, arka planda koşacak komut.
+    public let runsInBackground: Bool
 
-    public init(projectPath: String, projectName: String, description: String, currentScript: String = "") {
+    public init(
+        projectPath: String, projectName: String, description: String,
+        currentScript: String = "", runsInBackground: Bool = false
+    ) {
         self.projectPath = projectPath
         self.projectName = projectName
         self.description = description
         self.currentScript = currentScript
+        self.runsInBackground = runsInBackground
     }
 }
 

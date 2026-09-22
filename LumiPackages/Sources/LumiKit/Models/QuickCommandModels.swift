@@ -15,13 +15,24 @@ public struct ProjectQuickCommand: Sendable, Equatable, Identifiable {
     /// Claude'a verilen son tarif — yeniden üretimde alan dolu gelsin diye
     /// saklanır. Elle yazılmış komutta boştur.
     public var request: String
+    /// Karar 93: projenin tek `Start App` komutu mu, sıradan bir action mı.
+    public let role: QuickCommandRole
 
-    public init(id: String = UUID().uuidString, projectPath: String, name: String, script: String, request: String = "") {
+    public init(
+        id: String = UUID().uuidString, projectPath: String, name: String, script: String,
+        request: String = "", role: QuickCommandRole = .action
+    ) {
         self.id = id
         self.projectPath = projectPath
         self.name = name
         self.script = script
         self.request = request
+        self.role = role
+    }
+
+    /// Projenin boş `Start App` taslağı (adı sabittir).
+    public static func startApp(projectPath: String) -> ProjectQuickCommand {
+        ProjectQuickCommand(projectPath: projectPath, name: QuickCommandRole.startAppName, script: "", role: .startApp)
     }
 
     /// Kaydedilebilir mi: ad ve gövde boş olamaz.
@@ -29,6 +40,19 @@ public struct ProjectQuickCommand: Sendable, Equatable, Identifiable {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+}
+
+/// Komutun rolü (karar 93).
+public enum QuickCommandRole: String, Sendable, Equatable {
+    /// Checkout menüsünün `Actions` alt menüsünde listelenir, terminalde koşar.
+    case action
+    /// Proje başına en fazla bir tane: gövdesi doluysa checkout menüsünün en
+    /// başında durur ve terminal açmadan arka planda koşar.
+    case startApp
+
+    public static let startAppName = "Start App"
+
+    public var runsInBackground: Bool { self == .startApp }
 }
 
 /// Komut gövdesinde kullanılabilen anahtarlar (karar 92).
@@ -142,6 +166,11 @@ public enum QuickCommandRun {
         let body = QuickCommandTemplate.resolve(command.script, context: context)
         let header = "# Lumi action: \(command.name.replacingOccurrences(of: "\n", with: " "))\n"
         return header + (body.hasSuffix("\n") ? body : body + "\n")
+    }
+
+    /// Arka plan çalıştırmasının (karar 93) çıktı dosyası: script'in yanında `.log`.
+    public static func logPath(scriptPath: String) -> String {
+        (scriptPath as NSString).deletingPathExtension + ".log"
     }
 
     /// Terminale yazılan satır: yol tek tırnaklanır (içindeki `'` kaçırılır).

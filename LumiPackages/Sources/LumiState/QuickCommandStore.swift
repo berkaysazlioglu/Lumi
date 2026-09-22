@@ -16,15 +16,18 @@ public final class QuickCommandStore {
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let generator: any QuickCommandGenerating
     @ObservationIgnored private let scripts: any QuickCommandScriptWriting
+    @ObservationIgnored private let launcher: any QuickCommandBackgroundLaunching
     @ObservationIgnored private let toasts: ToastStore
 
     public init(
         config: any ConfigServicing, generator: any QuickCommandGenerating,
-        scripts: any QuickCommandScriptWriting, toasts: ToastStore
+        scripts: any QuickCommandScriptWriting, launcher: any QuickCommandBackgroundLaunching,
+        toasts: ToastStore
     ) {
         self.config = config
         self.generator = generator
         self.scripts = scripts
+        self.launcher = launcher
         self.toasts = toasts
     }
 
@@ -41,9 +44,26 @@ public final class QuickCommandStore {
         commands.filter { $0.projectPath == projectPath }
     }
 
+    /// Projenin `Start App` komutu (karar 93) — kayıtlıysa gövdesi doludur.
+    public func startApp(for projectPath: String) -> ProjectQuickCommand? {
+        commands.first { $0.projectPath == projectPath && $0.role == .startApp }
+    }
+
+    /// Checkout menüsünün `Actions` alt menüsündeki komutlar.
+    public func actions(for projectPath: String) -> [ProjectQuickCommand] {
+        commands(for: projectPath).filter { $0.role == .action }
+    }
+
     /// Ekler ya da aynı `id`'li kaydı yerinde günceller (sıra korunur).
+    /// Karar 93: gövdesi boşaltılmış `Start App` kaydedilmez, SİLİNİR — boş
+    /// Start App menüde görünmez; projede ikinci bir Start App de oluşmaz.
     @discardableResult
     public func save(_ command: ProjectQuickCommand) async -> Bool {
+        if command.role == .startApp, command.script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return await write(failureTitle: "Start App could not be cleared") { config in
+                config.projectQuickCommands.removeAll { $0.projectPath == command.projectPath && $0.role == .startApp }
+            }
+        }
         guard command.isValid else { return false }
         let trimmed = {
             var copy = command
@@ -51,6 +71,11 @@ public final class QuickCommandStore {
             return copy
         }()
         return await write(failureTitle: "Command could not be saved") { config in
+            if trimmed.role == .startApp {
+                config.projectQuickCommands.removeAll {
+                    $0.projectPath == trimmed.projectPath && $0.role == .startApp && $0.id != trimmed.id
+                }
+            }
             if let index = config.projectQuickCommands.firstIndex(where: { $0.id == trimmed.id }) {
                 config.projectQuickCommands[index] = trimmed
             } else {
@@ -77,6 +102,21 @@ public final class QuickCommandStore {
             line = QuickCommandRun.launchLine(scriptPath: path)
         }
         return line
+    }
+
+    /// Karar 93: komutu terminal açmadan arka planda başlatır; çıktı script'in
+    /// yanındaki `.log` dosyasına gider. Başarıda log yolunu döner.
+    public func launchInBackground(_ command: ProjectQuickCommand, context: QuickCommandContext) async -> String? {
+        let fileName = QuickCommandRun.fileName(commandID: command.id, checkoutName: context.name)
+        let contents = QuickCommandRun.scriptContents(command, context: context)
+        var logPath: String?
+        await toasts.reporting {
+            let path = try await self.scripts.writeScript(named: fileName, contents: contents)
+            let log = QuickCommandRun.logPath(scriptPath: path)
+            try await self.launcher.launch(scriptPath: path, workingDirectory: context.path, logPath: log)
+            logPath = log
+        }
+        return logPath
     }
 
     public func isGenerating(_ draftID: String) -> Bool {

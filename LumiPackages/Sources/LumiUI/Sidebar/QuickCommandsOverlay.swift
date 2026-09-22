@@ -9,6 +9,10 @@ import SwiftUI
 /// Düzenlemeler kaydedilene kadar modal yerel TASLAKLARDIR: komutlar arasında
 /// gezinmek yarım kalan düzenlemeyi kaybetmez, Save ile config'e yazılır.
 /// Modal kapanınca kaydedilmemiş taslaklar atılır.
+///
+/// Karar 93: listenin başında projenin tek `Start App` girişi sabit durur —
+/// kayıtlı değilse boş bir taslak açılır, gövdesi boşaltılıp kaydedilirse
+/// silinir.
 public struct QuickCommandsOverlay: View {
     @Shell private var shell
     @State private var selectedID: String?
@@ -16,6 +20,8 @@ public struct QuickCommandsOverlay: View {
     @State private var drafts: [String: ProjectQuickCommand] = [:]
     /// Kaydedilmemiş yeni komutlar, eklenme sırasıyla.
     @State private var newIDs: [String] = []
+    /// Kayıtlı Start App yoksa bu oturumda açılan boş taslağın kimliği.
+    @State private var startAppDraftID: String?
 
     public init() {}
 
@@ -89,6 +95,12 @@ public struct QuickCommandsOverlay: View {
 
     private func commandList(projectPath: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            startAppRow(projectPath: projectPath)
+            Text("ACTIONS")
+                .font(Theme.Typography.ui(.caption, weight: .semibold))
+                .foregroundStyle(Theme.textMuted)
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.top, Theme.Spacing.lg)
             HoverReader { isHovering in
                 Button { addCommand(projectPath: projectPath) } label: {
                     Label("New Action", systemImage: "plus")
@@ -107,6 +119,7 @@ public struct QuickCommandsOverlay: View {
                     ForEach(rows(projectPath: projectPath)) { command in
                         QuickCommandListRow(
                             title: command.name,
+                            icon: "bolt",
                             isSelected: selectedID == command.id,
                             hasChanges: hasChanges(command.id),
                             isGenerating: shell.quickCommands.isGenerating(command.id)
@@ -120,10 +133,42 @@ public struct QuickCommandsOverlay: View {
         .padding(.vertical, Theme.Spacing.xl)
     }
 
-    /// Kaydedilmiş komutlar (taslaklarıyla) + kaydedilmemiş yeniler.
+    /// Kaydedilmiş action'lar (taslaklarıyla) + kaydedilmemiş yeniler.
     private func rows(projectPath: String) -> [ProjectQuickCommand] {
-        let saved = shell.quickCommands.commands(for: projectPath).map { drafts[$0.id] ?? $0 }
+        let saved = shell.quickCommands.actions(for: projectPath).map { drafts[$0.id] ?? $0 }
         return saved + newIDs.compactMap { drafts[$0] }
+    }
+
+    private func startAppRow(projectPath: String) -> some View {
+        let id = startAppID(projectPath: projectPath)
+        return QuickCommandListRow(
+            title: QuickCommandRole.startAppName,
+            icon: "play.fill",
+            detail: shell.quickCommands.startApp(for: projectPath) == nil && !hasChanges(id) ? "Not set" : nil,
+            isSelected: selectedID == id,
+            hasChanges: hasChanges(id),
+            isGenerating: shell.quickCommands.isGenerating(id)
+        ) { selectStartApp(projectPath: projectPath) }
+    }
+
+    /// Kayıtlı Start App'in ya da bu oturumun boş taslağının kimliği.
+    private func startAppID(projectPath: String) -> String {
+        shell.quickCommands.startApp(for: projectPath)?.id ?? startAppDraftID ?? ""
+    }
+
+    private func selectStartApp(projectPath: String) {
+        if let saved = shell.quickCommands.startApp(for: projectPath) {
+            selectedID = saved.id
+            return
+        }
+        if let startAppDraftID, drafts[startAppDraftID] != nil {
+            selectedID = startAppDraftID
+            return
+        }
+        let draft = ProjectQuickCommand.startApp(projectPath: projectPath)
+        drafts[draft.id] = draft
+        startAppDraftID = draft.id
+        selectedID = draft.id
     }
 
     // MARK: - Detay
@@ -178,15 +223,22 @@ public struct QuickCommandsOverlay: View {
 
     private func hasChanges(_ id: String) -> Bool {
         guard let draft = drafts[id] else { return false }
-        return draft != saved(id)
+        guard let saved = saved(id) else {
+            // Boş Start App taslağı değişiklik değildir — "Not set" der.
+            guard draft.role == .startApp else { return true }
+            return !draft.script.isEmpty || !draft.request.isEmpty
+        }
+        return draft != saved
     }
 
+    /// Önce kayıtlı Start App, yoksa ilk action, o da yoksa boş Start App.
     private func selectInitialCommand() {
         guard let projectPath else { return }
-        if let first = shell.quickCommands.commands(for: projectPath).first {
+        if shell.quickCommands.startApp(for: projectPath) == nil,
+           let first = shell.quickCommands.actions(for: projectPath).first {
             selectedID = first.id
         } else {
-            addCommand(projectPath: projectPath)
+            selectStartApp(projectPath: projectPath)
         }
     }
 
@@ -204,6 +256,11 @@ public struct QuickCommandsOverlay: View {
             // Kayıt sırasında kullanıcı yazmaya devam ettiyse taslak korunur.
             if drafts[id] == command { drafts[id] = nil }
             newIDs.removeAll { $0 == id }
+            // Boşaltılan Start App silindi (karar 93): yerine boş taslak.
+            if command.role == .startApp, saved(id) == nil, let projectPath {
+                startAppDraftID = nil
+                selectStartApp(projectPath: projectPath)
+            }
         }
     }
 
@@ -212,11 +269,21 @@ public struct QuickCommandsOverlay: View {
     }
 
     private func delete(_ id: String) {
-        let isNew = newIDs.contains(id)
+        let isSaved = saved(id) != nil
+        let isStartApp = draft(id)?.role == .startApp
         drafts[id] = nil
         newIDs.removeAll { $0 == id }
+        if isStartApp {
+            // Start App girişi listede kalır: boş bir taslakla yeniden seçilir.
+            startAppDraftID = nil
+            Task {
+                if isSaved { await shell.quickCommands.delete(id: id) }
+                if let projectPath { selectStartApp(projectPath: projectPath) }
+            }
+            return
+        }
         selectedID = projectPath.flatMap { path in rows(projectPath: path).first { $0.id != id }?.id }
-        guard !isNew else { return }
+        guard isSaved else { return }
         Task { await shell.quickCommands.delete(id: id) }
     }
 
@@ -226,7 +293,8 @@ public struct QuickCommandsOverlay: View {
         guard let command = draft(id) else { return }
         let request = QuickCommandGenerationRequest(
             projectPath: project.path, projectName: project.name,
-            description: command.request, currentScript: command.script
+            description: command.request, currentScript: command.script,
+            runsInBackground: command.role.runsInBackground
         )
         Task {
             guard let script = await shell.quickCommands.generate(draftID: id, request: request),
@@ -249,6 +317,9 @@ public struct QuickCommandsOverlay: View {
 /// noktası ve üretim sürerken ilerleme göstergesi.
 private struct QuickCommandListRow: View {
     let title: String
+    let icon: String
+    /// Adın yanında soluk ek bilgi ("Not set").
+    var detail: String?
     let isSelected: Bool
     let hasChanges: Bool
     let isGenerating: Bool
@@ -258,7 +329,7 @@ private struct QuickCommandListRow: View {
         HoverReader { isHovering in
             Button(action: action) {
                 HStack(spacing: Theme.Spacing.sm) {
-                    Image(systemName: "bolt")
+                    Image(systemName: icon)
                         .font(Theme.Typography.ui(.label))
                         .foregroundStyle(isSelected ? Theme.accentPrimary : Theme.textMuted)
                         .accessibilityHidden(true)
@@ -267,6 +338,11 @@ private struct QuickCommandListRow: View {
                         .foregroundStyle(foreground(isHovering: isHovering))
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if let detail {
+                        Text(detail)
+                            .font(Theme.Typography.captionMono)
+                            .foregroundStyle(Theme.textMuted)
+                    }
                     Spacer(minLength: 0)
                     if isGenerating {
                         ProgressView().controlSize(.mini)

@@ -43,7 +43,7 @@ public actor ClaudeQuickCommandService: QuickCommandGenerating {
         }
         let output = await runner.run(
             binary,
-            arguments: Self.arguments(projectPath: request.projectPath),
+            arguments: Self.arguments(projectPath: request.projectPath, runsInBackground: request.runsInBackground),
             currentDirectory: request.projectPath,
             standardInput: Data(QuickCommandPrompt.body(for: request).utf8),
             timeout: Self.timeout
@@ -69,11 +69,11 @@ public actor ClaudeQuickCommandService: QuickCommandGenerating {
         return script
     }
 
-    static func arguments(projectPath: String) -> [String] {
+    static func arguments(projectPath: String, runsInBackground: Bool = false) -> [String] {
         let tools = Self.tools.joined(separator: ",")
         return [
             "-p",
-            "--append-system-prompt", QuickCommandPrompt.systemPrompt(projectPath: projectPath),
+            "--append-system-prompt", QuickCommandPrompt.systemPrompt(projectPath: projectPath, runsInBackground: runsInBackground),
             "--model", model,
             "--effort", effort,
             "--output-format", "json",

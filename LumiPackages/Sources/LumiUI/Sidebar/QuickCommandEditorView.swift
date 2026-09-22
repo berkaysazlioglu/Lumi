@@ -24,8 +24,12 @@ struct QuickCommandEditorView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    LumiField(title: "Name", hint: nil) {
-                        LumiTextInput(text: $command.name, placeholder: "Open in Unity", autofocus: !isSaved)
+                    if isStartApp {
+                        startAppIntro
+                    } else {
+                        LumiField(title: "Name", hint: nil) {
+                            LumiTextInput(text: $command.name, placeholder: "Open in Unity", autofocus: !isSaved)
+                        }
                     }
                     LumiField(
                         title: "Ask Claude",
@@ -33,7 +37,7 @@ struct QuickCommandEditorView: View {
                     ) {
                         requestField
                     }
-                    LumiField(title: "Script", hint: "Runs with sh in a new terminal; the working directory is the checkout.", isLast: true) {
+                    LumiField(title: "Script", hint: scriptHint, isLast: true) {
                         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                             LumiCodeEditor(text: $command.script, isEditable: !isGenerating)
                                 .frame(height: Self.scriptHeight)
@@ -52,6 +56,33 @@ struct QuickCommandEditorView: View {
 
     private var isGenerating: Bool { shell.quickCommands.isGenerating(command.id) }
 
+    private var isStartApp: Bool { command.role == .startApp }
+
+    private var scriptHint: String {
+        isStartApp
+            ? "Runs with sh in the background — no terminal; output goes to a log file. Leave empty to hide Start App."
+            : "Runs with sh in a new terminal; the working directory is the checkout."
+    }
+
+    private var startAppIntro: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            Text(QuickCommandRole.startAppName)
+                .font(Theme.Typography.mono(.title, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+            Text("Shown first in every checkout's right-click menu when the script is set.")
+                .font(Theme.Typography.labelMono)
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.bottom, Theme.Spacing.xxl)
+    }
+
+    /// Start App'te boş gövdeyle Save = kaldırma (karar 93).
+    private var canSave: Bool {
+        guard !isGenerating, hasChanges || !isSaved else { return false }
+        if isStartApp && isSaved { return true }
+        return command.isValid
+    }
+
     private var canGenerate: Bool {
         !isGenerating && !command.request.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -60,7 +91,7 @@ struct QuickCommandEditorView: View {
 
     private var requestField: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            TextField("e.g. Open this checkout in the Unity version the project uses", text: $command.request, axis: .vertical)
+            TextField(requestPlaceholder, text: $command.request, axis: .vertical)
                 .lineLimit(2...5)
                 .font(Theme.Typography.bodyMono)
                 .textFieldStyle(.plain)
@@ -86,6 +117,12 @@ struct QuickCommandEditorView: View {
                 }
             }
         }
+    }
+
+    private var requestPlaceholder: String {
+        isStartApp
+            ? "e.g. Open this checkout in the Unity version the project uses"
+            : "e.g. Build a release and install it to /Applications"
     }
 
     private var generateTitle: String {
@@ -114,28 +151,33 @@ struct QuickCommandEditorView: View {
         }
     }
 
+    private var deletePrompt: String {
+        if isStartApp { return "Remove Start App from the menu?" }
+        return isSaved ? "Delete this action?" : "Discard this new action?"
+    }
+
     // MARK: - Alt şerit
 
     private var footer: some View {
         HStack(spacing: Theme.Spacing.md) {
             if isConfirmingDelete {
-                Text(isSaved ? "Delete this action?" : "Discard this new action?")
+                Text(deletePrompt)
                     .font(Theme.Typography.labelMono)
                     .foregroundStyle(Theme.error)
-                LumiActionButton(title: "Delete", kind: .primary) {
+                LumiActionButton(title: isStartApp ? "Clear" : "Delete", kind: .primary) {
                     isConfirmingDelete = false
                     onDelete()
                 }
                 LumiActionButton(title: "Keep") { isConfirmingDelete = false }
-            } else {
-                LumiActionButton(title: "Delete") { isConfirmingDelete = true }
+            } else if !(isStartApp && !isSaved) {
+                LumiActionButton(title: isStartApp ? "Clear" : "Delete") { isConfirmingDelete = true }
             }
             Spacer(minLength: 0)
             if isSaved && hasChanges {
                 LumiActionButton(title: "Discard Changes", action: onDiscard)
             }
             LumiActionButton(title: "Save", kind: .primary, action: onSave)
-                .disabled(!command.isValid || !(hasChanges || !isSaved) || isGenerating)
+                .disabled(!canSave)
                 .keyboardShortcut(.return, modifiers: .command)
         }
         .padding(.horizontal, Theme.Spacing.xxl)

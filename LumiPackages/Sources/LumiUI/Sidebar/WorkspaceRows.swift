@@ -220,24 +220,35 @@ struct CheckoutRow: View {
 
     // MARK: - Menü
 
+    /// Karar 93: dolu `Start App` en başta; diğer komutlar `Actions` alt menüsünde.
     private var menuItems: [PopoverMenu.Item] {
-        checkoutMenuItems + [.divider] + runMenuItems
+        startAppItems + checkoutMenuItems + [.divider, actionsSubmenu]
     }
 
-    /// Karar 92: projenin hızlı komutları bu checkout'ta çalışır.
-    private var runMenuItems: [PopoverMenu.Item] {
-        let commands = shell.quickCommands.commands(for: projectPath)
-        let runs: [PopoverMenu.Item] = commands.map { command in
+    private var startAppItems: [PopoverMenu.Item] {
+        guard let startApp = shell.quickCommands.startApp(for: projectPath) else { return [] }
+        return [
+            .action(QuickCommandRole.startAppName, icon: "play.fill", isEnabled: !isMissing) {
+                let context = quickCommandContext
+                Task { await shell.startApp(startApp, context: context) }
+            },
+            .divider,
+        ]
+    }
+
+    /// Karar 92: projenin hızlı komutları bu checkout'ta yeni terminalde çalışır.
+    private var actionsSubmenu: PopoverMenu.Item {
+        let actions = shell.quickCommands.actions(for: projectPath)
+        let runs: [PopoverMenu.Item] = actions.map { command in
             .action(command.name, icon: "play", isEnabled: !isMissing) {
                 let context = quickCommandContext
                 Task { await shell.runQuickCommand(command, context: context) }
             }
         }
-        return [.section("Run")] + runs + [
-            .action(commands.isEmpty ? "Add Action…" : "Manage Actions…", icon: "bolt") {
-                shell.dialogs.present(.quickCommands(projectPath: projectPath))
-            },
-        ]
+        let manage = PopoverMenu.Item.action(actions.isEmpty ? "Add Action…" : "Manage Actions…", icon: "slider.horizontal.3") {
+            shell.dialogs.present(.quickCommands(projectPath: projectPath))
+        }
+        return .submenu("Actions", icon: "bolt", items: runs + (runs.isEmpty ? [] : [.divider]) + [manage])
     }
 
     private var projectPath: String {

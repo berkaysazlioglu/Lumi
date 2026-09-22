@@ -28,6 +28,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let commitMessages: any CommitMessageGenerating
     let quickCommandGenerator: any QuickCommandGenerating
     let quickCommandScripts: any QuickCommandScriptWriting
+    let quickCommandLauncher: any QuickCommandBackgroundLaunching
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
     let highlighter: any SyntaxHighlighting
@@ -76,6 +77,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         commitMessages = ClaudeCommitMessageService()
         quickCommandGenerator = ClaudeQuickCommandService()
         quickCommandScripts = QuickCommandScriptService(directory: paths.quickCommandsDir)
+        quickCommandLauncher = QuickCommandBackgroundLauncher()
         agentHistory = AgentHistoryService()
         agentSessionTransfer = AgentSessionTransferService()
         let deepSeekEnvironment = DeepSeekEnvironmentService()

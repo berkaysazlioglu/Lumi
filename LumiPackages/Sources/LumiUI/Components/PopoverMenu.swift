@@ -5,7 +5,11 @@ import SwiftUI
 /// Native `Menu`/`NSMenu` sistem görünümüyle açılıyordu ve koyu panelin
 /// içinde yabancı duruyordu (Explorer görünüm seçenekleri şikâyeti). Bu menü
 /// `.popover` içinde kendi satırlarını çizer: eylem, onay işaretli toggle,
-/// bölüm başlığı ve ayraç. Satırlar hover'da `bgDeep` zeminle aydınlanır.
+/// bölüm başlığı, ayraç ve alt menü. Satırlar hover'da `bgDeep` zeminle aydınlanır.
+///
+/// Alt menü (karar 93): satırın üstüne gelince sağda ikinci bir `PopoverMenu`
+/// açılır; başka bir satıra gelinince kapanır. Satırdan çıkmak (alt menüye
+/// geçmek) kapatmaz — alt popover ayrı bir penceredir.
 struct PopoverMenu: View {
     enum Item {
         case action(String, icon: String? = nil, isDestructive: Bool = false, isEnabled: Bool = true, action: () -> Void)
@@ -14,6 +18,8 @@ struct PopoverMenu: View {
         case divider
         /// Tıklanamayan bilgi satırı (yükleniyor / hata / sonuç yok).
         case note(String)
+        /// Hover'da sağda açılan alt menü; içindeki eylem ana menüyü de kapatır.
+        case submenu(String, icon: String? = nil, isEnabled: Bool = true, items: [Item])
     }
 
     let items: [Item]
@@ -24,10 +30,15 @@ struct PopoverMenu: View {
 
     static var width: CGFloat { Theme.scaled(220) }
 
+    /// Açık alt menünün `items` içindeki konumu.
+    @State private var openSubmenu: Int?
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxxs) {
             // Konum bazlı kimlik: menü içeriği sabit sırada gelir, ayraçların adı yok.
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in row(item) }
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                row(item, index: index)
+            }
         }
         .padding(Theme.Spacing.sm)
         .frame(width: width)
@@ -36,8 +47,28 @@ struct PopoverMenu: View {
     }
 
     @ViewBuilder
-    private func row(_ item: Item) -> some View {
+    private func row(_ item: Item, index: Int) -> some View {
         switch item {
+        case .submenu(let title, let icon, let isEnabled, let items):
+            PopoverSubmenuRow(
+                title: title, icon: icon, isEnabled: isEnabled,
+                isOpen: Binding(
+                    get: { openSubmenu == index },
+                    set: { openSubmenu = $0 ? index : (openSubmenu == index ? nil : openSubmenu) }
+                ),
+                items: items, dismiss: dismiss
+            )
+        default:
+            plainRow(item)
+                .onHover { if $0 { openSubmenu = nil } }
+        }
+    }
+
+    @ViewBuilder
+    private func plainRow(_ item: Item) -> some View {
+        switch item {
+        case .submenu:
+            EmptyView()
         case .action(let title, let icon, let isDestructive, let isEnabled, let action):
             PopoverMenuRow(
                 title: title, icon: icon, trailingCheck: nil,
@@ -119,6 +150,56 @@ private struct PopoverMenuRow: View {
     }
 
     private static let disabledOpacity = 0.4
+}
+
+/// Alt menü satırı: sağda chevron; hover ya da tık alt menüyü açar ve açıkken
+/// satır vurgulu kalır.
+private struct PopoverSubmenuRow: View {
+    let title: String
+    let icon: String?
+    let isEnabled: Bool
+    @Binding var isOpen: Bool
+    let items: [PopoverMenu.Item]
+    let dismiss: () -> Void
+
+    var body: some View {
+        HoverReader { isHovering in
+            Button { isOpen = true } label: {
+                HStack(spacing: Theme.Spacing.sm) {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(Theme.Typography.ui(.label))
+                            .frame(width: Theme.Row.iconColumn)
+                            .accessibilityHidden(true)
+                    }
+                    Text(title).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(Theme.Typography.ui(.caption, weight: .bold))
+                        .foregroundStyle(Theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+                .font(Theme.Typography.ui(.body))
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, Theme.Spacing.md)
+                .frame(height: Theme.Row.compact + Theme.Spacing.xs)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background((isOpen || isHovering) && isEnabled ? Theme.bgDeep : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onChange(of: isHovering) { _, hovering in
+                if hovering && isEnabled { isOpen = true }
+            }
+        }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .popover(isPresented: $isOpen, arrowEdge: .trailing) {
+            PopoverMenu(items: items, dismiss: dismiss)
+        }
+        .accessibilityLabel("\(title) submenu")
+    }
 }
 
 #if DEBUG
