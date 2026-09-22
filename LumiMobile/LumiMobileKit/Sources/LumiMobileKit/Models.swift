@@ -119,10 +119,15 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     public let cols: Int
     public let rows: Int
     public let kind: String?   // session type (e.g. "chat", "terminal"); Phase 2 — nil if absent
+    /// Agent provider ("claude" | "codex"); nil for plain shell or older Mac (tree glyph).
+    public let provider: String?
+    /// Last activity, epoch ms; nil if omitted by an older Mac (relative-time label).
+    public let lastActivityAt: Double?
 
     public init(id: String, repoName: String, status: String,
                 title: String? = nil, model: String? = nil,
-                cols: Int, rows: Int, kind: String? = nil) {
+                cols: Int, rows: Int, kind: String? = nil,
+                provider: String? = nil, lastActivityAt: Double? = nil) {
         self.id = id
         self.repoName = repoName
         self.status = status
@@ -131,10 +136,12 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
         self.cols = cols
         self.rows = rows
         self.kind = kind
+        self.provider = provider
+        self.lastActivityAt = lastActivityAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, repoName, status, title, model, cols, rows, kind
+        case id, repoName, status, title, model, cols, rows, kind, provider, lastActivityAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -147,13 +154,85 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
             model: try c.decodeIfPresent(String.self, forKey: .model),
             cols: try c.decode(Int.self, forKey: .cols),
             rows: try c.decode(Int.self, forKey: .rows),
-            kind: try c.decodeIfPresent(String.self, forKey: .kind)
+            kind: try c.decodeIfPresent(String.self, forKey: .kind),
+            provider: try c.decodeIfPresent(String.self, forKey: .provider),
+            lastActivityAt: try c.decodeIfPresent(Double.self, forKey: .lastActivityAt)
         )
     }
 
     /// Reduces the raw status string to a phone badge (same tolerance as SessionStatus).
     public var badge: Badge {
         (SessionStatus(rawValue: status) ?? .idle).badge
+    }
+}
+
+public struct CheckoutNode: Decodable, Sendable, Equatable, Identifiable {
+    public let kind: String        // "original" | "workspace" (unknown tolerated)
+    public let title: String
+    public let branch: String?
+    public let scm: String         // "git" | "plastic" | "none" (unknown tolerated)
+    public let path: String
+    public let agentIds: [String]
+    public var id: String { path }
+
+    public init(kind: String, title: String, branch: String?, scm: String, path: String, agentIds: [String]) {
+        self.kind = kind; self.title = title; self.branch = branch
+        self.scm = scm; self.path = path; self.agentIds = agentIds
+    }
+
+    private enum CodingKeys: String, CodingKey { case kind, title, branch, scm, path, agentIds }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            kind: try c.decodeIfPresent(String.self, forKey: .kind) ?? "original",
+            title: try c.decodeIfPresent(String.self, forKey: .title) ?? "",
+            branch: try c.decodeIfPresent(String.self, forKey: .branch),
+            scm: try c.decodeIfPresent(String.self, forKey: .scm) ?? "none",
+            path: try c.decode(String.self, forKey: .path),
+            agentIds: try c.decodeIfPresent([String].self, forKey: .agentIds) ?? []
+        )
+    }
+}
+
+public struct ProjectNode: Decodable, Sendable, Equatable, Identifiable {
+    public let name: String
+    public let path: String
+    public let checkouts: [CheckoutNode]
+    public var id: String { path }
+
+    public init(name: String, path: String, checkouts: [CheckoutNode]) {
+        self.name = name; self.path = path; self.checkouts = checkouts
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, path, checkouts }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            name: try c.decodeIfPresent(String.self, forKey: .name) ?? "",
+            path: try c.decode(String.self, forKey: .path),
+            checkouts: try c.decodeIfPresent([CheckoutNode].self, forKey: .checkouts) ?? []
+        )
+    }
+}
+
+public struct ProjectsSnapshot: Decodable, Sendable, Equatable {
+    public let projects: [ProjectNode]
+    public let addable: [Repo]
+
+    public init(projects: [ProjectNode], addable: [Repo]) {
+        self.projects = projects; self.addable = addable
+    }
+
+    private enum CodingKeys: String, CodingKey { case projects, addable }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            projects: try c.decodeIfPresent([ProjectNode].self, forKey: .projects) ?? [],
+            addable: try c.decodeIfPresent([Repo].self, forKey: .addable) ?? []
+        )
     }
 }
 
@@ -184,16 +263,23 @@ public struct Welcome: Decodable, Sendable, Equatable {
     public let sessions: [SessionMeta]?
     /// Repo list for starting a new session from the phone (from the relay room cache).
     public let repos: [Repo]?
+    /// Projects tree snapshot (additive; nil if omitted by an older Mac).
+    public let projects: [ProjectNode]?
+    /// Addable repos (additive; nil if omitted by an older Mac).
+    public let addable: [Repo]?
 
-    public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil) {
+    public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil,
+                projects: [ProjectNode]? = nil, addable: [Repo]? = nil) {
         self.macOnline = macOnline
         self.lastSeenAt = lastSeenAt
         self.sessions = sessions
         self.repos = repos
+        self.projects = projects
+        self.addable = addable
     }
 
     private enum CodingKeys: String, CodingKey {
-        case macOnline, lastSeenAt, sessions, repos
+        case macOnline, lastSeenAt, sessions, repos, projects, addable
     }
 
     public init(from decoder: Decoder) throws {
@@ -202,6 +288,8 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.lastSeenAt = try c.decodeIfPresent(Double.self, forKey: .lastSeenAt)
         self.sessions = try c.decodeIfPresent([SessionMeta].self, forKey: .sessions)
         self.repos = try c.decodeIfPresent([Repo].self, forKey: .repos)
+        self.projects = try c.decodeIfPresent([ProjectNode].self, forKey: .projects)
+        self.addable = try c.decodeIfPresent([Repo].self, forKey: .addable)
     }
 }
 

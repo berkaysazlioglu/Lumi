@@ -184,6 +184,41 @@ final class EndToEndWireTests: XCTestCase {
         )
     }
 
+    // MARK: Projects welcome + standalone projects frame E2E test (Task 10)
+
+    func testProjectsWelcomeAndMessageBuildTree() async {
+        let client = FakeRelayClient()
+        let store = InMemorySecureStore()
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        let model = AppModel(client: client, store: store)
+        await model.start()
+
+        // welcome carries projects + addable + a session, exactly as the relay emits.
+        injectFrame("""
+        {"v":1,"type":"welcome","payload":{
+          "macOnline":true,"lastSeenAt":null,
+          "sessions":[{"id":"t1","repoName":"unco","status":"idle","cols":80,"rows":24,"provider":"claude","lastActivityAt":1790000000000}],
+          "projects":[{"name":"unco","path":"/p/unco","checkouts":[
+            {"kind":"original","title":"main","scm":"git","path":"/p/unco","agentIds":["t1"]}]}],
+          "addable":[{"name":"orca","path":"/p/orca"}]
+        }}
+        """, into: client)
+
+        let gotTree = await waitFor { model.projectTree.count == 1 }
+        XCTAssertTrue(gotTree, "projectTree should have 1 project after welcome")
+        XCTAssertEqual(model.projectTree.count, 1)
+        XCTAssertEqual(model.projectTree[0].checkouts[0].agents.map(\.id), ["t1"])
+        XCTAssertEqual(model.projectsSnapshot.addable.map(\.name), ["orca"])
+
+        // A later standalone `projects` frame replaces the snapshot.
+        injectFrame("""
+        {"v":1,"type":"projects","payload":{"projects":[],"addable":[]}}
+        """, into: client)
+
+        let cleared = await waitFor { model.projectTree.isEmpty }
+        XCTAssertTrue(cleared, "projectTree should be empty after standalone projects frame")
+    }
+
     // MARK: Combined full round-trip E2E test
 
     func testFullRoundTrip_WelcomeSubscribeScrollbackDataInput() async throws {

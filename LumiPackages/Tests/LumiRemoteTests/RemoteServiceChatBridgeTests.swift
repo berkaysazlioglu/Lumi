@@ -15,7 +15,7 @@ import LumiTestSupport
                                            createdAt: Date(timeIntervalSince1970: 0)), snapshots: [])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "command",
             payload: ["commandId": "c1", "action": "start_session", "repoPath": "/repo", "kind": "chat"])
@@ -43,7 +43,7 @@ import LumiTestSupport
         ])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs1", "mode": "chat"])
         // Tüm üç frame tipi beklenir:
@@ -70,7 +70,7 @@ import LumiTestSupport
         ])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs-upd", "mode": "chat"])
         try await conn.waitForSent(types: ["chat", "chat_append"])
@@ -93,7 +93,7 @@ import LumiTestSupport
         chatSvc.stub(meta: meta, snapshots: [withMsg])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs2", "mode": "chat"])
         try await conn.waitForSent(types: ["chat"])
@@ -119,7 +119,7 @@ import LumiTestSupport
         chatSvc.stub(meta: meta, snapshots: [s1, s2])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs3", "mode": "chat"])
         try await conn.waitForSent(types: ["chat", "chat_append"])
@@ -136,7 +136,7 @@ import LumiTestSupport
         chatSvc.stub(meta: meta, snapshots: [active])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs4", "mode": "chat"])
         try await conn.waitForSent(types: ["chat_status"])
@@ -153,7 +153,7 @@ import LumiTestSupport
         // stub yok: snapshots nil döndürür
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         // Bu bir UUID değil, chat oturumu da yok → mode=chat, ama UUID formatı da yanlış
         // Asıl case: geçerli bir UUID ama chatSvc'de yok → terminal yok, sessizce geç
@@ -172,7 +172,7 @@ import LumiTestSupport
         chatSvc.stub(meta: meta, snapshots: [ChatJournalState()])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs5", "mode": "chat"])
         // Subscribe sonrası köprü task'ı aktif olmalı
@@ -194,7 +194,7 @@ import LumiTestSupport
                      snapshots: [ChatJournalState()])   // yalnızca boş snapshot
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs9", "mode": "chat"])
         // Boş olsa da ilk chat snapshot frame'i gelmeli

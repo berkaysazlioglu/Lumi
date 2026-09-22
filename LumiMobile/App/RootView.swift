@@ -6,7 +6,7 @@ struct RootView: View {
 
     var body: some View {
         if model.isPaired {
-            SessionListView(model: model)
+            ProjectsView(model: model)
         } else {
             PairingView(model: model)
         }

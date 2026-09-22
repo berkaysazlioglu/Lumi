@@ -806,4 +806,89 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(render.contains { $0.id == "a1" }, "message is still in the list after turn ends (no vanish)")
         XCTAssertFalse(render.contains { $0.id == "streaming" }, "no bubble after turn ends")
     }
+
+    // MARK: Projects tree (Task 4)
+
+    @MainActor
+    func testProjectsMessagePopulatesTree() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+        client.emit(.message(.sessions([
+            SessionMeta(id: "t1", repoName: "p", status: "waiting-unseen", cols: 80, rows: 24, provider: "claude"),
+        ])))
+        client.emit(.message(.projects(ProjectsSnapshot(projects: [
+            ProjectNode(name: "p", path: "/p", checkouts: [
+                CheckoutNode(kind: "original", title: "main", branch: nil, scm: "git",
+                             path: "/p", agentIds: ["t1"])
+            ])
+        ], addable: [Repo(name: "orca", path: "/p/orca")]))))
+
+        // Wait for async event loop to process
+        for _ in 0..<200 where model.projectTree.isEmpty {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        XCTAssertEqual(model.projectTree.count, 1)
+        XCTAssertEqual(model.projectTree[0].checkouts[0].agents.map(\.id), ["t1"])
+        XCTAssertTrue(model.projectTree[0].checkouts[0].agents[0].needsAttention)
+        XCTAssertEqual(model.projectsSnapshot.addable.map(\.path), ["/p/orca"])
+        XCTAssertTrue(model.macOnline)
+    }
+
+    @MainActor
+    func testAddProjectSendsCommand() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+        await model.addProject(path: "/p/orca")
+        let sent = client.commands
+        XCTAssertTrue(sent.contains { if case .addProject(let p) = $0.action { return p == "/p/orca" } else { return false } })
+    }
+
+    /// addProject failure sets addProjectError and is idempotent: second failure for same commandId is ignored.
+    @MainActor
+    func testAddProjectErrorOnFailedResult() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+        await model.addProject(path: "/p/x")
+        let commandId = client.commands[0].commandId
+
+        // Deliver a failing result
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: false, error: "already_added")))
+        XCTAssertEqual(model.addProjectError, "already_added")
+
+        // Deliver a SECOND failing result for the same commandId (id was already removed, so this is a no-op)
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: false, error: "again")))
+        XCTAssertEqual(model.addProjectError, "already_added", "second result with same id should be ignored")
+    }
+
+    /// unpair() resets projectsSnapshot and addProjectError.
+    @MainActor
+    func testUnpairResetsProjectsState() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+
+        // Populate projectsSnapshot with a project
+        client.emit(.message(.projects(ProjectsSnapshot(projects: [
+            ProjectNode(name: "p", path: "/p", checkouts: [
+                CheckoutNode(kind: "original", title: "main", branch: nil, scm: "git",
+                             path: "/p", agentIds: [])
+            ])
+        ], addable: []))))
+
+        // Wait for async processing
+        for _ in 0..<200 where model.projectsSnapshot.projects.isEmpty {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        // Trigger a failed add_project to set addProjectError
+        await model.addProject(path: "/p/x")
+        let commandId = client.commands[0].commandId
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: false, error: "already_added")))
+        XCTAssertEqual(model.addProjectError, "already_added")
+
+        // Unpair should reset both fields
+        await model.unpair()
+        XCTAssertTrue(model.projectsSnapshot.projects.isEmpty, "projects should be empty after unpair")
+        XCTAssertNil(model.addProjectError, "addProjectError should be nil after unpair")
+    }
 }

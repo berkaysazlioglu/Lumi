@@ -31,7 +31,7 @@ import LumiTestSupport
         // chatSessions no-op: snapshots her zaman nil → köprü kurulmaz, terminal path devreye girer
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } })
+            hookEvents: { AsyncStream { _ in } }, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         // Boş chat + idle status beklenir
@@ -53,7 +53,7 @@ import LumiTestSupport
         let sid = id.description
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { AsyncStream { _ in } })
+            hookEvents: { AsyncStream { _ in } }, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "terminal"])
         try await conn.waitForSent(types: ["scrollback"])

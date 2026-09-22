@@ -9,6 +9,7 @@ export interface Room {
   phones: Set<ClientLike>
   sessions: unknown[] | null
   repos: unknown[] | null
+  projects: unknown | null
   lastSeenAt: number | null
   pushTokens: Set<string>
 }
@@ -50,7 +51,7 @@ export class Registry {
   private ensure(token: string): Room {
     let room = this.rooms.get(token)
     if (!room) {
-      room = { token, mac: null, phones: new Set(), sessions: null, repos: null, lastSeenAt: null, pushTokens: new Set() }
+      room = { token, mac: null, phones: new Set(), sessions: null, repos: null, projects: null, lastSeenAt: null, pushTokens: new Set() }
       this.rooms.set(token, room)
     }
     return room

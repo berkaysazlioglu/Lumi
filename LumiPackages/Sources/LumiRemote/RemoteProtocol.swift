@@ -13,10 +13,13 @@ struct SessionMeta {
     let cols: Int
     let rows: Int
     let kind: String?   // oturum türü (örn. "chat", "terminal"); Faz 2 — yoksa nil
+    let provider: String?
+    let lastActivityAt: Double?
 
     init(id: String, repoName: String, status: String,
          title: String? = nil, model: String? = nil,
-         cols: Int, rows: Int, kind: String? = nil) {
+         cols: Int, rows: Int, kind: String? = nil,
+         provider: String? = nil, lastActivityAt: Double? = nil) {
         self.id = id
         self.repoName = repoName
         self.status = status
@@ -25,6 +28,8 @@ struct SessionMeta {
         self.cols = cols
         self.rows = rows
         self.kind = kind
+        self.provider = provider
+        self.lastActivityAt = lastActivityAt
     }
 
     func toDict() -> [String: Any] {
@@ -38,6 +43,8 @@ struct SessionMeta {
         ]
         if let title { d["title"] = title }
         if let model { d["model"] = model }
+        if let provider { d["provider"] = provider }
+        if let lastActivityAt { d["lastActivityAt"] = lastActivityAt }
         return d
     }
 }
@@ -77,6 +84,11 @@ enum RemoteProtocol {
     /// `repos` payload: `{repos:[{name,path}]}` — telefondan yeni oturum başlatma seçici.
     static func reposPayload(_ repos: [[String: String]]) -> [String: Any] {
         ["repos": repos]
+    }
+
+    /// `projects` payload: favorites tree + addable pool (Mac → phone).
+    static func projectsPayload(projects: [[String: Any]], addable: [[String: String]]) -> [String: Any] {
+        ["projects": projects, "addable": addable]
     }
 
     /// `scrollback` payload: ilk bağlantıda terminal geçmişini gönderir.

@@ -102,7 +102,7 @@ xcodebuild -project LumiMobile.xcodeproj -scheme LumiMobile -configuration Debug
   -destination 'platform=iOS,id=<DEVICE_ID>' -allowProvisioningUpdates build
 xcrun devicectl device install app --device <DEVICE_ID> <app-path>   # bundle: com.lumi.LumiRemoteNew
 
-# Relay (Railway, servis: lumi-relay-new)
+# Relay (Railway, servis: lumi-relay — canlı olan; lumi-relay-new 2026-09-22'de silindi)
 cd RelayServer && railway up --detach
 ```
 

@@ -13,7 +13,7 @@ struct RemoteCommandHandlerTests {
     @Test func startSessionTerminalSpawnsProcess() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, config: FakeConfigService())
         let result = await handler.handle([
             "action": "start_session",
             "repoPath": "/repo",
@@ -27,7 +27,7 @@ struct RemoteCommandHandlerTests {
     @Test func startSessionBindsClaudeSessionID() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, config: FakeConfigService())
         _ = await handler.handle([
             "action": "start_session",
             "repoPath": "/repo",
@@ -48,7 +48,7 @@ struct RemoteCommandHandlerTests {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
         let chatSvc = FakeChatSessionService()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc, config: FakeConfigService())
         let result = await handler.handle([
             "action": "start_session",
             "kind": "chat",
@@ -69,7 +69,7 @@ struct RemoteCommandHandlerTests {
     @Test func startSessionKindChatWithPromptBakesIntoCommand() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, config: FakeConfigService())
         _ = await handler.handle([
             "action": "start_session",
             "kind": "chat",
@@ -86,7 +86,7 @@ struct RemoteCommandHandlerTests {
     @Test func startSessionKindChatEmptyPromptSpawnsBareClaude() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, config: FakeConfigService())
         _ = await handler.handle([
             "action": "start_session",
             "kind": "chat",
@@ -108,7 +108,7 @@ struct RemoteCommandHandlerTests {
         let chatSvc = FakeChatSessionService()
         let meta = ChatSessionMeta(id: "cs-del-1", repoPath: "/repo", createdAt: Date())
         chatSvc.stub(meta: meta, snapshots: [])
-        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc, config: FakeConfigService())
         // Bir stream-json chat oturumunu doğrudan seed'le (karar 80: start_session artık
         // terminal açar, chatSessions.create çağırmaz — bu test delete dalını izole eder).
         _ = await chatSvc.create(repoPath: "/repo")
@@ -124,7 +124,7 @@ struct RemoteCommandHandlerTests {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
         let chatSvc = FakeChatSessionService()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc, config: FakeConfigService())
         let result = await handler.handle([
             "action": "delete_session",
             "sessionId": "11111111-1111-1111-1111-111111111111",
@@ -142,7 +142,7 @@ struct RemoteCommandHandlerTests {
     @Test func chatSendIsHandledByRemoteServiceNotHandler() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let handler = RemoteCommandHandler(terminal: term, trust: trust)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, config: FakeConfigService())
         // chat_send bir "action" değil, "type"; handler bunu bilmez.
         let result = await handler.handle([
             "action": "chat_send",
@@ -152,5 +152,44 @@ struct RemoteCommandHandlerTests {
         ])
         #expect(!result.ok)
         #expect(result.error == "unknown_action")
+    }
+
+    // MARK: - add_project
+
+    @Test func addProjectAppendsFavorite() async throws {
+        let config = FakeConfigService()
+        let repos = FakeRepoService(repos: [Repo(name: "orca", path: "/p/orca", isGitRepo: true, source: .standalone)])
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalService(), trust: FakeClaudeWorkspaceTrust(),
+            repos: repos, config: config)
+
+        let result = await handler.handle(["commandId": "c1", "action": "add_project", "path": "/p/orca"])
+        #expect(result.ok == true)
+        let saved = await config.config().sidebarProjectPaths
+        #expect(saved.contains("/p/orca"))
+    }
+
+    @Test func addProjectRejectsUnknownRepo() async throws {
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalService(), trust: FakeClaudeWorkspaceTrust(),
+            repos: FakeRepoService(repos: []), config: FakeConfigService())
+        let result = await handler.handle(["commandId": "c1", "action": "add_project", "path": "/nope"])
+        #expect(result.ok == false)
+        #expect(result.error == "unknown_repo")
+    }
+
+    @Test func addProjectIsIdempotent() async throws {
+        let config = FakeConfigService()
+        var cfg = AppConfig.defaults
+        cfg.sidebarProjectPaths = ["/p/orca"]
+        await config.seed(cfg)
+        let repos = FakeRepoService(repos: [Repo(name: "orca", path: "/p/orca", isGitRepo: true, source: .standalone)])
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalService(), trust: FakeClaudeWorkspaceTrust(),
+            repos: repos, config: config)
+
+        _ = await handler.handle(["commandId": "c2", "action": "add_project", "path": "/p/orca"])
+        let saved = await config.config().sidebarProjectPaths
+        #expect(saved.filter { $0 == "/p/orca" }.count == 1)
     }
 }

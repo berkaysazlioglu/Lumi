@@ -18,6 +18,8 @@ public enum ServerMessage: Sendable, Equatable {
     case chatStatus(sessionId: String, status: ChatTurnStatus)
     // Phase 3: interactive prompt
     case prompt(sessionId: String, prompt: ChatPrompt)
+    // Projects tree
+    case projects(ProjectsSnapshot)
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -30,6 +32,7 @@ public enum CommandAction: Sendable, Equatable {
     case getHistory(sessionId: String)
     case deleteSession(sessionId: String)
     case setModel(sessionId: String, model: String)
+    case addProject(path: String)
 }
 
 public struct OutgoingCommand: Sendable, Equatable {
@@ -87,6 +90,7 @@ public enum PhoneProtocol {
             guard let sessionId = payload["sessionId"] as? String,
                   let p = ChatPrompt.decode(payload) else { return nil }
             return .prompt(sessionId: sessionId, prompt: p)
+        case "projects": return decodePayload(ProjectsSnapshot.self).map(ServerMessage.projects)
         default: return nil
         }
     }
@@ -204,6 +208,9 @@ public enum PhoneProtocol {
             payload["action"] = "set_model"
             payload["sessionId"] = sessionId
             payload["model"] = model
+        case .addProject(let path):
+            payload["action"] = "add_project"
+            payload["path"] = path
         }
         return frame(type: "command", payload: payload)
     }

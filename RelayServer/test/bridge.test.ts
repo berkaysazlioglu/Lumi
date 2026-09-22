@@ -244,6 +244,35 @@ test('subscribe mode alanı opak geçer (phone→mac)', () => {
   expect(mac.last().payload.mode).toBe('chat')
 })
 
+test('mac projects → odada saklanır ve telefonlara yayınlanır', () => {
+  const { bridge, registry, mac, phone, macSession } = paired()
+  const payload = { projects: [{ name: 'p', path: '/p', checkouts: [] }], addable: [{ name: 'orca', path: '/p/orca' }] }
+  bridge.handleMessage(macSession, env('projects', payload))
+  expect(registry.get(TOKEN)?.projects).toEqual(payload)
+  expect(phone.last().type).toBe('projects')
+  expect(phone.last().payload).toEqual(payload)
+})
+
+test('telefon hello → welcome içinde projects ve addable gelir (mac önce cache etmişse)', () => {
+  const { bridge } = setup()
+  const mac = new FakeClient()
+  const macSession = bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+  macSession.room.projects = { projects: [{ name: 'p', path: '/p', checkouts: [] }], addable: [] }
+
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  expect(phone.last().type).toBe('welcome')
+  expect(phone.last().payload.projects).toEqual([{ name: 'p', path: '/p', checkouts: [] }])
+  expect(phone.last().payload.addable).toEqual([])
+})
+
+test('telefon command add_project → mac\'e forward edilir', () => {
+  const { bridge, mac, phoneSession } = paired()
+  bridge.handleMessage(phoneSession, env('command', { commandId: 'c1', action: 'add_project', path: '/p/orca' }))
+  const forwarded = mac.sent.find((m) => m.type === 'command')
+  expect(forwarded?.payload.action).toBe('add_project')
+})
+
 // --- Terminal-stream routing tests (brief Step 7) ---
 
 function fakeClient() {

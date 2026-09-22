@@ -22,9 +22,12 @@ export class Bridge {
       ? this.registry.attachMac(hello.token, client)
       : this.registry.attachPhone(hello.token, client)
     if (hello.role === 'phone') {
+      const proj = (room.projects as { projects?: unknown; addable?: unknown } | null) ?? null
       client.send(envelope('welcome', {
         sessions: room.sessions ?? [],
         repos: room.repos ?? [],
+        projects: proj?.projects ?? [],
+        addable: proj?.addable ?? [],
         macOnline: room.mac !== null,
         lastSeenAt: room.lastSeenAt,
       }))
@@ -60,6 +63,11 @@ export class Bridge {
         const list = Array.isArray(env.payload.repos) ? env.payload.repos : null
         room.repos = list
         this.broadcast(room, envelope('repos', env.payload))
+        break
+      }
+      case 'projects': {
+        room.projects = env.payload
+        this.broadcast(room, envelope('projects', env.payload))
         break
       }
       case 'scrollback':

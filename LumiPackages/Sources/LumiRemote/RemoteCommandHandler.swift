@@ -47,16 +47,19 @@ final class RemoteCommandHandler {
     private let chatSessions: any ChatSessionServicing
     private let repos: any RepoServicing
     private let workspaces: any WorkspaceServicing
+    private let config: any ConfigServicing
 
     init(terminal: any TerminalServicing, trust: any ClaudeWorkspaceTrusting,
          chatSessions: any ChatSessionServicing = NoopChatSessionService(),
          repos: any RepoServicing = NoopRepoServicing(),
-         workspaces: any WorkspaceServicing = NoopWorkspaceServicing()) {
+         workspaces: any WorkspaceServicing = NoopWorkspaceServicing(),
+         config: any ConfigServicing) {
         self.terminal = terminal
         self.trust = trust
         self.chatSessions = chatSessions
         self.repos = repos
         self.workspaces = workspaces
+        self.config = config
     }
 
     func handle(_ payload: [String: Any]) async -> CommandResult {
@@ -102,6 +105,8 @@ final class RemoteCommandHandler {
             })
         case "list_branches":
             return await listBranches(payload, commandId: commandId)
+        case "add_project":
+            return await addProject(payload, commandId: commandId)
         default:
             return .failure(commandId, "unknown_action")
         }
@@ -177,6 +182,21 @@ final class RemoteCommandHandler {
         do {
             let branches = try await workspaces.branches(project: repo, limit: 100)
             return .ok(commandId, branches: branches.map(\.name))
+        } catch {
+            return .failure(commandId, "\(error)")
+        }
+    }
+
+    private func addProject(_ payload: [String: Any], commandId: String?) async -> CommandResult {
+        let path = payload["path"] as? String ?? ""
+        guard !path.isEmpty, await repos.repos().contains(where: { $0.path == path }) else {
+            return .failure(commandId, "unknown_repo")
+        }
+        do {
+            try await config.updateConfig { c in
+                if !c.sidebarProjectPaths.contains(path) { c.sidebarProjectPaths.append(path) }
+            }
+            return .ok(commandId)
         } catch {
             return .failure(commandId, "\(error)")
         }

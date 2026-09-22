@@ -76,6 +76,29 @@ import LumiKit
         #expect(p["startedAtMs"] as? Int == 42)
         #expect(p["tool"] as? String == "Read")
     }
+
+    @Test func sessionMetaToDictIncludesProviderAndActivity() {
+        let meta = SessionMeta(id: "t1", repoName: "r", status: "idle", cols: 80, rows: 24,
+                               provider: "claude", lastActivityAt: 1_790_000_000_000)
+        let d = meta.toDict()
+        #expect(d["provider"] as? String == "claude")
+        #expect(d["lastActivityAt"] as? Double == 1_790_000_000_000)
+    }
+
+    @Test func sessionMetaToDictOmitsNilProvider() {
+        let meta = SessionMeta(id: "t1", repoName: "r", status: "idle", cols: 80, rows: 24)
+        let d = meta.toDict()
+        #expect(d["provider"] == nil)
+        #expect(d["lastActivityAt"] == nil)
+    }
+
+    @Test func projectsPayloadShape() {
+        let payload = RemoteProtocol.projectsPayload(
+            projects: [["name": "p", "path": "/p", "checkouts": []]],
+            addable: [["name": "orca", "path": "/p/orca"]])
+        #expect((payload["projects"] as? [[String: Any]])?.count == 1)
+        #expect((payload["addable"] as? [[String: String]])?.first?["path"] == "/p/orca")
+    }
 }
 
 @Suite struct RemoteProtocolPromptTests {

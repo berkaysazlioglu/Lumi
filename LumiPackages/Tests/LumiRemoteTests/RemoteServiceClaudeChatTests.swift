@@ -36,7 +36,7 @@ import LumiTestSupport
 
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
                                 connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-                                hookEvents: { AsyncStream { _ in } })
+                                hookEvents: { AsyncStream { _ in } }, config: FakeConfigService())
         await svc.start()
 
         // welcome → sendSessions tetiklenir
@@ -82,7 +82,8 @@ import LumiTestSupport
             connection: conn,
             chatSource: chatSrc,
             hookEvents: { AsyncStream { _ in } },
-            transcriptLocator: locator
+            transcriptLocator: locator,
+            config: FakeConfigService()
         )
         await svc.start()
 
@@ -123,7 +124,8 @@ import LumiTestSupport
         let svc = RemoteService(
             paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: chatSrc,
-            hookEvents: { AsyncStream { _ in } }, transcriptLocator: locator)
+            hookEvents: { AsyncStream { _ in } }, transcriptLocator: locator,
+            config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         try await conn.waitForCount(type: "chat_append", atLeast: 1)
@@ -160,7 +162,8 @@ import LumiTestSupport
             chatSource: FakeChatTranscriptSource(events: []),
             hookEvents: { AsyncStream { _ in } },
             keystrokeScheduler: InstantScheduler(),   // settle'ı anında geç
-            chatSessions: chatSvc
+            chatSessions: chatSvc,
+            config: FakeConfigService()
         )
         await svc.start()
 
@@ -203,7 +206,8 @@ import LumiTestSupport
             connection: conn,
             chatSource: FakeChatTranscriptSource(events: []),
             hookEvents: { AsyncStream { _ in } },
-            chatSessions: chatSvc
+            chatSessions: chatSvc,
+            config: FakeConfigService()
         )
         await svc.start()
 

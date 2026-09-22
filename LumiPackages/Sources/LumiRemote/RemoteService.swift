@@ -24,6 +24,7 @@ public final class RemoteService: RemoteServicing {
     public private(set) var currentConfig: RemoteConfig = .defaults
 
     private let configService: RemoteConfigService
+    private let appConfig: any ConfigServicing
     private let terminal: any TerminalServicing
     private let repos: any RepoServicing
     private let connection: any RelayConnecting
@@ -59,6 +60,7 @@ public final class RemoteService: RemoteServicing {
     private var promptWriteTasks: [TerminalID: Task<Void, Never>] = [:]
     private var promptSeq = 0
     private var hookTask: Task<Void, Never>?
+    private var configTask: Task<Void, Never>?
 
     private var inboundTask: Task<Void, Never>?
     private var terminalTask: Task<Void, Never>?
@@ -84,15 +86,17 @@ public final class RemoteService: RemoteServicing {
         keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
         transcriptLocator: any TranscriptLocating = NoopTranscriptLocating(),
         chatSessions: any ChatSessionServicing = NoopChatSessionService(),
-        workspaces: any WorkspaceServicing = NoopWorkspaceServicing()
+        workspaces: any WorkspaceServicing = NoopWorkspaceServicing(),
+        config: any ConfigServicing
     ) {
         self.configService = RemoteConfigService(paths: paths)
+        self.appConfig = config
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
         self.commandHandler = RemoteCommandHandler(
             terminal: terminal, trust: trust, chatSessions: chatSessions,
-            repos: repos, workspaces: workspaces)
+            repos: repos, workspaces: workspaces, config: config)
         self.chatSource = chatSource
         self.hookEvents = hookEvents
         self.turnClock = turnClock
@@ -132,6 +136,15 @@ public final class RemoteService: RemoteServicing {
             }
             rlog("hook stream dinleme BİTTİ (iptal/finish)")
         }
+        let configStream = appConfig.events()
+        configTask = Task { [weak self] in
+            for await event in configStream {
+                if case .configChanged(let old, let new) = event,
+                   old.sidebarProjectPaths != new.sidebarProjectPaths || old.workspaces != new.workspaces {
+                    await self?.sendProjects()
+                }
+            }
+        }
         await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
         guard myEpoch == epoch else { return }
         setState(.connecting)
@@ -155,6 +168,7 @@ public final class RemoteService: RemoteServicing {
         chatBridgeState.removeAll()
         chatModeTerminals.removeAll()
         hookTask?.cancel(); hookTask = nil
+        configTask?.cancel(); configTask = nil
         turnReducers.removeAll()
         promptJournals.removeAll()
         for t in promptWriteTasks.values { t.cancel() }
@@ -191,6 +205,7 @@ public final class RemoteService: RemoteServicing {
             case "welcome":
                 await sendSessions()
                 await sendRepos()
+                await sendProjects()
             case "subscribe":
                 await handleSubscribe(payload)
             case "unsubscribe":
@@ -230,6 +245,7 @@ public final class RemoteService: RemoteServicing {
                 promptWriteTasks[id]?.cancel(); promptWriteTasks[id] = nil
             }
             await sendSessions()
+            await sendProjects()
         case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .codexSessionIDChanged, .writeFailed, .stalled,
              .viewFocused, .linkActivated:
             break
@@ -256,7 +272,9 @@ public final class RemoteService: RemoteServicing {
                 rows: 24,
                 // Karar 79: Claude provider'lı terminal → telefonda chat view (kind:"chat").
                 // Bash/Codex/shell terminal'lar nil kalır (terminal view).
-                kind: meta.provider == .claude ? "chat" : nil
+                kind: meta.provider == .claude ? "chat" : nil,
+                provider: meta.provider?.rawValue,
+                lastActivityAt: meta.lastActivityAt.timeIntervalSince1970 * 1000
             )
         }
         // Stream-json chat oturumları (Faz 2): kind:"chat" ile listeye eklenir —
@@ -264,6 +282,9 @@ public final class RemoteService: RemoteServicing {
         // (final review #1: kind prod'da yalnız buradan set edilir).
         for chat in await chatSessions.list() {
             let repoName = repoNames[chat.repoPath] ?? (chat.repoPath as NSString).lastPathComponent
+            // v1 kasıtlı: chat oturumları transcript-tail; aktivite zaman damgası ve
+            // provider bilinmiyor → provider/lastActivityAt nil bırakılır, telefonda
+            // boş göreli-zaman etiketi görünür.
             metas.append(SessionMeta(
                 id: chat.id, repoName: repoName, status: "idle",
                 title: nil, model: nil, cols: 80, rows: 24, kind: "chat"
@@ -283,6 +304,49 @@ public final class RemoteService: RemoteServicing {
     private func sendRepos() async {
         let list = await repos.repos().map { ["name": $0.name, "path": $0.path] }
         await connection.send(type: "repos", payload: RemoteProtocol.reposPayload(list))
+    }
+
+    /// Favorites tree (karar 48–51 parite): favorited projeler → checkout'lar
+    /// (original + yönetilen workspace'ler) → checkout path'ine göre gruplandırılmış ajan id'leri.
+    /// v1: original checkout'un gerçek branch'i atlanır (nil) — git/plastic store'larını
+    /// RemoteService'e çekmemek için; workspace checkout'ları kendi branch'lerini taşır.
+    /// Ajanlar en yeni aktiviteye göre azalan sırada sıralanır.
+    private func sendProjects() async {
+        let cfg = await appConfig.config()
+        let allRepos = await repos.repos()
+        let repoByPath = Dictionary(allRepos.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        let managedPaths = Set(cfg.workspaces.map(\.path))
+
+        func agentIds(at path: String) -> [String] {
+            terminal.terminals
+                .filter { $0.repoPath == path }
+                .sorted { $0.lastActivityAt > $1.lastActivityAt }
+                .map { $0.id.description }
+        }
+
+        var projects: [[String: Any]] = []
+        for favPath in cfg.sidebarProjectPaths {
+            guard let repo = repoByPath[favPath] else { continue }
+            var checkouts: [[String: Any]] = [[
+                "kind": "original", "title": "main",
+                "scm": repo.isGitRepo ? "git" : "none",
+                "path": repo.path, "agentIds": agentIds(at: repo.path),
+            ]]
+            for ws in cfg.workspaces where ws.projectPath == favPath {
+                checkouts.append([
+                    "kind": "workspace", "title": ws.name, "branch": ws.branch,
+                    "scm": ws.scm.rawValue, "path": ws.path, "agentIds": agentIds(at: ws.path),
+                ])
+            }
+            projects.append(["name": repo.name, "path": repo.path, "checkouts": checkouts])
+        }
+
+        let favorited = Set(cfg.sidebarProjectPaths)
+        let addable = allRepos
+            .filter { !favorited.contains($0.path) && !managedPaths.contains($0.path) }
+            .map { ["name": $0.name, "path": $0.path] }
+
+        await connection.send(type: "projects", payload: RemoteProtocol.projectsPayload(projects: projects, addable: addable))
     }
 
     // MARK: - Subscribe / Unsubscribe

@@ -59,6 +59,14 @@ public final class AppModel {
     /// even if the `sessions` broadcast is delayed (final review #1: cannot depend on kind broadcast race).
     private var chatSessionIds: Set<String> = []
 
+    // MARK: Projects state (Task 4)
+
+    /// Latest projects tree snapshot (favorites mirror from the Mac).
+    public private(set) var projectsSnapshot = ProjectsSnapshot(projects: [], addable: [])
+    /// Last add_project failure (surfaced by the add sheet).
+    public private(set) var addProjectError: String?
+    private var addProjectCommandIds: Set<String> = []
+
     // MARK: Terminal byte-routing
 
     /// Live chunk consumer for the active session (SwiftTerm view). A single consumer is sufficient.
@@ -171,6 +179,9 @@ public final class AppModel {
         branchesLoading = false
         branchesError = nil
         startState = .idle
+        projectsSnapshot = ProjectsSnapshot(projects: [], addable: [])
+        addProjectError = nil
+        addProjectCommandIds = []
     }
 
     // MARK: Incoming messages
@@ -185,6 +196,9 @@ public final class AppModel {
             lastSeenAt = welcome.lastSeenAt.map { Date(timeIntervalSince1970: $0 / 1000) }
             if let metas = welcome.sessions { applySessions(metas) }
             if let repos = welcome.repos { self.repos = repos }
+            if let projects = welcome.projects {
+                projectsSnapshot = ProjectsSnapshot(projects: projects, addable: welcome.addable ?? [])
+            }
 
         case .sessions(let metas):
             // Only the Mac can send a sessions message → Mac is online.
@@ -201,6 +215,10 @@ public final class AppModel {
             route(chunk)
 
         case .commandResult(let result):
+            if addProjectCommandIds.remove(result.commandId) != nil {
+                if !result.ok { addProjectError = result.error ?? "couldn't add project" }
+                return
+            }
             if branchRequestIds.remove(result.commandId) != nil {
                 branchesLoading = false
                 if result.ok { branchesForRepo = result.branches ?? [] }
@@ -266,6 +284,10 @@ public final class AppModel {
             list.removeAll { $0.itemId == p.itemId }
             if p.state == .pending { list.append(p) }   // resolved/cancelled → listede tutma
             prompts[sessionId] = list
+
+        case .projects(let snap):
+            macOnline = true
+            projectsSnapshot = snap
         }
     }
 
@@ -294,6 +316,8 @@ public final class AppModel {
             "chat_status \(sessionId.prefix(8))"
         case .prompt(let sessionId, let p):
             "prompt \(sessionId.prefix(8)) \(p.kind.rawValue) \(p.state.rawValue)"
+        case .projects(let snap):
+            "projects projects=\(snap.projects.count) addable=\(snap.addable.count)"
         }
     }
 
@@ -518,6 +542,11 @@ public final class AppModel {
 
     // MARK: Derived state
 
+    /// View-ready tree: joins the snapshot's agent ids against live `sessions`.
+    public var projectTree: [ProjectRowData] {
+        assembleProjectTree(snapshot: projectsSnapshot, sessions: sessions, selectedId: activeSessionId)
+    }
+
     /// `waiting` first (design §4.3), then error/working/idle; within a group sorted by repo name.
     public var orderedSessions: [SessionMeta] {
         func priority(_ badge: Badge) -> Int {
@@ -631,6 +660,18 @@ public final class AppModel {
 
     public func deleteSession(sessionId: String) async {
         await dispatch(target: sessionId, action: .deleteSession(sessionId: sessionId))
+    }
+
+    /// Adds a Mac-known project to favorites (the one phone-side write). Not
+    /// optimistic — the Mac appends the favorite and rebroadcasts `projects`.
+    public func addProject(path: String) async {
+        commandCounter += 1
+        let commandId = "ph-\(commandCounter)"
+        addProjectCommandIds.insert(commandId)
+        addProjectError = nil
+        let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: .addProject(path: path)))
+        DiagLog.shared.log("model", "out \(commandId) add_project ok=\(ok)")
+        if !ok { addProjectCommandIds.remove(commandId); addProjectError = "no connection" }
     }
 
     public func currentModel(for sessionId: String) -> String? {

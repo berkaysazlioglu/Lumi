@@ -112,4 +112,16 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(p["sessionId"] as? String, "s42")
         XCTAssertEqual(p["text"] as? String, "Merhaba")
     }
+
+    func testAddProjectCommandFrameEncodes() {
+        let frame = PhoneProtocol.commandFrame(
+            OutgoingCommand(commandId: "c1", action: .addProject(path: "/p/orca")))
+        let data = frame.data(using: .utf8)!
+        let obj = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let payload = obj["payload"] as! [String: Any]
+        XCTAssertEqual(obj["type"] as? String, "command")
+        XCTAssertEqual(payload["action"] as? String, "add_project")
+        XCTAssertEqual(payload["path"] as? String, "/p/orca")
+        XCTAssertEqual(payload["commandId"] as? String, "c1")
+    }
 }

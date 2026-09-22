@@ -12,6 +12,25 @@ Open your repositories as tabs, spawn as many terminals as you need inside each 
 - **Git panel** — status, commit log and a file tree with an integrated viewer (syntax highlighting + unified diff)
 - **Usage indicator**, **focus mode**, and an optional **scheduled session trigger**
 
+## Download
+
+Grab the latest ready-to-run app — no build tools needed:
+
+**→ [github.com/berkaysazlioglu/Lumi/releases/latest](https://github.com/berkaysazlioglu/Lumi/releases/latest)**
+
+Pick the disk image for your Mac, open it and drag **Lumi** to Applications:
+
+| Your Mac | File |
+|---|---|
+| Apple Silicon (M1/M2/M3/M4…) | `Lumi-<version>-arm64-mac.dmg` |
+| Intel | `Lumi-<version>-x86_64-mac.dmg` |
+
+Not sure which? Apple menu →  About This Mac → if it says "Apple M…" you're Apple Silicon.
+
+The builds are signed with a Developer ID and notarized by Apple, so they open normally on first launch — no right-click-to-open workaround. You still need the [agent CLI](#requirements) (`claude` / `codex`) on your `PATH`.
+
+New versions are published to the same link, so bookmark it and re-download when you want to update.
+
 ## Requirements
 
 | | |

@@ -242,7 +242,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let term = FakeTerminalServicing()
         term.scrollback = ("SCROLL".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []), config: FakeConfigService())
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
@@ -267,7 +267,7 @@ final class FakeTerminalServicing: TerminalServicing {
             Repo(name: "lumi", path: "/a/lumi", isGitRepo: true, source: .standalone),
             Repo(name: "beta", path: "/a/beta", isGitRepo: false, source: .standalone),
         ])
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc, connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc, connection: conn, chatSource: FakeChatTranscriptSource(events: []), config: FakeConfigService())
         await svc.start()
 
         await conn.injectInbound(type: "welcome", payload: [:])
@@ -281,7 +281,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         let sid = makeSession(term)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []), config: FakeConfigService())
         await svc.start()
 
         await conn.injectInbound(type: "input", payload: ["sessionId": sid, "data": "aGk="]) // "hi"
@@ -301,7 +301,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let trust = FakeClaudeWorkspaceTrust()
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
                                 connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-                                trust: trust)
+                                trust: trust, config: FakeConfigService())
         await svc.start()
 
         await conn.injectInbound(type: "command", payload: [
@@ -320,7 +320,7 @@ final class FakeTerminalServicing: TerminalServicing {
         term.scrollback = ("X".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)
         let tid = TerminalID(raw: UUID(uuidString: sid)!)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []), config: FakeConfigService())
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
@@ -353,7 +353,8 @@ final class FakeTerminalServicing: TerminalServicing {
         term.metas.append(meta)
         let sid = meta.id.description
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-                                connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+                                config: FakeConfigService())
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
@@ -374,7 +375,8 @@ final class FakeTerminalServicing: TerminalServicing {
         term.metas.append(meta)
         let sid = meta.id.description
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-                                connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+                                config: FakeConfigService())
         await svc.start()
         // Terminal mode subscribe → feed başlar
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
@@ -396,7 +398,8 @@ final class FakeTerminalServicing: TerminalServicing {
         term.scrollback = ("X".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)  // claudeSessionID yok
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-                                connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+                                config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         // Boş chat + idle (scrollback gelmez)
@@ -414,7 +417,8 @@ final class FakeTerminalServicing: TerminalServicing {
         await ws.setBranches(.success([WorkspaceBranch(name: "main"), WorkspaceBranch(name: "dev")]))
         let result = await RemoteCommandHandler(
             terminal: term, trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws
+            chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws,
+            config: FakeConfigService()
         ).handle(["action": "list_branches", "repoPath": "/tmp/r", "commandId": "c1"])
 
         #expect(result.ok)
@@ -429,7 +433,8 @@ final class FakeTerminalServicing: TerminalServicing {
         let ws = FakeWorkspaceService()
         let result = await RemoteCommandHandler(
             terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws
+            chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws,
+            config: FakeConfigService()
         ).handle(["action": "list_branches", "repoPath": "/nope", "commandId": "c1"])
         #expect(!result.ok)
         #expect(result.error == "unknown_repo")
@@ -449,7 +454,8 @@ final class FakeTerminalServicing: TerminalServicing {
         let term = FakeTerminalServicing()
         let handler = RemoteCommandHandler(
             terminal: term, trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: FakeChatSessionService(), repos: repoSvc, workspaces: ws)
+            chatSessions: FakeChatSessionService(), repos: repoSvc, workspaces: ws,
+            config: FakeConfigService())
 
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
@@ -472,7 +478,8 @@ final class FakeTerminalServicing: TerminalServicing {
         let term = FakeTerminalServicing()
         let handler = RemoteCommandHandler(
             terminal: term, trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: FakeChatSessionService(), repos: FakeRepoService(repos: [repo]), workspaces: ws)
+            chatSessions: FakeChatSessionService(), repos: FakeRepoService(repos: [repo]), workspaces: ws,
+            config: FakeConfigService())
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "", "branchMode": "current", "commandId": "c1"])
@@ -491,7 +498,8 @@ final class FakeTerminalServicing: TerminalServicing {
         let term = FakeTerminalServicing()
         let handler = RemoteCommandHandler(
             terminal: term, trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: FakeChatSessionService(), repos: FakeRepoService(repos: [repo]), workspaces: ws)
+            chatSessions: FakeChatSessionService(), repos: FakeRepoService(repos: [repo]), workspaces: ws,
+            config: FakeConfigService())
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "", "branchMode": "existing", "branchName": "dev", "commandId": "c1"])

@@ -35,7 +35,8 @@ import LumiTestSupport
             paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
             hookEvents: { hooks.events() },
-            turnClock: { Date(timeIntervalSince1970: 100) }
+            turnClock: { Date(timeIntervalSince1970: 100) },
+            config: FakeConfigService()
         )
         await svc.start()
 
@@ -78,7 +79,8 @@ import LumiTestSupport
         let svc = RemoteService(
             paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { hooks.events() }
+            hookEvents: { hooks.events() },
+            config: FakeConfigService()
         )
         await svc.start()
 
@@ -111,7 +113,8 @@ import LumiTestSupport
         let svc = RemoteService(
             paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { hooks.events() })
+            hookEvents: { hooks.events() },
+            config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         try await conn.waitForSent(types: ["chat_status"])

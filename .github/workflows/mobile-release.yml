@@ -1,0 +1,60 @@
+name: Mobile Release (TestFlight)
+on:
+  push:
+    tags: ['ios-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version (CFBundleShortVersionString)
+        required: false
+        default: '1.0'
+
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # make-mobile.sh derives the build number from `git rev-list --count HEAD`,
+          # so a shallow clone (default depth 1) would make every build number 1 and
+          # TestFlight would reject the duplicate. Fetch the full history.
+          fetch-depth: 0
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test LumiMobileKit
+        run: swift test
+        working-directory: LumiMobile/LumiMobileKit
+
+      - name: Resolve marketing version
+        run: |
+          REF="${GITHUB_REF_NAME}"
+          if [[ "$REF" == ios-v* ]]; then
+            echo "VERSION=${REF#ios-v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode -o "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Build, export and upload to TestFlight
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        # VERSION and ASC_KEY_PATH come from $GITHUB_ENV (previous steps).
+        # make-mobile.sh: xcodegen generate → xcodebuild archive → export .ipa →
+        # xcrun altool upload. No keychain certificate needed — the API key plus
+        # -allowProvisioningUpdates pulls the distribution cert/profile automatically.
+        run: ./Scripts/make-mobile.sh
