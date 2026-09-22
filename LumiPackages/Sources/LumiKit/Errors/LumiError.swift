@@ -11,6 +11,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case plasticFailed(operation: String, detail: String)
     /// Commit mesajı üretimi (`claude -p`) başarısız ya da boş yanıt (karar 47).
     case commitMessageGenerationFailed(detail: String)
+    /// Hızlı komut üretimi (`claude -p`, karar 92) başarısız ya da script'siz yanıt.
+    case quickCommandGenerationFailed(detail: String)
     case pathOutsideRepo(path: String)
     case fileOperationFailed(path: String, detail: String)
     case configIOFailed(file: String, detail: String)
@@ -40,6 +42,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Plastic SCM \(operation) failed: \(detail)"
         case .commitMessageGenerationFailed(let detail):
             return "Could not generate commit message: \(detail)"
+        case .quickCommandGenerationFailed(let detail):
+            return "Could not generate command: \(detail)"
         case .pathOutsideRepo(let path):
             return "Path is outside the repository: \(path)"
         case .fileOperationFailed(let path, let detail):

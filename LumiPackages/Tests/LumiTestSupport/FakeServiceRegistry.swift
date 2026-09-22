@@ -23,6 +23,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var git: any GitServicing
     public var plastic: any PlasticServicing = FakePlasticService()
     public var commitMessages: any CommitMessageGenerating = FakeCommitMessageGenerator()
+    public var quickCommandGenerator: any QuickCommandGenerating = FakeQuickCommandGenerator()
     public var terminal: any TerminalServicing
     public var viewProvider: any TerminalViewProviding
     public var highlighter: any SyntaxHighlighting
