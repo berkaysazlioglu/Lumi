@@ -60,6 +60,16 @@ struct CheckoutRow: View {
             row
             agentList
         }
+        .padding(.vertical, Theme.Spacing.xxs)
+        .background {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .fill(isActive ? Theme.textPrimary.opacity(0.10) : .clear)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(isActive ? Theme.textSecondary.opacity(0.45) : .clear, lineWidth: Theme.Stroke.hairline)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Satır
@@ -95,7 +105,6 @@ struct CheckoutRow: View {
             .padding(.trailing, Theme.Spacing.sm)
             .padding(.vertical, Theme.Spacing.xs)
         }
-        .background(isActive ? Theme.bgElevated : .clear)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .help(checkout.path)
         .contextMenu { contextMenu }
