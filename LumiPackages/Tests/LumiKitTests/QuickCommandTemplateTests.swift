@@ -43,3 +43,20 @@ final class QuickCommandNamingTests: XCTestCase {
         XCTAssertLessThanOrEqual(name.count, QuickCommandNaming.maxNameLength + 1)
     }
 }
+
+final class QuickCommandRunTests: XCTestCase {
+    func testFileNameIsStablePerCommandAndCheckout() {
+        XCTAssertEqual(QuickCommandRun.fileName(commandID: "A-1", checkoutName: "Sand Blocks"), "A-1-Sand-Blocks.sh")
+        XCTAssertEqual(QuickCommandRun.fileName(commandID: "A-1", checkoutName: "../"), "A-1-checkout.sh", "no traversal, no empty slug")
+    }
+
+    func testLaunchLineQuotesThePath() {
+        XCTAssertEqual(QuickCommandRun.launchLine(scriptPath: "/a b/it's.sh"), #"sh '/a b/it'\''s.sh'"#)
+    }
+
+    func testScriptContentsAddHeaderAndTrailingNewline() {
+        let command = ProjectQuickCommand(projectPath: "/p", name: "Two\nlines", script: "ls {path}")
+        let context = QuickCommandContext(path: "/w", projectPath: "/p", name: "w", branch: "")
+        XCTAssertEqual(QuickCommandRun.scriptContents(command, context: context), "# Lumi action: Two lines\nls /w\n")
+    }
+}

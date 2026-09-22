@@ -23,6 +23,8 @@ public protocol ServiceRegistry: AnyObject {
     var commitMessages: any CommitMessageGenerating { get }
     /// Hızlı komut üreticisi (karar 92) — araçlı `claude -p`.
     var quickCommandGenerator: any QuickCommandGenerating { get }
+    /// Çalıştırılacak hızlı komut script'lerinin yazıcısı (karar 92).
+    var quickCommandScripts: any QuickCommandScriptWriting { get }
     var agentHistory: any AgentHistoryServicing { get }
     /// Agent History oturumu dışa/içe aktarımı (karar 52).
     var agentSessionTransfer: any AgentSessionTransferring { get }

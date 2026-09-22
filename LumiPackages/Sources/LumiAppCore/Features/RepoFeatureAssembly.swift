@@ -40,7 +40,8 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             repos: repoStore, toasts: shared.toasts
         )
         quickCommands = QuickCommandStore(
-            config: services.config, generator: services.quickCommandGenerator, toasts: shared.toasts
+            config: services.config, generator: services.quickCommandGenerator,
+            scripts: services.quickCommandScripts, toasts: shared.toasts
         )
         agentHistory = AgentHistoryStore(
             service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts

@@ -123,3 +123,29 @@ public enum QuickCommandNaming {
         return cut + "…"
     }
 }
+
+/// Bir komutun bir checkout'ta çalıştırılışı (karar 92) — saf hesaplar.
+///
+/// Çok satırlı script PTY'ye satır satır yazılınca (`if`/döngü/heredoc)
+/// kabuğun etkileşimli ayrıştırmasına takılır; bu yüzden çözülmüş gövde bir
+/// dosyaya yazılır ve terminale yalnız `sh '<dosya>'` satırı girilir.
+public enum QuickCommandRun {
+    /// Komut + checkout başına sabit ad: aynı checkout'ta tekrar çalıştırma
+    /// dosyayı ezer (birikmez), farklı checkout'larda art arda çalıştırma
+    /// birbirinin dosyasını ezmez (terminal satırı gecikmeli okunur).
+    public static func fileName(commandID: String, checkoutName: String) -> String {
+        let slug = WorkspaceName.slug(checkoutName)
+        return "\(WorkspaceName.slug(commandID))-\(slug.isEmpty ? "checkout" : slug).sh"
+    }
+
+    public static func scriptContents(_ command: ProjectQuickCommand, context: QuickCommandContext) -> String {
+        let body = QuickCommandTemplate.resolve(command.script, context: context)
+        let header = "# Lumi action: \(command.name.replacingOccurrences(of: "\n", with: " "))\n"
+        return header + (body.hasSuffix("\n") ? body : body + "\n")
+    }
+
+    /// Terminale yazılan satır: yol tek tırnaklanır (içindeki `'` kaçırılır).
+    public static func launchLine(scriptPath: String) -> String {
+        "sh '\(scriptPath.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+}

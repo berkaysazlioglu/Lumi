@@ -221,6 +221,44 @@ struct CheckoutRow: View {
     // MARK: - Menü
 
     private var menuItems: [PopoverMenu.Item] {
+        checkoutMenuItems + [.divider] + runMenuItems
+    }
+
+    /// Karar 92: projenin hızlı komutları bu checkout'ta çalışır.
+    private var runMenuItems: [PopoverMenu.Item] {
+        let commands = shell.quickCommands.commands(for: projectPath)
+        let runs: [PopoverMenu.Item] = commands.map { command in
+            .action(command.name, icon: "play", isEnabled: !isMissing) {
+                let context = quickCommandContext
+                Task { await shell.runQuickCommand(command, context: context) }
+            }
+        }
+        return [.section("Run")] + runs + [
+            .action(commands.isEmpty ? "Add Action…" : "Manage Actions…", icon: "bolt") {
+                shell.dialogs.present(.quickCommands(projectPath: projectPath))
+            },
+        ]
+    }
+
+    private var projectPath: String {
+        switch checkout {
+        case .original(let repo): repo.path
+        case .workspace(let workspace): workspace.projectPath
+        }
+    }
+
+    private var quickCommandContext: QuickCommandContext {
+        switch checkout {
+        case .original(let repo):
+            QuickCommandContext(path: repo.path, projectPath: repo.path, name: repo.name, branch: identity.branch ?? "")
+        case .workspace(let workspace):
+            QuickCommandContext(
+                path: workspace.path, projectPath: workspace.projectPath, name: workspace.name, branch: workspace.branch
+            )
+        }
+    }
+
+    private var checkoutMenuItems: [PopoverMenu.Item] {
         switch checkout {
         case .original(let repo):
             var items: [PopoverMenu.Item] = [

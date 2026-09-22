@@ -15,11 +15,16 @@ public final class QuickCommandStore {
     public private(set) var generatingIDs: Set<String> = []
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let generator: any QuickCommandGenerating
+    @ObservationIgnored private let scripts: any QuickCommandScriptWriting
     @ObservationIgnored private let toasts: ToastStore
 
-    public init(config: any ConfigServicing, generator: any QuickCommandGenerating, toasts: ToastStore) {
+    public init(
+        config: any ConfigServicing, generator: any QuickCommandGenerating,
+        scripts: any QuickCommandScriptWriting, toasts: ToastStore
+    ) {
         self.config = config
         self.generator = generator
+        self.scripts = scripts
         self.toasts = toasts
     }
 
@@ -59,6 +64,19 @@ public final class QuickCommandStore {
         await write(failureTitle: "Command could not be deleted") { config in
             config.projectQuickCommands.removeAll { $0.id == id }
         }
+    }
+
+    /// Komutu checkout'a göre çözüp script dosyasına yazar ve terminale
+    /// girilecek satırı döner; yazılamazsa toast gösterip nil döner.
+    public func prepareRun(_ command: ProjectQuickCommand, context: QuickCommandContext) async -> String? {
+        let fileName = QuickCommandRun.fileName(commandID: command.id, checkoutName: context.name)
+        let contents = QuickCommandRun.scriptContents(command, context: context)
+        var line: String?
+        await toasts.reporting {
+            let path = try await self.scripts.writeScript(named: fileName, contents: contents)
+            line = QuickCommandRun.launchLine(scriptPath: path)
+        }
+        return line
     }
 
     public func isGenerating(_ draftID: String) -> Bool {

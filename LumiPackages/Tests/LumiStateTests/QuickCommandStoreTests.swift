@@ -9,13 +9,15 @@ final class QuickCommandStoreTests: XCTestCase {
     private var config: FakeConfigService!
     private var toasts: ToastStore!
     private var generator: FakeQuickCommandGenerator!
+    private var scripts: FakeQuickCommandScriptWriter!
     private var store: QuickCommandStore!
 
     override func setUp() async throws {
         config = FakeConfigService()
         toasts = ToastStore()
         generator = FakeQuickCommandGenerator()
-        store = QuickCommandStore(config: config, generator: generator, toasts: toasts)
+        scripts = FakeQuickCommandScriptWriter()
+        store = QuickCommandStore(config: config, generator: generator, scripts: scripts, toasts: toasts)
     }
 
     func testSaveAppendsThenUpdatesInPlace() async {
@@ -92,6 +94,26 @@ final class QuickCommandStoreTests: XCTestCase {
             draftID: "d", request: .init(projectPath: "/a", projectName: "A", description: "x")
         )
         XCTAssertNil(script)
+        XCTAssertFalse(toasts.toasts.isEmpty)
+    }
+
+    func testPrepareRunWritesResolvedScriptPerCheckout() async {
+        let command = ProjectQuickCommand(id: "cmd", projectPath: "/p", name: "Open", script: "cd \"{path}\" && echo {branch}")
+        let context = QuickCommandContext(path: "/w/review", projectPath: "/p", name: "review", branch: "feature/x")
+        let line = await store.prepareRun(command, context: context)
+        XCTAssertEqual(line, "sh '/lumi/quick-commands/cmd-review.sh'")
+        let writes = await scripts.writes
+        XCTAssertEqual(writes.first?.name, "cmd-review.sh")
+        XCTAssertEqual(writes.first?.contents, "# Lumi action: Open\ncd \"/w/review\" && echo feature/x\n")
+    }
+
+    func testPrepareRunFailureShowsToast() async {
+        await scripts.setError(.fileOperationFailed(path: "/x", detail: "denied"))
+        let line = await store.prepareRun(
+            ProjectQuickCommand(projectPath: "/p", name: "A", script: "ls"),
+            context: QuickCommandContext(path: "/p", projectPath: "/p", name: "p", branch: "")
+        )
+        XCTAssertNil(line)
         XCTAssertFalse(toasts.toasts.isEmpty)
     }
 }

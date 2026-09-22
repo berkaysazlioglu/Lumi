@@ -27,6 +27,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let plastic: any PlasticServicing
     let commitMessages: any CommitMessageGenerating
     let quickCommandGenerator: any QuickCommandGenerating
+    let quickCommandScripts: any QuickCommandScriptWriting
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
     let highlighter: any SyntaxHighlighting
@@ -74,6 +75,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         plastic = PlasticService()
         commitMessages = ClaudeCommitMessageService()
         quickCommandGenerator = ClaudeQuickCommandService()
+        quickCommandScripts = QuickCommandScriptService(directory: paths.quickCommandsDir)
         agentHistory = AgentHistoryService()
         agentSessionTransfer = AgentSessionTransferService()
         let deepSeekEnvironment = DeepSeekEnvironmentService()

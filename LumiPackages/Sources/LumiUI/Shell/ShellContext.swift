@@ -181,6 +181,15 @@ public final class ShellContext {
         }
     }
 
+    /// Karar 92: hızlı komutu checkout'ta yeni bir terminalde çalıştırır —
+    /// script checkout'a göre çözülüp dosyaya yazılır, checkout sekmesi açılır
+    /// ve terminale `sh <dosya>` girilir. Terminal komut bitince açık kalır.
+    public func runQuickCommand(_ command: ProjectQuickCommand, context: QuickCommandContext) async {
+        guard let line = await quickCommands.prepareRun(command, context: context) else { return }
+        navigation.openTab(context.path)
+        terminals.spawn(in: context.path, command: line, task: command.name)
+    }
+
     public func addSidebarProject(_ project: Repo) async {
         if await workspaces.addProject(project) {
             dialogs.dismiss(.sidebarProjectSelector)
