@@ -162,10 +162,15 @@ public enum QuickCommandRun {
         return "\(WorkspaceName.slug(commandID))-\(slug.isEmpty ? "checkout" : slug).sh"
     }
 
+    /// Başlık yorumu eklenir; script `#!` ile başlıyorsa o satır EN ÜSTTE
+    /// kalır (başlık önüne girerse shebang anlamını yitirir).
     public static func scriptContents(_ command: ProjectQuickCommand, context: QuickCommandContext) -> String {
-        let body = QuickCommandTemplate.resolve(command.script, context: context)
+        var body = QuickCommandTemplate.resolve(command.script, context: context)
+        if !body.hasSuffix("\n") { body += "\n" }
         let header = "# Lumi action: \(command.name.replacingOccurrences(of: "\n", with: " "))\n"
-        return header + (body.hasSuffix("\n") ? body : body + "\n")
+        guard body.hasPrefix("#!"), let newline = body.firstIndex(of: "\n") else { return header + body }
+        let shebang = body[...newline]
+        return shebang + header + body[body.index(after: newline)...]
     }
 
     /// Arka plan çalıştırmasının (karar 93) çıktı dosyası: script'in yanında `.log`.

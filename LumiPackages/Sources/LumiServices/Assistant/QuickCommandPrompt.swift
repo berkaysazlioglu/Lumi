@@ -24,7 +24,16 @@ public enum QuickCommandPrompt {
         \(keys)
         - Always wrap placeholders in double quotes, e.g. cd "{path}" (paths may contain spaces).
         - Prefer paths relative to the working directory when the file belongs to the checkout.
+        - Read project-specific values (tool/engine versions, scheme or target names, ports) from \
+        the checkout's files AT RUN TIME instead of hard-coding what you saw while exploring — \
+        other checkouts may be on a different branch. Example: a Unity editor version comes from \
+        "{path}/ProjectSettings/ProjectVersion.txt" (m_EditorVersion).
+        - Don't start with a #! line; Lumi runs the file with sh.
         - Target POSIX sh (macOS). Keep it short, add brief comments only where they help.
+        - macOS `open -a App --args …` passes the arguments ONLY when App is not already running; \
+        otherwise it just brings the running instance to the front and silently drops them. When \
+        each project needs its own instance (Unity Editor, another project in the same IDE), use \
+        `open -n -a …`, or check first whether that project is already open.
 
         Reply with exactly ONE ```sh fenced code block containing the whole script and nothing \
         else — no explanation before or after it. Write comments in English.
@@ -35,11 +44,18 @@ public enum QuickCommandPrompt {
         "The command you write is saved and later run with `sh <file>` in a NEW terminal window."
 
     /// Karar 93: Start App terminalsiz koşar — soru soramaz, çıktıyı kimse görmez.
+    /// Ölçülen hatalar: `npx expo start` stdin'siz "Input is required" ile
+    /// kapandı; `open -a Unity` açık Unity'ye `-projectPath`'i iletmedi.
     private static let backgroundRun = """
         The command you write starts the project's app. It is saved and later run with `sh <file>` \
-        in the BACKGROUND: no terminal, no stdin, output goes to a log file, and nobody waits for it. \
-        Never prompt for input. Launching a GUI app (e.g. `open -a …`) or a long-running server in \
-        the foreground of the script are both fine — the script is detached from Lumi.
+        in the BACKGROUND: no terminal, no stdin (it reads /dev/null), output goes to a log file, \
+        and nobody watches it. So nothing may ever ask a question: any CLI that can prompt \
+        (Expo, npm/npx, installers, simulators) must be made non-interactive — e.g. `CI=1`, \
+        `--non-interactive`, `--yes`, or answering defaults — otherwise it aborts with an \
+        "input is required" error and the app never starts. Fail loudly with a clear message on \
+        stderr (it lands in the log) when a prerequisite is missing. Launching a GUI app or a \
+        long-running server in the foreground of the script is fine — the script is detached from \
+        Lumi.
         """
 
     public static func body(for request: QuickCommandGenerationRequest) -> String {

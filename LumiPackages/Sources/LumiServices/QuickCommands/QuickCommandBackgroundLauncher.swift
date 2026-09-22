@@ -17,8 +17,10 @@ public actor QuickCommandBackgroundLauncher: QuickCommandBackgroundLaunching {
     public static let shell = "/bin/sh"
     /// Başlatıcı `&` ile hemen döner; üst sınır yalnız asılmaya karşı.
     public static let timeout: TimeInterval = 10
+    /// Script bittiğinde çıkış kodu log'un sonuna yazılır: arka planda sessizce
+    /// kapanan bir Start App (ör. stdin isteyen bir CLI) log'dan teşhis edilir.
     static let launcherScript =
-        #"cd "$1" || exit 1; nohup /bin/sh "$2" >"$3" 2>&1 </dev/null &"#
+        #"cd "$1" || exit 1; nohup /bin/sh -c '/bin/sh "$1"; echo "[lumi] exited with status $?"' lumi-start-app "$2" >"$3" 2>&1 </dev/null &"#
 
     private let runner: any ProcessRunning
 

@@ -50,8 +50,33 @@ final class QuickCommandBackgroundLauncherTests: XCTestCase {
             if let text = try? String(contentsOf: log, encoding: .utf8), text.contains("done") { break }
             try await Task.sleep(for: .milliseconds(100))
         }
+        for _ in 0 ..< 50 {
+            if let text = try? String(contentsOf: log, encoding: .utf8), text.contains("[lumi]") { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
         let output = try String(contentsOf: log, encoding: .utf8)
         XCTAssertTrue(output.contains("work dir"), "runs in the checkout: \(output)")
         XCTAssertTrue(output.contains("done"))
+        XCTAssertTrue(output.hasSuffix("[lumi] exited with status 0\n"), output)
+    }
+
+    /// Sessizce kapanan script (stdin isteyen CLI gibi) log'da teşhis edilebilir.
+    func testRealLaunchRecordsFailingExitStatusAndHasNoStdin() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("lumi-bg-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let script = root.appendingPathComponent("start.sh")
+        let log = root.appendingPathComponent("start.log")
+        try "read answer || echo no-input\nexit 3\n".write(to: script, atomically: true, encoding: .utf8)
+
+        try await QuickCommandBackgroundLauncher()
+            .launch(scriptPath: script.path, workingDirectory: root.path, logPath: log.path)
+        for _ in 0 ..< 50 {
+            if let text = try? String(contentsOf: log, encoding: .utf8), text.contains("[lumi]") { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let output = try String(contentsOf: log, encoding: .utf8)
+        XCTAssertTrue(output.contains("no-input"), "stdin is /dev/null: \(output)")
+        XCTAssertTrue(output.hasSuffix("[lumi] exited with status 3\n"), output)
     }
 }

@@ -39,7 +39,7 @@ final class QuickCommandBackgroundPromptTests: XCTestCase {
     func testBackgroundPromptForbidsInputAndMentionsLog() {
         let prompt = QuickCommandPrompt.systemPrompt(projectPath: "/p", runsInBackground: true)
         XCTAssertTrue(prompt.contains("BACKGROUND"))
-        XCTAssertTrue(prompt.contains("Never prompt for input"))
+        XCTAssertTrue(prompt.contains("nothing may ever ask a question"))
         XCTAssertFalse(QuickCommandPrompt.systemPrompt(projectPath: "/p").contains("BACKGROUND"))
     }
 
@@ -47,5 +47,15 @@ final class QuickCommandBackgroundPromptTests: XCTestCase {
         let arguments = ClaudeQuickCommandService.arguments(projectPath: "/p", runsInBackground: true)
         let index = arguments.firstIndex(of: "--append-system-prompt").map { $0 + 1 }
         XCTAssertEqual(index.map { arguments[$0] }, QuickCommandPrompt.systemPrompt(projectPath: "/p", runsInBackground: true))
+    }
+
+    func testPromptEncodesLessonsFromFailedStartApps() {
+        let common = QuickCommandPrompt.systemPrompt(projectPath: "/p")
+        XCTAssertTrue(common.contains("AT RUN TIME"), "no hard-coded versions")
+        XCTAssertTrue(common.contains("ProjectVersion.txt"))
+        XCTAssertTrue(common.contains("open -n -a"), "open -a drops --args for a running app")
+        let background = QuickCommandPrompt.systemPrompt(projectPath: "/p", runsInBackground: true)
+        XCTAssertTrue(background.contains("non-interactive"))
+        XCTAssertTrue(background.contains("CI=1"))
     }
 }

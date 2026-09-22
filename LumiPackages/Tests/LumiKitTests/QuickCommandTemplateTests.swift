@@ -59,4 +59,13 @@ final class QuickCommandRunTests: XCTestCase {
         let context = QuickCommandContext(path: "/w", projectPath: "/p", name: "w", branch: "")
         XCTAssertEqual(QuickCommandRun.scriptContents(command, context: context), "# Lumi action: Two lines\nls /w\n")
     }
+
+    func testShebangStaysOnTheFirstLine() {
+        let command = ProjectQuickCommand(projectPath: "/p", name: "Start App", script: "#!/bin/sh\nopen \"{path}\"")
+        let context = QuickCommandContext(path: "/w", projectPath: "/p", name: "w", branch: "")
+        XCTAssertEqual(
+            QuickCommandRun.scriptContents(command, context: context),
+            "#!/bin/sh\n# Lumi action: Start App\nopen \"/w\"\n"
+        )
+    }
 }
