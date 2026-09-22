@@ -59,6 +59,7 @@ enum AppConfigCodec {
             dict["indexShortcutStyle"] as? String
         )
         config.workspaces = ProjectWorkspaceCodec.decodeList(dict["workspaces"])
+        config.projectQuickCommands = QuickCommandCodec.decodeList(dict["projectQuickCommands"])
         return config
     }
 
@@ -85,6 +86,7 @@ enum AppConfigCodec {
             "codexAccounts": CodexAccountCodec.overlayList(config.codexAccounts),
             "indexShortcutStyle": config.indexShortcutStyle.rawValue,
             "workspaces": ProjectWorkspaceCodec.overlayList(config.workspaces),
+            "projectQuickCommands": QuickCommandCodec.overlayList(config.projectQuickCommands),
         ]
         // Sistem varsayılanı `null` olarak yazılır: anahtarı silmek, ham-dict
         // merge'inde eski seçimi diskte bırakırdı (karar 9).

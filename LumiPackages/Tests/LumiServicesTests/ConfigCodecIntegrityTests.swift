@@ -212,7 +212,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         ],
         codexAccountSelection: .account(ConfigCodecIntegrityTests.accountID),
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
-        sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
+        sidebarProjectPaths: ["/tmp/selected", "/tmp/another"],
+        projectQuickCommands: [ProjectQuickCommand(id: "qc", projectPath: "/p", name: "Open", script: "open \"{path}\"", request: "open it")]
     )
 
     private static let fullyPopulatedUIState = UIState(

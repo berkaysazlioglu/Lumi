@@ -17,6 +17,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
 
     private(set) var repoStore: RepoStore!
     private(set) var workspaceStore: ProjectWorkspaceStore!
+    private(set) var quickCommands: QuickCommandStore!
     private(set) var gitStore: GitStore!
     private(set) var plasticStore: PlasticStore!
     private(set) var commitAssistant: CommitMessageAssistant!
@@ -38,6 +39,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             service: services.workspaces, config: services.config,
             repos: repoStore, toasts: shared.toasts
         )
+        quickCommands = QuickCommandStore(config: services.config, toasts: shared.toasts)
         agentHistory = AgentHistoryStore(
             service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts
         )
@@ -94,6 +96,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         repoStore.start()
         await repoStore.reload()
         await workspaceStore.load()
+        await quickCommands.load()
         // SIRA: workspace yüklemesi repoStore.reload'dan SONRA (migration repo
         // listesini okur); tek ui-state okumasıyla önce navigation, sonra layout.
         let uiState = await services.config.uiState()
@@ -111,6 +114,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         }
         if old.workspaces != new.workspaces {
             workspaceStore.updateRecords(new.workspaces)
+        }
+        if old.projectQuickCommands != new.projectQuickCommands {
+            quickCommands.update(new.projectQuickCommands)
         }
         guard old.projectsRoot != new.projectsRoot
             || old.additionalPaths != new.additionalPaths else { return }

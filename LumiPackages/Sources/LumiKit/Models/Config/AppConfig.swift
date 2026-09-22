@@ -66,6 +66,8 @@ public struct AppConfig: Sendable, Equatable {
     /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
     /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
     public var workspaces: [ProjectWorkspace]
+    /// Proje başına hızlı komutlar (karar 92). Additive (karar 9): yoksa boş.
+    public var projectQuickCommands: [ProjectQuickCommand]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -101,7 +103,8 @@ public struct AppConfig: Sendable, Equatable {
         codexAccounts: [],
         codexAccountSelection: .systemDefault,
         workspaces: [],
-        sidebarProjectPaths: []
+        sidebarProjectPaths: [],
+        projectQuickCommands: []
     )
 
     public init(
@@ -127,7 +130,8 @@ public struct AppConfig: Sendable, Equatable {
         codexAccounts: [CodexAccount] = [],
         codexAccountSelection: CodexAccountSelection = .systemDefault,
         workspaces: [ProjectWorkspace] = [],
-        sidebarProjectPaths: [String] = []
+        sidebarProjectPaths: [String] = [],
+        projectQuickCommands: [ProjectQuickCommand] = []
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
@@ -152,5 +156,6 @@ public struct AppConfig: Sendable, Equatable {
         self.codexAccounts = codexAccounts
         self.codexAccountSelection = codexAccountSelection
         self.workspaces = workspaces
+        self.projectQuickCommands = projectQuickCommands
     }
 }

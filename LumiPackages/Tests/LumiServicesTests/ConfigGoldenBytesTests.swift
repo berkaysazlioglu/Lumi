@@ -151,6 +151,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "unseenEnabled" : false,
         "unseenIntervalMinutes" : 7
       },
+      "projectQuickCommands" : [
+
+      ],
       "projectsRoot" : "/Users/dev/wkspaces/Unity",
       "sessionTrigger" : {
         "enabled" : true,
