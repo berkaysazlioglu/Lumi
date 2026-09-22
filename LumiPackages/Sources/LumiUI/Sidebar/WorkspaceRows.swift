@@ -54,6 +54,7 @@ struct CheckoutRow: View {
     let checkout: Checkout
     @Shell private var shell
     @State private var isAgentListCollapsed = false
+    @State private var showsMenu = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -107,7 +108,11 @@ struct CheckoutRow: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .help(checkout.path)
-        .contextMenu { contextMenu }
+        // Proje satırıyla aynı: native `contextMenu` yerine Lumi `PopoverMenu`.
+        .onRightClick { showsMenu = true }
+        .popover(isPresented: $showsMenu, arrowEdge: .bottom) {
+            PopoverMenu(items: menuItems, dismiss: { showsMenu = false })
+        }
     }
 
     private var closeTabButton: some View {
@@ -215,31 +220,45 @@ struct CheckoutRow: View {
 
     // MARK: - Menü
 
-    @ViewBuilder
-    private var contextMenu: some View {
+    private var menuItems: [PopoverMenu.Item] {
         switch checkout {
         case .original(let repo):
-            Button("Create Workspace…") { shell.dialogs.present(.createWorkspace(projectPath: repo.path)) }
-                .disabled(shell.workspaces.isCreating)
+            var items: [PopoverMenu.Item] = [
+                .action("Create Workspace…", icon: "plus", isEnabled: !shell.workspaces.isCreating) {
+                    shell.dialogs.present(.createWorkspace(projectPath: repo.path))
+                },
+            ]
             if isOpenTab {
-                Button("Close Tab") { shell.requestCloseTab(repo.path, repoName: repo.name) }
+                items.append(.action("Close Tab", icon: "xmark") { shell.requestCloseTab(repo.path, repoName: repo.name) })
             }
-            Button("Reveal in Finder") { shell.actions.revealPath(repo.path) }
-            Button("Copy Path") { Pasteboard.copy(repo.path) }
+            items += [
+                .action("Reveal in Finder", icon: "folder") { shell.actions.revealPath(repo.path) },
+                .action("Copy Path", icon: "doc.on.doc") { Pasteboard.copy(repo.path) },
+            ]
+            return items
         case .workspace(let workspace):
-            Button("Open") { shell.navigation.openTab(workspace.path) }.disabled(isMissing)
+            var items: [PopoverMenu.Item] = [
+                .action("Open", icon: "arrow.up.forward.square", isEnabled: !isMissing) {
+                    shell.navigation.openTab(workspace.path)
+                },
+            ]
             if isOpenTab {
-                Button("Close Tab") { shell.requestCloseTab(workspace.path, repoName: workspace.name) }
+                items.append(.action("Close Tab", icon: "xmark") {
+                    shell.requestCloseTab(workspace.path, repoName: workspace.name)
+                })
             }
-            Button("Reveal in Finder") { shell.actions.revealPath(workspace.path) }.disabled(isMissing)
-            Button("Copy Path") { Pasteboard.copy(workspace.path) }
-            Divider()
-            if isMissing {
-                Button("Remove from List") { Task { await shell.forgetWorkspace(workspace) } }
-            } else {
-                Button("Delete Workspace…", role: .destructive) { shell.requestDeleteWorkspace(workspace) }
-                    .disabled(shell.workspaces.isDeleting)
-            }
+            items += [
+                .action("Reveal in Finder", icon: "folder", isEnabled: !isMissing) { shell.actions.revealPath(workspace.path) },
+                .action("Copy Path", icon: "doc.on.doc") { Pasteboard.copy(workspace.path) },
+                .divider,
+                isMissing
+                    ? .action("Remove from List", icon: "minus.circle") { Task { await shell.forgetWorkspace(workspace) } }
+                    : .action(
+                        "Delete Workspace…", icon: "trash", isDestructive: true,
+                        isEnabled: !shell.workspaces.isDeleting
+                    ) { shell.requestDeleteWorkspace(workspace) },
+            ]
+            return items
         }
     }
 
