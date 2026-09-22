@@ -16,15 +16,18 @@ public final class QuickCommandStore {
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let generator: any QuickCommandGenerating
     @ObservationIgnored private let scripts: any QuickCommandScriptWriting
+    @ObservationIgnored private let launcher: any QuickCommandBackgroundLaunching
     @ObservationIgnored private let toasts: ToastStore
 
     public init(
         config: any ConfigServicing, generator: any QuickCommandGenerating,
-        scripts: any QuickCommandScriptWriting, toasts: ToastStore
+        scripts: any QuickCommandScriptWriting, launcher: any QuickCommandBackgroundLaunching,
+        toasts: ToastStore
     ) {
         self.config = config
         self.generator = generator
         self.scripts = scripts
+        self.launcher = launcher
         self.toasts = toasts
     }
 
@@ -99,6 +102,21 @@ public final class QuickCommandStore {
             line = QuickCommandRun.launchLine(scriptPath: path)
         }
         return line
+    }
+
+    /// Karar 93: komutu terminal açmadan arka planda başlatır; çıktı script'in
+    /// yanındaki `.log` dosyasına gider. Başarıda log yolunu döner.
+    public func launchInBackground(_ command: ProjectQuickCommand, context: QuickCommandContext) async -> String? {
+        let fileName = QuickCommandRun.fileName(commandID: command.id, checkoutName: context.name)
+        let contents = QuickCommandRun.scriptContents(command, context: context)
+        var logPath: String?
+        await toasts.reporting {
+            let path = try await self.scripts.writeScript(named: fileName, contents: contents)
+            let log = QuickCommandRun.logPath(scriptPath: path)
+            try await self.launcher.launch(scriptPath: path, workingDirectory: context.path, logPath: log)
+            logPath = log
+        }
+        return logPath
     }
 
     public func isGenerating(_ draftID: String) -> Bool {

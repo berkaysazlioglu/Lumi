@@ -6,7 +6,7 @@ import LumiKit
 /// Sözleşme system prompt'a eklenir (`--append-system-prompt`), kullanıcının
 /// tarifi stdin'den gider: talimat/veri ayrımı karar 47'deki gibi korunur.
 public enum QuickCommandPrompt {
-    public static func systemPrompt(projectPath: String) -> String {
+    public static func systemPrompt(projectPath: String, runsInBackground: Bool = false) -> String {
         let keys = QuickCommandPlaceholder.allCases
             .map { "- \($0.token): \($0.summary)" }
             .joined(separator: "\n")
@@ -16,9 +16,9 @@ public enum QuickCommandPrompt {
         inspect existing scripts, run read-only commands — but NEVER modify, create or delete files \
         and never start long-running processes.
 
-        The command you write is saved and later run with `sh <file>` in a NEW terminal whose \
-        working directory is one checkout of this project: either the project itself or a separate \
-        workspace copy (git worktree / Plastic workspace) located elsewhere on disk. So:
+        \(runsInBackground ? backgroundRun : terminalRun) Its working directory is one checkout of \
+        this project: either the project itself or a separate workspace copy (git worktree / \
+        Plastic workspace) located elsewhere on disk. So:
         - Never hard-code \(projectPath) or any path inside it. Use these placeholders, which Lumi \
         replaces with raw text before running:
         \(keys)
@@ -30,6 +30,17 @@ public enum QuickCommandPrompt {
         else — no explanation before or after it. Write comments in English.
         """
     }
+
+    private static let terminalRun =
+        "The command you write is saved and later run with `sh <file>` in a NEW terminal window."
+
+    /// Karar 93: Start App terminalsiz koşar — soru soramaz, çıktıyı kimse görmez.
+    private static let backgroundRun = """
+        The command you write starts the project's app. It is saved and later run with `sh <file>` \
+        in the BACKGROUND: no terminal, no stdin, output goes to a log file, and nobody waits for it. \
+        Never prompt for input. Launching a GUI app (e.g. `open -a …`) or a long-running server in \
+        the foreground of the script are both fine — the script is detached from Lumi.
+        """
 
     public static func body(for request: QuickCommandGenerationRequest) -> String {
         var text = "Project: \(request.projectName)\n\nCommand I want:\n\(request.description.trimmingCharacters(in: .whitespacesAndNewlines))\n"

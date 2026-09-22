@@ -190,6 +190,13 @@ public final class ShellContext {
         terminals.spawn(in: context.path, command: line, task: command.name)
     }
 
+    /// Karar 93: `Start App` terminal açmadan, Lumi'den kopuk başlar; çıktı
+    /// log dosyasına gider ve yolu bilgi toast'ında söylenir.
+    public func startApp(_ command: ProjectQuickCommand, context: QuickCommandContext) async {
+        guard let logPath = await quickCommands.launchInBackground(command, context: context) else { return }
+        toasts.show(.info, title: "Starting \(context.name)", message: "Output: \(logPath)")
+    }
+
     public func addSidebarProject(_ project: Repo) async {
         if await workspaces.addProject(project) {
             dialogs.dismiss(.sidebarProjectSelector)

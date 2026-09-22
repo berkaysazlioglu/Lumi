@@ -293,7 +293,8 @@ public struct QuickCommandsOverlay: View {
         guard let command = draft(id) else { return }
         let request = QuickCommandGenerationRequest(
             projectPath: project.path, projectName: project.name,
-            description: command.request, currentScript: command.script
+            description: command.request, currentScript: command.script,
+            runsInBackground: command.role.runsInBackground
         )
         Task {
             guard let script = await shell.quickCommands.generate(draftID: id, request: request),

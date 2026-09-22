@@ -25,6 +25,8 @@ public protocol ServiceRegistry: AnyObject {
     var quickCommandGenerator: any QuickCommandGenerating { get }
     /// Çalıştırılacak hızlı komut script'lerinin yazıcısı (karar 92).
     var quickCommandScripts: any QuickCommandScriptWriting { get }
+    /// `Start App`'in terminalsiz başlatıcısı (karar 93).
+    var quickCommandLauncher: any QuickCommandBackgroundLaunching { get }
     var agentHistory: any AgentHistoryServicing { get }
     /// Agent History oturumu dışa/içe aktarımı (karar 52).
     var agentSessionTransfer: any AgentSessionTransferring { get }
