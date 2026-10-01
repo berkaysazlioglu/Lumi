@@ -160,6 +160,37 @@ final class TerminalSessionInjectionTests: XCTestCase {
         XCTAssertEqual(spy.claudeSessionIDs, ["after-clear"])
     }
 
+    // Karar 94: Bash aracındaki iç içe `claude -p` (agentID'siz, "lider" görünen)
+    // ve `/clear`'ın geç gelen eski kimlikli `SessionEnd`'i kimliği değiştirmez.
+    func testClaudeSessionIDChangesOnlyOnClearOrResumeSessionStart() async throws {
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "claude",
+            task: nil,
+            claudeSessionID: "current",
+            provider: .claude,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: FakePTY())
+        )
+        let spy = SpyDelegate()
+        session.delegate = spy
+
+        for event in [
+            AgentHookEvent(provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "nested", source: "startup"),
+            AgentHookEvent(provider: .claude, terminalID: session.id, kind: .preToolUse, sessionID: "nested", toolName: "Bash"),
+            AgentHookEvent(provider: .claude, terminalID: session.id, kind: .sessionEnd, sessionID: "stale"),
+        ] {
+            session.applyHookEvent(event)
+        }
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "resumed", source: "resume"
+        ))
+
+        let captured = await waitUntil { session.meta.claudeSessionID == "resumed" }
+        XCTAssertTrue(captured)
+        XCTAssertEqual(spy.claudeSessionIDs, ["resumed"])
+    }
+
     // Karar 94 / karar 23: düz shell'de elle koşulan claude'a kimlik atanmaz —
     // aksi hâlde shell terminali açılışta `claude --resume` ile geri gelirdi.
     func testClaudeHookDoesNotAdoptSessionForUntrackedTerminal() async throws {

@@ -264,7 +264,9 @@ final class TerminalSession {
             guard event.isLead, let sessionID = event.sessionID else { return }
             switch event.provider {
             case .codex: hopToMain { self?.applyCodexSessionID(sessionID) }
-            case .claude: hopToMain { self?.applyClaudeSessionID(sessionID) }
+            case .claude:
+                guard event.switchesClaudeConversation else { return }
+                hopToMain { self?.applyClaudeSessionID(sessionID) }
             }
         }
     }

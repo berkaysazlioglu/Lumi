@@ -139,6 +139,17 @@ public struct AgentHookEvent: Sendable, Equatable {
     /// Lider (ana ajan) olayı mı — alt ajan kimliği taşımayan.
     public var isLead: Bool { agentID == nil }
 
+    /// Karar 94: Claude terminalinin izlediği oturumu değiştirebilen TEK olay —
+    /// lider `SessionStart`, kaynağı `/clear` ya da `/resume`. Diğer olayların
+    /// farklı `session_id`'si yok sayılır: hook env'i alt süreçlere miras kalır,
+    /// Bash aracında koşan iç içe bir `claude -p` da "lider" olay üretir ve
+    /// kimliği ele geçirirdi; `/clear`'ın eski kimlikli `SessionEnd`'i geç
+    /// gelirse de kimlik eskiye dönerdi.
+    public var switchesClaudeConversation: Bool {
+        provider == .claude && isLead && kind == .sessionStart
+            && (source == "clear" || source == "resume")
+    }
+
     /// Orca `isAskUserQuestionTool`: Claude `AskUserQuestion`, Codex
     /// `request_user_input` — ajan bir insan cevabı bekliyor.
     public var isUserQuestionTool: Bool {
