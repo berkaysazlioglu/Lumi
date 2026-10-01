@@ -32,6 +32,8 @@ public final class TerminalEventMonitor {
     private var onViewFocused: ((NSView) -> Void)?
     /// leftMouseDown'ın penceresi: first responder ancak dispatch sonrası değişir.
     private weak var pendingFocusWindow: NSWindow?
+    /// Son hover'ın terminali — hover başka yere geçince link imleci bırakılsın.
+    private weak var hoveredView: DropAwareTerminalView?
 
     public init() {}
 
@@ -59,6 +61,8 @@ public final class TerminalEventMonitor {
         monitor = nil
         onViewFocused = nil
         pendingFocusWindow = nil
+        hoveredView?.clearLinkHover()
+        hoveredView = nil
     }
 
     // MARK: - Yönlendirme
@@ -78,7 +82,8 @@ public final class TerminalEventMonitor {
                 locationInWindow: event.locationInWindow,
                 in: event.window,
                 deltaY: isScroll ? event.scrollingDeltaY : 0,
-                isPrecise: isScroll && event.hasPreciseScrollingDeltas
+                isPrecise: isScroll && event.hasPreciseScrollingDeltas,
+                hoverEvent: isScroll ? nil : event
             )
         default:
             return false
@@ -98,20 +103,30 @@ public final class TerminalEventMonitor {
     }
 
     /// Tekerlek/hover yönlendirmesi. `true` → event yutuldu (SwiftTerm görmez).
-    /// NSEvent'siz imza: testler kararı doğrudan sürebilir.
+    /// `hoverEvent` yalnız gerçek hover'da verilir (anyEvent modunda raporsuz
+    /// yeniden oynatılır); testler kararı onsuz da sürebilir.
     @discardableResult
     func routePointer(
         isScroll: Bool,
         locationInWindow: NSPoint,
         in window: NSWindow?,
         deltaY: CGFloat = 0,
-        isPrecise: Bool = false
+        isPrecise: Bool = false,
+        hoverEvent: NSEvent? = nil
     ) -> Bool {
-        guard let window, let view = Self.terminalView(at: locationInWindow, in: window) else {
-            return false
-        }
-        guard isScroll else { return view.shouldConsumeHover() }
+        let view = window.flatMap { Self.terminalView(at: locationInWindow, in: $0) }
+        if !isScroll { noteHoverTarget(view) }
+        guard let view else { return false }
+        guard isScroll else { return view.handleHover(locationInWindow: locationInWindow, event: hoverEvent) }
         return view.consumeScroll(deltaY: deltaY, isPrecise: isPrecise, locationInWindow: locationInWindow)
+    }
+
+    /// Hover terminal değiştirdiyse (ya da bir overlay'e geçtiyse) önceki
+    /// terminalin link imleci bırakılır.
+    private func noteHoverTarget(_ view: DropAwareTerminalView?) {
+        guard hoveredView !== view else { return }
+        hoveredView?.clearLinkHover()
+        hoveredView = view
     }
 
     /// Karta tıklama → `TerminalEvent.viewFocused` (Electron `setActiveTerminal`

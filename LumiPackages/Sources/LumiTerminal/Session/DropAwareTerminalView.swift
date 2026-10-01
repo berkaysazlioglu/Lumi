@@ -40,6 +40,9 @@ final class DropAwareTerminalView: TerminalView {
         // caret tıklanan yere konur. Hover'ın buglu "release" raporu ise monitor'da
         // ayrıca bastırılır (aşağıda — SwiftTerm encodeButton release=3 bug'ı).
         TerminalTheme.lumi.apply(to: self)
+        // Link actions açıkken düz hover linkin altını çizer (Orca/xterm.js
+        // paritesi); kapalıyken SwiftTerm varsayılanı — vurgu ⌘ ister.
+        linkHighlightMode = Self.highlightMode(linkActionsEnabled: isLinkActionsEnabled)
         hideScroller()
     }
 
@@ -117,7 +120,19 @@ final class DropAwareTerminalView: TerminalView {
 
     /// Karar 57: düz tıkla açılan eylem popover'ı. Kapalıyken düz tık terminale
     /// aittir; ⌘ / ⇧⌘ doğrudan açma her hâlde çalışır.
-    var isLinkActionsEnabled = true
+    var isLinkActionsEnabled = true {
+        didSet {
+            guard isLinkActionsEnabled != oldValue else { return }
+            linkHighlightMode = Self.highlightMode(linkActionsEnabled: isLinkActionsEnabled)
+            clearLinkHover()
+        }
+    }
+
+    /// Altı çizme, tıkın ne yapacağını söyler: düz tık popover açıyorsa düz
+    /// hover da vurgular; açmıyorsa vurgu yalnız ⌘ basılıyken görünür.
+    static func highlightMode(linkActionsEnabled: Bool) -> LinkHighlightMode {
+        linkActionsEnabled ? .hover : .hoverWithModifier
+    }
 
     private var linkGesture = TerminalLinkGestureTracker()
     private var focusLossObservers: [any NSObjectProtocol] = []
@@ -166,7 +181,7 @@ final class DropAwareTerminalView: TerminalView {
     override func mouseUp(with event: NSEvent) {
         let gesture = linkGesture.activeGesture
         if gesture == nil || gesture == .actions {
-            super.mouseUp(with: event)
+            superMouseUpWithoutLinkOpening(event)
         }
         linkGesture.noteDrag(to: event.locationInWindow)
         guard let resolved = linkGesture.finish(hasSelection: selectionActive) else {
@@ -180,6 +195,21 @@ final class DropAwareTerminalView: TerminalView {
         }
         finishDeferredReports(claimed: true)
         onLinkActivation?(link, resolved.gesture, shellAnchor(for: event))
+    }
+
+    /// `.hover` modunda SwiftTerm vurgulu linke düz tıkta linki KENDİSİ açar
+    /// (`requestOpenLink`) ve o tıkın release raporunu yutar. Link tıkının
+    /// sahibi Lumi'nin jest yoludur (karar 57); bu yüzden `super.mouseUp`
+    /// boyunca SwiftTerm'in tık yolu ⌘'ye bağlanır — davranış `.hover`
+    /// öncesiyle birebir aynı kalır. Bedeli: vurgu bir sonraki hover'a dek söner.
+    private func superMouseUpWithoutLinkOpening(_ event: NSEvent) {
+        guard linkHighlightMode == .hover else {
+            super.mouseUp(with: event)
+            return
+        }
+        linkHighlightMode = .hoverWithModifier
+        super.mouseUp(with: event)
+        linkHighlightMode = .hover
     }
 
     /// Düz sol tık her terminalde link yoluna girer (Orca paritesi, kullanıcı
@@ -237,21 +267,28 @@ final class DropAwareTerminalView: TerminalView {
     /// Emülatörün tık hücresinde eşlediği link: OSC 8 payload'ı ya da örtük
     /// eşleşme (SwiftTerm'in Ghostty regex'i — URL, mutlak/göreli path, `~/`).
     private func link(at event: NSEvent) -> String? {
+        link(atCell: cell(atWindowPoint: event.locationInWindow))
+    }
+
+    private func link(atCell cell: TerminalLinkHitTest.Cell) -> String? {
+        let position = Position(col: cell.col, row: cell.row)
+        guard let text = getTerminal().link(at: .screen(position), mode: .explicitAndImplicit) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func cell(atWindowPoint point: NSPoint) -> TerminalLinkHitTest.Cell {
         let terminal = getTerminal()
         // Hücre boyutu SwiftTerm'in kendi `cellDimension`'ından türer (`cellSize`);
         // `bounds/rows` kesirli hücrelerde kenarlarda bir satır kayabiliyordu.
-        let cell = TerminalLinkHitTest.gridCell(
-            forViewPoint: convert(event.locationInWindow, from: nil),
+        return TerminalLinkHitTest.gridCell(
+            forViewPoint: convert(point, from: nil),
             cellSize: cellSize,
             bounds: bounds,
             cols: terminal.cols,
             rows: terminal.rows,
             isFlipped: isFlipped
         )
-        let position = Position(col: cell.col, row: cell.row)
-        guard let text = terminal.link(at: .screen(position), mode: .explicitAndImplicit) else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func shellAnchor(for event: NSEvent) -> CGPoint {
@@ -283,13 +320,77 @@ final class DropAwareTerminalView: TerminalView {
 
     /// Hover (mouseMoved): anyEvent (1003) modunda SwiftTerm hover'ı SGR "sol buton
     /// release" olarak KODLAYIP yollar (upstream bug: encodeButton release=3 →
-    /// `ESC[<32;x;ym`) — Claude bunu tıklama sayıp caret'i taşır. Bu modda yut;
-    /// diğer modlarda SwiftTerm'e bırak.
-    /// Bilinçli trade-off: anyEvent aktifken (Claude hep açar) Cmd+hover link
-    /// önizlemesi de çalışmaz — geçirsek hover her seferinde caret'i taşırdı.
+    /// `ESC[<32;x;ym`) — Claude bunu tıklama sayıp caret'i taşır. Bu modda event
+    /// AppKit'e bırakılmaz; `handleHover` onu raporsuz yeniden oynatır.
     /// `true` → event yutuldu.
     func shouldConsumeHover() -> Bool {
         getTerminal().mouseMode == .anyEvent
+    }
+
+    // MARK: - Link hover: altı çizgi + el imleci (Orca paritesi)
+
+    /// Son bakılan hücre ve o hücrede link olup olmadığı — Ghostty regex'i
+    /// her piksel hareketinde değil, yalnız hücre değişince koşar.
+    private var hoverCell: TerminalLinkHitTest.Cell?
+    private var isHoverOverLink = false
+    private var isShowingLinkCursor = false
+    /// `handleHover`'ın senkron `mouseMoved` çağrısı süresince üretilen fare
+    /// raporları PTY'ye gitmez.
+    private var isDroppingHoverReports = false
+
+    /// Monitörün (`TerminalEventMonitor`) her hover'da çağırdığı tek kapı.
+    /// İmleci linkin üstünde ele çevirir; anyEvent modunda SwiftTerm'in
+    /// `mouseMoved`'ını — altı çizgiyi o kurar — fare raporu DÜŞÜRÜLEREK
+    /// çalıştırır. `true` → event yutuldu (AppKit dağıtmaz).
+    func handleHover(locationInWindow: NSPoint, event: NSEvent?) -> Bool {
+        let commandHeld = (event?.modifierFlags ?? NSEvent.modifierFlags).contains(.command)
+        updateLinkCursor(at: cell(atWindowPoint: locationInWindow), commandHeld: commandHeld)
+        guard shouldConsumeHover() else { return false }
+        if let event {
+            isDroppingHoverReports = true
+            mouseMoved(with: event)
+            isDroppingHoverReports = false
+        }
+        return true
+    }
+
+    /// Hover bu terminalden ayrıldı (başka view / overlay): el imleci bırakılır.
+    func clearLinkHover() {
+        hoverCell = nil
+        isHoverOverLink = false
+        setLinkCursor(false)
+    }
+
+    /// Test gözlemi: imleç şu an link eli mi.
+    var isPointingAtLink: Bool { isShowingLinkCursor }
+
+    private func updateLinkCursor(at cell: TerminalLinkHitTest.Cell, commandHeld: Bool) {
+        if cell != hoverCell {
+            hoverCell = cell
+            isHoverOverLink = link(atCell: cell) != nil
+        }
+        // İmleç vurguyla aynı kuralı izler: tık bir şey yapacaksa el.
+        setLinkCursor(isHoverOverLink && (isLinkActionsEnabled || commandHeld))
+    }
+
+    private func setLinkCursor(_ pointing: Bool) {
+        guard pointing != isShowingLinkCursor else { return }
+        isShowingLinkCursor = pointing
+        if pointing {
+            NSCursor.pointingHand.set()
+        } else if let window {
+            // SwiftTerm'in iBeam cursor rect'i yeniden değerlendirilsin; imleç
+            // artık terminalin dışındaysa oradaki view'ın imleci geçerli olur.
+            window.invalidateCursorRects(for: self)
+            if bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+                NSCursor.iBeam.set()
+            }
+        }
+    }
+
+    override func send(source: Terminal, data: ArraySlice<UInt8>) {
+        if isDroppingHoverReports, TerminalMouseReport.isReport(Data(data)) { return }
+        super.send(source: source, data: data)
     }
 
     /// Tekerlek/trackpad delta'sı. `true` → event yutuldu (SwiftTerm görmez).
