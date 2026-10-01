@@ -18,4 +18,10 @@ public enum PromptInjection {
         }
         return pasteStart + text + pasteEnd + submit
     }
+
+    /// Submit'siz yapıştırma (karar 100): metin prompt'a eklenir, gönderim
+    /// kullanıcıya kalır.
+    public static func encodePaste(_ text: String) -> String {
+        pasteStart + text + pasteEnd
+    }
 }

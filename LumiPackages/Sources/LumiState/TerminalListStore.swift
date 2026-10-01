@@ -88,6 +88,26 @@ public final class TerminalListStore: StoreLifecycle {
         terminals.filter { $0.repoPath == repoPath && minimizedIDs.contains($0.id) }
     }
 
+    /// Karar 100 "Mention in Chat" hedefleri: repo'daki ajan koşan terminaller
+    /// (minimize edilmişler dahil). İlk eleman varsayılan hedeftir — aktif
+    /// terminal, yoksa repo'nun son aktifi, yoksa listedeki sıra.
+    public func mentionTargets(in repoPath: String) -> [TerminalMeta] {
+        let agents = terminals(in: repoPath).filter { $0.provider != nil }
+        let preferred = [activeTerminalID, lastActiveByRepo[repoPath]].compactMap { $0 }
+        guard let first = preferred.first(where: { id in agents.contains { $0.id == id } }) else {
+            return agents
+        }
+        return agents.filter { $0.id == first } + agents.filter { $0.id != first }
+    }
+
+    /// Metni terminalin prompt'una gönderMEDEN yapıştırır (karar 100).
+    @discardableResult
+    public func paste(_ text: String, into id: TerminalID) -> Bool {
+        toasts.reporting {
+            try self.service.write(id: id, text: PromptInjection.encodePaste(text))
+        }
+    }
+
     public func isMinimized(_ id: TerminalID) -> Bool {
         minimizedIDs.contains(id)
     }

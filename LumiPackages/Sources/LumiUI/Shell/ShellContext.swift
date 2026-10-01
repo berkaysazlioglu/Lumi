@@ -386,6 +386,16 @@ public final class ShellContext {
         Task { await fileViewer.presentCommit(repoPath: repoPath, commit: commit, initialFile: file) }
     }
 
+    /// Karar 100: FileViewer seçiminin referansını ajan terminalinin prompt'una
+    /// yapıştırır (göndermez), viewer'ı kapatır ve terminale odaklanır —
+    /// kullanıcı sorusunu doğrudan yazmaya devam eder.
+    public func mentionSelection(in target: TerminalMeta) {
+        guard let reference = fileViewer.mentionReference,
+              terminals.paste(reference, into: target.id) else { return }
+        fileViewer.close()
+        focusAgent(target)
+    }
+
     /// Karar 47: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.
     /// Kullanıcı bu arada yazmaya başladıysa yanıt onu EZMEZ.
     public func generateGitCommitMessage(_ repoPath: String) async {

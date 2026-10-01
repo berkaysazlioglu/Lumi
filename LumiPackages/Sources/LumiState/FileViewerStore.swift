@@ -58,6 +58,18 @@ public enum ViewerPresentation: Equatable, Sendable {
     )
 }
 
+private extension ViewerPresentation {
+    /// Seçimin geçerli kaldığı kimlik: aynı dosyanın yüklemesi bitince seçim
+    /// korunur, başka dosya/mod/kapanış sıfırlar.
+    var selectionIdentity: String? {
+        switch self {
+        case .hidden: return nil
+        case .file(let repoPath, let filePath, let mode, _): return "\(mode)|\(repoPath)|\(filePath)"
+        case .commit(let repoPath, let context, let filePath, _): return "commit|\(repoPath)|\(context.sha)|\(filePath ?? "")"
+        }
+    }
+}
+
 /// FileViewer modal state'i (karar 4 side-by-side diff, karar 6 lazy
 /// commit-diff, karar 21 markdown/görsel sunumu). Persist edilmez.
 ///
@@ -74,7 +86,16 @@ public final class FileViewerStore {
         case commitDiff
     }
 
-    public private(set) var presentation: ViewerPresentation = .hidden
+    public private(set) var presentation: ViewerPresentation = .hidden {
+        didSet {
+            // Seçim yalnız gösterildiği dosyaya aittir (karar 100).
+            if oldValue.selectionIdentity != presentation.selectionIdentity { selectedLines = nil }
+        }
+    }
+
+    /// Kod görünümündeki seçimin 1 tabanlı satır aralığı (karar 100); view
+    /// katmanı NSTextView seçiminden yazar. Persist edilmez.
+    public var selectedLines: ClosedRange<Int>?
 
     /// Markdown dosyalarında render'lı sunum (kapatılınca ham metin/diff).
     /// Oturumluk — persist edilmez (design/03 §6 Rendered ⇄ Raw rozeti).
@@ -144,6 +165,15 @@ public final class FileViewerStore {
 
     /// Markdown render'ı fiilen açık mı: uzantı + oturumluk tercih.
     public var isRenderedMarkdown: Bool { previewKind == .markdown && rendersMarkdown }
+
+    /// "Mention in Chat" ile ajana yapıştırılacak referans (karar 100).
+    /// Yalnız çalışma kopyasının ham metin görünümünde vardır: diff ve
+    /// render'lı markdown satırları dosyanın satırlarına birebir eşlenmez.
+    public var mentionReference: String? {
+        guard mode == .view, !isRenderedMarkdown, let lines = selectedLines,
+              case .loaded(.text) = content else { return nil }
+        return CodeMention.reference(filePath: filePath, repoPath: repoPath, lines: lines)
+    }
 
     // MARK: - Sunum modları
 

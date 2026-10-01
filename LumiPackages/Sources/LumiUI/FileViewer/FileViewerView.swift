@@ -60,6 +60,9 @@ struct FileViewerView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer()
+            if store.mentionReference != nil {
+                MentionInChatButton(store: store)
+            }
             if store.previewKind == .markdown {
                 markdownToggle
             }
@@ -92,6 +95,7 @@ struct FileViewerView: View {
         let isRendered = store.rendersMarkdown
         return Button {
             store.rendersMarkdown.toggle()
+            store.selectedLines = nil
         } label: {
             HStack(spacing: Theme.Spacing.xs) {
                 Image(systemName: isRendered ? "textformat" : "chevron.left.slash.chevron.right")
@@ -173,7 +177,8 @@ struct FileViewerView: View {
                 HighlightedCodeView(
                     code: text,
                     fileName: store.filePath,
-                    highlighter: highlighter
+                    highlighter: highlighter,
+                    onSelectLines: { store.selectedLines = $0 }
                 )
             }
         case .diff(let diff):
@@ -316,13 +321,14 @@ private struct HighlightedCodeView: View {
     let code: String
     let fileName: String
     let highlighter: any SyntaxHighlighting
+    let onSelectLines: (ClosedRange<Int>?) -> Void
 
     @State private var attributed: NSAttributedString?
 
     var body: some View {
         Group {
             if let attributed {
-                AttributedTextView(text: attributed)
+                AttributedTextView(text: attributed, onSelectLines: onSelectLines)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
