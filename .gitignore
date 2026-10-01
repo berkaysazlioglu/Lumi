@@ -1,8 +1,12 @@
 # macOS
 .DS_Store
 
-# Signing certificates — asla commit'lenmez
+# Signing certificates & secrets — asla commit'lenmez
 *.p12
+*.p8
+*.cer
+*.mobileprovision
+AuthKey_*.p8
 
 # Xcode
 xcuserdata/

@@ -14,11 +14,12 @@
 # İmza: keychain'de dağıtım sertifikası GEREKMEZ. `-allowProvisioningUpdates` + App Store
 # Connect API anahtarı ile Xcode dağıtım cert/profilini otomatik oluşturur/çeker.
 #
-# App Store Connect API sırları Scripts/make-mobile.local.sh'ten okunur (.gitignore'da):
+# App Store Connect API sırları ~/.lumi/mobile-tf.env'den okunur (repo DIŞI — git'e giremez):
 #   ASC_ISSUER_ID="69a6de7f-...-..."                  # ASC ▸ Users and Access ▸ Integrations
 #   ASC_KEY_ID="7ZM9LV2BVJ"                            # anahtar kimliği
 #   ASC_KEY_PATH="$HOME/Downloads/AuthKey_7ZM9LV2BVJ.p8"
-# (Aynı üç değer ortam değişkeni olarak da verilebilir; local dosya onları ezer.)
+# (Aynı üç değer ortam değişkeni olarak da verilebilir; env dosyası onları ezer.
+#  Geriye-uyum: Scripts/make-mobile.local.sh varsa o da yüklenir, env dosyası son sözü söyler.)
 set -euo pipefail
 
 NO_UPLOAD=0
@@ -38,10 +39,17 @@ EXPORT_DIR="$MOBILE/build/export"
 EXPORT_PLIST="$MOBILE/ExportOptions.plist"
 
 # Kişisel, commit'lenmeyen ayarlar (ASC sırları burada tutulur).
-LOCAL_OVERRIDES="$ROOT/Scripts/make-mobile.local.sh"
-if [ -f "$LOCAL_OVERRIDES" ]; then
-  echo "▸ Yerel ayarlar: Scripts/make-mobile.local.sh"
-  source "$LOCAL_OVERRIDES"
+# Önce geriye-uyum için repo-içi local.sh (varsa), sonra repo-dışı ~/.lumi/mobile-tf.env
+# (tercih edilen; son sözü söyler). set -a → dosyadaki atamalar bu kabuğa export edilir.
+LEGACY_OVERRIDES="$ROOT/Scripts/make-mobile.local.sh"
+if [ -f "$LEGACY_OVERRIDES" ]; then
+  echo "▸ Yerel ayarlar (legacy): Scripts/make-mobile.local.sh"
+  set -a; source "$LEGACY_OVERRIDES"; set +a
+fi
+ENV_OVERRIDES="$HOME/.lumi/mobile-tf.env"
+if [ -f "$ENV_OVERRIDES" ]; then
+  echo "▸ Yerel ayarlar: ~/.lumi/mobile-tf.env"
+  set -a; source "$ENV_OVERRIDES"; set +a
 fi
 
 # Sürüm/build.
@@ -49,16 +57,22 @@ VERSION="${VERSION:-1.0}"
 BUILD="$(cd "$ROOT" && git rev-list --count HEAD)"
 echo "▸ Sürüm: $VERSION ($BUILD)"
 
-# Yükleme yapılacaksa API sırları zorunlu.
-if [ "$NO_UPLOAD" -eq 0 ]; then
-  : "${ASC_ISSUER_ID:?HATA: ASC_ISSUER_ID gerekli (Scripts/make-mobile.local.sh'e ekle). Sadece .ipa için --no-upload kullan.}"
-  : "${ASC_KEY_ID:?HATA: ASC_KEY_ID gerekli (Scripts/make-mobile.local.sh'e ekle).}"
-  : "${ASC_KEY_PATH:?HATA: ASC_KEY_PATH gerekli (Scripts/make-mobile.local.sh'e ekle).}"
-  if [ ! -f "$ASC_KEY_PATH" ]; then
-    echo "HATA: API anahtarı bulunamadı: $ASC_KEY_PATH" >&2
-    exit 1
-  fi
+# Upload auth modu: (1) ASC API key (.p8) varsa onu kullan; (2) yoksa Apple ID +
+# app-specific password (o build-makinesi Fastfile'ının yaptığı gibi, .p8 GEREKMEZ).
+UPLOAD_MODE=""
+if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_KEY_PATH:-}" ] && [ -f "${ASC_KEY_PATH:-/nonexistent}" ]; then
+  UPLOAD_MODE="apikey"
+elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+  UPLOAD_MODE="appleid"
 fi
+
+if [ "$NO_UPLOAD" -eq 0 ] && [ -z "$UPLOAD_MODE" ]; then
+  echo "HATA: Yükleme için ya ASC API key (ASC_KEY_ID+ASC_ISSUER_ID+ASC_KEY_PATH)" >&2
+  echo "      ya da Apple ID (APPLE_ID+APPLE_APP_SPECIFIC_PASSWORD) gerekli." >&2
+  echo "      Sırlar: ~/.lumi/mobile-tf.env. Sadece .ipa için --no-upload." >&2
+  exit 1
+fi
+[ -n "$UPLOAD_MODE" ] && echo "▸ Upload modu: $UPLOAD_MODE"
 
 # Otomatik provisioning için API anahtarı archive/export'a da geçilir (varsa).
 AUTH_ARGS=()
@@ -107,13 +121,21 @@ if [ "$NO_UPLOAD" -eq 1 ]; then
   exit 0
 fi
 
-# altool anahtarı path'ten değil, AuthKey_<KEYID>.p8 adıyla bilinen dizinlerden arar.
-KEY_DIR="$HOME/.appstoreconnect/private_keys"
-mkdir -p "$KEY_DIR"
-cp -f "$ASC_KEY_PATH" "$KEY_DIR/AuthKey_$ASC_KEY_ID.p8"
-
-echo "▸ TestFlight'a yükleniyor…"
-xcrun altool --upload-app -f "$IPA" -t ios \
-  --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+echo "▸ TestFlight'a yükleniyor ($UPLOAD_MODE)…"
+if [ "$UPLOAD_MODE" = "apikey" ]; then
+  # altool anahtarı path'ten değil, AuthKey_<KEYID>.p8 adıyla bilinen dizinlerden arar.
+  KEY_DIR="$HOME/.appstoreconnect/private_keys"
+  mkdir -p "$KEY_DIR"
+  cp -f "$ASC_KEY_PATH" "$KEY_DIR/AuthKey_$ASC_KEY_ID.p8"
+  xcrun altool --upload-app -f "$IPA" -t ios \
+    --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+else
+  # Apple ID + app-specific password (Transporter yolu). Apple ID birden çok
+  # takımdaysa provider kısaltması şart (`xcrun altool --list-providers -u … -p …`).
+  PROVIDER_ARGS=()
+  [ -n "${ASC_PROVIDER:-}" ] && PROVIDER_ARGS=(--asc-provider "$ASC_PROVIDER")
+  xcrun altool --upload-app -f "$IPA" -t ios \
+    -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD" "${PROVIDER_ARGS[@]}"
+fi
 
 echo "✓ Yüklendi. TestFlight'ta işlenmesi birkaç dakika sürer → build $VERSION ($BUILD)."
