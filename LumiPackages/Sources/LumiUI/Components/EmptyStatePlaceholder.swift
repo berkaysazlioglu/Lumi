@@ -23,7 +23,7 @@ struct EmptyStatePlaceholder<Accessory: View>: View {
     init(
         _ text: String,
         density: Density = .panel,
-        @ViewBuilder accessory: @escaping () -> Accessory = { EmptyView() }
+        @ViewBuilder accessory: @escaping () -> Accessory
     ) {
         self.text = text
         self.density = density
@@ -91,3 +91,11 @@ struct EmptyStatePlaceholder<Accessory: View>: View {
     .background(Theme.bgSurface)
 }
 #endif
+
+extension EmptyStatePlaceholder where Accessory == EmptyView {
+    /// Aksesuarsız kullanım; generic init'teki default closure Swift 6.4'te
+    /// tip çıkarımı uyarısı verdiği için ayrı kısıtlı init.
+    init(_ text: String, density: Density = .panel) {
+        self.init(text, density: density, accessory: { EmptyView() })
+    }
+}

@@ -57,7 +57,7 @@ struct SectionHeader<Trailing: View>: View {
         isExpanded: Bool = true,
         contentPadding: CGFloat = 0,
         onToggle: (() -> Void)? = nil,
-        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
+        @ViewBuilder trailing: @escaping () -> Trailing
     ) {
         self.title = title
         self.icon = icon
@@ -147,3 +147,28 @@ struct SectionHeader<Trailing: View>: View {
     .background(Theme.bgSurface)
 }
 #endif
+
+extension SectionHeader where Trailing == EmptyView {
+    /// Sağ içeriksiz kullanım; generic init'teki default closure Swift 6.4'te
+    /// tip çıkarımı uyarısı verdiği için ayrı kısıtlı init.
+    init(
+        title: String,
+        icon: String? = nil,
+        count: Count? = nil,
+        disclosure: Disclosure = .none,
+        isExpanded: Bool = true,
+        contentPadding: CGFloat = 0,
+        onToggle: (() -> Void)? = nil
+    ) {
+        self.init(
+            title: title,
+            icon: icon,
+            count: count,
+            disclosure: disclosure,
+            isExpanded: isExpanded,
+            contentPadding: contentPadding,
+            onToggle: onToggle,
+            trailing: { EmptyView() }
+        )
+    }
+}
