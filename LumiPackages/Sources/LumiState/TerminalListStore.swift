@@ -135,6 +135,19 @@ public final class TerminalListStore: StoreLifecycle {
         }
     }
 
+    /// Karar 97 elle sıralama: iki terminal tam listede birbirinin yerine
+    /// geçer; aradaki (minimize edilmiş dahil) hiçbir terminal kıpırdamaz —
+    /// gizli terminal geri açılınca kendi yerine döner. Farklı repo'lar
+    /// arasında takas yapılmaz.
+    public func swap(_ first: TerminalID, _ second: TerminalID) {
+        guard first != second,
+              let firstIndex = terminals.firstIndex(where: { $0.id == first }),
+              let secondIndex = terminals.firstIndex(where: { $0.id == second }),
+              terminals[firstIndex].repoPath == terminals[secondIndex].repoPath else { return }
+        terminals.swapAt(firstIndex, secondIndex)
+        onOrderChanged?()
+    }
+
     public func closeAll(in repoPath: String) {
         for meta in terminals(in: repoPath) {
             close(meta.id)
@@ -329,6 +342,9 @@ public final class TerminalListStore: StoreLifecycle {
     /// Karar 57: terminalde link tıklandı. Composition root bunu
     /// `TerminalLinkActionStore`'a bağlar; bağlanmazsa sinyal sessizce düşer.
     @ObservationIgnored public var onLinkActivated: ((TerminalLinkActivation) -> Void)?
+    /// Karar 97: elle sıralama değişti. Servis olayı doğmadığı için resume
+    /// checkpoint'i (karar 90) bu kanaldan tetiklenir.
+    @ObservationIgnored public var onOrderChanged: (() -> Void)?
 
     func apply(_ event: TerminalEvent) {
         switch event {

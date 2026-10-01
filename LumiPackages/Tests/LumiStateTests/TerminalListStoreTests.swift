@@ -30,6 +30,57 @@ final class TerminalListStoreTests: XCTestCase {
         return meta
     }
 
+    // MARK: - Elle sıralama (karar 97)
+
+    func testSwapExchangesOnlyTheTwoTerminalsKeepingHiddenSlots() {
+        let t = (1...7).map { makeTerminal("t\($0)") }
+        [t[1], t[3], t[5]].forEach { store.minimize($0.id) }
+
+        store.swap(t[2].id, t[4].id)
+
+        XCTAssertEqual(store.terminals.map(\.name), ["t1", "t2", "t5", "t4", "t3", "t6", "t7"])
+        XCTAssertEqual(store.visibleTerminals(in: "/repo/a").map(\.name), ["t1", "t5", "t3", "t7"])
+        store.restore(t[3].id)
+        XCTAssertEqual(store.visibleTerminals(in: "/repo/a").map(\.name), ["t1", "t5", "t4", "t3", "t7"])
+    }
+
+    func testSwapAcrossReposIsIgnored() {
+        let a = makeTerminal("a", repo: "/repo/a")
+        let b = makeTerminal("b", repo: "/repo/b")
+        var notified = 0
+        store.onOrderChanged = { notified += 1 }
+
+        store.swap(a.id, b.id)
+
+        XCTAssertEqual(store.terminals.map(\.name), ["a", "b"])
+        XCTAssertEqual(notified, 0)
+    }
+
+    func testSwapNotifiesOrderChangeAndIgnoresSelfOrUnknown() {
+        let a = makeTerminal("a")
+        let b = makeTerminal("b")
+        var notified = 0
+        store.onOrderChanged = { notified += 1 }
+
+        store.swap(a.id, a.id)
+        store.swap(a.id, TerminalID())
+        XCTAssertEqual(notified, 0)
+
+        store.swap(a.id, b.id)
+        XCTAssertEqual(store.terminals.map(\.name), ["b", "a"])
+        XCTAssertEqual(notified, 1)
+    }
+
+    func testSwapReordersIndexShortcuts() {
+        let a = makeTerminal("a")
+        let b = makeTerminal("b")
+        store.swap(a.id, b.id)
+
+        store.focusIndex(0, in: "/repo/a")
+
+        XCTAssertEqual(store.activeTerminalID, b.id)
+    }
+
     // MARK: - Ajan kimliği (karar 45)
 
     func testProviderChangedUpdatesMetaAndClearsOnNil() {

@@ -196,4 +196,28 @@ final class WorkspaceBootResumeTests: XCTestCase {
         XCTAssertFalse(WorkspaceBootAssembly.affectsResumeSessions(.statusChanged(id, .idle)))
         XCTAssertFalse(WorkspaceBootAssembly.affectsResumeSessions(.bell(id)))
     }
+
+    // MARK: - Karar 97: elle sıralama resume sırasına iner
+
+    private func meta(_ name: String) -> TerminalMeta {
+        TerminalMeta(id: TerminalID(), name: name, repoPath: "/repo", createdAt: .distantPast)
+    }
+
+    func testInDisplayOrderFollowsStoreOrder() {
+        let (a, b, c) = (meta("a"), meta("b"), meta("c"))
+        let ordered = WorkspaceBootAssembly.inDisplayOrder([a, b, c], order: [c, a, b])
+        XCTAssertEqual(ordered.map(\.id), [c.id, a.id, b.id])
+    }
+
+    func testInDisplayOrderAppendsTerminalsNotYetInStore() {
+        let (a, b, fresh) = (meta("a"), meta("b"), meta("fresh"))
+        let ordered = WorkspaceBootAssembly.inDisplayOrder([a, fresh, b], order: [b, a])
+        XCTAssertEqual(ordered.map(\.id), [b.id, a.id, fresh.id])
+    }
+
+    func testInDisplayOrderDropsTerminalsGoneFromService() {
+        let (a, gone) = (meta("a"), meta("gone"))
+        let ordered = WorkspaceBootAssembly.inDisplayOrder([a], order: [gone, a])
+        XCTAssertEqual(ordered.map(\.id), [a.id])
+    }
 }
