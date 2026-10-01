@@ -62,8 +62,21 @@ public actor ClaudeAccountService: ClaudeAccountServicing {
         let config = await config.config()
         return ClaudeAccountsSnapshot(
             accounts: config.claudeAccounts.sorted { $0.createdAt < $1.createdAt },
-            selection: config.claudeAccountSelection
+            selection: config.claudeAccountSelection,
+            systemDefaultEmail: systemDefaultEmail(for: config.claudeAccountSelection)
         )
+    }
+
+    /// Sistem login'inin kimliği token'sız kaynaklardan okunur: varsayılan
+    /// seçiliyken yüzeyin kendisi (`.claude.json` ▸ `oauthAccount`), yönetilen
+    /// bir hesaptayken yakalanmış snapshot'ın marker'ı. Keychain'e dokunulmaz.
+    private func systemDefaultEmail(for selection: ClaudeAccountSelection) -> String? {
+        let oauthAccountJSON = selection == .systemDefault
+            ? surface.readOauthAccount()
+            : store.systemDefaultOauthAccountJSON()
+        return ClaudeIdentity.resolve(
+            statusJSON: nil, oauthAccountJSON: oauthAccountJSON, credentialsJSON: nil
+        ).email
     }
 
     /// Uygulama açılışında çağrılır.

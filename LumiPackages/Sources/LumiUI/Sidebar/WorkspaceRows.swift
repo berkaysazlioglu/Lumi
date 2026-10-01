@@ -220,56 +220,9 @@ struct CheckoutRow: View {
 
     // MARK: - Menü
 
-    /// Karar 93: dolu `Start App` en başta; diğer komutlar `Actions` alt menüsünde.
+    /// Karar 96: Start App ve `Actions` top bar'a taşındı; menüde yalnız
+    /// checkout eylemleri kalır.
     private var menuItems: [PopoverMenu.Item] {
-        startAppItems + checkoutMenuItems + [.divider, actionsSubmenu]
-    }
-
-    private var startAppItems: [PopoverMenu.Item] {
-        guard let startApp = shell.quickCommands.startApp(for: projectPath) else { return [] }
-        return [
-            .action(QuickCommandRole.startAppName, icon: "play.fill", isEnabled: !isMissing) {
-                let context = quickCommandContext
-                Task { await shell.startApp(startApp, context: context) }
-            },
-            .divider,
-        ]
-    }
-
-    /// Karar 92: projenin hızlı komutları bu checkout'ta yeni terminalde çalışır.
-    private var actionsSubmenu: PopoverMenu.Item {
-        let actions = shell.quickCommands.actions(for: projectPath)
-        let runs: [PopoverMenu.Item] = actions.map { command in
-            .action(command.name, icon: "play", isEnabled: !isMissing) {
-                let context = quickCommandContext
-                Task { await shell.runQuickCommand(command, context: context) }
-            }
-        }
-        let manage = PopoverMenu.Item.action(actions.isEmpty ? "Add Action…" : "Manage Actions…", icon: "slider.horizontal.3") {
-            shell.dialogs.present(.quickCommands(projectPath: projectPath))
-        }
-        return .submenu("Actions", icon: "bolt", items: runs + (runs.isEmpty ? [] : [.divider]) + [manage])
-    }
-
-    private var projectPath: String {
-        switch checkout {
-        case .original(let repo): repo.path
-        case .workspace(let workspace): workspace.projectPath
-        }
-    }
-
-    private var quickCommandContext: QuickCommandContext {
-        switch checkout {
-        case .original(let repo):
-            QuickCommandContext(path: repo.path, projectPath: repo.path, name: repo.name, branch: identity.branch ?? "")
-        case .workspace(let workspace):
-            QuickCommandContext(
-                path: workspace.path, projectPath: workspace.projectPath, name: workspace.name, branch: workspace.branch
-            )
-        }
-    }
-
-    private var checkoutMenuItems: [PopoverMenu.Item] {
         switch checkout {
         case .original(let repo):
             var items: [PopoverMenu.Item] = [
@@ -317,26 +270,11 @@ struct CheckoutRow: View {
         identity.title
     }
 
-    /// Original checkout da yönetilen workspace'lerle aynı iki kolonlu
-    /// kimliği kullanır: solda sabit `main`, yanında gerçek SCM branch yolu.
     private var branchLabel: String? {
         identity.branch
     }
 
-    private var identity: CheckoutIdentity {
-        switch checkout {
-        case .original(let repo):
-            if let branch = shell.git.branches[repo.path]?.first(where: { $0.isCurrent }) {
-                return checkout.identity(originalBranch: branch.name)
-            }
-            if let branch = shell.plastic.workspaces[repo.path]?.branch {
-                return checkout.identity(originalBranch: PlasticBranchName.display(branch))
-            }
-            return checkout.identity()
-        case .workspace:
-            return checkout.identity()
-        }
-    }
+    private var identity: CheckoutIdentity { checkout.identity(in: shell) }
 
     private var isActive: Bool { shell.navigation.activeRepoPath == checkout.path }
 

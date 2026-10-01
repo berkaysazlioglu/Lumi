@@ -47,6 +47,21 @@ final class ClaudeAccountStoreTests: XCTestCase {
         XCTAssertFalse(store.isBusy)
     }
 
+    func testSystemDefaultLabelShowsTheMacLoginEmailWhenKnown() async {
+        await service.seed(ClaudeAccountsSnapshot(
+            accounts: [Self.personal], selection: .systemDefault,
+            systemDefaultEmail: "me@home.com"
+        ))
+        let store = makeStore()
+        await store.load()
+
+        XCTAssertEqual(store.systemDefaultEmail, "me@home.com")
+        XCTAssertEqual(store.activeLabel, "me@home.com")
+
+        await store.select(.account("personal"))
+        XCTAssertEqual(store.activeLabel, Self.personal.email)
+    }
+
     func testSelectingAnAccountUpdatesTheLabelAndRefreshesUsage() async {
         let store = makeStore()
         await store.load()

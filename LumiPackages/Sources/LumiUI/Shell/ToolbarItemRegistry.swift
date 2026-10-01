@@ -65,6 +65,8 @@ public extension ToolbarItemID {
 
     static let logo = ToolbarItemID("logo")
     static let gridSettings = ToolbarItemID("gridSettings")
+    /// Aktif checkout'un Start App + Actions kontrolü (karar 96).
+    static let quickCommands = ToolbarItemID("quickCommands")
     static let newTerminal = ToolbarItemID("newTerminal")
     static let focusMode = ToolbarItemID("focusMode")
     static let settings = ToolbarItemID("settings")

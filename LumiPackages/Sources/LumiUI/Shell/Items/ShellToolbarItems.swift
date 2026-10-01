@@ -19,6 +19,9 @@ public enum ShellToolbarItems {
         /// (traffic light → logo → toggle).
         public static let panelToggleLeading = 10
 
+        /// Hızlı komutlar (karar 96) — üretim grubunun en solunda, grid ve
+        /// birincil CTA'dan önce (Orca'da Run, `+`'nın yanında durur).
+        public static let quickCommands = -10
         public static let gridSettings = 0
         public static let newTerminal = 10
         /// Repo-dışı bir route'un kendi başlığı (karar 55) — grid/CTA o

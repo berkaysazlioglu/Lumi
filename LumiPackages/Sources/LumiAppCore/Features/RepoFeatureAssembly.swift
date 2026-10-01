@@ -86,6 +86,14 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             isPresented: { $0.dialogs.deleteAgentSessionDialog != nil },
             makeView: { AnyView(DeleteAgentSessionDialogOverlay()) }
         ))
+        // Karar 96: hızlı komutlar checkout sağ tıkından üretim bölgesine taşındı.
+        registries.toolbar.register(ToolbarItemDescriptor(
+            id: .quickCommands,
+            region: .center,
+            order: ShellToolbarItems.Order.quickCommands,
+            isVisible: { $0.activeRepoPath != nil },
+            makeView: { AnyView(QuickCommandsToolbarItem()) }
+        ))
         registries.panels.register(PanelItemDescriptor(
             id: .projectTools,
             title: "Project Tools",

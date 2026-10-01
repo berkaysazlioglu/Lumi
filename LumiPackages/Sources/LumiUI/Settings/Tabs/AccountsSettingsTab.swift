@@ -88,7 +88,7 @@ struct AccountsSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             ClaudeAccountRow(
                 title: ClaudeAccountText.systemDefaultTitle,
-                subtitle: ClaudeAccountText.systemDefaultSubtitle,
+                subtitle: store.systemDefaultEmail ?? ClaudeAccountText.systemDefaultSubtitle,
                 isActive: store.isActive(.systemDefault),
                 isWorking: store.activity == .switching(to: .systemDefault),
                 isDisabled: store.isBusy

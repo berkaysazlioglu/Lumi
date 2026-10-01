@@ -62,14 +62,19 @@ public actor FakeClaudeAccountService: ClaudeAccountServicing {
         let remaining = snapshot.accounts.filter { $0.id != accountID }
         let selection: ClaudeAccountSelection = snapshot.selection == .account(accountID)
             ? .systemDefault : snapshot.selection
-        snapshot = ClaudeAccountsSnapshot(accounts: remaining, selection: selection)
+        snapshot = ClaudeAccountsSnapshot(
+            accounts: remaining, selection: selection, systemDefaultEmail: snapshot.systemDefaultEmail
+        )
         return snapshot
     }
 
     public func select(_ selection: ClaudeAccountSelection) async throws -> ClaudeAccountsSnapshot {
         selections.append(selection)
         try failIfNeeded()
-        snapshot = ClaudeAccountsSnapshot(accounts: snapshot.accounts, selection: selection)
+        snapshot = ClaudeAccountsSnapshot(
+            accounts: snapshot.accounts, selection: selection,
+            systemDefaultEmail: snapshot.systemDefaultEmail
+        )
         return snapshot
     }
 

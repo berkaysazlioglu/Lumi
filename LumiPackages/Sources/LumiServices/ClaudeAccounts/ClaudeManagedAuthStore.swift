@@ -143,6 +143,13 @@ struct ClaudeManagedAuthStore: Sendable {
         }
     }
 
+    /// Yakalanmış sistem varsayılanının token'sız `oauthAccount` bloğu —
+    /// yalnız kimlik göstermek için; Keychain okunmaz.
+    func systemDefaultOauthAccountJSON() -> String? {
+        guard let marker = readSystemDefaultMarker(), marker.isComplete else { return nil }
+        return marker.oauthAccountJSON
+    }
+
     /// Sistem varsayılanına dönülüp yüzey geri yazıldıktan sonra çağrılır:
     /// snapshot tüketilmiştir, bir sonraki geçişte güncel hâl yakalanmalıdır.
     func clearSystemDefaultSnapshot() async throws {

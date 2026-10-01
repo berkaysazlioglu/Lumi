@@ -214,6 +214,25 @@ final class ClaudeAccountServiceTests: XCTestCase {
         XCTAssertEqual(selection, .systemDefault)
     }
 
+    /// `System default` satırı Mac'teki login'in e-postasını gösterir —
+    /// yönetilen bir hesaba geçildikten sonra da (yakalanan snapshot'tan).
+    func testSystemDefaultEmailComesFromTheSurfaceAndThenFromTheSnapshot() async throws {
+        await keychain.seed(
+            Self.credentials(accessToken: "system"),
+            service: ClaudeAuthLocations.legacyKeychainService, account: user
+        )
+        let object = ["oauthAccount": ["emailAddress": "me@home.com"]]
+        try JSONSerialization.data(withJSONObject: object)
+            .write(to: home.appendingPathComponent(".claude.json"))
+        let account = try await addAccount(email: "dev@example.com", accessToken: "token-1")
+
+        let initial = await makeService().accounts()
+        XCTAssertEqual(initial.systemDefaultEmail, "me@home.com")
+
+        let switched = try await makeService().select(.account(account.id))
+        XCTAssertEqual(switched.systemDefaultEmail, "me@home.com", "yüzey artık yönetilen hesabın")
+    }
+
     /// İkinci bir geçişte yakalanan snapshot ÜZERİNE yazılmamalı: yoksa
     /// yönetilen bir hesabın token'ı "sistem varsayılanı" sanılırdı.
     func testSystemDefaultSnapshotIsCapturedOnlyOnce() async throws {

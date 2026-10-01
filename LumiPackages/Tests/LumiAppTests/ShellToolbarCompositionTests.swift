@@ -131,10 +131,11 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertEqual(ids(.leading), [.logo, .panelToggle(.left)])
     }
 
-    /// Üretim grubu: grid ayarı → New <Provider> (karar 55: ayraç kaldırıldı).
+    /// Üretim grubu: hızlı komutlar → grid ayarı → New <Provider> (karar 55:
+    /// ayraç kaldırıldı; karar 96: hızlı komutlar grubun en soluna geldi).
     func testCenterRegionOrder() {
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.quickCommands, .gridSettings, .newTerminal])
     }
 
     /// `.bottom` yuvasının kayıtlı öğesi yok → toggle'ı bar'da görünmez.
@@ -151,13 +152,13 @@ final class ShellToolbarCompositionTests: XCTestCase {
 
     func testProductionItemsAreHiddenOnANonRepoRoute() {
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.quickCommands, .gridSettings, .newTerminal])
 
         fixture.context.navigation.setRoute(.content(ContentRouteID("placeholder")))
         XCTAssertEqual(ids(.center), [], "repo-dışı route'ta üretim grubu bar'dan düşer")
 
         fixture.context.navigation.setRoute(.repo("/r/alpha"))
-        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal], "geri dönüşte geri gelir")
+        XCTAssertEqual(ids(.center), [.quickCommands, .gridSettings, .newTerminal], "geri dönüşte geri gelir")
     }
 
     // MARK: - Tasks/Remote route'ları (karar 55)
@@ -166,7 +167,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
     /// CTA düşer, yerine route başlığı gelir.
     func testTasksRouteReplacesTheProductionGroupWithItsOwnItem() {
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.quickCommands, .gridSettings, .newTerminal])
 
         fixture.context.navigation.setRoute(.content(TasksPanelSection.tasks.routeID))
         XCTAssertEqual(ids(.center), [ToolbarItemID("route.tasks")])
@@ -181,7 +182,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertEqual(ids(.center), [ToolbarItemID("route.tasks")])
 
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.quickCommands, .gridSettings, .newTerminal])
     }
 
     func testEachSectionRegistersItsContentRoute() {

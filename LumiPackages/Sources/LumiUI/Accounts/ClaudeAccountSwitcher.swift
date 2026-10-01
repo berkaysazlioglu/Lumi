@@ -70,7 +70,11 @@ struct ClaudeAccountSwitcher: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                row(.systemDefault, title: ClaudeAccountText.systemDefaultTitle, subtitle: nil)
+                row(
+                    .systemDefault,
+                    title: ClaudeAccountText.systemDefaultTitle,
+                    subtitle: store.systemDefaultEmail
+                )
                 ForEach(store.accounts) { account in
                     row(
                         .account(account.id),

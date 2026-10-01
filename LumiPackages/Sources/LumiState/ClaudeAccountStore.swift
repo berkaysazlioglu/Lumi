@@ -22,6 +22,7 @@ public final class ClaudeAccountStore {
 
     public private(set) var accounts: [ClaudeAccount] = []
     public private(set) var selection: ClaudeAccountSelection = .systemDefault
+    public private(set) var systemDefaultEmail: String?
     public private(set) var activity: Activity = .idle
 
     @ObservationIgnored private let service: any ClaudeAccountServicing
@@ -48,8 +49,11 @@ public final class ClaudeAccountStore {
         selection.accountID.flatMap { id in accounts.first { $0.id == id } }
     }
 
-    /// Topbar/popover etiketi: aktif hesabın e-postası ya da "System default".
-    public var activeLabel: String { activeAccount?.email ?? Self.systemDefaultLabel }
+    /// Topbar/popover etiketi: aktif hesabın e-postası; sistem varsayılanında
+    /// Mac'teki login'in e-postası, o da okunamazsa "System default".
+    public var activeLabel: String {
+        activeAccount?.email ?? systemDefaultEmail ?? Self.systemDefaultLabel
+    }
 
     public static let systemDefaultLabel = "System default"
 
@@ -137,5 +141,6 @@ public final class ClaudeAccountStore {
     private func apply(_ snapshot: ClaudeAccountsSnapshot) {
         accounts = snapshot.accounts
         selection = snapshot.selection
+        systemDefaultEmail = snapshot.systemDefaultEmail
     }
 }

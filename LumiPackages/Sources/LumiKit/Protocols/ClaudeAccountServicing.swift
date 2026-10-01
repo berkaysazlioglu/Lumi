@@ -38,10 +38,18 @@ public protocol ClaudeAccountServicing: Sendable {
 public struct ClaudeAccountsSnapshot: Sendable, Equatable {
     public let accounts: [ClaudeAccount]
     public let selection: ClaudeAccountSelection
+    /// Mac'teki kendi Claude login'inin e-postası (`System default` satırı
+    /// adıyla görünsün diye). Okunamazsa `nil`.
+    public let systemDefaultEmail: String?
 
-    public init(accounts: [ClaudeAccount], selection: ClaudeAccountSelection) {
+    public init(
+        accounts: [ClaudeAccount],
+        selection: ClaudeAccountSelection,
+        systemDefaultEmail: String? = nil
+    ) {
         self.accounts = accounts
         self.selection = selection
+        self.systemDefaultEmail = systemDefaultEmail
     }
 
     public static let empty = ClaudeAccountsSnapshot(accounts: [], selection: .systemDefault)
