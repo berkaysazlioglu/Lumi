@@ -134,13 +134,29 @@ final class CommitGraphBoundaryTests: XCTestCase {
         XCTAssertEqual(side?.outputLanes.dropLast(), rows[2].outputLanes[...], "yalnız en sağa incoming lane'i eklenir")
     }
 
-    func testIncomingRowIsSkippedWhenUpstreamIsAlreadyMerged() {
+    /// Yerel bir merge (ya da `pull` merge'ü) merge-base'i parent olarak taşısa da
+    /// upstream merge-base'in önündeyse gelen commit'ler vardır.
+    func testIncomingRowIsShownAboveMergeBaseEvenWhenTheRowAboveIsAMerge() {
         let rows = CommitGraph.build(
             [commit("m", parents: ["x", "b"], refs: [main]), commit("b", parents: ["r"]), commit("x", parents: ["r"]), commit("r")],
             headHash: "m"
         )
 
         let result = CommitGraph.addBoundaryRows(rows, context: context(head: "m", upstream: "z", mergeBase: "b"))
+
+        let incomingIndex = result.firstIndex { $0.kind == .incomingChanges }
+        let mergeBaseIndex = result.firstIndex { $0.commit.hash == "b" }
+        XCTAssertNotNil(incomingIndex)
+        XCTAssertEqual(incomingIndex.map { $0 + 1 }, mergeBaseIndex)
+    }
+
+    func testIncomingRowIsSkippedWhenUpstreamIsTheMergeBase() {
+        let rows = CommitGraph.build(
+            [commit("m", parents: ["x", "b"], refs: [main]), commit("b", parents: ["r"]), commit("x", parents: ["r"]), commit("r")],
+            headHash: "m"
+        )
+
+        let result = CommitGraph.addBoundaryRows(rows, context: context(head: "m", upstream: "b", mergeBase: "b"))
 
         XCTAssertFalse(result.contains { $0.kind == .incomingChanges })
     }

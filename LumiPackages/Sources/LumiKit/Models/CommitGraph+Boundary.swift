@@ -33,11 +33,10 @@ public extension CommitGraph {
         let beforeIndex = rows.lastIndex { row in
             row.outputLanes.contains { $0.targetHash == mergeBase }
         }
+        // "Gelen var mı" kararı yalnız `hasIncomingChanges`'tadır (upstream ≠
+        // merge-base ⇒ upstream HEAD'in atası değil). Üstteki satırın merge-base'i
+        // parent olarak taşıyan bir merge olması bunu değiştirmez.
         let before = beforeIndex.map { rows[$0] }
-        // Upstream zaten HEAD'e merge edilmişse gösterilecek "gelen" yok.
-        if let before, before.commit.parentHashes.count == 2, before.commit.parentHashes.contains(mergeBase) {
-            return
-        }
 
         let after = rows[afterIndex]
         // Incoming lane'i EN SAĞA eklenir. Orca onu yerel lane'in hemen yanına
