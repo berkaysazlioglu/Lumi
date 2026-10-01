@@ -15,6 +15,8 @@ struct AgentTranscriptParser {
         var gitBranch: String?
         var model: String?
         var firstPrompt: String?
+        /// Claude `/rename` ile verilen ad (`custom-title` kaydı); en son kayıt geçerlidir.
+        var customTitle: String?
         var turns: [AgentHistoryTurn] = []
 
         /// Örneklenen kullanıcı+asistan mesaj sayısı (tool çağrıları hariç).
@@ -71,6 +73,11 @@ struct AgentTranscriptParser {
         assignIfMissing(&transcript.cwd, record["cwd"])
         assignIfMissing(&transcript.sessionID, record["sessionId"])
         assignIfMissing(&transcript.gitBranch, record["gitBranch"])
+        // `/rename` her seferinde yeni bir `custom-title` satırı ekler; sonuncusu geçerlidir.
+        if record["type"] as? String == "custom-title", let title = nonEmpty(record["customTitle"]) {
+            transcript.customTitle = title
+            return
+        }
         // Model son asistan mesajından okunur: oturum ortasında değişebilir.
         guard record["type"] as? String == "assistant",
               let model = nonEmpty((record["message"] as? [String: Any])?["model"]) else { return }

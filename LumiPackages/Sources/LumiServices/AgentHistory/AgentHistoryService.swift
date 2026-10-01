@@ -139,10 +139,11 @@ public actor AgentHistoryService: AgentHistoryServicing {
         )
     }
 
-    /// Başlık ilk kullanıcı istemidir; transkriptin başı örnekleme dışında
-    /// kaldıysa (çok büyük dosya) ilk konuşma turuna düşer.
+    /// Başlık, oturum `/rename` ile adlandırıldıysa o addır; değilse ilk kullanıcı
+    /// istemidir; transkriptin başı örnekleme dışında kaldıysa (çok büyük dosya)
+    /// ilk konuşma turuna düşer.
     private func title(_ transcript: AgentTranscriptParser.Transcript) -> String {
-        transcript.firstPrompt ?? transcript.turns.first?.text ?? "Untitled session"
+        transcript.customTitle ?? transcript.firstPrompt ?? transcript.turns.first?.text ?? "Untitled session"
     }
 
     /// Dosyanın baş ve son `sampleBytes`'ını okuyup JSON satırlarına ayırır.

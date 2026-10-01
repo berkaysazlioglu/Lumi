@@ -83,6 +83,26 @@ final class AgentTranscriptParserTests: XCTestCase {
         XCTAssertEqual(AgentHistoryTurn(role: .user, text: "kısa").truncated(to: 400).text, "kısa")
     }
 
+    func testClaudeRenameUsesLatestCustomTitle() {
+        let lines = [
+            claudeUser(text: "İlk istem"),
+            #"{"type":"custom-title","customTitle":"Eski ad","sessionId":"s-1"}"#,
+            #"{"type":"agent-name","agentName":"Eski ad","sessionId":"s-1"}"#,
+            #"{"type":"custom-title","customTitle":"Yeni ad","sessionId":"s-1"}"#,
+            #"{"type":"custom-title","customTitle":"","sessionId":"s-1"}"#,
+        ]
+
+        let transcript = parse(lines, provider: .claude)
+
+        XCTAssertEqual(transcript.customTitle, "Yeni ad", "boş kayıt son geçerli adı silmez")
+        XCTAssertEqual(transcript.firstPrompt, "İlk istem")
+        XCTAssertEqual(transcript.messageCount, 1, "başlık kayıtları tur sayılmaz")
+    }
+
+    func testClaudeWithoutRenameHasNoCustomTitle() {
+        XCTAssertNil(parse([claudeUser(text: "İstem")], provider: .claude).customTitle)
+    }
+
     func testModelLabelDropsVendorPrefixAndDateSuffix() {
         XCTAssertEqual(entry(model: "claude-opus-4-1").modelLabel, "opus-4-1")
         XCTAssertEqual(entry(model: "claude-sonnet-4-20250514").modelLabel, "sonnet-4")

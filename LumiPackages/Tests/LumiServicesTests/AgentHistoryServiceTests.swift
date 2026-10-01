@@ -18,6 +18,16 @@ final class AgentHistoryServiceTests: XCTestCase {
         XCTAssertEqual(entries.first { $0.sessionID == "codex-1" }?.preview, "Run suite")
     }
 
+    func testClaudeRenamedSessionTitleIsCustomTitle() async throws {
+        let root = try makeRoot(); defer { try? FileManager.default.removeItem(at: root) }
+        let c = root.appendingPathComponent(".claude/projects/-repo")
+        try FileManager.default.createDirectory(at: c, withIntermediateDirectories: true)
+        try put("{\"type\":\"user\",\"sessionId\":\"claude-1\",\"cwd\":\"/repo\",\"message\":{\"content\":\"Build game\"}}\n{\"type\":\"custom-title\",\"customTitle\":\"Oyun prototipi\",\"sessionId\":\"claude-1\"}", c.appendingPathComponent("a.jsonl"))
+        let entry = try await AgentHistoryService(home: root, environment: [:]).entries(projectPath: "/repo").first
+        XCTAssertEqual(entry?.title, "Oyun prototipi")
+        XCTAssertEqual(entry?.firstPrompt, "Build game")
+    }
+
     func testMalformedDuplicateAndUnsafeID() async throws {
         let root = try makeRoot(); defer { try? FileManager.default.removeItem(at: root) }
         let d = root.appendingPathComponent(".claude/projects/-repo")
