@@ -24,8 +24,14 @@ struct TerminalGridView: View {
     var isArranging = false
     var onSwap: (TerminalID, TerminalID) -> Void = { _, _ in }
     var onEndArranging: () -> Void = {}
+    /// Klavye odağı Edit modundayken başka bir yere geçti (⌘1–9, spawn,
+    /// bildirim, Projects ajan satırı…): mod odağı geri ÇALMADAN biter — aksi
+    /// hâlde tuşlar karartılmış terminale giderdi.
+    var onArrangeFocusLost: () -> Void = {}
 
-    @State private var drag: ArrangeDrag?
+    /// `@GestureState`: jest iptal edilince ya da kart sürükleme sırasında
+    /// kaldırılınca kendiliğinden sıfırlanır — bayat drop-target vurgusu kalmaz.
+    @GestureState private var drag: ArrangeDrag?
     @FocusState private var isArrangeFocused: Bool
 
     private static let coordinateSpace = "terminalGrid"
@@ -44,7 +50,9 @@ struct TerminalGridView: View {
             }
             .onChange(of: isArranging, initial: true) { _, arranging in
                 isArrangeFocused = arranging
-                if !arranging { drag = nil }
+            }
+            .onChange(of: isArrangeFocused) { wasFocused, isFocused in
+                if wasFocused, !isFocused, isArranging { onArrangeFocusLost() }
             }
     }
 
@@ -107,30 +115,36 @@ struct TerminalGridView: View {
             }
         }
         .coordinateSpace(name: Self.coordinateSpace)
-        .animation(Theme.Motion.standardEase, value: terminals.map(\.id))
+        // Yalnız Edit modunda: spawn/close/minimize'da animasyonlu frame, kare
+        // başına terminal resize'ı (SIGWINCH) ve TUI titremesi demekti.
+        .animation(isArranging ? Theme.Motion.standardEase : nil, value: terminals.map(\.id))
     }
 
     // MARK: - Edit modu (karar 97)
 
     private func arrangeGesture(for id: TerminalID, frames: [CGRect]) -> some Gesture {
         DragGesture(coordinateSpace: .named(Self.coordinateSpace))
-            .onChanged { value in
-                drag = ArrangeDrag(id: id, translation: value.translation, location: value.location)
+            .updating($drag) { value, state, _ in
+                state = ArrangeDrag(id: id, translation: value.translation, location: value.location)
             }
-            .onEnded { _ in
-                if let target = dropTargetID(frames: frames) {
+            .onEnded { value in
+                if let target = targetID(at: value.location, dragged: id, frames: frames) {
                     onSwap(id, target)
                 }
-                drag = nil
             }
     }
 
-    /// İmlecin üstünde durduğu (sürüklenenden farklı) kart.
+    /// Süren sürüklemede imlecin üstünde durduğu kart.
     private func dropTargetID(frames: [CGRect]) -> TerminalID? {
         guard let drag else { return nil }
-        return ArrangeDrag.targetIndex(at: drag.location, frames: frames)
+        return targetID(at: drag.location, dragged: drag.id, frames: frames)
+    }
+
+    /// Noktadaki (sürüklenenden farklı) kart.
+    private func targetID(at location: CGPoint, dragged: TerminalID, frames: [CGRect]) -> TerminalID? {
+        ArrangeDrag.targetIndex(at: location, frames: frames)
             .flatMap { terminals.indices.contains($0) ? terminals[$0].id : nil }
-            .flatMap { $0 == drag.id ? nil : $0 }
+            .flatMap { $0 == dragged ? nil : $0 }
     }
 }
 

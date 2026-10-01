@@ -283,12 +283,16 @@ public final class TerminalListStore: StoreLifecycle {
         surfaceRepoPath = repoPath
         setTerminalSurfaceVisible(true, in: repoPath)
 
+        focus(lastActiveVisible(in: repoPath))
+    }
+
+    /// Repo'nun son aktif görünür terminali; yoksa ilk görünür terminal.
+    public func lastActiveVisible(in repoPath: String) -> TerminalID? {
         let visible = visibleTerminals(in: repoPath)
         if let last = lastActiveByRepo[repoPath], visible.contains(where: { $0.id == last }) {
-            focus(last)
-        } else {
-            focus(visible.first?.id)
+            return last
         }
+        return visible.first?.id
     }
 
     // MARK: - Klavye navigasyonu (görünür küme, aynı repo)

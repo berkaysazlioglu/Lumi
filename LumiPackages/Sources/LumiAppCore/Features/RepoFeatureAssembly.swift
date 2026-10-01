@@ -222,8 +222,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     /// Tab kapanışı → repo'ya ait bellek cache'lerinin boşaltılması
-    /// (refactor 5.5). `LayoutStore.projectGridLayouts` KASITLI olarak
-    /// korunur: persist edilen kullanıcı tercihidir (karar 9).
+    /// (refactor 5.5). `LayoutStore.evict` yalnız oturumluk maximize/Edit modu
+    /// kaydını düşürür; `projectGridLayouts` KASITLI olarak korunur: persist
+    /// edilen kullanıcı tercihidir (karar 9).
     private func wireTabClosed() {
         shared.navigation.onTabClosed = { [weak self] repoPath in
             guard let self else { return }
@@ -231,6 +232,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             plasticStore.evict(repoPath)
             agentHistory.evict(repoPath)
             repoStore.evict(repoPath)
+            shared.layout.evict(repoPath)
         }
     }
 

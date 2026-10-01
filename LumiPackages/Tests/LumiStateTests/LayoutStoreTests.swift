@@ -49,6 +49,17 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertNil(store.maximizedTerminal(in: "/a"))
     }
 
+    func testMaximizeEndsArranging() {
+        let id = TerminalID()
+        visible = [id]
+        store.toggleArranging(in: "/a")
+
+        store.maximize(id, in: "/a")
+
+        XCTAssertFalse(store.isArranging(in: "/a"))
+        XCTAssertEqual(store.maximizedTerminal(in: "/a"), id)
+    }
+
     func testEvictEndsArrangingOnlyForThatRepo() {
         store.toggleArranging(in: "/a")
         store.evict("/b")

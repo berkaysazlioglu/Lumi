@@ -73,7 +73,8 @@ public struct TerminalsRouteView: View {
                     onClose: { shell.terminals.close($0) },
                     isArranging: shell.layout.isArranging(in: repoPath),
                     onSwap: { shell.terminals.swap($0, $1) },
-                    onEndArranging: { shell.toggleArrangingTerminals(in: repoPath) }
+                    onEndArranging: { shell.toggleArrangingTerminals(in: repoPath) },
+                    onArrangeFocusLost: { shell.layout.endArranging() }
                 )
             }
         }

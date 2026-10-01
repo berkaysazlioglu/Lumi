@@ -286,11 +286,13 @@ public final class ShellContext {
     }
 
     /// Karar 97: Edit modunu aç/kapa. Çıkışta klavye odağı (Edit modunda grid'e
-    /// alınmıştı) aktif terminale geri verilir.
+    /// alınmıştı) bu repo'nun son aktif terminaline geri verilir — global aktif
+    /// terminal başka repo'da olabilir.
     public func toggleArrangingTerminals(in repoPath: String) {
         layout.toggleArranging(in: repoPath)
-        guard !layout.isArranging(in: repoPath) else { return }
-        terminals.focus(terminals.activeTerminalID)
+        guard !layout.isArranging(in: repoPath),
+              let id = terminals.lastActiveVisible(in: repoPath) else { return }
+        terminals.focus(id)
     }
 
     /// Silme onayı: canlı oturum sayısı dialogda gösterilir; store'un önceki

@@ -47,4 +47,18 @@ final class RepoFeatureAssemblyEvictionTests: XCTestCase {
         XCTAssertNil(assembly.repoStore.fileTrees[repoPath])
         XCTAssertNil(assembly.gitStore.changes[repoPath])
     }
+
+    /// Karar 97: Edit modu tab kapanınca biter — yeniden açılan tab açık modla gelmez.
+    func testClosingTabEndsArrangingTerminals() async {
+        let repoPath = "/tmp/lumi-evict-arrange"
+        let assembly = RepoFeatureAssembly()
+        assembly.build(services: registry, shared: shared)
+        await assembly.start()
+        shared.navigation.openTab(repoPath)
+        shared.layout.toggleArranging(in: repoPath)
+
+        shared.navigation.closeTab(repoPath)
+
+        XCTAssertFalse(shared.layout.isArranging(in: repoPath))
+    }
 }

@@ -283,6 +283,9 @@ public final class LayoutStore {
     @discardableResult
     public func maximize(_ id: TerminalID, in repoPath: String) -> Bool {
         guard isTerminalVisible(id, repoPath) else { return false }
+        // Edit modu grid üzerinde çalışır (karar 97): solo yüzeye geçiş onu bitirir —
+        // aksi hâlde grid unmount olur, mod açık kalır ve klavye terminale döner.
+        if isArranging(in: repoPath) { endArranging() }
         maximizedByRepo[repoPath] = id
         focusTerminal(id)
         return true
