@@ -93,6 +93,18 @@ public enum GitPorcelainParser {
         return (lines[0], lines[1])
     }
 
+    /// `rev-parse HEAD @{upstream} --symbolic-full-name HEAD --abbrev-ref @{upstream}`
+    /// çıktısı: HEAD hash'i, upstream hash'i, HEAD'in tam adı, upstream'in kısa adı.
+    public static func parseHeadAndUpstream(
+        _ raw: String
+    ) -> (headHash: String, upstreamHash: String, headName: String, upstreamName: String)? {
+        let lines = raw.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard lines.count == 4 else { return nil }
+        return (lines[0], lines[1], lines[2], lines[3])
+    }
+
     /// `%D` dekorasyon listesi → `GitRef`ler.
     ///
     /// Ayraç ", " (virgül + boşluk): git ref adları boşluk içeremez, bu yüzden

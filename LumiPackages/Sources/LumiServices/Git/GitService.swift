@@ -99,36 +99,53 @@ public struct GitService: GitServicing {
     /// tam ref adı (detached'ta `HEAD`), upstream hash'i + kısa adı (yoksa
     /// exit≠0 → upstream yok, arıza değil) ve ayrıştılarsa merge-base.
     public func historyContext(repoPath: String) async -> GitHistoryContext? {
+        // Dosya izleyicisi tik'i başına koşar: HEAD ve upstream TEK `rev-parse`
+        // ile okunur (hash, hash, HEAD'in tam adı, upstream'in kısa adı). Upstream
+        // yoksa (yayınlanmamış dal, detached HEAD) komut bütünüyle düşer; yalnız
+        // HEAD ikinci bir sorguyla okunur. Merge-base yalnız ayrışmışsa sorulur.
+        let combined = await commands.run(
+            ["rev-parse", "HEAD", "@{upstream}", "--symbolic-full-name", "HEAD", "--abbrev-ref", "@{upstream}"],
+            in: repoPath
+        )
+        if let combined, combined.exitCode == 0,
+           let parsed = GitPorcelainParser.parseHeadAndUpstream(combined.stdout),
+           let branch = Self.branchName(fromFullRef: parsed.headName) {
+            let upstream = GitHistoryContext.Upstream(name: parsed.upstreamName, hash: parsed.upstreamHash)
+            return await historyContext(repoPath: repoPath, branch: branch, headHash: parsed.headHash, upstream: upstream)
+        }
         let head = await commands.run(["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"], in: repoPath)
         guard let head, head.exitCode == 0,
               let parsedHead = GitPorcelainParser.parseRevisionAndName(head.stdout) else {
             commands.logQuietFailure("historyContext", head)
             return nil
         }
-        let branchPrefix = "refs/heads/"
-        guard parsedHead.name.hasPrefix(branchPrefix) else {
-            return GitHistoryContext(currentBranch: nil, headHash: parsedHead.hash)
+        return GitHistoryContext(currentBranch: Self.branchName(fromFullRef: parsedHead.name), headHash: parsedHead.hash)
+    }
+
+    private func historyContext(
+        repoPath: String,
+        branch: String,
+        headHash: String,
+        upstream: GitHistoryContext.Upstream
+    ) async -> GitHistoryContext {
+        guard upstream.hash != headHash else {
+            return GitHistoryContext(currentBranch: branch, headHash: headHash, upstream: upstream)
         }
-        let branch = String(parsedHead.name.dropFirst(branchPrefix.count))
-        let upstreamOutput = await commands.run(
-            ["rev-parse", "@{upstream}", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: repoPath
-        )
-        guard let upstreamOutput, upstreamOutput.exitCode == 0,
-              let parsedUpstream = GitPorcelainParser.parseRevisionAndName(upstreamOutput.stdout) else {
-            return GitHistoryContext(currentBranch: branch, headHash: parsedHead.hash)
-        }
-        let upstream = GitHistoryContext.Upstream(name: parsedUpstream.name, hash: parsedUpstream.hash)
-        guard upstream.hash != parsedHead.hash else {
-            return GitHistoryContext(currentBranch: branch, headHash: parsedHead.hash, upstream: upstream)
-        }
-        let base = await commands.run(["merge-base", parsedHead.hash, upstream.hash], in: repoPath)
+        let base = await commands.run(["merge-base", headHash, upstream.hash], in: repoPath)
         let mergeBase = base.flatMap { $0.exitCode == 0 ? $0.stdout.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
         return GitHistoryContext(
             currentBranch: branch,
-            headHash: parsedHead.hash,
+            headHash: headHash,
             upstream: upstream,
             mergeBase: mergeBase?.isEmpty == false ? mergeBase : nil
         )
+    }
+
+    /// `refs/heads/x` → `x`; detached HEAD (`HEAD`) ya da başka ref → nil.
+    private static func branchName(fromFullRef ref: String) -> String? {
+        let branchPrefix = "refs/heads/"
+        guard ref.hasPrefix(branchPrefix) else { return nil }
+        return String(ref.dropFirst(branchPrefix.count))
     }
 
     /// `origin` remote adresi; tanımlı değilse `nil`.
@@ -320,7 +337,9 @@ public struct GitService: GitServicing {
 
     public func commitFiles(repoPath: String, sha: String) async -> [CommitFile] {
         let output = await commands.run(
-            ["diff-tree", "--no-commit-id", "-r", "--name-status", "--root", sha],
+            // Merge commit'te düz `diff-tree` hiçbir şey basmaz; ilk parent'a göre
+            // listelenir (`imagePreview`'in `sha^` tabanıyla aynı taraf).
+            ["diff-tree", "--no-commit-id", "-r", "--name-status", "--root", "--diff-merges=first-parent", sha],
             in: repoPath
         )
         guard let output, output.exitCode == 0 else {
@@ -334,7 +353,7 @@ public struct GitService: GitServicing {
         _ = try resolveInsideRepo(repoPath, file)
         // `git show` ilk (root) commit'te de çalışır — `sha^` parent sorunu yok
         guard let output = await commands.run(
-            ["show", "--pretty=format:", "--patch", sha, "--", file],
+            ["show", "--pretty=format:", "--patch", "-m", "--first-parent", sha, "--", file],
             in: repoPath
         ), output.exitCode == 0 else {
             throw LumiError.gitFailed(operation: "show", detail: "diff unavailable for \(file) @ \(sha)")

@@ -152,6 +152,22 @@ final class GitServiceTests: XCTestCase {
         XCTAssertTrue(context.hasOutgoingChanges)
     }
 
+    func testHistoryContextOfBranchInSyncWithUpstream() async throws {
+        try write("a.txt", "v1")
+        try commitAll("base")
+        try git("branch", "tracked")
+        try git("branch", "--set-upstream-to=tracked")
+
+        let fetched = await service.historyContext(repoPath: repoDir.path)
+        let context = try XCTUnwrap(fetched)
+
+        XCTAssertEqual(context.currentBranch, "main")
+        XCTAssertEqual(context.upstream?.name, "tracked")
+        XCTAssertEqual(context.upstream?.hash, context.headHash)
+        XCTAssertFalse(context.hasIncomingChanges)
+        XCTAssertFalse(context.hasOutgoingChanges)
+    }
+
     func testHistoryContextOfDetachedHead() async throws {
         try write("a.txt", "v1")
         try commitAll("first")
@@ -490,6 +506,27 @@ final class GitServiceTests: XCTestCase {
             repoPath: repoDir.path, sha: rootSha, file: "one.txt"
         )
         XCTAssertTrue(rootDiff.hunks.flatMap(\.lines).allSatisfy { $0.kind == .addition })
+    }
+
+    /// Merge commit'in dosyaları ve diff'i ilk parent'a göre okunur — düz
+    /// `diff-tree`/`show` merge'te boş dönüyordu.
+    func testMergeCommitFilesAndDiffUseFirstParent() async throws {
+        try write("base.txt", "base\n")
+        try commitAll("base")
+        try git("checkout", "-q", "-b", "feature")
+        try write("feature.txt", "from feature\n")
+        try commitAll("feature work")
+        try git("checkout", "-q", "-")
+        try write("main.txt", "on main\n")
+        try commitAll("main work")
+        try git("merge", "-q", "--no-ff", "--no-edit", "feature")
+
+        let commits = await service.commits(repoPath: repoDir.path, branch: nil)
+        let mergeSha = try XCTUnwrap(commits.first?.hash)
+        let files = await service.commitFiles(repoPath: repoDir.path, sha: mergeSha)
+        XCTAssertEqual(files.map(\.path), ["feature.txt"])
+        let diff = try await service.commitFileDiff(repoPath: repoDir.path, sha: mergeSha, file: "feature.txt")
+        XCTAssertTrue(diff.hunks.flatMap(\.lines).contains { $0.kind == .addition && $0.text == "from feature" })
     }
 
     // MARK: - Görsel önizleme (karar 21)

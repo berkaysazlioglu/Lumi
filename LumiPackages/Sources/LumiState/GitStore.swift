@@ -23,6 +23,10 @@ public final class GitStore {
     /// Upstream karşılaştırma bağlamı — Incoming/Outgoing satırları ve
     /// upstream rengi. Upstream'siz / detached repo'da da bağlam vardır.
     public private(set) var historyContexts: [String: GitHistoryContext] = [:]
+    /// Graph satırları — `loadHistory` sonunda BİR kez hesaplanır. View body'si
+    /// hover/açılım state'inde her değişimde yeniden koşar; graph'ı (200 commit ×
+    /// lane + sınır satırları) orada kurmak her fare geçişinde yeniden hesaptı.
+    public private(set) var historyGraphRows: [String: [CommitGraphRow]] = [:]
     /// Tavanın ötesinde commit kaldı mı (log `historyLimit + 1` ister).
     public private(set) var historyHasMore: [String: Bool] = [:]
     /// Satır içi açılan commit'lerin dosya listesi (repo → sha → liste). Commit
@@ -105,6 +109,10 @@ public final class GitStore {
         } else {
             headHash[repoPath] = commits.first?.hash
         }
+        let rows = Self.graphRows(history[repoPath] ?? [], headHash: headHash[repoPath], context: context)
+        // Dosya izleyicisi tik'lerinin çoğu graph'ı değiştirmez: aynı satırları
+        // yeniden yazmak gözlemcileri boşuna uyandırırdı.
+        if historyGraphRows[repoPath] != rows { historyGraphRows[repoPath] = rows }
 
         await loadRemoteURL(repoPath, rescan: rescanRemote)
 
@@ -129,14 +137,18 @@ public final class GitStore {
         }
     }
 
-    /// Graph satırları: lane'ler + upstream renkleri + sentetik sınır satırları.
+    /// Graph satırları: lane'ler + upstream renkleri + sentetik sınır satırları
+    /// (`loadHistory`'nin cache'i; okumak hesap yapmaz).
     public func historyRows(_ repoPath: String) -> [CommitGraphRow] {
-        let context = historyContexts[repoPath]
-        let rows = CommitGraph.build(
-            history[repoPath] ?? [],
-            headHash: headHash[repoPath],
-            upstream: context?.upstream?.name
-        )
+        historyGraphRows[repoPath] ?? []
+    }
+
+    private static func graphRows(
+        _ commits: [GitCommit],
+        headHash: String?,
+        context: GitHistoryContext?
+    ) -> [CommitGraphRow] {
+        let rows = CommitGraph.build(commits, headHash: headHash, upstream: context?.upstream?.name)
         return CommitGraph.addBoundaryRows(rows, context: context)
     }
 
@@ -274,6 +286,7 @@ public final class GitStore {
         headHash.removeValue(forKey: repoPath)
         historyContexts.removeValue(forKey: repoPath)
         historyHasMore.removeValue(forKey: repoPath)
+        historyGraphRows.removeValue(forKey: repoPath)
         commitFiles.removeValue(forKey: repoPath)
         remoteURLs.removeValue(forKey: repoPath)
         probedRemoteRepos.remove(repoPath)

@@ -113,6 +113,12 @@ final class GitPorcelainParserTests: XCTestCase {
     func testParsesRevisionAndName() {
         XCTAssertEqual(GitPorcelainParser.parseRevisionAndName("abc\nrefs/heads/main\n")?.name, "refs/heads/main")
         XCTAssertNil(GitPorcelainParser.parseRevisionAndName("abc\n"))
+        let combined = GitPorcelainParser.parseHeadAndUpstream("h1\nu1\nrefs/heads/main\norigin/main\n")
+        XCTAssertEqual(combined?.headHash, "h1")
+        XCTAssertEqual(combined?.upstreamHash, "u1")
+        XCTAssertEqual(combined?.headName, "refs/heads/main")
+        XCTAssertEqual(combined?.upstreamName, "origin/main")
+        XCTAssertNil(GitPorcelainParser.parseHeadAndUpstream("h1\nrefs/heads/main\n"))
     }
 
     func testSkipsMalformedHistoryRecords() {
