@@ -39,7 +39,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
 DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
 APP="$DIST/Lumi.app"
-VERSION="${VERSION:-0.7.5}"
+VERSION="${VERSION:-0.7.6}"
 
 # Kişisel, commit'lenmeyen ayarlar: varsa burada source edilir (.gitignore'da).
 # Değişkenler (IDENTITY / VERSION / DIST / NOTARY_PROFILE) burada ezilebilir,
