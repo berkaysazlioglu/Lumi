@@ -141,6 +141,16 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
         return historyToReturn
     }
 
+    /// `historyContext(repoPath:)` dönüşü — upstream karşılaştırma bağlamı.
+    public var historyContextToReturn: GitHistoryContext?
+    public private(set) var commitFilesCalls: [String] = []
+
+    public func setHistoryContext(_ context: GitHistoryContext?) { historyContextToReturn = context }
+
+    public func historyContext(repoPath: String) async -> GitHistoryContext? {
+        historyContextToReturn
+    }
+
     public func remoteURL(repoPath: String) async -> String? {
         remoteURLCallCount += 1
         return remoteURLToReturn
@@ -193,7 +203,8 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     }
 
     public func commitFiles(repoPath: String, sha: String) async -> [CommitFile] {
-        commitFilesToReturn
+        commitFilesCalls.append(sha)
+        return commitFilesToReturn
     }
 
     public func commitFileDiff(repoPath: String, sha: String, file: String) async throws -> UnifiedDiff {

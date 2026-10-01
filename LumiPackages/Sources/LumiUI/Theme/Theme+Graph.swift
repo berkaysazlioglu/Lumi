@@ -34,9 +34,25 @@ public extension Theme {
             Theme.graphPink,
         ]
 
+        /// Upstream (ör. `origin/main`) lane'i ve rozeti — dönen paletten
+        /// ayrışan turuncu (Orca `git-graph-remote-ref` rolü).
+        public static let remoteRefColor = Theme.graphOrange
+
+        /// Sınır (Incoming/Outgoing) düğümünün kesikli halka deseni (Orca `4 2`).
+        public static let boundaryDash: [CGFloat] = [4, 2]
+        /// Hover kartının açılma gecikmesi — satırların üstünden geçerken kart
+        /// yanıp sönmesin.
+        public static let hoverCardDelay: Duration = .milliseconds(450)
+        /// 26pt — tek satırlık Git history satırı (Orca `min-h-[26px]`); lane
+        /// segmenti de bu yükseklikte çizilir.
+        public static var compactRowHeight: CGFloat { Theme.scaled(26) }
+        /// 320pt — hover kartının tavan genişliği (Orca `76ch`'ın dar panel hâli).
+        public static var hoverCardMaxWidth: CGFloat { Theme.scaled(320) }
+
         /// Palet indeksi → renk; indeks taşarsa başa döner (model ve tema
         /// paleti aynı boyda olmalı, ama UI asla çökmez).
         public static func laneColor(_ index: Int) -> Color {
+            if index == CommitGraph.remoteRefColor { return remoteRefColor }
             guard !laneColors.isEmpty else { return Theme.accentPrimary }
             return laneColors[((index % laneColors.count) + laneColors.count) % laneColors.count]
         }
@@ -50,6 +66,8 @@ public extension Theme {
 
     /// Paletin beşinci lane tonu — yalnız graph'ta kullanılır.
     static let graphPink = Color(hex: 0xF472B6)
+    /// Upstream lane tonu — yalnız graph'ta kullanılır.
+    static let graphOrange = Color(hex: 0xFB923C)
 }
 
 #if DEBUG

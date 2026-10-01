@@ -155,9 +155,9 @@ public final class FileViewerStore {
         await presentFile(mode: .diff, repoPath: repoPath, filePath: filePath)
     }
 
-    /// Karar 6: commit seçilince yalnız dosya listesi; ilk dosya default seçilir
-    /// ve onun diff'i lazy yüklenir.
-    public func presentCommit(repoPath: String, commit: GitCommit) async {
+    /// Karar 6: commit seçilince yalnız dosya listesi; ilk dosya (ya da
+    /// listede varsa `initialFile`) seçilir ve onun diff'i lazy yüklenir.
+    public func presentCommit(repoPath: String, commit: GitCommit, initialFile: String? = nil) async {
         let files = await git.commitFiles(repoPath: repoPath, sha: commit.hash)
         guard !files.isEmpty else {
             toasts.show(.info, title: commit.shortHash, message: "Commit has no file changes")
@@ -170,7 +170,8 @@ public final class FileViewerStore {
             filePath: nil,
             content: nil
         )
-        await selectCommitFile(files[0].path)
+        let initial = files.first { $0.path == initialFile } ?? files[0]
+        await selectCommitFile(initial.path)
     }
 
     public func selectCommitFile(_ path: String) async {

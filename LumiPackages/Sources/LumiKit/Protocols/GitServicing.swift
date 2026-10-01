@@ -21,6 +21,10 @@ public protocol GitReading: Sendable {
     /// dolu gelir (`CommitGraph` lane'leri bunlardan kurar). Branch başına
     /// ayrı log YALNIZ `commits(repoPath:branch:)`te kalır.
     func history(repoPath: String, limit: Int) async -> [GitCommit]
+    /// History graph'ının upstream bağlamı (checkout edilmiş branch, upstream,
+    /// merge-base) — sentetik Incoming/Outgoing satırlarının ve upstream
+    /// renginin kaynağı. HEAD okunamazsa nil; upstream yoksa `upstream == nil`.
+    func historyContext(repoPath: String) async -> GitHistoryContext?
     /// `git remote get-url origin` — ham çıktı (normalizasyon `GitRemote`de).
     /// Remote yoksa nil.
     func remoteURL(repoPath: String) async -> String?

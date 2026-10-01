@@ -106,6 +106,63 @@ final class GitServiceTests: XCTestCase {
         try git("commit", "-m", message)
     }
 
+    // MARK: - History bağlamı (karar 98)
+
+    func testHistoryCarriesCommitBody() async throws {
+        try write("a.txt", "v1")
+        try git("add", "-A")
+        try git("commit", "-m", "feat: subject", "-m", "body line")
+
+        let history = await service.history(repoPath: repoDir.path, limit: 5)
+
+        XCTAssertEqual(history.first?.message, "feat: subject")
+        XCTAssertEqual(history.first?.body, "body line")
+    }
+
+    func testHistoryContextWithoutUpstream() async throws {
+        try write("a.txt", "v1")
+        try commitAll("first")
+
+        let context = await service.historyContext(repoPath: repoDir.path)
+
+        XCTAssertEqual(context?.currentBranch, "main")
+        XCTAssertNil(context?.upstream)
+        XCTAssertFalse(context?.hasOutgoingChanges ?? true)
+    }
+
+    func testHistoryContextOfDivergedBranch() async throws {
+        try write("a.txt", "v1")
+        try commitAll("base")
+        try git("checkout", "-b", "feature")
+        try write("b.txt", "feature")
+        try commitAll("feature work")
+        try git("checkout", "main")
+        try write("a.txt", "v2")
+        try commitAll("main work")
+        try git("checkout", "feature")
+        try git("branch", "--set-upstream-to=main")
+
+        let fetched = await service.historyContext(repoPath: repoDir.path)
+        let context = try XCTUnwrap(fetched)
+
+        XCTAssertEqual(context.currentBranch, "feature")
+        XCTAssertEqual(context.upstream?.name, "main")
+        XCTAssertNotNil(context.mergeBase)
+        XCTAssertTrue(context.hasIncomingChanges)
+        XCTAssertTrue(context.hasOutgoingChanges)
+    }
+
+    func testHistoryContextOfDetachedHead() async throws {
+        try write("a.txt", "v1")
+        try commitAll("first")
+        try git("checkout", "--detach")
+
+        let context = await service.historyContext(repoPath: repoDir.path)
+
+        XCTAssertNil(context?.currentBranch)
+        XCTAssertNotNil(context?.headHash)
+    }
+
     // MARK: - Branch / log semantiği
 
     func testBranchesListsCurrentFlag() async throws {

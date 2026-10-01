@@ -3,87 +3,109 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Source Control > History: lane'li commit graph'ı (karar 40).
+/// Source Control > History: lane'li commit graph'ı (karar 40, Orca paritesi
+/// karar 98).
 ///
-/// Veri tek `git log HEAD --topo-order` sonucudur (`GitStore.history`); lane
-/// hesabı saf `CommitGraph`de, çizim `CommitGraphLaneCanvas`ta. Bu görünüm
-/// yalnız satırları ve eylemleri bağlar.
+/// Veri tek `git log HEAD --topo-order` sonucu + upstream bağlamıdır
+/// (`GitStore.historyRows`); lane/renk/sınır satırı hesabı saf `CommitGraph`te,
+/// çizim `CommitGraphLaneCanvas`ta. Bu görünüm satırları, satır içi açılımı
+/// (dosya listesi), hover kartını ve eylemleri bağlar.
 struct CommitGraphView: View {
     let repoPath: String
     @Shell private var shell
     @State private var hoveredHash: String?
-
-    private var rows: [CommitGraphRow] {
-        CommitGraph.build(
-            shell.git.history[repoPath] ?? [],
-            headHash: shell.git.headHash[repoPath]
-        )
-    }
+    @State private var hoverCardHash: String?
+    @State private var hoverCardTask: Task<Void, Never>?
+    @State private var expandedHashes: Set<String> = []
 
     var body: some View {
-        let rows = rows
+        let rows = shell.git.historyRows(repoPath)
         let laneCount = CommitGraph.maxLaneCount(rows)
+        let upstream = shell.git.historyContexts[repoPath]?.upstream?.name
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if rows.isEmpty {
                     EmptyStatePlaceholder("No commits", density: .inline)
                 }
                 ForEach(rows) { row in
-                    commitRow(row, laneCount: laneCount)
+                    rowGroup(row, laneCount: laneCount, upstream: upstream)
+                }
+                if shell.git.historyHasMore[repoPath] == true {
+                    Text("Showing the latest \(GitStore.historyLimit) commits")
+                        .font(Theme.Typography.ui(.caption))
+                        .foregroundStyle(Theme.textMuted)
+                        .padding(.horizontal, Theme.Spacing.md)
+                        .frame(height: Theme.Row.compact)
                 }
             }
         }
+        .overlayPreferenceValue(CommitHoverAnchorKey.self) { anchor in
+            CommitHoverCardOverlay(anchor: anchor, commit: rows.first { $0.id == hoverCardHash }?.commit)
+                .animation(Theme.Motion.quickEase, value: hoverCardHash)
+        }
+        .onChange(of: repoPath) {
+            expandedHashes = []
+            setHover(nil)
+        }
+        .onDisappear { hoverCardTask?.cancel() }
     }
 
-    // MARK: - Satır
+    // MARK: - Satır + açılım
 
-    private func commitRow(_ row: CommitGraphRow, laneCount: Int) -> some View {
-        let commit = row.commit
-        return Button { shell.presentCommit(commit) } label: {
-            HStack(spacing: Theme.Spacing.sm) {
-                CommitGraphLaneCanvas(row: row, laneCount: laneCount, height: Theme.Row.commit)
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Text(commit.message)
-                            .font(Theme.Typography.ui(.body))
-                            .foregroundStyle(Theme.textPrimary)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        CommitRefBadges(refs: commit.references, colorIndex: row.nodeColorIndex)
-                    }
-                    metaLine(commit)
-                }
-                .padding(.trailing, Theme.Spacing.md)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: Theme.Row.commit)
-            .background(hoveredHash == commit.hash ? Theme.bgElevated : Color.clear)
-            .contentShape(Rectangle())
+    @ViewBuilder
+    private func rowGroup(_ row: CommitGraphRow, laneCount: Int, upstream: String?) -> some View {
+        let isExpanded = !row.isBoundary && expandedHashes.contains(row.id)
+        GitHistoryRowView(
+            row: row,
+            laneCount: laneCount,
+            upstream: upstream,
+            isExpanded: isExpanded,
+            isHovered: hoveredHash == row.id,
+            onToggle: { toggle(row.commit) }
+        )
+        .onHover { inside in
+            guard !row.isBoundary else { return }
+            if inside { setHover(row.id) } else if hoveredHash == row.id { setHover(nil) }
         }
-        .buttonStyle(.plain)
-        .help(commit.message)
-        .onHover { hoveredHash = $0 ? commit.hash : nil }
-        .contextMenu { contextMenu(commit) }
+        .anchorPreference(key: CommitHoverAnchorKey.self, value: .bounds) { anchor in
+            hoverCardHash == row.id ? anchor : nil
+        }
+        .contextMenu {
+            if !row.isBoundary { contextMenu(row.commit) }
+        }
+        if isExpanded {
+            GitCommitFilesView(
+                row: row,
+                laneCount: laneCount,
+                files: shell.git.commitFiles[repoPath]?[row.id],
+                onOpenFile: { shell.presentCommit(row.commit, file: $0) },
+                onOpenAll: { shell.presentCommit(row.commit) }
+            )
+        }
     }
 
-    private func metaLine(_ commit: GitCommit) -> some View {
-        HStack(spacing: Theme.Spacing.xs) {
-            Text(commit.shortHash)
-                .font(Theme.Typography.mono(.caption))
-                .foregroundStyle(Theme.textSecondary)
-            Text("·").foregroundStyle(Theme.textMuted)
-            Text(commit.author)
-                .font(Theme.Typography.ui(.caption))
-                .foregroundStyle(Theme.textMuted)
-                .lineLimit(1)
-            Text("·").foregroundStyle(Theme.textMuted)
-            Text(RelativeTimeFormatter.label(commit.date))
-                .font(Theme.Typography.ui(.caption))
-                .foregroundStyle(Theme.textMuted)
-            Spacer(minLength: 0)
+    private func toggle(_ commit: GitCommit) {
+        // Tıklama kartı kapatır ama satır hover'da kalır (imleç hâlâ üstünde).
+        hoverCardTask?.cancel()
+        hoverCardHash = nil
+        if expandedHashes.remove(commit.hash) == nil {
+            expandedHashes.insert(commit.hash)
+            Task { await shell.git.loadCommitFiles(repoPath, sha: commit.hash) }
         }
-        .font(Theme.Typography.ui(.caption))
-        .accessibilityElement(children: .combine)
+    }
+
+    /// Satır hover'ı anında, kart `hoverCardDelay` sonra; satırdan çıkınca
+    /// ikisi birden kapanır.
+    private func setHover(_ hash: String?) {
+        hoveredHash = hash
+        hoverCardTask?.cancel()
+        hoverCardHash = nil
+        guard let hash else { return }
+        hoverCardTask = Task { @MainActor in
+            try? await Task.sleep(for: Theme.Graph.hoverCardDelay)
+            guard !Task.isCancelled, hoveredHash == hash else { return }
+            hoverCardHash = hash
+        }
     }
 
     // MARK: - Sağ tık menüsü
@@ -94,7 +116,7 @@ struct CommitGraphView: View {
         Divider()
         Button("Copy Commit Hash") { copy(commit.hash) }
         Button("Copy Short Hash") { copy(commit.shortHash) }
-        Button("Copy Commit Message") { copy(commit.message) }
+        Button("Copy Commit Message") { copy(commit.fullMessage) }
         if let url = shell.git.commitURL(repoPath, sha: commit.hash) {
             Divider()
             Button("Open on GitHub") { NSWorkspace.shared.open(url) }

@@ -100,6 +100,21 @@ final class GitPorcelainParserTests: XCTestCase {
         XCTAssertEqual(refs.map(\.name), ["main", "dev", "origin/dev", "v9"])
     }
 
+    func testParsesOptionalBodyField() {
+        let raw = record(hash: "aaa", short: "aaa1111", subject: "feat: x") + "\u{1f}line one\nline two\n"
+
+        let commit = GitPorcelainParser.parseHistory(raw)[0]
+
+        XCTAssertEqual(commit.message, "feat: x")
+        XCTAssertEqual(commit.body, "line one\nline two")
+        XCTAssertEqual(commit.fullMessage, "feat: x\n\nline one\nline two")
+    }
+
+    func testParsesRevisionAndName() {
+        XCTAssertEqual(GitPorcelainParser.parseRevisionAndName("abc\nrefs/heads/main\n")?.name, "refs/heads/main")
+        XCTAssertNil(GitPorcelainParser.parseRevisionAndName("abc\n"))
+    }
+
     func testSkipsMalformedHistoryRecords() {
         let raw = ["", "not-enough\u{1f}fields", record(hash: "aaa", short: "aaa1111")]
             .joined(separator: "\0")

@@ -381,9 +381,9 @@ public final class ShellContext {
         Task { await fileViewer.presentDiff(repoPath: repoPath, filePath: filePath) }
     }
 
-    public func presentCommit(_ commit: GitCommit) {
+    public func presentCommit(_ commit: GitCommit, file: String? = nil) {
         guard let repoPath = activeRepoPath else { return }
-        Task { await fileViewer.presentCommit(repoPath: repoPath, commit: commit) }
+        Task { await fileViewer.presentCommit(repoPath: repoPath, commit: commit, initialFile: file) }
     }
 
     /// Karar 47: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.

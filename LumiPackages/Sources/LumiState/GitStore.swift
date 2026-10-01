@@ -18,8 +18,16 @@ public final class GitStore {
     public private(set) var commitsByBranch: [String: [String: [GitCommit]]] = [:]
     /// Karar 40: `HEAD`ten geriye tek topolojik log — graph'ın kaynağı.
     public private(set) var history: [String: [GitCommit]] = [:]
-    /// History'nin HEAD commit'i (`HEAD -> …` dekorasyonundan türer).
+    /// History'nin HEAD commit'i (bağlamdan; yoksa `HEAD -> …` dekorasyonundan).
     public private(set) var headHash: [String: String] = [:]
+    /// Upstream karşılaştırma bağlamı — Incoming/Outgoing satırları ve
+    /// upstream rengi. Upstream'siz / detached repo'da da bağlam vardır.
+    public private(set) var historyContexts: [String: GitHistoryContext] = [:]
+    /// Tavanın ötesinde commit kaldı mı (log `historyLimit + 1` ister).
+    public private(set) var historyHasMore: [String: Bool] = [:]
+    /// Satır içi açılan commit'lerin dosya listesi (repo → sha → liste). Commit
+    /// içeriği değişmez; cache yalnız `evict` ile boşalır.
+    public private(set) var commitFiles: [String: [String: Loadable<[CommitFile]>]] = [:]
     /// `origin` remote URL'i (ham); GitHub eylemlerinin kapısı.
     public private(set) var remoteURLs: [String: String] = [:]
     /// GitHub CLI PATH'te mi? Süreç ömrü boyunca bir kez ölçülür.
@@ -81,9 +89,16 @@ public final class GitStore {
     /// koşar: PATH taraması repo'dan bağımsızdır ve her tazelemede bir
     /// `which gh` süreci açmak gereksiz.
     public func loadHistory(_ repoPath: String, rescanRemote: Bool = true) async {
-        let commits = await git.history(repoPath: repoPath, limit: Self.historyLimit)
-        history[repoPath] = commits
-        if let head = commits.first(where: { commit in
+        let git = self.git
+        async let fetched = git.history(repoPath: repoPath, limit: Self.historyLimit + 1)
+        async let fetchedContext = git.historyContext(repoPath: repoPath)
+        let (commits, context) = await (fetched, fetchedContext)
+        history[repoPath] = Array(commits.prefix(Self.historyLimit))
+        historyHasMore[repoPath] = commits.count > Self.historyLimit
+        historyContexts[repoPath] = context
+        if let context {
+            headHash[repoPath] = context.headHash
+        } else if let head = commits.first(where: { commit in
             commit.references.contains { $0.isCurrent || $0.kind == .head }
         }) {
             headHash[repoPath] = head.hash
@@ -112,6 +127,28 @@ public final class GitStore {
         } else {
             remoteURLs.removeValue(forKey: repoPath)
         }
+    }
+
+    /// Graph satırları: lane'ler + upstream renkleri + sentetik sınır satırları.
+    public func historyRows(_ repoPath: String) -> [CommitGraphRow] {
+        let context = historyContexts[repoPath]
+        let rows = CommitGraph.build(
+            history[repoPath] ?? [],
+            headHash: headHash[repoPath],
+            upstream: context?.upstream?.name
+        )
+        return CommitGraph.addBoundaryRows(rows, context: context)
+    }
+
+    /// Satır içi açılımın dosya listesi — sha başına bir kez okunur; yükleme
+    /// sürerken ya da bittikten sonra gelen çağrılar yeni süreç açmaz.
+    public func loadCommitFiles(_ repoPath: String, sha: String) async {
+        guard commitFiles[repoPath]?[sha] == nil else { return }
+        commitFiles[repoPath, default: [:]][sha] = .loading
+        let files = await git.commitFiles(repoPath: repoPath, sha: sha)
+        // Yükleme sürerken tab kapandıysa (evict) cache yeniden doğmaz.
+        guard commitFiles[repoPath]?[sha] != nil else { return }
+        commitFiles[repoPath, default: [:]][sha] = .loaded(files)
     }
 
     // MARK: - GitHub türevleri (karar 40)
@@ -235,6 +272,9 @@ public final class GitStore {
         commitsByBranch.removeValue(forKey: repoPath)
         history.removeValue(forKey: repoPath)
         headHash.removeValue(forKey: repoPath)
+        historyContexts.removeValue(forKey: repoPath)
+        historyHasMore.removeValue(forKey: repoPath)
+        commitFiles.removeValue(forKey: repoPath)
         remoteURLs.removeValue(forKey: repoPath)
         probedRemoteRepos.remove(repoPath)
         changes.removeValue(forKey: repoPath)

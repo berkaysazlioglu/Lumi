@@ -36,7 +36,11 @@ public struct GitCommit: Sendable, Equatable, Identifiable {
     public var id: String { hash }
     public let hash: String
     public let shortHash: String
+    /// Konu satırı (`%s`).
     public let message: String
+    /// Konu satırından sonraki gövde (`%b`) — yalnız graph'lı history okumasında
+    /// dolar; hover kartı tam mesajı bundan kurar.
+    public let body: String
     public let author: String
     public let date: Date
     /// Topolojik sırada ilk parent birinci sıradadır; merge commit'te >1 eleman.
@@ -47,6 +51,7 @@ public struct GitCommit: Sendable, Equatable, Identifiable {
         hash: String,
         shortHash: String,
         message: String,
+        body: String = "",
         author: String,
         date: Date,
         parentHashes: [String] = [],
@@ -55,6 +60,7 @@ public struct GitCommit: Sendable, Equatable, Identifiable {
         self.hash = hash
         self.shortHash = shortHash
         self.message = message
+        self.body = body
         self.author = author
         self.date = date
         self.parentHashes = parentHashes
@@ -62,6 +68,57 @@ public struct GitCommit: Sendable, Equatable, Identifiable {
     }
 
     public var isMerge: Bool { parentHashes.count > 1 }
+
+    /// Konu + (varsa) boş satırla ayrılmış gövde — commit'in tam mesajı.
+    public var fullMessage: String {
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedBody.isEmpty ? message : "\(message)\n\n\(trimmedBody)"
+    }
+}
+
+/// History graph'ının karşılaştırma bağlamı (Orca `GitHistoryResult` meta
+/// alanları): checkout edilmiş branch, upstream'i ve ikisinin merge-base'i.
+///
+/// History yalnız `HEAD`ten okunur; upstream'in henüz çekilmemiş commit'leri
+/// listede YOKTUR. Bu bağlam graph'a sentetik "Incoming / Outgoing Changes"
+/// satırlarını ekletir (`CommitGraph.addBoundaryRows`).
+public struct GitHistoryContext: Sendable, Equatable {
+    public struct Upstream: Sendable, Equatable {
+        /// Kısa ad — `origin/main`; `GitRef.name` ile birebir karşılaştırılır.
+        public let name: String
+        public let hash: String
+
+        public init(name: String, hash: String) {
+            self.name = name
+            self.hash = hash
+        }
+    }
+
+    /// `main` — detached HEAD'de nil.
+    public let currentBranch: String?
+    public let headHash: String
+    public let upstream: Upstream?
+    /// HEAD ile upstream ayrıştıysa ortak ataları; aynı commit'teyse nil.
+    public let mergeBase: String?
+
+    public init(currentBranch: String?, headHash: String, upstream: Upstream? = nil, mergeBase: String? = nil) {
+        self.currentBranch = currentBranch
+        self.headHash = headHash
+        self.upstream = upstream
+        self.mergeBase = mergeBase
+    }
+
+    /// Upstream'de, HEAD'de olmayan commit var.
+    public var hasIncomingChanges: Bool {
+        guard let upstream, let mergeBase else { return false }
+        return upstream.hash != mergeBase
+    }
+
+    /// HEAD'de, upstream'de olmayan commit var.
+    public var hasOutgoingChanges: Bool {
+        guard upstream != nil, let mergeBase else { return false }
+        return headHash != mergeBase
+    }
 }
 
 /// Checkout edilmiş branch'in özet bağlamı (Source Control başlığı, karar 41):

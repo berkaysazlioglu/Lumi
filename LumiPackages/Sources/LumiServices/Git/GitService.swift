@@ -84,7 +84,7 @@ public struct GitService: GitServicing {
         let output = await commands.run(
             [
                 "log", "--max-count=\(limit)", "-z", "--topo-order", "--decorate=full",
-                "--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%P%x1f%D%x1f%s", "HEAD",
+                "--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%P%x1f%D%x1f%s%x1f%b", "HEAD",
             ],
             in: repoPath
         )
@@ -93,6 +93,42 @@ public struct GitService: GitServicing {
             return []
         }
         return GitPorcelainParser.parseHistory(output.stdout)
+    }
+
+    /// History'nin upstream bağlamı — en fazla üç hafif komut: HEAD hash'i +
+    /// tam ref adı (detached'ta `HEAD`), upstream hash'i + kısa adı (yoksa
+    /// exit≠0 → upstream yok, arıza değil) ve ayrıştılarsa merge-base.
+    public func historyContext(repoPath: String) async -> GitHistoryContext? {
+        let head = await commands.run(["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"], in: repoPath)
+        guard let head, head.exitCode == 0,
+              let parsedHead = GitPorcelainParser.parseRevisionAndName(head.stdout) else {
+            commands.logQuietFailure("historyContext", head)
+            return nil
+        }
+        let branchPrefix = "refs/heads/"
+        guard parsedHead.name.hasPrefix(branchPrefix) else {
+            return GitHistoryContext(currentBranch: nil, headHash: parsedHead.hash)
+        }
+        let branch = String(parsedHead.name.dropFirst(branchPrefix.count))
+        let upstreamOutput = await commands.run(
+            ["rev-parse", "@{upstream}", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: repoPath
+        )
+        guard let upstreamOutput, upstreamOutput.exitCode == 0,
+              let parsedUpstream = GitPorcelainParser.parseRevisionAndName(upstreamOutput.stdout) else {
+            return GitHistoryContext(currentBranch: branch, headHash: parsedHead.hash)
+        }
+        let upstream = GitHistoryContext.Upstream(name: parsedUpstream.name, hash: parsedUpstream.hash)
+        guard upstream.hash != parsedHead.hash else {
+            return GitHistoryContext(currentBranch: branch, headHash: parsedHead.hash, upstream: upstream)
+        }
+        let base = await commands.run(["merge-base", parsedHead.hash, upstream.hash], in: repoPath)
+        let mergeBase = base.flatMap { $0.exitCode == 0 ? $0.stdout.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+        return GitHistoryContext(
+            currentBranch: branch,
+            headHash: parsedHead.hash,
+            upstream: upstream,
+            mergeBase: mergeBase?.isEmpty == false ? mergeBase : nil
+        )
     }
 
     /// `origin` remote adresi; tanımlı değilse `nil`.

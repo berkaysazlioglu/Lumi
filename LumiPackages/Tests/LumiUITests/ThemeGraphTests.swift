@@ -12,8 +12,13 @@ final class ThemeGraphTests: XCTestCase {
     }
 
     func testLaneColorWrapsInsteadOfCrashingOnOutOfRangeIndex() {
-        XCTAssertEqual(Theme.Graph.laneColor(CommitGraph.paletteSize), Theme.Graph.laneColors[0])
+        XCTAssertEqual(Theme.Graph.laneColor(CommitGraph.paletteSize * 2), Theme.Graph.laneColors[0])
         XCTAssertEqual(Theme.Graph.laneColor(-1), Theme.Graph.laneColors.last)
+    }
+
+    func testRemoteRefColorIsOutsideTheRotatingPalette() {
+        XCTAssertEqual(Theme.Graph.laneColor(CommitGraph.remoteRefColor), Theme.Graph.remoteRefColor)
+        XCTAssertFalse(Theme.Graph.laneColors.contains(Theme.Graph.remoteRefColor))
     }
 
     func testColumnWidthLeavesOneLaneOfPaddingAndNeverCollapses() {

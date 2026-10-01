@@ -550,7 +550,58 @@ final class GitStoreTests: XCTestCase {
 
         XCTAssertEqual(store.history[repoPath]?.map(\.hash), ["aaa", "bbb"])
         let calls = await git.historyCalls
-        XCTAssertEqual(calls, [GitStore.historyLimit])
+        XCTAssertEqual(calls, [GitStore.historyLimit + 1], "tavanın ötesini anlamak için bir fazlası istenir")
+    }
+
+    func testLoadHistoryTrimsToLimitAndFlagsMore() async {
+        let git = FakeGitService()
+        let commits = (0 ... GitStore.historyLimit).map { historyCommit("c\($0)") }
+        await git.setHistory(commits)
+        let store = makeStore(git)
+
+        await store.loadHistory(repoPath)
+
+        XCTAssertEqual(store.history[repoPath]?.count, GitStore.historyLimit)
+        XCTAssertEqual(store.historyHasMore[repoPath], true)
+    }
+
+    func testHistoryRowsAddBoundaryRowsFromContext() async {
+        let git = FakeGitService()
+        await git.setHistory([
+            historyCommit("bbb", parents: ["aaa"], refs: [GitRef(name: "main", kind: .localBranch, isCurrent: true)]),
+            historyCommit("aaa"),
+        ])
+        await git.setHistoryContext(GitHistoryContext(
+            currentBranch: "main",
+            headHash: "bbb",
+            upstream: GitHistoryContext.Upstream(name: "origin/main", hash: "zzz"),
+            mergeBase: "aaa"
+        ))
+        let store = makeStore(git)
+
+        await store.loadHistory(repoPath)
+
+        XCTAssertEqual(store.headHash[repoPath], "bbb")
+        XCTAssertEqual(
+            store.historyRows(repoPath).map(\.kind),
+            [.outgoingChanges, .commit, .incomingChanges, .commit]
+        )
+    }
+
+    func testCommitFilesLoadOncePerShaAndEvictClears() async {
+        let git = FakeGitService()
+        await git.setCommitFiles([CommitFile(path: "a.txt", status: .modified)])
+        let store = makeStore(git)
+
+        await store.loadCommitFiles(repoPath, sha: "abc")
+        await store.loadCommitFiles(repoPath, sha: "abc")
+
+        XCTAssertEqual(store.commitFiles[repoPath]?["abc"]?.value?.map(\.path), ["a.txt"])
+        let calls = await git.commitFilesCalls
+        XCTAssertEqual(calls, ["abc"], "aynı commit ikinci kez okunmaz")
+
+        store.evict(repoPath)
+        XCTAssertNil(store.commitFiles[repoPath])
     }
 
     func testHeadHashComesFromCurrentRefDecoration() async {

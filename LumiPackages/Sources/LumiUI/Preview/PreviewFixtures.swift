@@ -346,6 +346,7 @@ private struct PreviewGitService: GitServicing {
     func branches(repoPath: String) async -> [GitBranch] { [] }
     func commits(repoPath: String, branch: String?) async -> [GitCommit] { [] }
     func history(repoPath: String, limit: Int) async -> [GitCommit] { PreviewSamples.history }
+    func historyContext(repoPath: String) async -> GitHistoryContext? { PreviewSamples.historyContext }
     func remoteURL(repoPath: String) async -> String? { "git@github.com:lumi/lumi.git" }
     func isGitHubCLIAvailable() async -> Bool { true }
     func branchSummary(repoPath: String) async -> GitBranchSummary? { GitBranchSummary(upstream: "origin/main", ahead: 2, insertions: 4612, deletions: 691) }
@@ -438,7 +439,6 @@ enum PreviewSamples {
                 "a1b2c3d4e5f6", "feat: commit graph", parents: ["b1", "c1"],
                 refs: [
                     GitRef(name: "main", kind: .localBranch, isCurrent: true),
-                    GitRef(name: "origin/main", kind: .remoteBranch),
                 ],
                 minutesAgo: 4
             ),
@@ -450,6 +450,15 @@ enum PreviewSamples {
             commit("d1", "chore: ilk commit", parents: [], minutesAgo: 3000),
         ]
     }()
+
+    /// `main` upstream'den hem önde hem geride: graph Incoming + Outgoing
+    /// satırlarını birlikte gösterir.
+    static let historyContext = GitHistoryContext(
+        currentBranch: "main",
+        headHash: "a1b2c3d4e5f6",
+        upstream: GitHistoryContext.Upstream(name: "origin/main", hash: "e9f8"),
+        mergeBase: "d1"
+    )
 
     static let markdown = """
     # Lumi

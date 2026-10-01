@@ -125,10 +125,21 @@ struct CommitGraphLaneCanvas: View {
         stroke(path, color: row.nodeColorIndex, in: &context)
     }
 
-    /// Düğüm: HEAD çift halka, merge çift daire, gerisi dolu daire.
+    /// Düğüm: HEAD çift halka, sınır satırı kesikli halka, merge çift daire,
+    /// gerisi dolu daire.
     private func drawNode(in context: inout GraphicsContext, center: CGPoint) {
         let color = Theme.Graph.laneColor(row.nodeColorIndex)
         let radius = Theme.Graph.nodeRadius
+        if row.isBoundary {
+            let ring = circle(center, radius + Theme.Graph.ringInset / 2)
+            context.fill(ring, with: .color(Theme.bgSurface))
+            context.stroke(
+                ring,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: Theme.Stroke.hairline, dash: Theme.Graph.boundaryDash)
+            )
+            return
+        }
         if row.isHead {
             context.fill(circle(center, radius + Theme.Graph.ringInset), with: .color(color))
             context.fill(circle(center, Theme.Stroke.graph), with: .color(Theme.bgSurface))
@@ -189,5 +200,32 @@ struct CommitGraphLaneCanvas: View {
             with: .color(Theme.Graph.laneColor(index)),
             style: StrokeStyle(lineWidth: Theme.Stroke.graph, lineCap: .round, lineJoin: .round)
         )
+    }
+}
+
+/// Satır içi açılımın (dosya listesi) yanında lane'lerin kesintisiz sürmesi:
+/// satırın ÇIKIŞ lane'leri açılım boyunca düz iner, böylece alttaki satırın
+/// girişine kopmadan bağlanır.
+struct CommitGraphContinuationCanvas: View {
+    let lanes: [CommitGraphLane]
+    let laneCount: Int
+
+    var body: some View {
+        Canvas { context, size in
+            for (index, lane) in lanes.enumerated() {
+                let x = Theme.Graph.laneWidth * CGFloat(index + 1)
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(
+                    path,
+                    with: .color(Theme.Graph.laneColor(lane.colorIndex)),
+                    style: StrokeStyle(lineWidth: Theme.Stroke.graph, lineCap: .butt)
+                )
+            }
+        }
+        .frame(width: Theme.Graph.columnWidth(laneCount: laneCount))
+        .frame(maxHeight: .infinity)
+        .accessibilityHidden(true)
     }
 }

@@ -60,10 +60,11 @@ public enum GitPorcelainParser {
     public static func parseHistory(_ raw: String) -> [GitCommit] {
         let dateParser = ISO8601DateFormatter()
         return raw.split(separator: "\0", omittingEmptySubsequences: true).compactMap { record in
+            // 8. alan (`%b` gövde) sonradan eklendi; 7 alanlı kayıt da geçerli.
             let parts = record.split(
-                separator: "\u{1f}", maxSplits: 6, omittingEmptySubsequences: false
+                separator: "\u{1f}", maxSplits: 7, omittingEmptySubsequences: false
             )
-            guard parts.count == 7 else { return nil }
+            guard parts.count == 7 || parts.count == 8 else { return nil }
             let hash = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !hash.isEmpty else { return nil }
             let parents = parts[4]
@@ -73,12 +74,23 @@ public enum GitPorcelainParser {
                 hash: hash,
                 shortHash: String(parts[1]),
                 message: String(parts[6]),
+                body: parts.count == 8 ? String(parts[7]).trimmingCharacters(in: .whitespacesAndNewlines) : "",
                 author: String(parts[2]),
                 date: dateParser.date(from: String(parts[3])) ?? Date(timeIntervalSince1970: 0),
                 parentHashes: parents,
                 references: parseRefs(String(parts[5]))
             )
         }
+    }
+
+    /// `rev-parse <rev> … --symbolic-full-name <rev>` çıktısı: ilk satır
+    /// hash, ikinci satır ad. İkisinden biri boşsa nil.
+    public static func parseRevisionAndName(_ raw: String) -> (hash: String, name: String)? {
+        let lines = raw.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard lines.count >= 2 else { return nil }
+        return (lines[0], lines[1])
     }
 
     /// `%D` dekorasyon listesi → `GitRef`ler.

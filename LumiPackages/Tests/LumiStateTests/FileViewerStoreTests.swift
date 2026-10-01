@@ -169,6 +169,29 @@ final class FileViewerStoreTests: XCTestCase {
         XCTAssertEqual(store.content, .loaded(.diff(diff)))
     }
 
+    func testCommitOpensRequestedInitialFile() async {
+        let git = FakeGitService()
+        await git.setCommitFiles([
+            CommitFile(path: "a.txt", status: .modified),
+            CommitFile(path: "b.txt", status: .added),
+        ])
+        let store = makeStore(git)
+
+        await store.presentCommit(repoPath: "/repo", commit: commit(), initialFile: "b.txt")
+
+        XCTAssertEqual(store.filePath, "b.txt")
+    }
+
+    func testCommitFallsBackToFirstFileWhenInitialFileIsMissing() async {
+        let git = FakeGitService()
+        await git.setCommitFiles([CommitFile(path: "a.txt", status: .modified)])
+        let store = makeStore(git)
+
+        await store.presentCommit(repoPath: "/repo", commit: commit(), initialFile: "gone.txt")
+
+        XCTAssertEqual(store.filePath, "a.txt")
+    }
+
     func testCommitWithNoFilesShowsInfoToastAndDoesNotPresent() async {
         let git = FakeGitService()
         await git.setCommitFiles([])

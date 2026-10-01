@@ -14,6 +14,10 @@ struct CommitRefBadges: View {
     /// Verilirse rozet bu genişliği aşamaz ve sığmayan metin rozet içinde
     /// sürekli kayar (dükkân tabelası); nil → Git davranışı (orta kırpma).
     var marqueeMaxWidth: CGFloat? = nil
+    /// Verilirse rozet rengi buradan gelir (Git: Orca `colorMap` — yalnız
+    /// checkout edilmiş ref ve upstream renklidir); nil dönen ref nötr çizilir.
+    /// Verilmezse Plastic davranışı sürer: düğümün lane rengi.
+    var refColor: ((GitRef) -> Color?)? = nil
 
     static let maxVisibleRefs = 2
     private static let badgeBorderOpacity = 0.6
@@ -36,7 +40,8 @@ struct CommitRefBadges: View {
     }
 
     private func badge(_ ref: GitRef) -> some View {
-        let color = ref.isCurrent ? Theme.accentVivid : Theme.Graph.laneColor(colorIndex)
+        let color = refColor.map { $0(ref) ?? Theme.textSecondary }
+            ?? (ref.isCurrent ? Theme.accentVivid : Theme.Graph.laneColor(colorIndex))
         return label(displayName(ref), color: color)
             .padding(.horizontal, Theme.Spacing.xs)
             .padding(.vertical, Theme.Spacing.xxxs)
