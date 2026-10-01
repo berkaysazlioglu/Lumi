@@ -307,6 +307,8 @@ public final class TerminalListStore: StoreLifecycle {
             return "provider \(LumiLog.short(id)) \(provider.map { $0.rawValue } ?? "nil")"
         case .codexSessionIDChanged(let id, _):
             return "codexSessionID \(LumiLog.short(id))"
+        case .claudeSessionIDChanged(let id, _):
+            return "claudeSessionID \(LumiLog.short(id))"
         case .awaitingDecisionChanged(let id, let awaiting):
             return "awaitingDecision \(LumiLog.short(id)) \(awaiting)"
         case .bell(let id):
@@ -358,6 +360,9 @@ public final class TerminalListStore: StoreLifecycle {
         case .codexSessionIDChanged(let id, let sessionID):
             // Karar 90: store'daki meta kopyası servisle aynı thread kimliğini taşısın.
             update(id) { $0.codexSessionID = sessionID }
+        case .claudeSessionIDChanged(let id, let sessionID):
+            // Karar 94: `/clear` sonrası store kopyası da yeni konuşmayı taşısın.
+            update(id) { $0.claudeSessionID = sessionID }
         case .awaitingDecisionChanged(let id, let awaiting):
             if awaiting {
                 awaitingDecisionIDs.insert(id)

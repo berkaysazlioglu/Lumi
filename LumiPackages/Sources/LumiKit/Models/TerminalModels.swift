@@ -71,7 +71,10 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// Karar 23: spawn komutuna enjekte edilen (veya komuttan çıkarılan) claude
     /// oturum kimliği — quit'te persist edilip açılışta resume için kullanılır.
     /// nil = bu terminal Lumi'nin izlediği bir claude oturumu taşımıyor.
-    public let claudeSessionID: String?
+    /// Karar 94: `/clear` (ve claude içi `/resume`) yeni bir oturum açar; lider
+    /// Claude hook'u yeni kimliği bildirince güncellenir — resume ve telefon
+    /// transcript takibi hep terminalin ŞU ANKİ konuşmasını izler.
+    public var claudeSessionID: String?
     /// Codex thread learned from the provider hook. Fresh Codex sessions do
     /// not expose this at launch time, so it becomes available asynchronously.
     public var codexSessionID: String?
@@ -137,6 +140,10 @@ public enum TerminalEvent: Sendable, Equatable {
     /// checkpoint'i bunu görünce `ui-state.json`'ı yeniler — kimlik spawn'da
     /// bilinmediği için `.spawned` tek başına yetmez.
     case codexSessionIDChanged(TerminalID, String)
+    /// Karar 94: Lumi'nin izlediği claude terminalinde konuşma değişti (`/clear`
+    /// yeni kimlikle yeni transcript açar). Resume checkpoint'i ve telefon
+    /// chat köprüsü bunu görünce yeni kimliğe geçer.
+    case claudeSessionIDChanged(TerminalID, String)
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)

@@ -43,6 +43,13 @@ final class TerminalListStoreTests: XCTestCase {
         XCTAssertNil(store.meta(for: terminal.id)?.provider)
     }
 
+    // Karar 94: `/clear` sonrası store kopyası yeni konuşma kimliğini taşır.
+    func testClaudeSessionIDChangedUpdatesMeta() {
+        let terminal = makeTerminal("t1")
+        store.apply(.claudeSessionIDChanged(terminal.id, "after-clear"))
+        XCTAssertEqual(store.meta(for: terminal.id)?.claudeSessionID, "after-clear")
+    }
+
     // MARK: - Donma rozeti (design/00 Ek A §A.2-10)
 
     func testStalledEventMarksAndClearsTerminal() {

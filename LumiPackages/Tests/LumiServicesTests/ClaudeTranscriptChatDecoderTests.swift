@@ -15,6 +15,21 @@ import LumiKit
         #expect(msg?.id == "u1")
     }
 
+    // Karar 95: `/clear` zarfı ve yerel komut çıktısı telefona gitmez;
+    // skill zarfı kullanıcının yazdığı `/name args` olarak görünür.
+    @Test func dropsHarnessInjectedUserTurns() {
+        let clear: [String: Any] = ["type": "user", "uuid": "c1", "message": ["content":
+            "<command-name>/clear</command-name>\n            <command-message>clear</command-message>\n            <command-args></command-args>"]]
+        #expect(decoder.decode(clear, index: 0) == nil)
+        let stdout: [String: Any] = ["type": "user", "uuid": "c2", "message": ["content": [
+            ["type": "text", "text": "<local-command-stdout>Set model to Opus</local-command-stdout>"],
+        ]]]
+        #expect(decoder.decode(stdout, index: 1) == nil)
+        let skill: [String: Any] = ["type": "user", "uuid": "c3", "message": ["content":
+            "<command-name>/brainstorm</command-name><command-args>login ekranı</command-args>"]]
+        #expect(decoder.decode(skill, index: 2)?.blocks == [.text("/brainstorm login ekranı", presentation: nil)])
+    }
+
     @Test func decodesAssistantTextAndToolUse() {
         let rec: [String: Any] = [
             "type": "assistant", "uuid": "a1",

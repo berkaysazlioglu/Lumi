@@ -120,6 +120,60 @@ final class TerminalSessionInjectionTests: XCTestCase {
         XCTAssertEqual(session.meta.codexSessionID, "root-thread")
     }
 
+    // Karar 94: `/clear` yeni oturum açar; lider Claude hook'unun yeni kimliği
+    // Lumi'nin izlediği terminalin kimliğini değiştirir, tekrar bildirilmez.
+    func testClaudeClearHookReplacesTrackedSessionID() async throws {
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "claude",
+            task: nil,
+            claudeSessionID: "before-clear",
+            provider: .claude,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: FakePTY())
+        )
+        let spy = SpyDelegate()
+        session.delegate = spy
+
+        // Aynı kimlik (açılıştaki SessionStart) değişim sayılmaz.
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart,
+            sessionID: "before-clear", source: "startup"
+        ))
+        // Alt ajan olayı lider kimliğine dokunmaz.
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .subagentStart,
+            sessionID: "child", agentID: "a1"
+        ))
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart,
+            sessionID: "after-clear", source: "clear"
+        ))
+
+        let captured = await waitUntil { session.meta.claudeSessionID == "after-clear" }
+        XCTAssertTrue(captured)
+        XCTAssertEqual(spy.claudeSessionIDs, ["after-clear"])
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .userPromptSubmit, sessionID: "after-clear"
+        ))
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(spy.claudeSessionIDs, ["after-clear"])
+    }
+
+    // Karar 94 / karar 23: düz shell'de elle koşulan claude'a kimlik atanmaz —
+    // aksi hâlde shell terminali açılışta `claude --resume` ile geri gelirdi.
+    func testClaudeHookDoesNotAdoptSessionForUntrackedTerminal() async throws {
+        let session = try makeSession(pty: FakePTY())
+        let spy = SpyDelegate()
+        session.delegate = spy
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "manual"
+        ))
+        try? await Task.sleep(for: .milliseconds(30))
+        XCTAssertNil(session.meta.claudeSessionID)
+        XCTAssertTrue(spy.claudeSessionIDs.isEmpty)
+    }
+
     func testRequestRepaintPokesPTYAndRedrawDoesNot() throws {
         let pty = FakePTY()
         let session = try makeSession(pty: pty)
@@ -208,6 +262,7 @@ final class SpyDelegate: TerminalSessionDelegate {
     private(set) var stalls: [Bool] = []
     private(set) var linkActivations: [TerminalLinkActivation] = []
     private(set) var codexSessionIDs: [String] = []
+    private(set) var claudeSessionIDs: [String] = []
 
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus) {}
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool) {}
@@ -215,6 +270,10 @@ final class SpyDelegate: TerminalSessionDelegate {
     func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?) {}
     func session(_ session: TerminalSession, didChangeCodexSessionID sessionID: String) {
         codexSessionIDs.append(sessionID)
+    }
+
+    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String) {
+        claudeSessionIDs.append(sessionID)
     }
 
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {

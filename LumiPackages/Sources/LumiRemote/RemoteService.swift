@@ -246,9 +246,28 @@ public final class RemoteService: RemoteServicing {
             }
             await sendSessions()
             await sendProjects()
+        case .claudeSessionIDChanged(let id, let sessionID):
+            await retargetChat(id: id, sessionID: sessionID)
         case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .codexSessionIDChanged, .writeFailed, .stalled,
              .viewFocused, .linkActivated:
             break
+        }
+    }
+
+    /// Karar 94: `/clear` terminalde yeni bir konuşma (yeni transcript) açtı.
+    /// Telefon bu terminalin chat'ini izliyorsa eski dosyanın tail'i kesilir,
+    /// boş `chat` snapshot'ı telefondaki eski sohbeti siler ve köprü yeni
+    /// kimliğin transcript'ine yeniden kurulur (dosya henüz yoksa boş bekler).
+    private func retargetChat(id: TerminalID, sessionID: String) async {
+        guard chatModeTerminals.contains(id), chatSubscriptions[id] != nil,
+              let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
+        let raw = id.description
+        rlog("chat retarget: /clear sonrası yeni oturum sid=\(sessionID.prefix(8)) terminal=\(raw.prefix(8))")
+        cancelChatSubscription(id)
+        await connection.send(type: "chat",
+            payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
+        chatSubscriptions[id] = Task { [weak self] in
+            await self?.awaitTranscript(id: id, raw: raw, meta: meta)
         }
     }
 

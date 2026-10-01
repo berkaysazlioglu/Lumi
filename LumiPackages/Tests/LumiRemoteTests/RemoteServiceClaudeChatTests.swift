@@ -136,6 +136,65 @@ import LumiTestSupport
         svc.stop()
     }
 
+    /// Karar 94: `/clear` terminalde yeni oturum açar. `.claudeSessionIDChanged`
+    /// gelince köprü eski transcript'i bırakıp yeni kimliğe geçmeli ve telefona
+    /// boş bir `chat` snapshot'ı gidip eski sohbeti silmeli.
+    @Test func claudeSessionIDChangeRetargetsChatToNewTranscript() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        var claudeMeta = TerminalMeta(
+            id: TerminalID(), name: "claude", repoPath: "/tmp/r",
+            createdAt: Date(), claudeSessionID: "before-clear")
+        claudeMeta.provider = .claude
+        term.metas.append(claudeMeta)
+        let sid = claudeMeta.id.description
+        let chatSrc = FakeChatTranscriptSource(events: [], keepOpen: true)
+
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: chatSrc,
+            hookEvents: { AsyncStream { _ in } }, config: FakeConfigService())
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForCount(type: "chat", atLeast: 1)
+        #expect(chatSrc.requested.map(\.sessionID) == ["before-clear"])
+
+        // /clear: servis meta'sı yeni kimliği taşır, ardından event yayınlanır.
+        term.metas[0].claudeSessionID = "after-clear"
+        term.emit(.claudeSessionIDChanged(claudeMeta.id, "after-clear"))
+
+        try await conn.waitForCount(type: "chat", atLeast: 2)
+        for _ in 0..<50 where chatSrc.requested.count < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(chatSrc.requested.map(\.sessionID) == ["before-clear", "after-clear"])
+        #expect(svc.hasActiveChatSubscription(claudeMeta.id))
+        svc.stop()
+    }
+
+    /// Chat'e abone olunmamış terminalde kimlik değişimi telefona frame yollamaz.
+    @Test func claudeSessionIDChangeWithoutChatSubscriptionSendsNothing() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        var claudeMeta = TerminalMeta(
+            id: TerminalID(), name: "claude", repoPath: "/tmp/r",
+            createdAt: Date(), claudeSessionID: "before-clear")
+        claudeMeta.provider = .claude
+        term.metas.append(claudeMeta)
+        let chatSrc = FakeChatTranscriptSource(events: [], keepOpen: true)
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: chatSrc,
+            hookEvents: { AsyncStream { _ in } }, config: FakeConfigService())
+        await svc.start()
+
+        term.emit(.claudeSessionIDChanged(claudeMeta.id, "after-clear"))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await conn.count(type: "chat") == 0)
+        #expect(chatSrc.requested.isEmpty)
+        svc.stop()
+    }
+
     // MARK: - T3a: handleChatSend — terminal PTY'ye yazar (stream-json oturumu yoksa)
 
     /// chat_send gelen id bir stream-json chat oturumuna ait değilse ve terminal ID ise

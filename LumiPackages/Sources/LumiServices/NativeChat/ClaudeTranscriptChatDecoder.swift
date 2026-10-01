@@ -16,14 +16,33 @@ struct ClaudeTranscriptChatDecoder {
         default: return nil
         }
         let content = (record["message"] as? [String: Any])?["content"]
-        let blocks = ClaudeContentBlockDecoding.decodeBlocks(content)
+        var blocks = ClaudeContentBlockDecoding.decodeBlocks(content)
         guard !blocks.isEmpty else { return nil }
+        if role == .user {
+            guard let visible = Self.visibleUserBlocks(blocks) else { return nil }
+            blocks = visible
+        }
         let id = (record["uuid"] as? String) ?? "idx-\(index)"
         return ChatMessage(
             id: id, role: role, blocks: blocks,
             timestampMs: timestampMs(record["timestamp"] as? String),
             turnId: id
         )
+    }
+
+    /// Karar 95: harness'in eklediği user turları (`/clear` zarfı, yerel komut
+    /// çıktısı, system-reminder…) chat'te gösterilmez; skill zarfı `/name args`
+    /// olarak görünür. Yalnız düz metinden oluşan turlar sınıflandırılır —
+    /// tool_result taşıyan user kayıtları olduğu gibi kalır.
+    static func visibleUserBlocks(_ blocks: [ChatBlock]) -> [ChatBlock]? {
+        var texts: [String] = []
+        for block in blocks {
+            guard case let .text(text, _) = block else { return blocks }
+            texts.append(text)
+        }
+        let joined = texts.joined(separator: "\n")
+        guard let display = HarnessInjectedTurn.displayText(forUserText: joined) else { return nil }
+        return display == joined ? blocks : [.text(display, presentation: nil)]
     }
 
     private func timestampMs(_ raw: String?) -> Int? {

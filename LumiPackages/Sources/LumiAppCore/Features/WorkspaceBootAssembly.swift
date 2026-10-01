@@ -12,7 +12,8 @@ import LumiTerminal
 ///   simetriktir ve canlı oturumları persist eder — `.ui` fazı ilk yıkılan faz
 ///   olduğu için persist, terminal feature'ının `killAll()`'undan ÖNCE koşar.
 /// - **Karar 90 crash checkpoint'i:** aynı liste yalnız quit'te değil, canlı
-///   küme her değiştiğinde (`.spawned` / `.exited` / `.codexSessionIDChanged`)
+///   küme her değiştiğinde (`.spawned` / `.exited` / `.codexSessionIDChanged` /
+///   `.claudeSessionIDChanged`)
 ///   yeniden yazılır; böylece crash / SIGKILL / güç kesintisinde de son
 ///   snapshot diskte durur. Kapanışta tüketici ÖNCE susturulur ki `killAll()`'ın
 ///   `.exited`'ları son snapshot'ı boş listeyle ezmesin.
@@ -75,7 +76,7 @@ final class WorkspaceBootAssembly: FeatureAssembly {
 
     static func affectsResumeSessions(_ event: TerminalEvent) -> Bool {
         switch event {
-        case .spawned, .exited, .codexSessionIDChanged:
+        case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged:
             return true
         case .statusChanged, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
              .writeFailed, .stalled, .viewFocused, .linkActivated:

@@ -142,6 +142,26 @@ final class WorkspaceBootResumeTests: XCTestCase {
         await assembly.shutdown()
     }
 
+    // Karar 94: `/clear` sonrası resume listesi yeni konuşmayı taşır — açılışta
+    // `/clear` öncesi sohbet geri gelmez.
+    func testClaudeSessionIDChangedCheckpointsNewConversation() async throws {
+        let (registry, _, assembly) = await makeHarness()
+        defer { registry.removeTemporaryDirectories() }
+        await assembly.start()
+        let spawned = try registry.fakeTerminal.spawn(repoPath: "/r/a", task: nil, command: "claude")
+        _ = await resumeSessions(of: registry, until: [claudeEntry(spawned)])
+
+        var cleared = spawned
+        cleared.claudeSessionID = "after-clear"
+        registry.fakeTerminal.replaceSpawnedMeta(cleared)
+        registry.fakeTerminal.emit(.claudeSessionIDChanged(spawned.id, "after-clear"))
+
+        let expected = [ResumeSession(repoPath: "/r/a", sessionID: "after-clear")]
+        let written = await resumeSessions(of: registry, until: expected)
+        XCTAssertEqual(written, expected, "/clear sonrası kimlik checkpoint'e yazılmalı")
+        await assembly.shutdown()
+    }
+
     func testExitedCheckpointsRemovalAndShutdownStopsListening() async throws {
         let (registry, _, assembly) = await makeHarness()
         defer { registry.removeTemporaryDirectories() }
@@ -172,6 +192,7 @@ final class WorkspaceBootResumeTests: XCTestCase {
         let id = TerminalID()
         XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.exited(id, code: 0)))
         XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.codexSessionIDChanged(id, "t")))
+        XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.claudeSessionIDChanged(id, "c")))
         XCTAssertFalse(WorkspaceBootAssembly.affectsResumeSessions(.statusChanged(id, .idle)))
         XCTAssertFalse(WorkspaceBootAssembly.affectsResumeSessions(.bell(id)))
     }

@@ -15,6 +15,8 @@ protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeProvider provider: AgentProvider?)
     /// Karar 90: doğrulanmış lider Codex hook'undan thread kimliği geldi.
     func session(_ session: TerminalSession, didChangeCodexSessionID sessionID: String)
+    /// Karar 94: lider Claude hook'u terminalin yeni konuşma kimliğini bildirdi.
+    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)
@@ -259,10 +261,22 @@ final class TerminalSession {
         guard !isTerminated else { return }
         ioQueue.async { [weak self, pipeline] in
             pipeline.processHookEvent(event)
-            guard event.provider == .codex, event.isLead,
-                  let sessionID = event.sessionID else { return }
-            hopToMain { self?.applyCodexSessionID(sessionID) }
+            guard event.isLead, let sessionID = event.sessionID else { return }
+            switch event.provider {
+            case .codex: hopToMain { self?.applyCodexSessionID(sessionID) }
+            case .claude: hopToMain { self?.applyClaudeSessionID(sessionID) }
+            }
         }
+    }
+
+    /// Karar 94: yalnız Lumi'nin zaten izlediği claude oturumu (spawn'da kimlik
+    /// taşıyan terminal) takip edilir. Düz shell'de elle koşulan claude'a kimlik
+    /// atanmaz — aksi hâlde claude çıktıktan sonra shell terminali açılışta
+    /// `claude --resume` ile geri gelirdi (karar 23 kapsamı).
+    private func applyClaudeSessionID(_ sessionID: String) {
+        guard !isTerminated, let current = meta.claudeSessionID, current != sessionID else { return }
+        meta.claudeSessionID = sessionID
+        delegate?.session(self, didChangeClaudeSessionID: sessionID)
     }
 
     private func applyCodexSessionID(_ sessionID: String) {

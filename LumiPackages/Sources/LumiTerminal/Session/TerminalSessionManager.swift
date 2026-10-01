@@ -300,6 +300,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.codexSessionIDChanged(session.id, sessionID))
     }
 
+    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.claudeSessionIDChanged(session.id, sessionID))
+    }
+
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {
         guard isRegistered(session) else { return }
         broadcaster.send(.stalled(session.id, stalled))
