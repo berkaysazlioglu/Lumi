@@ -8,14 +8,13 @@ import SwiftUI
 /// Solda satırın çıkış lane'leri kesintisiz iner; graph açılımla kopmaz.
 struct GitCommitFilesView: View {
     let row: CommitGraphRow
-    let laneCount: Int
     let files: Loadable<[CommitFile]>?
     let onOpenFile: (String) -> Void
     let onOpenAll: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.xs) {
-            CommitGraphContinuationCanvas(lanes: row.outputLanes, laneCount: laneCount)
+            CommitGraphContinuationCanvas(lanes: row.outputLanes, laneCount: row.outputLanes.count)
             VStack(alignment: .leading, spacing: 0) {
                 meta
                 filesBody

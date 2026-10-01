@@ -5,11 +5,14 @@ import SwiftUI
 /// açılım oku + konu + ref rozetleri. Yazar/tarih satırda DEĞİL — açılımda ve
 /// hover kartında durur, satır tek çizgide kalır.
 ///
+/// Kolon genişliği satırın KENDİ lane sayısıdır (Orca `GitHistoryGraphSvg`):
+/// başlık, o satırda gerçekten çizilen son lane'in hemen sağından başlar;
+/// listenin en geniş satırına göre hizalanmaz.
+///
 /// Sentetik sınır satırları (Incoming/Outgoing Changes) etkileşimsizdir:
 /// soluk metin, ok yok, sağ tık yok.
 struct GitHistoryRowView: View {
     let row: CommitGraphRow
-    let laneCount: Int
     let upstream: String?
     let isExpanded: Bool
     let isHovered: Bool
@@ -27,7 +30,7 @@ struct GitHistoryRowView: View {
 
     private var content: some View {
         HStack(spacing: Theme.Spacing.xs) {
-            CommitGraphLaneCanvas(row: row, laneCount: laneCount, height: Theme.Graph.compactRowHeight)
+            CommitGraphLaneCanvas(row: row, laneCount: row.laneCount, height: Theme.Graph.compactRowHeight)
             if !row.isBoundary {
                 Image(systemName: "chevron.right")
                     .font(Theme.Typography.ui(.caption, weight: .semibold))

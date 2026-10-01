@@ -20,7 +20,6 @@ struct CommitGraphView: View {
 
     var body: some View {
         let rows = shell.git.historyRows(repoPath)
-        let laneCount = CommitGraph.maxLaneCount(rows)
         let upstream = shell.git.historyContexts[repoPath]?.upstream?.name
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -28,7 +27,7 @@ struct CommitGraphView: View {
                     EmptyStatePlaceholder("No commits", density: .inline)
                 }
                 ForEach(rows) { row in
-                    rowGroup(row, laneCount: laneCount, upstream: upstream)
+                    rowGroup(row, upstream: upstream)
                 }
                 if shell.git.historyHasMore[repoPath] == true {
                     Text("Showing the latest \(GitStore.historyLimit) commits")
@@ -53,11 +52,10 @@ struct CommitGraphView: View {
     // MARK: - Satır + açılım
 
     @ViewBuilder
-    private func rowGroup(_ row: CommitGraphRow, laneCount: Int, upstream: String?) -> some View {
+    private func rowGroup(_ row: CommitGraphRow, upstream: String?) -> some View {
         let isExpanded = !row.isBoundary && expandedHashes.contains(row.id)
         GitHistoryRowView(
             row: row,
-            laneCount: laneCount,
             upstream: upstream,
             isExpanded: isExpanded,
             isHovered: hoveredHash == row.id,
@@ -76,7 +74,6 @@ struct CommitGraphView: View {
         if isExpanded {
             GitCommitFilesView(
                 row: row,
-                laneCount: laneCount,
                 files: shell.git.commitFiles[repoPath]?[row.id],
                 onOpenFile: { shell.presentCommit(row.commit, file: $0) },
                 onOpenAll: { shell.presentCommit(row.commit) }
