@@ -25,20 +25,19 @@ struct NewTerminalMenuItem: Identifiable {
 }
 
 /// Modern "New <Provider>" split-button (v1 paritesi): solid mor; sol kısım
-/// aktif provider'ı spawn eder, sağ chevron özel koyu dropdown'u **hover'da**
-/// açar (diğer ajanlar + New Bash). Buton VEYA popover üstünde hover olduğu
-/// sürece açık kalır; ikisinden de ayrılınca kısa grace period sonra kapanır.
-/// Native NSMenu DEĞİL — temalı popover.
+/// aktif provider'ı spawn eder, sağ chevron özel koyu dropdown'u **tıklamayla**
+/// açar/kapar (diğer ajanlar + New Bash). Popover transient'tır: bir eyleme
+/// ya da dışarı tıklayınca kapanır. Fare popover'dan çıkarsa
+/// `Theme.Motion.menuLeaveCloseDelay` sonra kapanır; bu sürede geri dönmek
+/// kapanışı iptal eder. Native NSMenu DEĞİL — temalı popover.
 struct NewTerminalButton: View {
-    static let hoverOpenDelay = Theme.Motion.hoverOpenDelay
-    static let hoverCloseDelay = Theme.Motion.hoverCloseDelay
+    static let leaveCloseDelay = Theme.Motion.menuLeaveCloseDelay
 
     let provider: AgentProvider
     let onNewProvider: () -> Void
     let items: [NewTerminalMenuItem]
 
     @State private var isOpen = false
-    @State private var openTask: Task<Void, Never>?
     @State private var closeTask: Task<Void, Never>?
 
     var body: some View {
@@ -66,47 +65,48 @@ struct NewTerminalButton: View {
                 .frame(width: Theme.Stroke.hairline, height: Theme.scaled(14))
                 .accessibilityHidden(true)
 
-            // Chevron yalnız görsel ipucu — açma/kapama hover'la sürülür.
-            Image(systemName: "chevron.down")
-                .font(Theme.Typography.ui(.micro, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, Theme.scaled(7))
-                .frame(height: TopBarMetrics.controlHeight)
-                .contentShape(Rectangle())
-                .accessibilityHidden(true)
+            Button(action: toggle) {
+                Image(systemName: "chevron.down")
+                    .font(Theme.Typography.ui(.micro, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Theme.scaled(7))
+                    .frame(height: TopBarMetrics.controlHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("More agents")
+            .accessibilityLabel("More agents")
         }
         .background(Theme.accentVivid)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .onHover { updateHover($0) }
         .popover(isPresented: $isOpen, arrowEdge: .bottom) {
             dropdown.onHover { updateHover($0) }
         }
+        .onChange(of: isOpen) { _, open in
+            if !open { cancelClose() }
+        }
     }
 
-    /// Buton ya da popover hover'ı: girişte kısa açılış gecikmesi (yanlışlıkla
-    /// üstünden geçince açılmaz) + bekleyen kapanışı iptal et; çıkışta grace
-    /// period zamanlayıcısı kur (arada geçişte flicker olmaz).
+    private func toggle() {
+        cancelClose()
+        isOpen.toggle()
+    }
+
+    /// Popover hover'ı: girişte bekleyen kapanış iptal edilir, çıkışta
+    /// gecikmeli kapanış kurulur (kısa süreli taşma menüyü kapatmaz).
     private func updateHover(_ hovering: Bool) {
-        if hovering {
-            closeTask?.cancel()
-            closeTask = nil
-            guard !isOpen, openTask == nil else { return }
-            openTask = Task { @MainActor in
-                try? await Task.sleep(for: Self.hoverOpenDelay)
-                guard !Task.isCancelled else { return }
-                isOpen = true
-                openTask = nil
-            }
-        } else {
-            openTask?.cancel()
-            openTask = nil
-            closeTask?.cancel()
-            closeTask = Task { @MainActor in
-                try? await Task.sleep(for: Self.hoverCloseDelay)
-                guard !Task.isCancelled else { return }
-                isOpen = false
-            }
+        cancelClose()
+        guard !hovering else { return }
+        closeTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.leaveCloseDelay)
+            guard !Task.isCancelled else { return }
+            isOpen = false
         }
+    }
+
+    private func cancelClose() {
+        closeTask?.cancel()
+        closeTask = nil
     }
 
     private var dropdown: some View {

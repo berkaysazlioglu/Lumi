@@ -68,10 +68,6 @@ final class ThemeTokenTests: XCTestCase {
 
     func testHoverDelaysArePositive() {
         XCTAssertGreaterThan(Theme.Motion.hoverRevealDelay, .zero)
-        XCTAssertGreaterThan(Theme.Motion.hoverOpenDelay, .zero)
-        XCTAssertGreaterThan(Theme.Motion.hoverCloseDelay, .zero)
-        // Kapanış payı açılış gecikmesinden kısa olmalı: buton ↔ popover
-        // geçişinde dropdown kapanmadan yeniden açılabilsin.
-        XCTAssertLessThan(Theme.Motion.hoverCloseDelay, Theme.Motion.hoverOpenDelay)
+        XCTAssertGreaterThan(Theme.Motion.menuLeaveCloseDelay, .zero)
     }
 }

@@ -35,11 +35,9 @@ public extension Theme {
 
         /// Focus mode barının hover-reveal gecikmesi (design/03 §2).
         public static let hoverRevealDelay: Duration = .milliseconds(500)
-        /// Hover ile açılan dropdown'ın açılış gecikmesi (yanlışlıkla üstünden
-        /// geçince açılmaz).
-        public static let hoverOpenDelay: Duration = .milliseconds(350)
-        /// Buton ↔ popover arasında geçerken flicker olmasın diye kapanış payı.
-        public static let hoverCloseDelay: Duration = .milliseconds(200)
+        /// Tıklamayla açılan dropdown'dan fare çıkınca kapanmadan önceki pay;
+        /// bu sürede geri dönen fare menüyü açık tutar.
+        public static let menuLeaveCloseDelay: Duration = .milliseconds(800)
         /// Sidebar kenarında kısa niyet kontrolü; çıkışta bekleme yoktur.
         public static let sidebarRevealDelay: Duration = .milliseconds(100)
         /// Arama girdisinin filtre debounce'u.
