@@ -44,6 +44,13 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
             makeView: { AnyView(GridSettingsToolbarItem()) }
         ))
         registries.toolbar.register(ToolbarItemDescriptor(
+            id: .arrangeTerminals,
+            region: .center,
+            order: ShellToolbarItems.Order.arrangeTerminals,
+            isVisible: { $0.activeRepoPath != nil },
+            makeView: { AnyView(ArrangeTerminalsToolbarItem()) }
+        ))
+        registries.toolbar.register(ToolbarItemDescriptor(
             id: .newTerminal,
             region: .center,
             order: ShellToolbarItems.Order.newTerminal,

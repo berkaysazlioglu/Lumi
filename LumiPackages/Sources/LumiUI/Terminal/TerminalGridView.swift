@@ -19,8 +19,36 @@ struct TerminalGridView: View {
     let onMinimize: (TerminalID) -> Void
     let onMaximize: (TerminalID) -> Void
     let onClose: (TerminalID) -> Void
+    /// Karar 97 Edit modu: kartlar sürüklenip başka kartın üstüne bırakılınca
+    /// `onSwap` ile takas edilir; terminal gövdeleri tık almaz.
+    var isArranging = false
+    var onSwap: (TerminalID, TerminalID) -> Void = { _, _ in }
+    var onEndArranging: () -> Void = {}
+
+    @State private var drag: ArrangeDrag?
+    @FocusState private var isArrangeFocused: Bool
+
+    private static let coordinateSpace = "terminalGrid"
 
     var body: some View {
+        grid
+            .focusable(isArranging)
+            .focused($isArrangeFocused)
+            .focusEffectDisabled()
+            // Edit modunda klavye odağı terminalden alınır: Esc PTY'ye değil
+            // moddan çıkışa gider.
+            .onKeyPress(.escape) {
+                guard isArranging else { return .ignored }
+                onEndArranging()
+                return .handled
+            }
+            .onChange(of: isArranging, initial: true) { _, arranging in
+                isArrangeFocused = arranging
+                if !arranging { drag = nil }
+            }
+    }
+
+    private var grid: some View {
         GeometryReader { geometry in
             let frames = GridLayoutMath.frames(
                 layout: layout,
@@ -48,6 +76,7 @@ struct TerminalGridView: View {
                 if index < frames.count {
                     let frame = frames[index]
                     let isAwaitingDecision = awaitingDecisionIDs.contains(meta.id)
+                    let isDragged = drag?.id == meta.id
                     TerminalCardView(
                         meta: meta,
                         isActive: activeTerminalID == meta.id,
@@ -63,13 +92,61 @@ struct TerminalGridView: View {
                         onFocus: { onFocus(meta.id) },
                         onMinimize: { onMinimize(meta.id) },
                         onMaximize: { onMaximize(meta.id) },
-                        onClose: { onClose(meta.id) }
+                        onClose: { onClose(meta.id) },
+                        arrangement: isArranging
+                            ? .init(position: index + 1, isDropTarget: dropTargetID(frames: frames) == meta.id)
+                            : nil
                     )
                     .frame(width: frame.width, height: frame.height)
+                    .scaleEffect(isDragged ? ArrangeDrag.liftScale : 1)
                     .offset(x: frame.minX, y: frame.minY)
+                    .offset(isDragged ? drag?.translation ?? .zero : .zero)
+                    .zIndex(isDragged ? 1 : 0)
+                    .gesture(arrangeGesture(for: meta.id, frames: frames), including: isArranging ? .all : .subviews)
                 }
             }
         }
+        .coordinateSpace(name: Self.coordinateSpace)
+        .animation(Theme.Motion.standardEase, value: terminals.map(\.id))
+    }
+
+    // MARK: - Edit modu (karar 97)
+
+    private func arrangeGesture(for id: TerminalID, frames: [CGRect]) -> some Gesture {
+        DragGesture(coordinateSpace: .named(Self.coordinateSpace))
+            .onChanged { value in
+                drag = ArrangeDrag(id: id, translation: value.translation, location: value.location)
+            }
+            .onEnded { _ in
+                if let target = dropTargetID(frames: frames) {
+                    onSwap(id, target)
+                }
+                drag = nil
+            }
+    }
+
+    /// İmlecin üstünde durduğu (sürüklenenden farklı) kart.
+    private func dropTargetID(frames: [CGRect]) -> TerminalID? {
+        guard let drag else { return nil }
+        return ArrangeDrag.targetIndex(at: drag.location, frames: frames)
+            .flatMap { terminals.indices.contains($0) ? terminals[$0].id : nil }
+            .flatMap { $0 == drag.id ? nil : $0 }
+    }
+}
+
+/// Edit modunda süren tek sürükleme (karar 97).
+struct ArrangeDrag: Equatable {
+    /// Tutulan kartın hafifçe büyümesi — "elde" olduğunu gösterir.
+    static let liftScale: CGFloat = 1.03
+
+    let id: TerminalID
+    let translation: CGSize
+    /// Grid koordinatında imleç — bırakma hedefi buradan çözülür.
+    let location: CGPoint
+
+    /// Noktayı içeren kartın indeksi; boşluğa bırakılırsa nil (takas yok).
+    static func targetIndex(at location: CGPoint, frames: [CGRect]) -> Int? {
+        frames.firstIndex { $0.contains(location) }
     }
 }
 
@@ -87,12 +164,21 @@ struct TerminalCardView: View {
     let onMinimize: () -> Void
     let onMaximize: () -> Void
     let onClose: () -> Void
+    /// Karar 97: Edit modundaysa kartın sıra bilgisi; normal modda nil.
+    var arrangement: Arrangement?
+
+    struct Arrangement: Equatable {
+        /// Görünür sıradaki yeri (1 tabanlı) — ⌘ indeksinin karşılığı.
+        let position: Int
+        /// Sürüklenen kart şu an bunun üstünde: bırakılırsa takas olur.
+        let isDropTarget: Bool
+    }
 
     @State private var isQueueOpen = false
 
     var body: some View {
         TerminalCardChrome(
-            isActive: isActive,
+            isActive: isActive || arrangement?.isDropTarget == true,
             needsAttention: needsAttention,
             terminalID: meta.id,
             promptQueue: promptQueue,
@@ -112,12 +198,45 @@ struct TerminalCardView: View {
                 onZoom: onMaximize,
                 onMinimize: onMinimize,
                 onClose: onClose,
-                onTap: onFocus
+                onTap: onFocus,
+                isArranging: arrangement != nil
             )
         } content: {
             TerminalHostView(terminalID: meta.id, provider: viewProvider)
                 .id(meta.id)
                 .padding(Theme.Spacing.md)
+                .allowsHitTesting(arrangement == nil)
+                .overlay {
+                    if let arrangement {
+                        ArrangeCardOverlay(position: arrangement.position)
+                    }
+                }
         }
+    }
+}
+
+/// Edit modunda terminal gövdesinin üstü: karartma + sıra rozeti + tutamaç.
+/// Overlay hit-test'i terminale geçirmez — sürükleme kartın her yerinden başlar.
+private struct ArrangeCardOverlay: View {
+    /// Terminal içeriği tanınacak kadar görünür kalsın, rozet öne çıksın.
+    static let dimOpacity = 0.55
+
+    let position: Int
+
+    var body: some View {
+        ZStack {
+            Theme.bgDeep.opacity(Self.dimOpacity)
+            VStack(spacing: Theme.Spacing.sm) {
+                Text("\(position)")
+                    .font(Theme.Typography.mono(.display, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                    .font(Theme.Typography.ui(.body))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Position \(position). Drag onto another terminal to swap.")
+        }
+        .contentShape(Rectangle())
     }
 }

@@ -28,6 +28,35 @@ final class LayoutStoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Edit modu (karar 97)
+
+    func testArrangingIsScopedToRepoAndToggles() {
+        store.toggleArranging(in: "/a")
+        XCTAssertTrue(store.isArranging(in: "/a"))
+        XCTAssertFalse(store.isArranging(in: "/b"))
+
+        store.toggleArranging(in: "/a")
+        XCTAssertFalse(store.isArranging(in: "/a"))
+    }
+
+    func testEnteringArrangeLeavesMaximize() {
+        let id = TerminalID()
+        visible = [id]
+        store.maximize(id, in: "/a")
+
+        store.toggleArranging(in: "/a")
+
+        XCTAssertNil(store.maximizedTerminal(in: "/a"))
+    }
+
+    func testEvictEndsArrangingOnlyForThatRepo() {
+        store.toggleArranging(in: "/a")
+        store.evict("/b")
+        XCTAssertTrue(store.isArranging(in: "/a"))
+        store.evict("/a")
+        XCTAssertNil(store.arrangingRepoPath)
+    }
+
     // MARK: - Arayüz ölçeği (karar 61)
 
     func testZoomStepsThroughTheClosedSet() {

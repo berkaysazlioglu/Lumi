@@ -66,6 +66,10 @@ public final class LayoutStore {
     public private(set) var maximizedByRepo: [String: TerminalID] = [:]
     /// Oturumluk — persist edilmez.
     public private(set) var isFocusMode = false
+    /// Karar 97: kartların elle sıralandığı Edit modu hangi repo'da açık.
+    /// Repo'ya bağlıdır — başka checkout'a geçince o yüzeyde kapalı görünür.
+    /// Oturumluk — persist edilmez.
+    public private(set) var arrangingRepoPath: String?
     /// Karar 44: kenar hover'ıyla o an içeriğin ÜSTÜNDE açık duran yuvalar.
     /// Oturumluk — persist edilmez; kalıcı tercih `panelLayout.autoRevealSlots`.
     public private(set) var revealedSlots: Set<PanelSlot> = []
@@ -310,6 +314,26 @@ public final class LayoutStore {
         return id
     }
 
+    // MARK: - Elle sıralama (karar 97)
+
+    public func isArranging(in repoPath: String) -> Bool {
+        arrangingRepoPath == repoPath
+    }
+
+    /// Edit modu grid üzerinde çalışır: açılırken maximize/solo bırakılır.
+    public func toggleArranging(in repoPath: String) {
+        if isArranging(in: repoPath) {
+            endArranging()
+        } else {
+            restoreMaximize(in: repoPath)
+            arrangingRepoPath = repoPath
+        }
+    }
+
+    public func endArranging() {
+        arrangingRepoPath = nil
+    }
+
     // MARK: - Cache eviction (refactor 5.5)
 
     /// Tab kapanınca oturumluk maximize kaydı düşer. `projectGridLayouts`
@@ -317,6 +341,7 @@ public final class LayoutStore {
     /// (karar 9) — tab yeniden açıldığında yerleşimi geri gelmelidir.
     public func evict(_ repoPath: String) {
         maximizedByRepo.removeValue(forKey: repoPath)
+        if arrangingRepoPath == repoPath { endArranging() }
     }
 
     // MARK: - Persistence

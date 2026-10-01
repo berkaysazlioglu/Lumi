@@ -93,6 +93,9 @@ struct TerminalCardHeader: View {
     let onClose: () -> Void
     /// Tek tık davranışı yalnız grid'de var (kartı odakla); maximize'da nil.
     var onTap: (() -> Void)?
+    /// Karar 97 Edit modu: yalnız minimize kalır (gizliler de düzenlenebilsin);
+    /// kuyruk/zoom/kapat ve tık jestleri sürüklemeyle yarışmasın diye çekilir.
+    var isArranging = false
 
     var body: some View {
         HStack(spacing: style.spacing) {
@@ -116,30 +119,34 @@ struct TerminalCardHeader: View {
                     needsAttention ? "\(meta.displayTitle), needs attention" : meta.displayTitle
                 )
             Spacer()
-            PromptQueueToggleButton(
-                count: promptQueue.count(for: meta.id),
-                isPaused: promptQueue.isPaused(meta.id),
-                isOpen: $isQueueOpen
-            )
-            IconButton(
-                systemName: zoomIcon,
-                label: zoomLabel,
-                size: .caption,
-                action: onZoom
-            )
+            if !isArranging {
+                PromptQueueToggleButton(
+                    count: promptQueue.count(for: meta.id),
+                    isPaused: promptQueue.isPaused(meta.id),
+                    isOpen: $isQueueOpen
+                )
+                IconButton(
+                    systemName: zoomIcon,
+                    label: zoomLabel,
+                    size: .caption,
+                    action: onZoom
+                )
+            }
             IconButton(
                 systemName: "minus",
                 label: "Minimize \(meta.displayTitle)",
                 size: .caption,
                 action: onMinimize
             )
-            IconButton(
-                systemName: "xmark",
-                label: "Close \(meta.displayTitle)",
-                size: .caption,
-                role: .destructive,
-                action: onClose
-            )
+            if !isArranging {
+                IconButton(
+                    systemName: "xmark",
+                    label: "Close \(meta.displayTitle)",
+                    size: .caption,
+                    role: .destructive,
+                    action: onClose
+                )
+            }
         }
         .padding(.leading, style.leadingPadding)
         .padding(.trailing, style.trailingPadding)
@@ -149,9 +156,9 @@ struct TerminalCardHeader: View {
             Theme.border.frame(height: Theme.Stroke.hairline)
         }
         .contentShape(Rectangle())
-        .onTapGesture { onTap?() }
+        .onTapGesture { if !isArranging { onTap?() } }
         // Başlığa çift tık zoom'u çevirir (grid → maximize, maximize → grid)
-        .simultaneousGesture(TapGesture(count: 2).onEnded(onZoom))
+        .simultaneousGesture(TapGesture(count: 2).onEnded { if !isArranging { onZoom() } })
     }
 
     private var titleColor: Color {

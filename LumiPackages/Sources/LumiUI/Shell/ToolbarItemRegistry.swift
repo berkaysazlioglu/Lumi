@@ -68,6 +68,8 @@ public extension ToolbarItemID {
     /// Aktif checkout'un Start App + Actions kontrolü (karar 96).
     static let quickCommands = ToolbarItemID("quickCommands")
     static let newTerminal = ToolbarItemID("newTerminal")
+    /// Terminal kartlarını elle sıralama modu (karar 97).
+    static let arrangeTerminals = ToolbarItemID("arrangeTerminals")
     static let focusMode = ToolbarItemID("focusMode")
     static let settings = ToolbarItemID("settings")
     /// Alt bar segmentleri (karar 43).

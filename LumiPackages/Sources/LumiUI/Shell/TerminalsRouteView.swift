@@ -70,7 +70,10 @@ public struct TerminalsRouteView: View {
                     onFocus: { shell.terminals.focus($0) },
                     onMinimize: { shell.terminals.minimize($0) },
                     onMaximize: { shell.layout.maximize($0, in: repoPath) },
-                    onClose: { shell.terminals.close($0) }
+                    onClose: { shell.terminals.close($0) },
+                    isArranging: shell.layout.isArranging(in: repoPath),
+                    onSwap: { shell.terminals.swap($0, $1) },
+                    onEndArranging: { shell.toggleArrangingTerminals(in: repoPath) }
                 )
             }
         }

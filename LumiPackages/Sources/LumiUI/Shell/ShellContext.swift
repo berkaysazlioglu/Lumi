@@ -285,6 +285,14 @@ public final class ShellContext {
         }
     }
 
+    /// Karar 97: Edit modunu aç/kapa. Çıkışta klavye odağı (Edit modunda grid'e
+    /// alınmıştı) aktif terminale geri verilir.
+    public func toggleArrangingTerminals(in repoPath: String) {
+        layout.toggleArranging(in: repoPath)
+        guard !layout.isArranging(in: repoPath) else { return }
+        terminals.focus(terminals.activeTerminalID)
+    }
+
     /// Silme onayı: canlı oturum sayısı dialogda gösterilir; store'un önceki
     /// hata/force durumu sıfırlanır.
     public func requestDeleteWorkspace(_ workspace: ProjectWorkspace) {
