@@ -14,8 +14,9 @@ import SwiftUI
 ///    doğrulandı). Bu yüzden tek gerçek kaynak, imleç konumunu doğrudan okuyan
 ///    doğrulama tik'idir; tracking area yalnız anında tepki için durur.
 /// 2. **Popover açılınca kapanma:** `NSPopover` / `DropdownPanel` ayrı bir
-///    pencere açar, SwiftUI "fare çıktı" der. Sensör, ana pencereye BAĞLI
-///    (child) pencerelerin içini de "içeride" sayar.
+///    pencere açar, SwiftUI "fare çıktı" der. Sensör, BU PANELDEN açılmış
+///    (sahiplenilmiş) child pencerelerin içini de "içeride" sayar (karar 99);
+///    başka yerden açılan popover'lar paneli açmaz.
 /// 3. **Kaçan giriş/çıkış:** `mouseEntered` (overlay imlecin altında doğduğunda,
 ///    ör. panel gizlenir gizlenmez) ve `mouseExited` (pencere değişimi, hızlı
 ///    çıkış, view yeniden kurulumu) tek başına bırakılmaz; view pencerede
@@ -43,20 +44,40 @@ struct PointerPresence: NSViewRepresentable {
     }
 }
 
-/// Sensörün **saf** kararı (test edilebilir): imleç bölgenin içinde mi?
+/// Sensörün **saf** kararları (test edilebilir).
 ///
-/// Uygulama arka plandayken hover yoktur; bölgenin dışı, yalnız imleç ana
-/// pencereye bağlı bir yardımcı pencerenin (popover, açılır liste) üstündeyse
-/// içeride sayılır.
+/// Bölgenin dışı yalnız iki durumda içeride sayılır (karar 99): imleç bu
+/// panelin **sahip olduğu** bir yardımcı pencerenin (popover, açılır liste)
+/// üstündeyse ya da panelden başlayan bir `NSMenu` takibi sürüyorsa. Ana
+/// pencereye bağlı her pencere DEĞİL — top bar'ın popover'ı paneli açmaz.
 enum PointerPresenceRule {
     static func isInside(
         pointer: CGPoint,
         region: CGRect?,
         isAppActive: Bool,
-        isPointerInAttachedWindow: Bool
+        isPointerInOwnedWindow: Bool,
+        isMenuHeld: Bool
     ) -> Bool {
         guard isAppActive, let region else { return false }
-        return region.contains(pointer) || isPointerInAttachedWindow
+        return region.contains(pointer) || isPointerInOwnedWindow || isMenuHeld
+    }
+
+    /// Panelin sahip olduğu yardımcı pencereler (pencere numarası).
+    ///
+    /// Sahiplik sayılmaz, çıkarsanır: bir pencere ilk görüldüğü anda imleç
+    /// içerideyse (panelin ya da onun sahip olduğu bir popover'ın üstünde —
+    /// iç içe alt menüler böylece zincirlenir) panele aittir. Kapanan pencere
+    /// `attached`'tan düştüğü için sahiplik kendiliğinden biter; azaltılması
+    /// unutulabilecek bir sayaç yoktur.
+    static func ownedWindows(
+        attached: Set<Int>,
+        previouslyAttached: Set<Int>,
+        owned: Set<Int>,
+        wasInside: Bool
+    ) -> Set<Int> {
+        let kept = owned.intersection(attached)
+        guard wasInside else { return kept }
+        return kept.union(attached.subtracting(previouslyAttached))
     }
 }
 
@@ -73,6 +94,16 @@ private final class PointerPresenceView: NSView {
 
     private var isInside = false
     private var verifyTimer: Timer?
+    private var menuObservers: [NSObjectProtocol] = []
+
+    /// Bir önceki ölçümde ana pencereye bağlı olan yardımcı pencereler.
+    private var previouslyAttached: Set<Int> = []
+    /// Bu panelden açılmış yardımcı pencereler (`PointerPresenceRule.ownedWindows`).
+    private var ownedWindows: Set<Int> = []
+    /// Panelin içindeyken başlayan `NSMenu` takibi (`.contextMenu`) sürüyor mu.
+    /// Menü penceresi ana pencereye bağlı olmadığı için ayrı izlenir; başlangıç
+    /// ve bitiş bildirimleri AppKit tarafından çift olarak gönderilir.
+    private var isMenuHeld = false
 
     /// Sensör tamamen şeffaftır: tıklama ve sürükleme altındaki view'a gider.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -98,6 +129,9 @@ private final class PointerPresenceView: NSView {
         if window == nil {
             tearDown()
         } else {
+            // Sensör doğmadan önce açık olan pencereler (ör. top bar popover'ı)
+            // hiçbir zaman bu panelin sayılmaz.
+            previouslyAttached = attachedWindowNumbers
             startVerifying()
             evaluate()
         }
@@ -105,6 +139,8 @@ private final class PointerPresenceView: NSView {
 
     func tearDown() {
         stopVerifying()
+        ownedWindows = []
+        isMenuHeld = false
         if isInside {
             isInside = false
             onChange?(false)
@@ -112,11 +148,21 @@ private final class PointerPresenceView: NSView {
     }
 
     private func evaluate() {
+        let attached = attachedWindowNumbers
+        ownedWindows = PointerPresenceRule.ownedWindows(
+            attached: attached,
+            previouslyAttached: previouslyAttached,
+            owned: ownedWindows,
+            wasInside: isInside
+        )
+        previouslyAttached = attached
+
         let inside = PointerPresenceRule.isInside(
             pointer: NSEvent.mouseLocation,
             region: screenRegion,
             isAppActive: NSApp.isActive,
-            isPointerInAttachedWindow: isPointerInAttachedWindow
+            isPointerInOwnedWindow: isPointerInOwnedWindow,
+            isMenuHeld: isMenuHeld
         )
         guard inside != isInside else { return }
         isInside = inside
@@ -128,14 +174,36 @@ private final class PointerPresenceView: NSView {
         let timer = Timer(timeInterval: Self.verifyInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.evaluate() }
         }
-        // `.common`: kaydırma/sürükleme sırasında da dönmeli.
+        // `.common`: kaydırma/sürükleme ve menü takibi sırasında da dönmeli.
         RunLoop.main.add(timer, forMode: .common)
         verifyTimer = timer
+        observeMenuTracking()
     }
 
     private func stopVerifying() {
         verifyTimer?.invalidate()
         verifyTimer = nil
+        menuObservers.forEach(NotificationCenter.default.removeObserver)
+        menuObservers = []
+    }
+
+    private func observeMenuTracking() {
+        let center = NotificationCenter.default
+        menuObservers = [
+            center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.isInside else { return }
+                    self.isMenuHeld = true
+                }
+            },
+            center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.isMenuHeld else { return }
+                    self.isMenuHeld = false
+                    self.evaluate()
+                }
+            },
+        ]
     }
 
     /// Bölgenin ekran koordinatındaki dikdörtgeni; pencere yoksa `nil`.
@@ -144,16 +212,26 @@ private final class PointerPresenceView: NSView {
         return window.convertToScreen(convert(bounds, to: nil))
     }
 
-    /// İmlecin altındaki pencere, ana pencereye bağlı bir yardımcı pencere mi
-    /// (popover, açılır liste)? Bağlıysa panel açık kalmalıdır.
-    private var isPointerInAttachedWindow: Bool {
-        guard let window else { return false }
+    /// Ana pencereye (zincirleme) bağlı, görünür yardımcı pencereler.
+    private var attachedWindowNumbers: Set<Int> {
+        guard let window else { return [] }
+        return Set(NSApp.windows.lazy
+            .filter { $0 !== window && $0.isVisible && Self.isDescendant($0, of: window) }
+            .map(\.windowNumber))
+    }
+
+    /// İmlecin altındaki pencere bu panelin sahip olduğu bir pencere mi?
+    private var isPointerInOwnedWindow: Bool {
+        guard !ownedWindows.isEmpty else { return false }
         let number = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
-        guard let hovered = NSApp.window(withWindowNumber: number), hovered !== window else { return false }
-        var parent = hovered.parent
-        while let candidate = parent {
-            if candidate === window { return true }
-            parent = candidate.parent
+        return ownedWindows.contains(number)
+    }
+
+    private static func isDescendant(_ candidate: NSWindow, of ancestor: NSWindow) -> Bool {
+        var parent = candidate.parent
+        while let current = parent {
+            if current === ancestor { return true }
+            parent = current.parent
         }
         return false
     }
