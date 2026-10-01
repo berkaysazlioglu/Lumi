@@ -32,6 +32,9 @@ public final class AppModel {
     public private(set) var personas: [Persona] = []
     public private(set) var lastCommandError: [String: String] = [:]
     public private(set) var startState: StartSessionState = .idle
+    /// Session id the Mac returned for the last successful chat start — lets the
+    /// UI navigate straight into the new agent. Cleared by `resetStartState`.
+    public private(set) var lastStartedSessionId: String?
     public private(set) var notificationsEnabled: Bool
     public private(set) var notificationAuthStatus: NotificationAuthStatus = .notDetermined
     public weak var pushControl: (any PushControlling)?
@@ -232,6 +235,7 @@ public final class AppModel {
                 // start_session kind=chat → Mac returns sessionId → mark as a chat session
                 // (for routing) + automatically subscribe to chat.
                 if result.ok, let sid = result.sessionId {
+                    lastStartedSessionId = sid
                     chatSessionIds.insert(sid)
                     subscribeChat(sid)
                 }
@@ -611,6 +615,7 @@ public final class AppModel {
                                  branchName: String? = nil, baseBranch: String? = nil,
                                  workspaceName: String? = nil) async {
         startState = .sending
+        lastStartedSessionId = nil
         await dispatch(target: "", action: .startSession(
             repoPath: repoPath, personaId: nil, prompt: "", kind: "chat",
             branchMode: branchMode, branchName: branchName,
@@ -635,6 +640,7 @@ public final class AppModel {
 
     public func resetStartState() {
         startState = .idle
+        lastStartedSessionId = nil
     }
 
     // MARK: Streaming text (Phase 2 Task 4)

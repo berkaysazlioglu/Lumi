@@ -45,7 +45,7 @@ targets:
         # Sürüm/build; make-mobile.sh xcodebuild komut satırından ezer
         # (CURRENT_PROJECT_VERSION = git commit sayısı, MARKETING_VERSION = VERSION env).
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "336"
+        CURRENT_PROJECT_VERSION: "379"
     info:
       path: App/Info.plist
       properties:

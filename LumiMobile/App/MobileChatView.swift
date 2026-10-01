@@ -63,6 +63,12 @@ struct MobileChatView: View {
                         .padding(.vertical, 8)
                     }
                     .coordinateSpace(name: "chatScroll")
+                    // WhatsApp-style: reading never needs the keyboard. Dragging the
+                    // transcript pulls it down, tapping empty space dismisses it
+                    // (buttons inside messages still win their own taps).
+                    .scrollDismissesKeyboard(.interactively)
+                    .contentShape(Rectangle())
+                    .onTapGesture { composerFocused = false }
                     .onPreferenceChange(BottomSentinelKey.self) { minY in
                         atBottom = chatAtBottom(sentinelMinY: minY, viewportHeight: geo.size.height)
                     }
@@ -122,9 +128,8 @@ struct MobileChatView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeOut(duration: 0.25), value: keyboard.height)
         .task(id: sessionId) { model.subscribeChat(sessionId) }
-        // Focus the composer when opening an empty chat → removes "what do I do?"
-        // ambiguity, letting the user start typing right away (Phase 2.1 §4).
-        .onAppear { if turns.isEmpty { composerFocused = true } }
+        // No auto-focus on open (not even for an empty chat): the keyboard only
+        // appears when the user taps the composer, like WhatsApp.
     }
 
     private var composer: some View {

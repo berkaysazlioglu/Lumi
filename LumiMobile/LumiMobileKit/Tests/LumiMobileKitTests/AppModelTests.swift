@@ -341,6 +341,26 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.startState, .failed("mac_offline"))
     }
 
+    func testStartChatSessionRecordsReturnedSessionId() async {
+        let (model, client, _) = makeModel()
+        await model.startChatSession(repoPath: "/r/lumi/.worktrees/feat-x")
+        guard case .startSession(let repoPath, _, _, let kind, let mode, _, _, _) = client.commands[0].action
+        else { return XCTFail() }
+        XCTAssertEqual(repoPath, "/r/lumi/.worktrees/feat-x")
+        XCTAssertEqual(kind, "chat")
+        XCTAssertNil(mode)
+        XCTAssertNil(model.lastStartedSessionId)
+
+        model.handle(.commandResult(CommandResult(
+            commandId: client.commands[0].commandId, ok: true, error: nil, sessionId: "t-42")))
+        XCTAssertEqual(model.startState, .succeeded)
+        XCTAssertEqual(model.lastStartedSessionId, "t-42")
+        XCTAssertTrue(model.isChatSession("t-42"))
+
+        model.resetStartState()
+        XCTAssertNil(model.lastStartedSessionId)
+    }
+
     func testStartSessionFailureLandsInFailed() async {
         let (model, client, _) = makeModel()
         client.sendResult = false

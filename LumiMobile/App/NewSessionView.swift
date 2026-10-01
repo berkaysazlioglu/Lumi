@@ -3,13 +3,27 @@ import LumiMobileKit
 
 struct NewSessionView: View {
     let model: AppModel
+    /// Called with the new session id after a successful start, so the
+    /// presenter can navigate straight into the agent.
+    var onStarted: (String) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
-    @State private var repoPath = ""
-    @State private var branchMode = "current"          // current | existing | new (branch mode)
+    @State private var repoPath: String
+    @State private var branchMode: String              // current | existing | new (branch mode)
     @State private var selectedBranch = ""
     @State private var newBranchName = ""
-    @State private var baseBranch = ""
+    @State private var baseBranch: String
     @State private var workspaceName = ""
+
+    /// Presets let a Projects checkout row open the form as
+    /// "new branch from <this checkout's branch>" in the given repo.
+    init(model: AppModel, repoPath: String = "", branchMode: String = "current",
+         baseBranch: String = "", onStarted: @escaping (String) -> Void = { _ in }) {
+        self.model = model
+        self.onStarted = onStarted
+        _repoPath = State(initialValue: repoPath)
+        _branchMode = State(initialValue: branchMode)
+        _baseBranch = State(initialValue: baseBranch)
+    }
 
     var body: some View {
         NavigationStack {
@@ -47,6 +61,10 @@ struct NewSessionView: View {
                             .autocorrectionDisabled()
                         Picker("Base branch (opt.)", selection: $baseBranch) {
                             Text("Current branch").tag("")
+                            // A preset base may not be in the loaded list (yet) — keep it selectable.
+                            if !baseBranch.isEmpty && !model.branchesForRepo.contains(baseBranch) {
+                                Text(baseBranch).tag(baseBranch)
+                            }
                             ForEach(model.branchesForRepo, id: \.self) { Text($0).tag($0) }
                         }
                     }
@@ -76,9 +94,18 @@ struct NewSessionView: View {
                 }
             }
             .onChange(of: model.startState) { _, state in
-                if state == .succeeded { model.resetStartState(); dismiss() }
+                if state == .succeeded {
+                    let sid = model.lastStartedSessionId
+                    model.resetStartState()
+                    dismiss()
+                    if let sid { onStarted(sid) }
+                }
             }
-            .onAppear { model.resetStartState() }
+            .onAppear {
+                model.resetStartState()
+                // Preset repo: onChange doesn't fire for the initial value, so load here.
+                if !repoPath.isEmpty { Task { await model.loadBranches(repoPath: repoPath) } }
+            }
         }
     }
 

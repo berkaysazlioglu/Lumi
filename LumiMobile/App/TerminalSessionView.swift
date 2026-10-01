@@ -15,6 +15,8 @@ struct TerminalSessionView: View {
     @State private var buffer = TerminalFeedBuffer()
     /// Tracks keyboard height; manually shifts the bottom bar above the keyboard (bug #1).
     @StateObject private var keyboard = KeyboardObserver()
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
 
     var body: some View {
         // Phase 2.1: the view is chosen based on the session TYPE (reactive — `isChatSession`
@@ -35,6 +37,27 @@ struct TerminalSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { toolbarItems }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Delete this chat", role: .destructive) { confirmDelete = true }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete this chat?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                // Pop back to home first, then end the session on the Mac.
+                dismiss()
+                Task { await model.deleteSession(sessionId: sessionId) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This session will be ended on the Mac.")
         }
     }
 

@@ -1,10 +1,25 @@
 import SwiftUI
+import UIKit
 import LumiMobileKit
 
 struct ProjectsView: View {
     let model: AppModel
     @State private var collapsedProjects: Set<String> = []
     @State private var showAdd = false
+    @State private var confirmUnpair = false
+    // Single-selection navigation. Replaces per-agent NavigationLink(value:) — when
+    // multiple NavigationLinks live in one List cell, SwiftUI activates ALL of them,
+    // so tapping one checkout pushed the whole group and Back walked through each chat
+    // in sequence. An explicit `navigationDestination(item:)` binding guarantees exactly
+    // one push and a clean Back-to-home.
+    @State private var openSession: String?
+    /// Agent whose deletion is awaiting confirmation (main-screen delete).
+    @State private var pendingDelete: String?
+    /// Checkout whose one-tap agent start is in flight (its + shows a spinner).
+    @State private var startingCheckout: String?
+    @State private var startError: String?
+    /// Long-press "New branch from …" → NewSessionView preset for that checkout.
+    @State private var newBranchPreset: NewBranchPreset?
 
     var body: some View {
         NavigationStack {
@@ -20,10 +35,7 @@ struct ProjectsView: View {
             }
             .listStyle(.plain)
             .navigationTitle("Projects")
-            // Mirror SessionListView's routing exactly: all sessions go to
-            // TerminalSessionView, which internally branches to MobileChatView
-            // when isChatSession returns true (Phase 2.1 routing already inside it).
-            .navigationDestination(for: String.self) { sessionId in
+            .navigationDestination(item: $openSession) { sessionId in
                 TerminalSessionView(model: model, sessionId: sessionId)
             }
             .toolbar {
@@ -32,18 +44,86 @@ struct ProjectsView: View {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                         .disabled(!model.macOnline || model.projectsSnapshot.addable.isEmpty)
                 }
+                ToolbarItem(placement: .topBarTrailing) { settingsMenu }
             }
             .sheet(isPresented: $showAdd) { AddProjectSheet(model: model) }
+            .sheet(item: $newBranchPreset) { preset in
+                NewSessionView(model: model, repoPath: preset.repoPath, branchMode: "new",
+                               baseBranch: preset.baseBranch) { sessionId in
+                    openSession = sessionId
+                }
+            }
+            .onChange(of: model.startState) { _, state in
+                // Only the one-tap start owns this; the sheet handles its own result.
+                guard startingCheckout != nil, newBranchPreset == nil else { return }
+                switch state {
+                case .succeeded:
+                    let sid = model.lastStartedSessionId
+                    startingCheckout = nil
+                    model.resetStartState()
+                    if let sid { openSession = sid }
+                case .failed(let error):
+                    startingCheckout = nil
+                    model.resetStartState()
+                    startError = error
+                default: break
+                }
+            }
+            .alert("Couldn't start agent", isPresented: Binding(
+                get: { startError != nil },
+                set: { if !$0 { startError = nil } }
+            )) {
+                Button("OK", role: .cancel) { startError = nil }
+            } message: {
+                Text(startError ?? "")
+            }
+            .confirmationDialog(
+                "Disconnect from this Mac?",
+                isPresented: $confirmUnpair,
+                titleVisibility: .visible
+            ) {
+                Button("Disconnect", role: .destructive) {
+                    Task { await model.unpair() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You'll return to the pairing screen and can scan a new QR code.")
+            }
+            .confirmationDialog(
+                "Delete this chat?",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { sessionId in
+                Button("Delete", role: .destructive) {
+                    Task { await model.deleteSession(sessionId: sessionId) }
+                    pendingDelete = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
+            } message: { sessionId in
+                Text("The \(model.session(sessionId)?.repoName ?? "") session will be ended on the Mac.")
+            }
         }
     }
+
+    // MARK: - Rows
 
     @ViewBuilder
     private func projectSection(_ project: ProjectRowData) -> some View {
         let collapsed = collapsedProjects.contains(project.id)
         Section {
             if !collapsed {
+                // Agents are emitted as their own List rows (not nested inside a single
+                // checkout cell) so each is individually selectable and supports swipe /
+                // long-press delete.
                 ForEach(project.checkouts) { checkout in
-                    CheckoutRowView(checkout: checkout)
+                    checkoutHeader(checkout, in: project)
+                    ForEach(checkout.agents) { agent in
+                        agentRow(agent)
+                    }
                 }
             }
         } header: {
@@ -66,6 +146,116 @@ struct ProjectsView: View {
         }
     }
 
+    @ViewBuilder
+    private func checkoutHeader(_ checkout: CheckoutRowData, in project: ProjectRowData) -> some View {
+        HStack(spacing: 8) {
+            // "workspace" kind → branch icon; "original" (main checkout) → house icon
+            Image(systemName: checkout.node.kind == "workspace" ? "arrow.triangle.branch" : "house")
+                .font(.caption).foregroundStyle(.secondary)
+            Text(checkout.node.title).font(.subheadline.weight(.medium))
+            if let branch = checkout.node.branch, !branch.isEmpty {
+                Text(branch)
+                    .font(.caption).foregroundStyle(.tertiary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            Spacer()
+            newAgentButton(checkout, in: project)
+        }
+        .listRowSeparator(.hidden)
+    }
+
+    /// Tap: start a Claude agent right in this checkout's folder and open it.
+    /// Long-press: menu that also offers creating a new branch from this one.
+    @ViewBuilder
+    private func newAgentButton(_ checkout: CheckoutRowData, in project: ProjectRowData) -> some View {
+        let branch = checkout.node.branch.flatMap { $0.isEmpty ? nil : $0 }
+        if startingCheckout == checkout.id {
+            ProgressView().controlSize(.small).frame(width: 30, height: 30)
+        } else {
+            Menu {
+                Button { startAgent(in: checkout) } label: {
+                    Label("New Claude on \(branch ?? checkout.node.title)", systemImage: "sparkle")
+                }
+                Button {
+                    newBranchPreset = NewBranchPreset(repoPath: project.node.path, baseBranch: branch ?? "")
+                } label: {
+                    Label("New branch from \(branch ?? "current")…", systemImage: "arrow.triangle.branch")
+                }
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.title3)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            } primaryAction: {
+                startAgent(in: checkout)
+            }
+            .buttonStyle(.borderless)
+            .disabled(!model.macOnline || startingCheckout != nil)
+            .accessibilityLabel("New agent on \(branch ?? checkout.node.title)")
+        }
+    }
+
+    private func startAgent(in checkout: CheckoutRowData) {
+        startingCheckout = checkout.id
+        model.resetStartState()
+        // Current-branch start at the checkout path: the Mac spawns `claude` right
+        // there (worktree/workspace included) — no workspace creation involved.
+        Task { await model.startChatSession(repoPath: checkout.node.path) }
+    }
+
+    @ViewBuilder
+    private func agentRow(_ agent: AgentRowData) -> some View {
+        Button {
+            openSession = agent.id
+        } label: {
+            HStack(spacing: 10) {
+                Circle().fill(Color(badge: agent.badge)).frame(width: 10, height: 10)
+                Image(systemName: providerSymbol(agent.provider))
+                    .font(.callout).foregroundStyle(.secondary)
+                Text(agent.title)
+                    .font(.body)
+                    .foregroundStyle(agent.needsAttention ? Color.orange : .primary)
+                    .lineLimit(1).truncationMode(.tail)
+                Spacer()
+                Text(PhoneRelativeTime.shortLabel(
+                    agent.lastActivityAt,
+                    now: Date().timeIntervalSince1970 * 1000
+                ))
+                .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 6)
+            .padding(.leading, 16)
+            .contentShape(Rectangle())
+            .overlay(alignment: .leading) {
+                if agent.needsAttention {
+                    RoundedRectangle(cornerRadius: 2).fill(Color.orange).frame(width: 3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { pendingDelete = agent.id } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button(role: .destructive) { pendingDelete = agent.id } label: {
+                Label("Delete this chat", systemImage: "trash")
+            }
+        }
+    }
+
+    private func providerSymbol(_ provider: String?) -> String {
+        switch provider {
+        case "claude": "sparkle"
+        case "codex": "chevron.left.forwardslash.chevron.right"
+        default: "circle.fill"
+        }
+    }
+
+    // MARK: - Chrome
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "folder.badge.plus").font(.title).foregroundStyle(.secondary)
@@ -87,85 +277,30 @@ struct ProjectsView: View {
             .frame(width: 10, height: 10)
             .accessibilityLabel("Relay connection")
     }
-}
 
-private struct CheckoutRowView: View {
-    let checkout: CheckoutRowData
-    @State private var agentsCollapsed = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                // "workspace" kind → branch icon; "original" (main checkout) → house icon
-                Image(systemName: checkout.node.kind == "workspace" ? "arrow.triangle.branch" : "house")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(checkout.node.title).font(.subheadline)
-                if let branch = checkout.node.branch, !branch.isEmpty {
-                    Text(branch)
-                        .font(.caption).foregroundStyle(.tertiary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
-                Spacer()
-                // Show leading agent badge summary when agents row is collapsed
-                if agentsCollapsed, let lead = checkout.agents.first {
-                    HStack(spacing: 4) {
-                        Circle().fill(Color(badge: lead.badge)).frame(width: 8, height: 8)
-                        Text("\(checkout.agents.count)").font(.caption).foregroundStyle(.secondary)
+    // Always reachable — even while offline or stuck on a stale pairing —
+    // so a dead relay connection can be recovered by disconnecting and
+    // re-pairing. (Ported from the retired SessionListView gear menu.)
+    private var settingsMenu: some View {
+        Menu {
+            Toggle("Notifications", isOn: Binding(
+                get: { model.notificationsEnabled },
+                set: { isOn in
+                    Task {
+                        if isOn {
+                            if await model.enableNotifications() == .needsSettings,
+                               let url = URL(string: UIApplication.openSettingsURLString) {
+                                await UIApplication.shared.open(url)
+                            }
+                        } else {
+                            await model.disableNotifications()
+                        }
                     }
                 }
-            }
-            // Collapse/expand toggle only when there are multiple agents
-            if checkout.agents.count > 1 {
-                Button { agentsCollapsed.toggle() } label: {
-                    HStack {
-                        Text("\(checkout.agents.count) agents").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Image(systemName: agentsCollapsed ? "chevron.right" : "chevron.down")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain).padding(.leading, 24)
-            }
-            if !agentsCollapsed || checkout.agents.count == 1 {
-                ForEach(checkout.agents) { agent in AgentRowView(agent: agent) }
-            }
-        }
-    }
-}
-
-private struct AgentRowView: View {
-    let agent: AgentRowData
-
-    var body: some View {
-        NavigationLink(value: agent.id) {
-            HStack(spacing: 8) {
-                Circle().fill(Color(badge: agent.badge)).frame(width: 8, height: 8)
-                Image(systemName: providerSymbol).font(.caption2).foregroundStyle(.secondary)
-                Text(agent.title)
-                    .font(.subheadline)
-                    .foregroundStyle(agent.needsAttention ? Color.orange : .secondary)
-                    .lineLimit(1).truncationMode(.tail)
-                Spacer()
-                Text(PhoneRelativeTime.shortLabel(
-                    agent.lastActivityAt,
-                    now: Date().timeIntervalSince1970 * 1000
-                ))
-                .font(.caption2).foregroundStyle(.tertiary).monospacedDigit()
-            }
-            .padding(.leading, 24)
-            .overlay(alignment: .leading) {
-                if agent.needsAttention {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.orange).frame(width: 3)
-                }
-            }
-        }
-    }
-
-    private var providerSymbol: String {
-        switch agent.provider {
-        case "claude": "sparkle"
-        case "codex": "chevron.left.forwardslash.chevron.right"
-        default: "circle.fill"
+            ))
+            Button("Disconnect", role: .destructive) { confirmUnpair = true }
+        } label: {
+            Image(systemName: "gearshape")
         }
     }
 }
@@ -217,4 +352,11 @@ private extension Color {
         case .error: self = .red
         }
     }
+}
+
+/// Sheet item for the long-press "New branch from …" action.
+private struct NewBranchPreset: Identifiable {
+    let repoPath: String
+    let baseBranch: String
+    var id: String { repoPath + "\u{0}" + baseBranch }
 }
