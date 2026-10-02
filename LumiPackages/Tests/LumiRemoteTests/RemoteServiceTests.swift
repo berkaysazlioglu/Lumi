@@ -105,6 +105,13 @@ final actor FakeRelayConnection: RelayConnecting {
         }
     }
 
+    /// Son 'sessions' frame'inde verilen id'nin `awaitingDecision` değeri (yoksa nil).
+    func lastSessionAwaitingDecision(id: String) -> Bool? {
+        guard let payload = sent.last(where: { $0.type == "sessions" })?.payload,
+              let list = payload["sessions"] as? [[String: Any]] else { return nil }
+        return list.first { $0["id"] as? String == id }?["awaitingDecision"] as? Bool
+    }
+
     func lastBool(type: String, key: String) -> Bool? { sent.last { $0.type == type }?.payload[key] as? Bool }
     func lastInt(type: String, key: String) -> Int? { sent.last { $0.type == type }?.payload[key] as? Int }
     func lastString(type: String, key: String) -> String? { sent.last { $0.type == type }?.payload[key] as? String }
@@ -256,6 +263,26 @@ final class FakeTerminalServicing: TerminalServicing {
         #expect(await conn.firstInt(type: "scrollback", key: "seq") == 0)
         #expect(await conn.firstString(type: "data", key: "data") == "TElWRQ==")       // base64 "LIVE"
         #expect(await conn.firstInt(type: "data", key: "seq") == 1)
+        svc.stop()
+    }
+
+    /// Karar 97: `awaitingDecisionChanged` olayı `sessions`'ı yeniden yayınlar;
+    /// ilgili terminalin meta'sında `awaitingDecision` güncel değeri taşır.
+    @Test func awaitingDecisionChangeRebroadcastsSessions() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let sid = makeSession(term)
+        let tid = TerminalID(raw: UUID(uuidString: sid)!)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []), config: FakeConfigService())
+        await svc.start()
+
+        term.emit(.awaitingDecisionChanged(tid, true))
+        try await conn.waitForCount(type: "sessions", atLeast: 1)
+        #expect(await conn.lastSessionAwaitingDecision(id: sid) == true)
+
+        term.emit(.awaitingDecisionChanged(tid, false))
+        try await conn.waitForCount(type: "sessions", atLeast: 2)
+        #expect(await conn.lastSessionAwaitingDecision(id: sid) == false)
         svc.stop()
     }
 

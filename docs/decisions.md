@@ -1069,3 +1069,10 @@ Saha bulgusu: iOS'tan Stop'a basınca Claude duruyordu ama telefonda "Running" b
 - **Mac:** `RemoteService`, bir terminalin `statusChanged` olayı non-working olduğunda ve terminalin CANLI status'ü de working değilse `TurnStatusReducer.interrupt()` + `PromptJournal.cancelAllPending()` uygular; chat modundaki terminal için `chat_status working=false` ve iptal edilmiş `prompt` frame'leri yollanır. Canlı status kapısı, hook ve terminal akışları arasındaki sıra yarışında yeni turn'ün düşürülmesini engeller.
 - **Telefon:** Stop artık `0x03` değil `0x1B` (Esc) gönderir — Claude'un kesme tuşu, çıkış riski yok. Basınca bar "Stopping…" olur ve tekrar basılamaz; 5 sn içinde `working=false` gelmezse turn yerelde kapatılır (bekleyen kart düşer).
 - Protokol değişmez.
+
+### 97. Telefonda ajan durumu Mac'in durum dilini kullanır; `sessions`'a additive `awaitingDecision` (2026-10-02)
+
+Saha bulgusu: telefonda hangi ajanın çalıştığı, hangisinin beklediği belli değildi. Satırda yalnız 10pt'lik renkli bir nokta vardı ve tüm `waiting-*` durumları (bitmiş-görülmüş dahil) aynı turuncuydu; izin/soru bekleyen ajan bitmiş ajandan ayırt edilemiyordu, chat ekranında durum hiç yoktu.
+
+- **Protokol (additive):** `sessions` içindeki her `SessionMeta` artık `awaitingDecision: Bool` taşır. Kaynak `TerminalEvent.awaitingDecisionChanged`; `RemoteService` değişince `sessions`'ı yeniden yayınlar. Eski telefon alanı yok sayar, yeni telefon alan yoksa `false` kabul eder. Relay değişmez.
+- **Telefon:** YENİ `LumiMobileKit/AgentActivity` — Mac `AgentActivityState` eşlemesinin aynısı (çalışıyor → spinner, karar bekliyor → zil "Needs input", bitti → yeşil tik, hata → kırmızı çarpı, boşta → soluk nokta). Projects ajan satırı glif + çalışırken/karar beklerken kısa etiket gösterir; chat ekranının başlığı aynı glifi taşır. Dikkat vurgusu (karar 77) aynen kalır.

@@ -123,11 +123,15 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     public let provider: String?
     /// Last activity, epoch ms; nil if omitted by an older Mac (relative-time label).
     public let lastActivityAt: Double?
+    /// Awaiting a decision (permission/question prompt) separate from status; defaults
+    /// to false if omitted by an older Mac (decision 97).
+    public let awaitingDecision: Bool
 
     public init(id: String, repoName: String, status: String,
                 title: String? = nil, model: String? = nil,
                 cols: Int, rows: Int, kind: String? = nil,
-                provider: String? = nil, lastActivityAt: Double? = nil) {
+                provider: String? = nil, lastActivityAt: Double? = nil,
+                awaitingDecision: Bool = false) {
         self.id = id
         self.repoName = repoName
         self.status = status
@@ -138,10 +142,11 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
         self.kind = kind
         self.provider = provider
         self.lastActivityAt = lastActivityAt
+        self.awaitingDecision = awaitingDecision
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, repoName, status, title, model, cols, rows, kind, provider, lastActivityAt
+        case id, repoName, status, title, model, cols, rows, kind, provider, lastActivityAt, awaitingDecision
     }
 
     public init(from decoder: Decoder) throws {
@@ -156,7 +161,8 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
             rows: try c.decode(Int.self, forKey: .rows),
             kind: try c.decodeIfPresent(String.self, forKey: .kind),
             provider: try c.decodeIfPresent(String.self, forKey: .provider),
-            lastActivityAt: try c.decodeIfPresent(Double.self, forKey: .lastActivityAt)
+            lastActivityAt: try c.decodeIfPresent(Double.self, forKey: .lastActivityAt),
+            awaitingDecision: try c.decodeIfPresent(Bool.self, forKey: .awaitingDecision) ?? false
         )
     }
 
@@ -164,6 +170,9 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     public var badge: Badge {
         (SessionStatus(rawValue: status) ?? .idle).badge
     }
+
+    /// Mac's AgentActivityState mapping (decision 97): status + awaitingDecision → glyph state.
+    public var activity: AgentActivity { AgentActivity(status: status, awaitingDecision: awaitingDecision) }
 }
 
 public struct CheckoutNode: Decodable, Sendable, Equatable, Identifiable {

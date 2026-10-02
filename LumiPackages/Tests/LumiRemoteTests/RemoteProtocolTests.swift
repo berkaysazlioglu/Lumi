@@ -92,6 +92,14 @@ import LumiKit
         #expect(d["lastActivityAt"] == nil)
     }
 
+    @Test func sessionMetaCarriesAwaitingDecision() {
+        let d = SessionMeta(id: "a", repoName: "r", status: "working", cols: 80, rows: 24,
+                            awaitingDecision: true).toDict()
+        #expect(d["awaitingDecision"] as? Bool == true)
+        let d2 = SessionMeta(id: "a", repoName: "r", status: "idle", cols: 80, rows: 24).toDict()
+        #expect(d2["awaitingDecision"] as? Bool == false)
+    }
+
     @Test func projectsPayloadShape() {
         let payload = RemoteProtocol.projectsPayload(
             projects: [["name": "p", "path": "/p", "checkouts": []]],
