@@ -66,6 +66,12 @@ enum UIStateCodec {
         if let raw = dict["projectToolsTab"] as? String {
             state.projectToolsTab = raw
         }
+        // Karar 103 (additive): All Terminals yerleşimi ve kart sırası. Yoksa/
+        // bozuksa varsayılan; sıradaki String olmayan girdiler atılır.
+        state.allTerminalsGridLayout = GridLayoutCodec.decode(dict["allTerminalsGridLayout"] as? [String: Any])
+        if let raw = dict["allTerminalsOrder"] as? [Any] {
+            state.allTerminalsOrder = raw.compactMap { $0 as? String }
+        }
         return state
     }
 
@@ -118,6 +124,15 @@ enum UIStateCodec {
         // eski dosyalarda olmayan bir anahtar üretilmez (karar 9).
         if let tab = state.projectToolsTab {
             overlay["projectToolsTab"] = tab
+        }
+        // Karar 103 (additive): ikisi de yalnız DOLU iken yazılır. Sıra boşalınca
+        // diskte kalan eski liste zararsızdır: resume listesi (her yazımda
+        // yazılır) boştur, eşleşecek oturum doğmaz; ilk dolu yazım onu ezer.
+        if let layout = state.allTerminalsGridLayout {
+            overlay["allTerminalsGridLayout"] = GridLayoutCodec.overlay(layout)
+        }
+        if !state.allTerminalsOrder.isEmpty {
+            overlay["allTerminalsOrder"] = state.allTerminalsOrder
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

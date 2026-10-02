@@ -15,11 +15,12 @@ import LumiKit
 /// sorgu yok, sıra yok — onlar `NavigationStore.onTabClosed` event'iyle bağlanır.
 @MainActor
 public protocol TerminalFocusCoordinating: AnyObject {
-    /// Tab/route geçişi: yüzeyi bu repo'ya alır ve son aktif terminali odaklar.
-    func activateRepo(_ repoPath: String)
-    /// Route repo ekseninden ÇIKTIĞINDA (Faz 6.3: terminals → başka bir route)
-    /// yüzeyi arka plana alır ve "hangi repo öndeydi" kaydını düşürür; dönüşte
-    /// `activateRepo` aynı repoya bile gelse foreground'u yeniden uygular.
+    /// Tab/route geçişi: yüzeyi bu kapsama (repo ya da All Terminals — karar
+    /// 103) alır ve kapsamın son aktif terminalini odaklar.
+    func activateSurface(_ scope: TerminalScope)
+    /// Route terminal yüzeyinden ÇIKTIĞINDA (Faz 6.3: terminals → başka bir
+    /// route) yüzeyi arka plana alır; dönüşte `activateSurface` aynı kapsama
+    /// bile gelse foreground'u yeniden uygular.
     func deactivateSurface()
     /// Odağı doğrudan set eder (`nil` = odak yok).
     func focus(_ id: TerminalID?)

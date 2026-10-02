@@ -83,8 +83,8 @@ public final class NavigationStore {
 
         activeRoute = Self.restoreRoute(from: state, resolvedTab: resolveActiveTab(state.activeTab, repos: repos))
 
-        if let tab = activeRoute.repoPath {
-            terminals.activateRepo(tab)
+        if let scope = activeRoute.terminalScope {
+            terminals.activateSurface(scope)
         }
         announceRepoChange(from: .none, to: activeRoute)
         return openTabs
@@ -127,27 +127,30 @@ public final class NavigationStore {
         announceRepoChange(from: previous, to: route)
     }
 
-    /// **Faz 6.3 route geçiş sözleşmesi** (view'da DEĞİL, burada):
+    /// **Faz 6.3 route geçiş sözleşmesi** (view'da DEĞİL, burada). Karar 103:
+    /// "terminal yüzeyi" artık repo route'u VE All Terminals'tır
+    /// (`WorkspaceRoute.terminalScope`):
     ///
     /// | Geçiş | Terminal yüzeyi | View köprüsü |
     /// |---|---|---|
-    /// | terminals → başka route | `deactivateSurface()` (arka plan + odak yok) | `detachAll()` |
-    /// | başka route → terminals | `activateRepo()` (foreground + odak) | `refreshAttachedViews()` |
-    /// | repo → repo | `activateRepo()` (eskiyi arkaya, yeniyi öne) | — (host'lar yerinde) |
-    /// | route-dışı → route-dışı | — | — |
+    /// | yüzey → yüzey-dışı route | `deactivateSurface()` (arka plan + odak yok) | `detachAll()` |
+    /// | yüzey-dışı route → yüzey | `activateSurface()` (foreground + odak) | `refreshAttachedViews()` |
+    /// | yüzey → yüzey (repo ⇄ repo ⇄ All) | `activateSurface()` (eskiyi arkaya, yeniyi öne) | — (host'lar yerinde) |
+    /// | yüzey-dışı → yüzey-dışı | — | — |
     ///
     /// PTY hiçbir adımda durmaz, view'lar yok edilmez: detach yalnız reparent
-    /// eder (design/03 §3).
+    /// eder (design/03 §3). Yüzeyler arası geçişte kartlar yeni ızgaranın
+    /// host'larına SwiftUI'nin attach/dismantle yoluyla taşınır.
     private func applySurfaceTransition(from previous: WorkspaceRoute, to route: WorkspaceRoute) {
-        if let repoPath = route.repoPath {
-            terminals.activateRepo(repoPath) // cross-store yan etki
-            if previous.contentRouteID != nil {
+        if let scope = route.terminalScope {
+            terminals.activateSurface(scope) // cross-store yan etki
+            if previous.contentRouteID != nil, previous.terminalScope == nil {
                 // Terminaller detach edilmişti: canlı view'lar yeniden oturtulur.
                 viewProvider?.refreshAttachedViews()
             }
             return
         }
-        guard previous.isRepo else { return }
+        guard previous.terminalScope != nil else { return }
         terminals.deactivateSurface()
         viewProvider?.detachAll()
     }
@@ -202,7 +205,7 @@ public final class NavigationStore {
             // Kapanan aktifse listenin SON tab'ı aktif olur
             activeRoute = WorkspaceRoute(repoPath: openTabs.last)
             if let tab = activeRoute.repoPath {
-                terminals.activateRepo(tab)
+                terminals.activateSurface(.repo(tab))
             } else {
                 terminals.focus(nil)
             }

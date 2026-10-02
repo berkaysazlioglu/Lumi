@@ -47,6 +47,14 @@ public struct UIState: Sendable, Equatable {
     /// dahil) sıfırlanıyordu. Ham `String`: `ProjectToolsTab` LumiState'te
     /// tanımlı, LumiKit onu göremez; bilinmeyen değer okumada varsayılana iner.
     public var projectToolsTab: String?
+    /// Karar 103 (additive): All Terminals görünümünün grid yerleşimi. nil =
+    /// dosyada yok → varsayılan yerleşim. `projectGridLayouts`'a girmez: o
+    /// sözlüğün anahtarı repo yoludur (karar 9).
+    public var allTerminalsGridLayout: GridLayout?
+    /// Karar 103 (additive): All Terminals'ın kart sırası — resume edilebilen
+    /// terminallerin oturum kimlikleri (resume listesiyle aynı kimlik). Resume
+    /// listesiyle birlikte checkpoint'te yazılır.
+    public var allTerminalsOrder: [String]
 
     public static let defaults = UIState(
         openTabs: [],
@@ -73,7 +81,9 @@ public struct UIState: Sendable, Equatable {
         uiScale: Double? = nil,
         uiFontFamily: UIFontFamily? = nil,
         lastCheckouts: [String: String] = [:],
-        projectToolsTab: String? = nil
+        projectToolsTab: String? = nil,
+        allTerminalsGridLayout: GridLayout? = nil,
+        allTerminalsOrder: [String] = []
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -90,6 +100,8 @@ public struct UIState: Sendable, Equatable {
         self.uiFontFamily = uiFontFamily
         self.lastCheckouts = lastCheckouts
         self.projectToolsTab = projectToolsTab
+        self.allTerminalsGridLayout = allTerminalsGridLayout
+        self.allTerminalsOrder = allTerminalsOrder
     }
 }
 

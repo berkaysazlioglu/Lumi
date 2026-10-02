@@ -22,6 +22,14 @@ public struct ContentRouteID: RawRepresentable, Hashable, Sendable, Codable {
     }
 }
 
+public extension ContentRouteID {
+    /// Karar 103: tüm projelerin terminalleri tek ızgarada. Diğer repo-dışı
+    /// route'lardan farkı terminal YÜZEYİ olmasıdır — bkz.
+    /// `WorkspaceRoute.terminalScope`. Kimlik LumiKit'tedir çünkü route
+    /// geçiş sözleşmesi (`NavigationStore`) onu tanımak zorundadır.
+    static let allTerminals = ContentRouteID("allTerminals")
+}
+
 /// Kabuğun orta alanında ne gösterildiği (refactor 5.1).
 ///
 /// `.repo` bir repo tab'ıdır (bugünkü tek durum); `.content` repo'dan bağımsız
@@ -46,6 +54,18 @@ public enum WorkspaceRoute: Hashable, Sendable {
     }
 
     public var isRepo: Bool { repoPath != nil }
+
+    /// Route bir terminal yüzeyi mi, öyleyse hangi terminalleri kapsıyor
+    /// (karar 103). Yüzey geçişi (foreground/background, view attach) ve
+    /// terminal kontrolleri (grid, Edit, klavye) bu projeksiyondan okur;
+    /// `.content` route'larından yalnız All Terminals bir yüzeydir.
+    public var terminalScope: TerminalScope? {
+        switch self {
+        case .repo(let path): .repo(path)
+        case .content(let id): id == .allTerminals ? .all : nil
+        case .none: nil
+        }
+    }
 
     /// Legacy adaptör: `String?` → route (nil = `.none`).
     public init(repoPath: String?) {

@@ -238,7 +238,9 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         uiScale: 1.25,
         uiFontFamily: .jetBrainsMono,
         lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
-        projectToolsTab: "agentHistory"
+        projectToolsTab: "agentHistory",
+        allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
+        allTerminalsOrder: ["s-1", "s-2"]
     )
 }
 
