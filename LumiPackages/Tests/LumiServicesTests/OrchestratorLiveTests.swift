@@ -96,4 +96,22 @@ final class OrchestratorLiveTests: XCTestCase {
         }
         XCTAssertTrue(results.contains { $0.0.contains("Sent to") && !$0.1 }, "araç sonucu dönmedi: \(results)")
     }
+
+    /// Faz 4: gerçek haiku özeti JSON sözleşmesine uyuyor ve soruyu yakalıyor.
+    func testHaikuDigestFollowsTheJSONContract() async throws {
+        guard ProcessInfo.processInfo.environment["LUMI_LIVE_ORCHESTRATOR"] == "1" else {
+            throw XCTSkip("canlı test: LUMI_LIVE_ORCHESTRATOR=1 ile koşar")
+        }
+        let message = """
+        I refactored the authentication module: moved token refresh into `AuthSession`, \
+        replaced the callback API with async/await, and updated 14 call sites. All 212 tests pass. \
+        I also noticed the legacy `LoginViewController` still uses the old API, but changing it \
+        touches the onboarding flow. Should I migrate `LoginViewController` too, or leave it for a \
+        separate PR?
+        """
+        let digest = try await ClaudeDigestService().summarize(agentMessage: message, terminalTitle: "auth-refactor")
+        XCTAssertFalse(digest.summary.isEmpty)
+        XCTAssertTrue(digest.needsUser, "soru yakalanmadı: \(digest)")
+        print("haiku digest:", digest.summary)
+    }
 }

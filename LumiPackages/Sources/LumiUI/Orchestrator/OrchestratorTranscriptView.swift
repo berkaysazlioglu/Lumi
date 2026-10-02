@@ -72,7 +72,9 @@ struct OrchestratorMessageRow: View {
         switch block {
         case let .text(text, _):
             if message.role == .user {
-                OrchestratorUserBubble(text: text, isPending: false)
+                // Faz 4: mesaja iliştirilen `<lumi-activity>` notu kullanıcının yazdığı değildir.
+                let visible = OrchestratorActivityNote.strip(text)
+                if !visible.isEmpty { OrchestratorUserBubble(text: visible, isPending: false) }
             } else {
                 OrchestratorAssistantText(text: text)
             }

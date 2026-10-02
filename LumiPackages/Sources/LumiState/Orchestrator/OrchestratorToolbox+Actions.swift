@@ -115,12 +115,38 @@ extension OrchestratorToolbox {
         }
     }
 
+    /// proje · checkout · dal (Activity kartı ve bağlam notu — Faz 4).
+    func location(of meta: TerminalMeta) -> String {
+        let location = checkoutLocations()[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
+        return [location.project, location.checkout, location.branch].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// Ajanın son sözü (Faz 4): Claude'da transkriptteki son metinli asistan
+    /// mesajı, diğerlerinde ekranın son satırları. Hiçbiri yoksa nil.
+    func lastAgentMessage(of meta: TerminalMeta) async -> String? {
+        if meta.provider == .claude, let sessionID = meta.claudeSessionID {
+            let messages = await transcripts.recentClaudeMessages(sessionID: sessionID, cwd: meta.repoPath)
+            let lastText = messages.last { $0.role == .assistant && !$0.plainText.isEmpty }?.plainText
+            if let lastText { return lastText }
+        }
+        let screen = OrchestratorToolFormat.screenTail(screenText(meta.id))
+        return screen.isEmpty ? nil : screen
+    }
+
     /// Kartın hedef satırı: proje · checkout · dal · sağlayıcı · durum.
     func target(of meta: TerminalMeta) -> String {
-        let location = checkoutLocations()[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
-        return [
-            location.project, location.checkout, location.branch,
-            meta.provider?.rawValue ?? "shell", status(of: meta),
-        ].compactMap { $0 }.joined(separator: " · ")
+        [location(of: meta), meta.provider?.rawValue ?? "shell", status(of: meta)].joined(separator: " · ")
+    }
+}
+
+extension ChatMessage {
+    /// Metin bloklarının birleşimi (araç çağrı/sonuçları hariç).
+    var plainText: String {
+        blocks.compactMap { block -> String? in
+            if case let .text(text, _) = block { return text }
+            return nil
+        }
+        .joined(separator: "\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

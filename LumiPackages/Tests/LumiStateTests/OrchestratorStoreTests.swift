@@ -227,6 +227,36 @@ final class OrchestratorStoreTests: XCTestCase {
         XCTAssertTrue(approvals.pending.isEmpty)
     }
 
+    /// Faz 4: araya giren olaylar bir sonraki mesaja not olarak iliştirilir;
+    /// balon notsuz metinle eşleşir.
+    func testPendingActivityIsAttachedToNextMessageOnce() async {
+        let service = FakeOrchestratorService()
+        let activity = OrchestratorActivityFeed()
+        let store = OrchestratorStore(
+            service: service, config: FakeConfigService(), activity: activity, makeSessionID: { "s-1" }
+        )
+        await store.activate()
+        activity.append(OrchestratorEvent(
+            terminalID: TerminalID(), terminalTitle: "api", location: "api · main",
+            kind: .finished, summary: "bitti", needsUser: false, at: Date()
+        ))
+
+        await store.send("ne oldu?")
+        XCTAssertTrue(service.sent[0].hasPrefix(OrchestratorActivityNote.open))
+        XCTAssertTrue(service.sent[0].hasSuffix("\n\nne oldu?"))
+        XCTAssertEqual(store.pendingPrompt, "ne oldu?", "balon notsuz metni gösterir")
+
+        var echoed = ChatJournalState()
+        echoed.messages = [userText("u1", service.sent[0])]
+        echoed.completedTurns = 1
+        service.emit(echoed)
+        await drain()
+        XCTAssertNil(store.pendingPrompt, "notlu yankı bekleyen balonu kapatır")
+
+        await store.send("tamam")
+        XCTAssertEqual(service.sent.last, "tamam", "not bir kez gider")
+    }
+
     func testShutdownStopsProcess() async {
         let service = FakeOrchestratorService()
         let store = makeStore(service: service)

@@ -49,6 +49,14 @@ enum OrchestratorPrompt {
     - For start_terminal take the checkout path from list_projects; if the project or branch \
     is ambiguous, ask first.
 
+    Activity notes:
+    - A user message may start with a <lumi-activity> … </lumi-activity> block. Lumi writes it, \
+    not the user: it lists agent terminals that finished a turn, asked something, are awaiting a \
+    decision or hit an error since the user's last message. Treat it as background context. \
+    Answer what the user actually asked; mention an update only when it is relevant or someone \
+    is waiting on the user, and then in one short line. Never send anything because of a note \
+    alone.
+
     Style:
     - Reply in the user's language (default: Turkish, with correct Turkish characters).
     - Be brief. Lead with the answer; use short bullet lists for multiple items.

@@ -16,6 +16,8 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.ui
 
     private(set) var orchestrator: OrchestratorStore!
+    /// Faz 4: bitiş/soru özetleri Activity paneline.
+    private var digests: TerminalDigestCoordinator!
     /// Araçlar Projects ağacını okur — repo/workspace store'ları repo
     /// assembly'sinde doğar (`.repo` fazı `.ui`'dan önce kurulur).
     private let repo: RepoFeatureAssembly
@@ -40,12 +42,28 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             promptQueue: terminal.promptQueue,
             trust: ClaudeWorkspaceTrust()
         )
+        let activity = OrchestratorActivityFeed()
         orchestrator = OrchestratorStore(
             service: services.orchestrator,
             config: services.config,
             control: services.orchestratorControl,
             tools: toolbox,
-            approvals: approvals
+            approvals: approvals,
+            activity: activity
+        )
+        let config = services.config
+        digests = TerminalDigestCoordinator(
+            service: terminalService,
+            terminals: shared.terminals,
+            toolbox: toolbox,
+            summarizer: services.terminalDigests,
+            feed: activity,
+            // Ayar açık VE orchestrator en az bir kez kullanılmış olmalı —
+            // hiç açmayan kullanıcı için haiku çağrısı yapılmaz.
+            isEnabled: {
+                guard await config.config().orchestratorDigestsEnabled else { return false }
+                return await config.uiState().orchestratorSessionID != nil
+            }
         )
     }
 
@@ -63,9 +81,12 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
         ))
     }
 
-    func start() async {}
+    func start() async {
+        digests.start()
+    }
 
     func shutdown() async {
+        digests.stop()
         await orchestrator.shutdown()
     }
 }

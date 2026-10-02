@@ -72,6 +72,8 @@ public protocol ServiceRegistry: AnyObject {
     var orchestratorControl: any OrchestratorControlServing { get }
     /// Claude terminallerinin transkript kuyruğu (`read_terminal`).
     var terminalTranscripts: any TerminalTranscriptReading { get }
+    /// Faz 4: uzun ajan mesajlarının haiku özeti.
+    var terminalDigests: any TerminalDigestSummarizing { get }
 
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.

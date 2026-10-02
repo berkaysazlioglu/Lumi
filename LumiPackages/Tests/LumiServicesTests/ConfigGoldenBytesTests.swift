@@ -79,6 +79,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.computerAwakeMode = .auto
             config.agentHooksEnabled = false
             config.terminalLinkActionsEnabled = false
+            // Karar 103 Faz 4 additive anahtar.
+            config.orchestratorDigestsEnabled = false
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -151,6 +153,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "unseenEnabled" : false,
         "unseenIntervalMinutes" : 7
       },
+      "orchestratorDigestsEnabled" : false,
       "projectQuickCommands" : [
 
       ],

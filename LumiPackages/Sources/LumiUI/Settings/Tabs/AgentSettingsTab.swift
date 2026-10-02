@@ -2,8 +2,8 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Ek ajan arka uçları (karar 54). Şimdilik tek bölüm: DeepSeek'i Claude Code
-/// CLI'ı üzerinden çalıştıran env kurulumu.
+/// Ajan ayarları: orchestrator Activity özetleri (karar 103) ve ek ajan arka
+/// uçları (karar 54 — DeepSeek'i Claude Code CLI'ı üzerinden çalıştıran env).
 struct AgentSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .agent
 
@@ -17,8 +17,26 @@ struct AgentSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: 0) {
             LumiSectionTitle(
                 title: "Agent",
-                description: "Extra agent backends available to new terminals."
+                description: "The orchestrator and extra agent backends available to new terminals."
             )
+            SectionHeader(title: "Orchestrator", icon: OrchestratorToolbarItem.iconName)
+                .padding(.bottom, Theme.Spacing.md)
+            LumiField(
+                title: "Activity Summaries",
+                hint: "When an agent finishes a turn you haven't seen, or stops to ask for a decision, "
+                    + "a short summary appears in the orchestrator's Activity panel. Long replies are "
+                    + "summarized with Claude haiku. Only runs after you have used the orchestrator.",
+                isLast: true
+            ) {
+                LumiToggleSwitch(
+                    isOn: Binding(
+                        get: { shell.settings.current.orchestratorDigestsEnabled },
+                        set: { shell.settings.setOrchestratorDigestsEnabled($0) }
+                    ),
+                    label: "Orchestrator activity summaries"
+                )
+            }
+            .padding(.bottom, Theme.Spacing.xxl)
             SectionHeader(title: "DeepSeek", icon: "sparkles")
                 .padding(.bottom, Theme.Spacing.md)
             InfoCard(

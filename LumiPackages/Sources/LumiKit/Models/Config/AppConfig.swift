@@ -53,6 +53,10 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 57). Kapalıyken düz tık terminale aittir (seçim/caret) ve link
     /// yalnız ⌘ / ⇧⌘ ile açılır. Additive (karar 9): yoksa açık.
     public var terminalLinkActionsEnabled: Bool
+    /// Karar 103 Faz 4: biten/soru soran ajan terminallerinin orchestrator
+    /// Activity paneline özet olarak düşmesi (uzun mesajlar haiku ile
+    /// özetlenir). Additive (karar 9): yoksa açık.
+    public var orchestratorDigestsEnabled: Bool
     /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
     /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.
     public var claudeAccounts: [ClaudeAccount]
@@ -98,6 +102,7 @@ public struct AppConfig: Sendable, Equatable {
         agentHooksEnabled: true,
         indexShortcutStyle: .default,
         terminalLinkActionsEnabled: true,
+        orchestratorDigestsEnabled: true,
         claudeAccounts: [],
         claudeAccountSelection: .systemDefault,
         codexAccounts: [],
@@ -125,6 +130,7 @@ public struct AppConfig: Sendable, Equatable {
         agentHooksEnabled: Bool = true,
         indexShortcutStyle: IndexShortcutStyle = .default,
         terminalLinkActionsEnabled: Bool = true,
+        orchestratorDigestsEnabled: Bool = true,
         claudeAccounts: [ClaudeAccount] = [],
         claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
         codexAccounts: [CodexAccount] = [],
@@ -151,6 +157,7 @@ public struct AppConfig: Sendable, Equatable {
         self.agentHooksEnabled = agentHooksEnabled
         self.indexShortcutStyle = indexShortcutStyle
         self.terminalLinkActionsEnabled = terminalLinkActionsEnabled
+        self.orchestratorDigestsEnabled = orchestratorDigestsEnabled
         self.claudeAccounts = claudeAccounts
         self.claudeAccountSelection = claudeAccountSelection
         self.codexAccounts = codexAccounts

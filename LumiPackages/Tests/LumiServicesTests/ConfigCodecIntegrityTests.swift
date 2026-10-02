@@ -188,6 +188,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         agentHooksEnabled: false,
         indexShortcutStyle: .repoOnCommand,
         terminalLinkActionsEnabled: false,
+        orchestratorDigestsEnabled: false,
         claudeAccounts: [
             ClaudeAccount(
                 id: ConfigCodecIntegrityTests.accountID,

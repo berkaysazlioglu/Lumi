@@ -47,6 +47,9 @@ enum AppConfigCodec {
         if let value = JSONValue.bool(dict["terminalLinkActionsEnabled"]) {
             config.terminalLinkActionsEnabled = value
         }
+        if let value = JSONValue.bool(dict["orchestratorDigestsEnabled"]) {
+            config.orchestratorDigestsEnabled = value
+        }
         config.claudeAccounts = ClaudeAccountCodec.decodeList(dict["claudeAccounts"])
         config.claudeAccountSelection = ClaudeAccountCodec.decodeSelection(
             dict["activeClaudeAccountId"], accounts: config.claudeAccounts
@@ -82,6 +85,7 @@ enum AppConfigCodec {
             "computerAwakeMode": config.computerAwakeMode.rawValue,
             "agentHooksEnabled": config.agentHooksEnabled,
             "terminalLinkActionsEnabled": config.terminalLinkActionsEnabled,
+            "orchestratorDigestsEnabled": config.orchestratorDigestsEnabled,
             "claudeAccounts": ClaudeAccountCodec.overlayList(config.claudeAccounts),
             "codexAccounts": CodexAccountCodec.overlayList(config.codexAccounts),
             "indexShortcutStyle": config.indexShortcutStyle.rawValue,

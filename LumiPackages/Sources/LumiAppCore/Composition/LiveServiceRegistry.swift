@@ -44,6 +44,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let orchestrator: any OrchestratorServicing
     let orchestratorControl: any OrchestratorControlServing
     let terminalTranscripts: any TerminalTranscriptReading
+    let terminalDigests: any TerminalDigestSummarizing
 
     private let usageServices: [AgentProvider: any UsageServicing]
     /// P1 ölçüm harness'ı somut manager'a bağlıdır (debug-only araç, design/04).
@@ -126,6 +127,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         )
         orchestratorControl = LumiMCPServer(serverVersion: AppAboutInfo.current.version)
         terminalTranscripts = TranscriptChatSource()
+        terminalDigests = ClaudeDigestService()
         let manager = TerminalSessionManager()
         terminalManager = manager
         terminal = manager

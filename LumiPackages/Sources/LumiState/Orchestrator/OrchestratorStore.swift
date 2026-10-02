@@ -29,6 +29,8 @@ public final class OrchestratorStore {
     public private(set) var errorMessage: String?
     /// Faz 3: yazma araçlarının bekleyen onayları (popup kartları).
     public let approvals: OrchestratorApprovals
+    /// Faz 4: ajan terminallerinden gelen bitiş/soru özetleri (Activity paneli).
+    public let activity: OrchestratorActivityFeed
 
     @ObservationIgnored private let service: any OrchestratorServicing
     @ObservationIgnored private let config: any ConfigServicing
@@ -52,6 +54,7 @@ public final class OrchestratorStore {
         control: (any OrchestratorControlServing)? = nil,
         tools: (any OrchestratorToolHandling)? = nil,
         approvals: OrchestratorApprovals = OrchestratorApprovals(),
+        activity: OrchestratorActivityFeed = OrchestratorActivityFeed(),
         makeSessionID: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() }
     ) {
         self.service = service
@@ -59,6 +62,7 @@ public final class OrchestratorStore {
         self.control = control
         self.tools = tools
         self.approvals = approvals
+        self.activity = activity
         self.makeSessionID = makeSessionID
     }
 
@@ -91,7 +95,9 @@ public final class OrchestratorStore {
             return
         }
         sentTurns += 1
-        await service.send(trimmed)
+        // Faz 4: araya giren terminal olayları bu turla birlikte modele gider
+        // (ayrı tur açılmaz); balonda gösterilmez.
+        await service.send(OrchestratorActivityNote.attach(activity.consumeContextNote(), to: trimmed))
     }
 
     /// Cevabı keser: süreç sonlandırılır, konuşma transkriptte kalır ve
@@ -215,7 +221,7 @@ private extension ChatMessage {
     func isUserText(_ text: String) -> Bool {
         guard role == .user else { return false }
         return blocks.contains { block in
-            if case let .text(value, _) = block { return value == text }
+            if case let .text(value, _) = block { return OrchestratorActivityNote.strip(value) == text }
             return false
         }
     }

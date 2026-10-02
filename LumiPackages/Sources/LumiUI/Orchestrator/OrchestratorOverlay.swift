@@ -5,7 +5,8 @@ import SwiftUI
 /// Orchestrator popup'ı (karar 103): pencerenin %80'ini kaplayan modal sohbet.
 ///
 /// Kapatmak (Escape, dışarı tık, ✕, ⌘J) yalnız GİZLER — orchestrator süreci
-/// ve sohbet yaşamaya devam eder. Açılış süreci tembel başlatır.
+/// ve sohbet yaşamaya devam eder. Açılış süreci tembel başlatır. Sağ sütun
+/// ajanlardan gelen Activity kartlarıdır (Faz 4).
 public struct OrchestratorOverlay: View {
     @Shell private var shell
     @State private var draft = ""
@@ -22,10 +23,22 @@ public struct OrchestratorOverlay: View {
                     VStack(spacing: 0) {
                         OrchestratorHeader(store: shell.orchestrator, onClose: dismiss)
                         divider
-                        OrchestratorTranscriptView(store: shell.orchestrator)
-                        OrchestratorApprovalList(approvals: shell.orchestrator.approvals)
-                        divider
-                        OrchestratorComposer(store: shell.orchestrator, draft: $draft)
+                        HStack(spacing: 0) {
+                            VStack(spacing: 0) {
+                                OrchestratorTranscriptView(store: shell.orchestrator)
+                                OrchestratorApprovalList(approvals: shell.orchestrator.approvals)
+                                divider
+                                OrchestratorComposer(store: shell.orchestrator, draft: $draft)
+                            }
+                            Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
+                            OrchestratorActivityPanel(
+                                feed: shell.orchestrator.activity,
+                                isOpen: { shell.terminals.meta(for: $0) != nil },
+                                onOpen: open,
+                                onReply: reply
+                            )
+                            .frame(width: Self.activityWidth)
+                        }
                     }
                 }
                 .frame(
@@ -35,6 +48,25 @@ public struct OrchestratorOverlay: View {
             }
         }
         .task { await shell.orchestrator.activate() }
+        // Faz 4: popup açıkken gelen olaylar görülmüş sayılır (top bar noktası).
+        .onAppear { shell.orchestrator.activity.markAllRead() }
+        .onChange(of: shell.orchestrator.activity.unreadCount) { _, count in
+            if count > 0 { shell.orchestrator.activity.markAllRead() }
+        }
+    }
+
+    private static var activityWidth: CGFloat { Theme.scaled(320) }
+
+    /// Terminali grid'de öne getirir; popup kapanır ki terminal görülsün.
+    private func open(_ event: OrchestratorEvent) {
+        guard let meta = shell.terminals.meta(for: event.terminalID) else { return }
+        dismiss()
+        shell.focusAgent(meta)
+    }
+
+    /// Composer'ı o terminale yanıt için hazırlar — orchestrator `send_to_terminal`'a çevirir.
+    private func reply(_ event: OrchestratorEvent) {
+        draft = "Reply to “\(event.terminalTitle)”: "
     }
 
     private var divider: some View {
