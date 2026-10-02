@@ -33,6 +33,7 @@ public extension CommandID {
     static let zoomIn: CommandID = "zoomIn"
     static let zoomOut: CommandID = "zoomOut"
     static let resetZoom: CommandID = "resetZoom"
+    static let toggleOrchestrator: CommandID = "toggleOrchestrator"
     static let minimizeWindow: CommandID = "minimizeWindow"
 }
 

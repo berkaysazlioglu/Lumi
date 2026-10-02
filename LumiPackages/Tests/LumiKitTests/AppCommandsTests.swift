@@ -66,7 +66,7 @@ final class AppCommandsTests: XCTestCase {
         for command in AppCommands.all() where command.isSystemStandard {
             XCTAssertFalse(referenced.contains(command.id), "\(command.title) tabloda olmamalı")
         }
-        XCTAssertEqual(AppCommands.reference().count, 17, "17 kullanıcı kısayolu")
+        XCTAssertEqual(AppCommands.reference().count, 18, "18 kullanıcı kısayolu")
     }
 
     func testReferenceIsSortedByReferenceOrder() {
@@ -84,7 +84,7 @@ final class AppCommandsTests: XCTestCase {
                 "Focus Terminal N", "Previous Terminal", "Next Terminal",
                 "Maximize Terminal", "Toggle Left Sidebar", "Toggle Right Sidebar",
                 "Focus Mode", "Zoom In", "Zoom Out", "Actual Size",
-                "Settings", "Quit",
+                "Orchestrator", "Settings", "Quit",
             ]
         )
     }

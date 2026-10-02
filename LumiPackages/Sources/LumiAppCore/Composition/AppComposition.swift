@@ -58,13 +58,14 @@ struct AppComposition {
         })
         let terminalLinks = TerminalLinkActionsAssembly()
         let appUpdate = AppUpdateFeatureAssembly()
+        let orchestrator = OrchestratorFeatureAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
             assemblies: [
                 agentHooks, terminal, notifications, sessionSchedule, usage, repo, codexAccounts,
                 workspaceBoot, statusBar, remote, deepSeek, tasks, claudeAccounts, terminalLinks,
-                appUpdate,
+                appUpdate, orchestrator,
             ]
         )
         let shell = ShellComposition.make(
@@ -82,8 +83,10 @@ struct AppComposition {
             codexAccounts: codexAccounts,
             terminalLinks: terminalLinks,
             appUpdate: appUpdate,
+            orchestrator: orchestrator,
             contributors: [
                 tasks, terminal, repo, usage, statusBar, claudeAccounts, codexAccounts, terminalLinks,
+                orchestrator,
             ]
         )
         return AppComposition(

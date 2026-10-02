@@ -238,7 +238,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         uiScale: 1.25,
         uiFontFamily: .jetBrainsMono,
         lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
-        projectToolsTab: "agentHistory"
+        projectToolsTab: "agentHistory",
+        orchestratorSessionID: "orch-1"
     )
 }
 

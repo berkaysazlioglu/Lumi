@@ -8,7 +8,13 @@ public struct ChatJournalState: Equatable, Sendable {
     public var streamingText: String?
     public var turnActive: Bool
     public var lastCostUSD: Double?
-    public init() { messages = []; streamingText = nil; turnActive = false; lastCostUSD = nil }
+    /// Biten turn sayısı (`result` olayları). `turnActive` ilk metin
+    /// delta'sına kadar `false` kalır; "gönderilen mesaja cevap geldi mi?"
+    /// sorusu bu sayaçla cevaplanır (karar 103).
+    public var completedTurns: Int
+    public init() {
+        messages = []; streamingText = nil; turnActive = false; lastCostUSD = nil; completedTurns = 0
+    }
 }
 
 public final class ChatJournal {
@@ -32,6 +38,7 @@ public final class ChatJournal {
         case let .turnResult(cost, _):
             state.turnActive = false
             state.streamingText = nil
+            state.completedTurns += 1
             if let cost { state.lastCostUSD = cost }
         case .rateLimit, .ignored:
             break

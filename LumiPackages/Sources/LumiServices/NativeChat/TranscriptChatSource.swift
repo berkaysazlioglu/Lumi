@@ -41,6 +41,13 @@ public struct TranscriptChatSource: ChatTranscriptSourcing {
         }
     }
 
+    /// Transkriptin o anki tamamı — tek okuma, tail yok (karar 103: resume
+    /// edilen orchestrator konuşmasının geçmişi). Dosya yoksa boş.
+    public func messages(sessionID: String, repoPath: String) -> [ChatMessage] {
+        let file = Self.transcriptURL(home: home, sessionID: sessionID, repoPath: repoPath)
+        return readAppended(file, from: 0, index: 0).0
+    }
+
     /// `<home>/.claude/projects/<encoded-cwd>/<sid>.jsonl`. Klasör adı Claude'un
     /// kuralıyla kodlanır: cwd'deki alfanümerik OLMAYAN her karakter `-` olur
     /// (`_`, `.` dahil). Yalnız `/`→`-` yapmak alt çizgili/nokta içeren repo'da

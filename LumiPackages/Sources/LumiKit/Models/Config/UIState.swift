@@ -47,6 +47,9 @@ public struct UIState: Sendable, Equatable {
     /// dahil) sıfırlanıyordu. Ham `String`: `ProjectToolsTab` LumiState'te
     /// tanımlı, LumiKit onu göremez; bilinmeyen değer okumada varsayılana iner.
     public var projectToolsTab: String?
+    /// Karar 103 (additive): orchestrator'ın sürdürülen Claude konuşması.
+    /// nil = dosyada yok → ilk açılışta yeni kimlik üretilir.
+    public var orchestratorSessionID: String?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -73,7 +76,8 @@ public struct UIState: Sendable, Equatable {
         uiScale: Double? = nil,
         uiFontFamily: UIFontFamily? = nil,
         lastCheckouts: [String: String] = [:],
-        projectToolsTab: String? = nil
+        projectToolsTab: String? = nil,
+        orchestratorSessionID: String? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -90,6 +94,7 @@ public struct UIState: Sendable, Equatable {
         self.uiFontFamily = uiFontFamily
         self.lastCheckouts = lastCheckouts
         self.projectToolsTab = projectToolsTab
+        self.orchestratorSessionID = orchestratorSessionID
     }
 }
 

@@ -7,6 +7,10 @@ public actor StreamJsonAgentSession {
     private let sessionID: String
     private let repoPath: String
     private let environment: [String: String]
+    /// Var olan konuşmayı sürdür (`--resume`) — yoksa `--session-id` ile yeni.
+    private let resume: Bool
+    /// Çağıranın ek bayrakları (orchestrator'ın system prompt'u, model…).
+    private let extraArguments: [String]
     private let spawner: any StreamingProcessSpawning
     private let binaryLocator: any BinaryLocating
 
@@ -19,11 +23,14 @@ public actor StreamJsonAgentSession {
     private var finished = false
 
     public init(sessionID: String, repoPath: String, environment: [String: String],
+                resume: Bool = false, extraArguments: [String] = [],
                 spawner: any StreamingProcessSpawning = LiveStreamingProcess(),
                 binaryLocator: any BinaryLocating = SystemBinaryLocator()) {
         self.sessionID = sessionID
         self.repoPath = repoPath
         self.environment = environment
+        self.resume = resume
+        self.extraArguments = extraArguments
         self.spawner = spawner
         self.binaryLocator = binaryLocator
     }
@@ -31,8 +38,7 @@ public actor StreamJsonAgentSession {
     public func start() async {
         guard handle == nil else { return }
         let claude = await binaryLocator.locate("claude") ?? "claude"
-        let args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json",
-                    "--include-partial-messages", "--verbose", "--session-id", sessionID]
+        let args = Self.arguments(sessionID: sessionID, resume: resume, extra: extraArguments)
         let h = spawner.spawn(executable: claude, arguments: args,
                               currentDirectory: repoPath, environment: environment)
         handle = h
@@ -44,6 +50,12 @@ public actor StreamJsonAgentSession {
             }
             await self.finishSnapshots()
         }
+    }
+
+    static func arguments(sessionID: String, resume: Bool, extra: [String]) -> [String] {
+        ["-p", "--input-format", "stream-json", "--output-format", "stream-json",
+         "--include-partial-messages", "--verbose",
+         resume ? "--resume" : "--session-id", sessionID] + extra
     }
 
     private func ingest(_ line: String) {

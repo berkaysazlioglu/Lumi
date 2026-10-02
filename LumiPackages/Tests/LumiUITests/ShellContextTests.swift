@@ -314,6 +314,7 @@ final class ShellContextTests: XCTestCase {
             computerAwake: context.computerAwake,
             resourceUsage: context.resourceUsage,
             appUpdate: context.appUpdate,
+            orchestrator: context.orchestrator,
             viewProvider: context.viewProvider,
             highlighter: context.highlighter,
             actions: ShellActions(

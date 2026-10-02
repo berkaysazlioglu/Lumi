@@ -85,6 +85,8 @@ public enum ActiveDialog: Equatable, Sendable {
     /// Projenin hızlı komut düzenleyicisi (karar 92).
     case quickCommands(projectPath: String)
     case settings
+    /// Karar 103: orchestrator sohbet popup'ı.
+    case orchestrator
     case onboarding
     case closeTab(CloseTabDialogState)
     case deleteWorkspace(DeleteWorkspaceDialogState)
@@ -100,7 +102,8 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .settings, .onboarding, .closeTab,
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .settings, .orchestrator,
+             .onboarding, .closeTab,
              .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .removeCodexAccount,
              .quit: true
         }
@@ -184,6 +187,12 @@ public final class DialogRouter {
     public var isSettingsOpen: Bool {
         get { isPresenting(.settings) }
         set { setPresented(.settings, newValue) }
+    }
+
+    /// Karar 103: orchestrator popup'ı (⌘J / top bar butonu).
+    public var isOrchestratorOpen: Bool {
+        get { isPresenting(.orchestrator) }
+        set { setPresented(.orchestrator, newValue) }
     }
 
     public var isOnboardingActive: Bool {

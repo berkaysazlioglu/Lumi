@@ -34,7 +34,9 @@ public enum StreamJsonEvent: Equatable, Sendable {
             return .assistantSnapshot(id: id, blocks: blocks)
         case "user":
             guard let msg = obj["message"] as? [String: Any] else { return .ignored }
-            let id = (msg["id"] as? String) ?? "user-\(UUID().uuidString)"
+            // `--replay-user-messages` yankısı ve tool_result kayıtları
+            // `message.id` taşımaz ama üst seviye `uuid` taşır (karar 103).
+            let id = (msg["id"] as? String) ?? (obj["uuid"] as? String) ?? "user-\(UUID().uuidString)"
             let blocks = ClaudeContentBlockDecoding.decodeBlocks(msg["content"])
             return blocks.isEmpty ? .ignored : .userEcho(id: id, blocks: blocks)
         case "result":

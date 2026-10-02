@@ -92,6 +92,8 @@ public final class ShellContext {
     public let resourceUsage: ResourceUsageStore
     /// Settings ▸ About'un sürüm kontrolü (karar 102).
     public let appUpdate: AppUpdateStore
+    /// Karar 103: orchestrator sohbeti.
+    public let orchestrator: OrchestratorStore
 
     // MARK: - Köprüler
 
@@ -127,6 +129,7 @@ public final class ShellContext {
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
         appUpdate: AppUpdateStore,
+        orchestrator: OrchestratorStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
         actions: ShellActions
@@ -158,6 +161,7 @@ public final class ShellContext {
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage
         self.appUpdate = appUpdate
+        self.orchestrator = orchestrator
         self.viewProvider = viewProvider
         self.highlighter = highlighter
         self.actions = actions

@@ -49,6 +49,9 @@ enum AppMenuCommands {
         dispatcher.register(.openRepoSelector) {
             shared.dialogs.isRepoSelectorOpen = true
         }
+        dispatcher.register(.toggleOrchestrator) {
+            shared.dialogs.isOrchestratorOpen.toggle()
+        }
         dispatcher.register(.focusNextTerminal) {
             guard let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusNext(in: active)

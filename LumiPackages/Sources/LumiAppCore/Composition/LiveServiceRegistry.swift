@@ -41,6 +41,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let agentHooks: any AgentHookServing
     let agentHookInstaller: any AgentHookInstalling
     let chatSessions: any ChatSessionServicing
+    let orchestrator: any OrchestratorServicing
 
     private let usageServices: [AgentProvider: any UsageServicing]
     /// P1 ölçüm harness'ı somut manager'a bağlıdır (debug-only araç, design/04).
@@ -117,6 +118,10 @@ final class LiveServiceRegistry: ServiceRegistry {
         // Stream-json chat lane (Faz 2): child env'inden claude-oturum kimliği
         // temizlenir (AgentChildEnvironment) — nested-oturum transcript hatası.
         chatSessions = ChatSessionService(environment: AgentChildEnvironment.cleaned())
+        orchestrator = OrchestratorService(
+            workingDirectory: paths.orchestratorDir,
+            environment: AgentChildEnvironment.cleaned()
+        )
         let manager = TerminalSessionManager()
         terminalManager = manager
         terminal = manager

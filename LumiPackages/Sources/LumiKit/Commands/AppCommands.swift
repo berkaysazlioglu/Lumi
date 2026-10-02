@@ -19,13 +19,13 @@ public enum AppCommands {
         AppCommand(id: .openAbout, title: "About Lumi", menu: .app, key: nil),
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
-            separatorBefore: true, referenceTitle: "Settings", referenceOrder: 16
+            separatorBefore: true, referenceTitle: "Settings", referenceOrder: 17
         ),
         // Standart `NSApplication.terminate(_:)` selector'ına gider ama
         // kullanıcıya sunulan tabloda listelenir.
         AppCommand(
             id: .quit, title: "Quit Lumi", menu: .app, key: "q",
-            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 17
+            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 18
         ),
 
         // MARK: Shell
@@ -50,6 +50,11 @@ public enum AppCommands {
         AppCommand(
             id: .openRepoSelector, title: "Go to Project…", menu: .shell, key: "o",
             separatorBefore: true, referenceTitle: "Go to Project", referenceOrder: 4
+        ),
+        // Karar 103: tüm ajanları yöneten sohbet popup'ı — açar/kapatır.
+        AppCommand(
+            id: .toggleOrchestrator, title: "Orchestrator", menu: .shell, key: "j",
+            referenceTitle: "Orchestrator", referenceOrder: 16
         ),
         // ⌃1…⌃9 PROJELER arasında geçer (karar 65 — eskiden görünmeyen tab
         // listesine indeksliyordu). ⌘1…⌘9 ise aktif checkout içindeki terminali

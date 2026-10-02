@@ -76,6 +76,7 @@ public extension ShellContext {
                 terminals: shared.terminals, terminalService: terminal, sampler: PreviewProcessSampler()
             ),
             appUpdate: .preview,
+            orchestrator: OrchestratorStore(service: PreviewOrchestratorService(), config: config),
             viewProvider: viewProvider,
             highlighter: PreviewHighlighter(),
             actions: ShellActions(
@@ -630,5 +631,22 @@ private struct PreviewAppReleaseService: AppReleaseChecking {
             publishedAt: Date()
         )
     }
+}
+/// Süreçsiz sahte orchestrator (karar 103): sabit bir geçmiş döner.
+struct PreviewOrchestratorService: OrchestratorServicing {
+    func start(_ launch: OrchestratorLaunch) async throws -> OrchestratorRun {
+        let history = [
+            ChatMessage(id: "u1", role: .user, blocks: [.text("Hangi terminaller çalışıyor?", presentation: nil)],
+                        timestampMs: nil, turnId: "u1"),
+            ChatMessage(id: "a1", role: .assistant, blocks: [.text(
+                "Şu an **3** ajan açık:\n- `api-refactor` — çalışıyor\n- `ios-fix` — senden cevap bekliyor",
+                presentation: nil
+            )], timestampMs: nil, turnId: "a1"),
+        ]
+        return OrchestratorRun(history: history, updates: AsyncStream { _ in })
+    }
+
+    func send(_ text: String) async {}
+    func stop() async {}
 }
 #endif

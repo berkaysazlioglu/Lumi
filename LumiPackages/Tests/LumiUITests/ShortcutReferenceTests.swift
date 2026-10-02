@@ -14,7 +14,7 @@ final class ShortcutReferenceTests: XCTestCase {
             "Focus Terminal N", "Previous Terminal", "Next Terminal",
             "Maximize Terminal", "Toggle Left Sidebar", "Toggle Right Sidebar",
             "Focus Mode", "Zoom In", "Zoom Out", "Actual Size",
-            "Settings", "Quit",
+            "Orchestrator", "Settings", "Quit",
         ]
 
         XCTAssertEqual(actions, expected)

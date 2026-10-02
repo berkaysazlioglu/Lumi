@@ -66,6 +66,9 @@ public protocol ServiceRegistry: AnyObject {
     /// PTY'siz `claude --output-format stream-json` child'larıdır.
     var chatSessions: any ChatSessionServicing { get }
 
+    /// Karar 103: tüm ajan terminallerini yöneten orchestrator Claude'u.
+    var orchestrator: any OrchestratorServicing { get }
+
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.
     func usage(for provider: AgentProvider) -> any UsageServicing

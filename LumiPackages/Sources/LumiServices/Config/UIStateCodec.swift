@@ -66,6 +66,10 @@ enum UIStateCodec {
         if let raw = dict["projectToolsTab"] as? String {
             state.projectToolsTab = raw
         }
+        // Karar 103 (additive): orchestrator konuşması. Yoksa nil → yeni kimlik.
+        if let raw = dict["orchestratorSessionID"] as? String, !raw.isEmpty {
+            state.orchestratorSessionID = raw
+        }
         return state
     }
 
@@ -118,6 +122,10 @@ enum UIStateCodec {
         // eski dosyalarda olmayan bir anahtar üretilmez (karar 9).
         if let tab = state.projectToolsTab {
             overlay["projectToolsTab"] = tab
+        }
+        // Karar 103 (additive): yalnız DOLU iken yazılır (karar 9).
+        if let sessionID = state.orchestratorSessionID {
+            overlay["orchestratorSessionID"] = sessionID
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.
