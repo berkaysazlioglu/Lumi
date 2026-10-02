@@ -289,8 +289,13 @@ public final class AppModel {
 
         case .chatStatus(let sessionId, let status):
             macOnline = true
+            let previousStart = turnStatus[sessionId]?.startedAtMs
             turnStatus[sessionId] = status
-            if !status.working { stoppingSessions.remove(sessionId) }
+            // "Stopping…" belongs to one turn: clear it on idle, and also when a
+            // new turn (different startedAtMs) starts without an idle in between.
+            if !status.working || status.startedAtMs != previousStart {
+                stoppingSessions.remove(sessionId)
+            }
             recomputeStreaming(sessionId)
 
         case .prompt(let sessionId, let p):

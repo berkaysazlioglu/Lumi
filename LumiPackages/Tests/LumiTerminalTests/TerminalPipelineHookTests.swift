@@ -152,6 +152,53 @@ final class TerminalPipelineHookTests: XCTestCase {
         XCTAssertFalse(interrupt.isScheduled, "beklerken Esc kesme değildir")
     }
 
+    /// Final review: kesme çıkarımı etki ürettiğinde ayrık `onInterruptInferred`
+    /// sinyali doğar — ve non-working status'ten SONRA (tüketiciler önce status'ü görür).
+    func testInferredInterruptSignalsAfterStatusChange() {
+        let (pipeline, _, interrupt) = makePipeline()
+        let log = Recorder<String>()
+        pipeline.onStatusChange = { log.append("status:\($0.rawValue)") }
+        pipeline.onInterruptInferred = { log.append("interrupt") }
+        pipeline.processHookEvent(hook(.userPromptSubmit))
+        _ = pipeline.processInput(Data([0x1B]))
+
+        interrupt.fire()
+
+        XCTAssertEqual(log.values.filter { $0 == "interrupt" }.count, 1)
+        XCTAssertEqual(log.values.last, "interrupt")
+        let statusIndex = log.values.lastIndex(of: "status:\(TerminalStatus.waitingUnseen.rawValue)")
+        XCTAssertNotNil(statusIndex)
+        XCTAssertLessThan(statusIndex ?? .max, log.values.count - 1)
+    }
+
+    /// Çıkarım etki üretmezse (çalışan alt ajan var) sinyal yok.
+    func testNoInterruptSignalWhenInferenceProducesNoEffects() {
+        let (pipeline, _, interrupt) = makePipeline()
+        let signals = Recorder<Bool>()
+        pipeline.onInterruptInferred = { signals.append(true) }
+        pipeline.processHookEvent(hook(.userPromptSubmit))
+        pipeline.processHookEvent(hook(.subagentStart, agentID: "a1"))
+        _ = pipeline.processInput(Data([0x03]))
+        XCTAssertTrue(interrupt.isScheduled)
+
+        interrupt.fire()
+
+        XCTAssertTrue(signals.values.isEmpty)
+        XCTAssertEqual(pipeline.statusMachine.status, .working)
+    }
+
+    /// Lider turn bitmişken (status working değil) zamanlayıcı ateşlenirse sinyal yok.
+    func testNoInterruptSignalWhenNotWorking() {
+        let (pipeline, _, interrupt) = makePipeline()
+        let signals = Recorder<Bool>()
+        pipeline.onInterruptInferred = { signals.append(true) }
+        pipeline.processHookEvent(hook(.userPromptSubmit))
+        _ = pipeline.processInput(Data([0x1B]))
+        pipeline.processHookEvent(hook(.stop))   // hook kesmeyi bildirdi → timer iptal
+        XCTAssertFalse(interrupt.fire())
+        XCTAssertTrue(signals.values.isEmpty)
+    }
+
     // MARK: - Sağlayıcı kimliği
 
     func testProviderIsReportedFromHookAndClearedOnSessionEnd() {

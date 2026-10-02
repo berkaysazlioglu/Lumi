@@ -96,4 +96,18 @@ final class AppModelTurnStatusTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(120))
         XCTAssertEqual(model.turnStatus["s1"]?.working, true)
     }
+
+    /// A new turn (different startedAtMs) arriving with no idle in between must
+    /// clear "Stopping…" — it belongs to the old turn — and the fallback must
+    /// not idle the new turn.
+    func testNewTurnWithoutIdleClearsStoppingAndSurvivesFallback() async throws {
+        let model = makeModel()
+        model.stopFallbackDelay = .milliseconds(20)
+        model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(working: true, startedAtMs: 1, tool: nil)))
+        model.requestStop("s1")
+        model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(working: true, startedAtMs: 2, tool: nil)))
+        XCTAssertFalse(model.stoppingSessions.contains("s1"))
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertEqual(model.turnStatus["s1"]?.working, true)
+    }
 }

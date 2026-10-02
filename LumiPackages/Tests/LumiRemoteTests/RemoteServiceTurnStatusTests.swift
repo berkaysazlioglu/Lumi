@@ -94,8 +94,8 @@ import LumiTestSupport
         svc.stop()
     }
 
-    /// Karar 96: Stop hook'u gelmeyen kesmede terminal status'ü non-working'e
-    /// düşünce telefona working=false ve prompt iptali gider.
+    /// Karar 96: Stop hook'u gelmeyen kesmede terminal kesmeyi çıkarınca
+    /// (`interruptInferred`) telefona working=false ve prompt iptali gider.
     @Test func inferredInterruptEmitsIdleAndCancelsPrompts() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
@@ -125,9 +125,11 @@ import LumiTestSupport
         try await conn.waitForCount(type: "prompt", atLeast: 1)
 
         // Kesme çıkarıldı: terminal status working değil, Stop hook'u YOK.
+        // Gerçek pipeline sırası: önce non-working status, ardından ayrık sinyal.
         meta.status = .waitingFocused
         term.metas = [meta]
         term.emit(.statusChanged(id, .waitingFocused))
+        term.emit(.interruptInferred(id))
         try await conn.waitForCount(type: "chat_status", atLeast: 3)
         #expect(await conn.lastBool(type: "chat_status", key: "working") == false)
         try await conn.waitForCount(type: "prompt", atLeast: 2)
@@ -135,8 +137,8 @@ import LumiTestSupport
         svc.stop()
     }
 
-    /// Yeni turn başlamışken gelen gecikmiş non-working olayı turn'ü düşürmez:
-    /// otorite terminalin CANLI status'üdür.
+    /// Yeni turn başlamışken gelen gecikmiş kesme sinyali turn'ü düşürmez:
+    /// canlı status kapısı derinlemesine savunma olarak durur.
     @Test func staleNonWorkingEventIgnoredWhileTerminalWorking() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
@@ -159,7 +161,41 @@ import LumiTestSupport
         hooks.emit(hookEvent(.userPromptSubmit, terminalID: id))
         try await conn.waitForCount(type: "chat_status", atLeast: 2)
 
-        term.emit(.statusChanged(id, .waitingSeen))   // bayat olay; canlı meta hâlâ .working
+        term.emit(.interruptInferred(id))   // bayat sinyal; canlı meta hâlâ .working
+        try await conn.waitForNoSent(type: "chat_status", after: 2, for: .milliseconds(200))
+        #expect(await conn.lastBool(type: "chat_status", key: "working") == true)
+        svc.stop()
+    }
+
+    /// Final review yarışı: Stop→UserPromptSubmit art arda geldiğinde Stop'un
+    /// `statusChanged(waiting)`'i, canlı status henüz working'e dönmeden
+    /// tüketilebilir. Kesme ÇIKARILMADIĞI sürece düz non-working status turn'ü
+    /// kapatmaz (normal bitişi Stop hook'u zaten kapatır).
+    @Test func plainNonWorkingStatusDoesNotSettleTurn() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let hooks = FakeAgentHookServer()
+        let uuid = UUID()
+        var meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                createdAt: Date(), claudeSessionID: uuid.uuidString)
+        term.metas.append(meta)
+        let sid = meta.id.description
+        let id = TerminalID(raw: uuid)
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { hooks.events() },
+            config: FakeConfigService())
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForCount(type: "chat_status", atLeast: 1)
+        hooks.emit(hookEvent(.userPromptSubmit, terminalID: id))
+        try await conn.waitForCount(type: "chat_status", atLeast: 2)
+
+        // Canlı status da non-working (io→main sıçraması henüz inmedi), sinyal yok.
+        meta.status = .waitingSeen
+        term.metas = [meta]
+        term.emit(.statusChanged(id, .waitingSeen))
         try await conn.waitForNoSent(type: "chat_status", after: 2, for: .milliseconds(200))
         #expect(await conn.lastBool(type: "chat_status", key: "working") == true)
         svc.stop()

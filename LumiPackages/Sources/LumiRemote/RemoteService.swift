@@ -238,9 +238,6 @@ public final class RemoteService: RemoteServicing {
     private func handleTerminalEvent(_ event: TerminalEvent) async {
         switch event {
         case .spawned, .exited, .statusChanged:
-            if case let .statusChanged(id, status) = event, status != .working {
-                await settleInterruptIfNeeded(id: id)
-            }
             if case let .exited(id, _) = event {
                 chatModeTerminals.remove(id)
                 cancelSubscription(id)
@@ -253,6 +250,10 @@ public final class RemoteService: RemoteServicing {
             }
             await sendSessions()
             await sendProjects()
+        case .interruptInferred(let id):
+            // Karar 96: düz non-working status DEĞİL — art arda Stop→UserPromptSubmit
+            // yarışında yeni turn'ü düşürürdü; yalnız gerçek kesme çıkarımı kapatır.
+            await settleInterruptIfNeeded(id: id)
         case .claudeSessionIDChanged(let id, let sessionID):
             await retargetChat(id: id, sessionID: sessionID)
         case .awaitingDecisionChanged(let id, let awaiting):
@@ -603,9 +604,11 @@ public final class RemoteService: RemoteServicing {
     // MARK: - Turn status (Faz 2)
 
     /// Karar 96: Claude Esc/Ctrl+C kesmesinde Stop hook'u göndermez; terminal
-    /// kesmeyi çıkarıp status'ü non-working'e düşürünce turn burada kapanır.
-    /// Otorite terminalin CANLI status'üdür — hook ve terminal akışları ayrı
-    /// stream'ler olduğundan yeni turn başlamışken gelen bayat olay yok sayılır.
+    /// kesmeyi çıkarınca ayrık `TerminalEvent.interruptInferred` sinyali gelir
+    /// ve turn burada kapanır. Canlı status kapısı derinlemesine savunmadır —
+    /// hook ve terminal akışları ayrı stream'ler olduğundan yeni turn başlamışken
+    /// gelen bayat sinyal yok sayılır. Reducer/journal abone olunmasa da ilerler
+    /// (sonraki subscribe snapshot'ı doğru olsun).
     private func settleInterruptIfNeeded(id: TerminalID) async {
         guard terminal.terminals.first(where: { $0.id == id })?.status != .working else { return }
         let status = turnReducers[id]?.interrupt()
