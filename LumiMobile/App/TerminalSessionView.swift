@@ -37,9 +37,10 @@ struct TerminalSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
+                let meta = model.session(sessionId)
                 HStack(spacing: 6) {
-                    if let s = model.session(sessionId) { AgentActivityGlyph(activity: s.activity) }
-                    Text(model.session(sessionId)?.repoName ?? "Session")
+                    if let meta { AgentActivityGlyph(activity: meta.activity) }
+                    Text(meta?.repoName ?? "Session")
                         .font(.headline).lineLimit(1)
                 }
             }
@@ -96,11 +97,6 @@ struct TerminalSessionView: View {
     @ViewBuilder
     private var toolbarItems: some View {
         HStack(spacing: 12) {
-            // Status badge
-            if let meta = model.session(sessionId) {
-                StatusBadge(badge: meta.badge)
-            }
-
             // Model picker menu
             if let meta = model.session(sessionId) {
                 modelMenu(for: meta)
