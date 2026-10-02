@@ -154,9 +154,13 @@ public final class TerminalDigestCoordinator {
         }
         do {
             let digest = try await summarizer.summarize(agentMessage: message, terminalTitle: meta.displayTitle)
-            // Haiku uyarıları ("test edilmedi") da soru sanabiliyor — soru işareti
-            // olmayan mesaj kullanıcıdan bir şey istemiyor sayılır.
-            return TerminalDigest(summary: digest.summary, needsUser: digest.needsUser && message.contains("?"))
+            // Soruyla biten mesaj haiku ne derse desin sorudur. Haiku uyarıları
+            // ("test edilmedi") da soru sanabildiği için bayrağı yalnız soru
+            // sinyali (`?` ya da Türkçe soru eki) taşıyan mesajda geçerlidir —
+            // Türkçe ajan soruyu çoğu kez `?`'sız sorar ("… kaldırılsın mı,
+            // yoksa … mi olsun.").
+            let asks = Self.looksLikeQuestion(message) || (digest.needsUser && Self.containsQuestion(message))
+            return TerminalDigest(summary: digest.summary, needsUser: asks)
         } catch {
             return TerminalDigest(
                 summary: OrchestratorToolFormat.truncated(
@@ -167,8 +171,30 @@ public final class TerminalDigestCoordinator {
         }
     }
 
-    /// LLM'siz sezgi: mesaj soru işaretiyle bitiyor mu?
+    /// LLM'siz sezgi: mesajın son satırı bir soru mu?
     static func looksLikeQuestion(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("?")
+        let lastLine = text
+            .split(whereSeparator: \.isNewline)
+            .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        return lastLine.map { line in
+            line.trimmingCharacters(in: .whitespaces).hasSuffix("?") || containsTurkishQuestionParticle(String(line))
+        } ?? false
     }
+
+    /// Metnin herhangi bir yerinde soru sinyali var mı (`?` ya da Türkçe soru eki)?
+    static func containsQuestion(_ text: String) -> Bool {
+        text.contains("?") || containsTurkishQuestionParticle(text)
+    }
+
+    /// Ayrı yazılan Türkçe soru eki: mı/mi/mu/mü ve çekimleri (mısın, miyim,
+    /// musunuz, midir, mıydı…). Yalnız küçük harfli tam kelime eşleşir.
+    static func containsTurkishQuestionParticle(_ text: String) -> Bool {
+        text.split { !$0.isLetter }.contains { turkishQuestionParticles.contains(String($0)) }
+    }
+
+    /// Ünlü uyumuyla dört kök: mı, mi, mu, mü.
+    private static let turkishQuestionParticles: Set<String> = Set(["ı", "i", "u", "ü"].flatMap { v in
+        let stem = "m\(v)"
+        return [stem, "\(stem)s\(v)n", "\(stem)s\(v)n\(v)z", "\(stem)y\(v)m", "\(stem)y\(v)z", "\(stem)d\(v)r", "\(stem)yd\(v)"]
+    })
 }

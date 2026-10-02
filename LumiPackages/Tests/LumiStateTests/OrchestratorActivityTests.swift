@@ -179,6 +179,41 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         XCTAssertEqual(feed.events.first?.needsUser, true)
     }
 
+    /// Türkçe ajan soruyu `?`'sız, soru ekiyle sorar — haiku bayrağı veto edilmez.
+    func testTurkishQuestionWithoutQuestionMarkAsksTheUser() async {
+        let meta = agent()
+        reply(String(repeating: "Tahmini efor 1,5–3 gün. ", count: 20)
+              + "\n\nBaşlamadan önce iki konuda kararınız gerekiyor: migration kaldırılsın mı, "
+              + "yoksa tek seferlik mi kalsın; ve en küçük genişlik ortak 180 mi olsun.")
+        summarizer.stub(.success(TerminalDigest(summary: "2 karar gerekli: … mi olsun?", needsUser: true)))
+
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        await settle()
+        XCTAssertEqual(feed.events.first?.needsUser, true, "soru eki de sorudur")
+    }
+
+    /// Son satırı soru olan mesaj haiku `false` dese de kullanıcıya sorar.
+    func testMessageEndingWithAQuestionOverridesTheSummarizer() async {
+        let meta = agent()
+        reply(String(repeating: "uzun rapor ", count: 40) + "\nCommit atayım mı")
+        summarizer.stub(.success(TerminalDigest(summary: "Özet", needsUser: false)))
+
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        await settle()
+        XCTAssertEqual(feed.events.first?.needsUser, true)
+    }
+
+    func testQuestionHeuristics() {
+        XCTAssertTrue(TerminalDigestCoordinator.looksLikeQuestion("Bitti.\nCommit atayım mı?\n"))
+        XCTAssertTrue(TerminalDigestCoordinator.looksLikeQuestion("Hangisi olsun: sol mu sağ mı."))
+        XCTAssertTrue(TerminalDigestCoordinator.looksLikeQuestion("Devam edeyim mi"))
+        XCTAssertTrue(TerminalDigestCoordinator.looksLikeQuestion("Onaylıyor musunuz"))
+        XCTAssertFalse(TerminalDigestCoordinator.looksLikeQuestion("Neden? Çünkü cache boştu.\nDüzelttim."))
+        XCTAssertFalse(TerminalDigestCoordinator.looksLikeQuestion("Derleme geçti ama oyun içinde test etmedim."))
+        XCTAssertFalse(TerminalDigestCoordinator.containsQuestion("Kimi dosyalar eksikti, mimari değişmedi, mutex eklendi."))
+        XCTAssertTrue(TerminalDigestCoordinator.containsQuestion("Migration kaldırılsın mı, kalsın mı karar ver."))
+    }
+
     func testWatchedTerminalReportsEvenAFinishTheUserSaw() async {
         let meta = agent()
         reply("Bitti.")
