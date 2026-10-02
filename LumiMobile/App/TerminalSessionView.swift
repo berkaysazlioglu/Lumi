@@ -36,6 +36,13 @@ struct TerminalSessionView: View {
         .navigationTitle(model.session(sessionId)?.repoName ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) {
+                    if let s = model.session(sessionId) { AgentActivityGlyph(activity: s.activity) }
+                    Text(model.session(sessionId)?.repoName ?? "Session")
+                        .font(.headline).lineLimit(1)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) { toolbarItems }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
