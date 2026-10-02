@@ -163,6 +163,22 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         XCTAssertTrue(fallback.hasSuffix("(truncated)"), fallback)
     }
 
+    func testSummarizerQuestionFlagIsVetoedWhenTheMessageHasNoQuestionMark() async {
+        let meta = agent()
+        reply(String(repeating: "Derleme geçti ama oyun içinde test etmedim. ", count: 10))
+        summarizer.stub(.success(TerminalDigest(summary: "Özet", needsUser: true)))
+
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        await settle()
+        XCTAssertEqual(feed.events.first?.needsUser, false, "uyarı soru değildir")
+
+        reply(String(repeating: "uzun rapor ", count: 40) + "Commit atayım mı?")
+        coordinator.apply(.statusChanged(meta.id, .working))
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        await settle()
+        XCTAssertEqual(feed.events.first?.needsUser, true)
+    }
+
     func testWatchedTerminalReportsEvenAFinishTheUserSaw() async {
         let meta = agent()
         reply("Bitti.")

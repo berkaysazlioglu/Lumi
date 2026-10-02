@@ -75,16 +75,19 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
     You summarize the latest message of an AI coding agent for a busy developer who \
     supervises many agents. Reply with ONLY a JSON object, no prose, no code fence: \
     {"summary": "<one to three short lines in Turkish: what it did / what changed / what it asks>", \
-    "needsUser": <true if the agent asks a question, wants a decision or approval, or cannot \
-    continue without the user; otherwise false>}
+    "needsUser": <true ONLY if the message explicitly asks the user a question or for a decision \
+    or approval; otherwise false>}. Caveats ("not tested in-game", "build passes but untested"), \
+    reports and suggested next steps are NOT questions: needsUser is false for them. When \
+    needsUser is true, the summary must end with the question itself.
     """
 
     static let sessionInstruction = """
     You catch a supervisor up on an AI coding agent's session they just started watching. \
     Reply with ONLY a JSON object, no prose, no code fence: \
     {"summary": "<two to five short lines in Turkish: the goal, what is done (key files/changes), \
-    what it is doing or waiting on now>", "needsUser": <true if the agent's latest message asks \
-    the user something or waits for a decision; otherwise false>}
+    what it is doing or waiting on now>", "needsUser": <true ONLY if the agent's latest message \
+    explicitly asks the user a question or for a decision; caveats and reports are not questions; \
+    otherwise false>}
     """
 
     static let arguments = arguments(instruction: instruction)

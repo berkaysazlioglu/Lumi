@@ -115,6 +115,28 @@ final class OrchestratorLiveTests: XCTestCase {
         print("haiku digest:", digest.summary)
     }
 
+    /// "Test etmedim" uyarısı soru sayılmaz.
+    func testHaikuDigestDoesNotTreatACaveatAsAQuestion() async throws {
+        guard ProcessInfo.processInfo.environment["LUMI_LIVE_ORCHESTRATOR"] == "1" else {
+            throw XCTSkip("canlı test: LUMI_LIVE_ORCHESTRATOR=1 ile koşar")
+        }
+        let message = """
+        Platform artık üstünde underground pipe varken açılmıyor. Derleme hatasız geçti ama oyun \
+        içinde test etmedim.
+
+        Sorun: PlatformBlockerEvaluateSystem platformu açmadan önce footprint'inde canlı pit, grinder \
+        ve linear ivy olup olmadığına bakıyordu. Underground pipe bu listede yoktu.
+
+        Değişiklikler:
+        - PlatformBlockerEvaluateSystem.cs: UndergroundPipeTag taşıyan entity'lerin hücreleri de \
+        engel sayılıyor; platform pipe kendini yok edene kadar kapalı kalıyor.
+        - PlatformRules.cs: "Platform Without Top Pit" kuralı da aynı mantıkla çalışıyor.
+        """
+        let digest = try await ClaudeDigestService().summarize(agentMessage: message, terminalTitle: "platform-blocker")
+        XCTAssertFalse(digest.needsUser, "uyarı soru sanıldı: \(digest)")
+        print("haiku digest:", digest.summary)
+    }
+
     /// Sonradan izlemeye alınan terminalin oturum özeti: hedef + son durum.
     func testHaikuSessionCatchUpFollowsTheJSONContract() async throws {
         guard ProcessInfo.processInfo.environment["LUMI_LIVE_ORCHESTRATOR"] == "1" else {

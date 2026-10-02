@@ -153,7 +153,10 @@ public final class TerminalDigestCoordinator {
             return TerminalDigest(summary: message, needsUser: Self.looksLikeQuestion(message))
         }
         do {
-            return try await summarizer.summarize(agentMessage: message, terminalTitle: meta.displayTitle)
+            let digest = try await summarizer.summarize(agentMessage: message, terminalTitle: meta.displayTitle)
+            // Haiku uyarıları ("test edilmedi") da soru sanabiliyor — soru işareti
+            // olmayan mesaj kullanıcıdan bir şey istemiyor sayılır.
+            return TerminalDigest(summary: digest.summary, needsUser: digest.needsUser && message.contains("?"))
         } catch {
             return TerminalDigest(
                 summary: OrchestratorToolFormat.truncated(
