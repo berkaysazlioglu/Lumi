@@ -102,8 +102,9 @@ struct MobileChatView: View {
                 }
                 let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
                 if let status = model.turnStatus[sessionId], status.working {
-                    TurnStatusBar(status: status) {
-                        model.sendInput(sessionId, Data([0x03]))
+                    TurnStatusBar(status: status,
+                                  isStopping: model.stoppingSessions.contains(sessionId)) {
+                        model.requestStop(sessionId)
                     }
                 }
                 if let pending {

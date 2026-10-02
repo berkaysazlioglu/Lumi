@@ -99,6 +99,11 @@ public final class AppModel {
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
     /// Phase 3: active (pending) interactive prompts per session.
     public private(set) var prompts: [String: [ChatPrompt]] = [:]
+    /// Decision 96: sessions whose Stop was pressed and whose idle status has not
+    /// arrived yet — the bar shows "Stopping…" and the button is disabled.
+    public private(set) var stoppingSessions: Set<String> = []
+    /// Decision 96: if the Mac never reports idle after a Stop, close the turn locally.
+    public var stopFallbackDelay: Duration = .seconds(5)
 
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
@@ -172,6 +177,7 @@ public final class AppModel {
         streamingGates = [:]
         gatedStreaming = [:]
         turnStatus = [:]
+        stoppingSessions = []
         prompts = [:]
         models = [:]
         lastCommandError = [:]
@@ -280,6 +286,7 @@ public final class AppModel {
         case .chatStatus(let sessionId, let status):
             macOnline = true
             turnStatus[sessionId] = status
+            if !status.working { stoppingSessions.remove(sessionId) }
             recomputeStreaming(sessionId)
 
         case .prompt(let sessionId, let p):
@@ -345,6 +352,7 @@ public final class AppModel {
             streamingGates[active] = nil
             gatedStreaming[active] = nil
             turnStatus[active] = nil
+            stoppingSessions.remove(active)
             prompts[active] = nil
         }
     }
@@ -398,6 +406,31 @@ public final class AppModel {
     /// Sends a keystroke / byte sequence to the Mac PTY as an `input` frame.
     public func sendInput(_ sessionId: String, _ data: Data) {
         Task { await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: data)) }
+    }
+
+    /// Decision 96: interrupt the running turn. Esc (0x1B), not Ctrl-C — Esc is
+    /// Claude's interrupt key; a second Ctrl-C on an idle Claude asks it to exit.
+    public func requestStop(_ sessionId: String) {
+        guard !stoppingSessions.contains(sessionId) else { return }
+        stoppingSessions.insert(sessionId)
+        sendInput(sessionId, Data([0x1B]))
+        let startedAt = turnStatus[sessionId]?.startedAtMs
+        let delay = stopFallbackDelay
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            self?.applyStopFallback(sessionId, startedAt: startedAt)
+        }
+    }
+
+    private func applyStopFallback(_ sessionId: String, startedAt: Int?) {
+        guard stoppingSessions.contains(sessionId) else { return }
+        stoppingSessions.remove(sessionId)
+        // Only close the SAME turn — a new turn started meanwhile stays live.
+        guard let status = turnStatus[sessionId], status.working, status.startedAtMs == startedAt else { return }
+        DiagLog.shared.log("model", "stop fallback sid=\(sessionId.prefix(8)) → local idle")
+        turnStatus[sessionId] = .idle
+        prompts[sessionId] = []
+        recomputeStreaming(sessionId)
     }
 
     /// Phase 3: interactive prompt response. No optimistic dismiss — the card is removed
@@ -585,6 +618,7 @@ public final class AppModel {
         streamingGates[id] = nil
         gatedStreaming[id] = nil
         turnStatus[id] = nil
+        stoppingSessions.remove(id)
         prompts[id] = nil
         models[id] = nil
         lastCommandError[id] = nil
