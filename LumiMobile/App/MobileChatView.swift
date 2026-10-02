@@ -22,6 +22,9 @@ struct MobileChatView: View {
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
     @State private var atBottom = true
+    /// Opening a chat lands on the latest message (WhatsApp-style). Cleared once
+    /// the first non-empty history has been scrolled to the bottom.
+    @State private var needsInitialScroll = true
 
     // Combined render list (orca): optimistic pending + journal messages +
     // gated streaming bubble → single list, then folded into turns. Streaming
@@ -72,8 +75,14 @@ struct MobileChatView: View {
                     .onPreferenceChange(BottomSentinelKey.self) { minY in
                         atBottom = chatAtBottom(sentinelMinY: minY, viewportHeight: geo.size.height)
                     }
+                    // History already cached when the chat reopens → no count change fires.
+                    .onAppear { scrollToLatestIfNeeded(proxy) }
                     .onChange(of: turns.count) { _, _ in
-                        if atBottom { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                        if needsInitialScroll {
+                            scrollToLatestIfNeeded(proxy)
+                        } else if atBottom {
+                            withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        }
                     }
                     // Also scroll to bottom as streaming text grows (during token stream).
                     .onChange(of: model.gatedStreaming[sessionId]) { _, _ in
@@ -133,6 +142,21 @@ struct MobileChatView: View {
         .task(id: sessionId) { model.subscribeChat(sessionId) }
         // No auto-focus on open (not even for an empty chat): the keyboard only
         // appears when the user taps the composer, like WhatsApp.
+    }
+
+    /// First non-empty render lands on the latest message. The history snapshot
+    /// pushes the sentinel off-screen, which flips `atBottom` to false before
+    /// `onChange(turns.count)` fires — so this scrolls unconditionally, then once
+    /// more after the selectable text views have sized themselves.
+    private func scrollToLatestIfNeeded(_ proxy: ScrollViewProxy) {
+        guard needsInitialScroll, !turns.isEmpty else { return }
+        needsInitialScroll = false
+        atBottom = true
+        proxy.scrollTo("bottom", anchor: .bottom)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            proxy.scrollTo("bottom", anchor: .bottom)
+        }
     }
 
     private var composer: some View {
