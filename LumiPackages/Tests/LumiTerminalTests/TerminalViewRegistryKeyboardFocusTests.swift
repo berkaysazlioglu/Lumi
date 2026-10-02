@@ -111,6 +111,74 @@ final class TerminalViewRegistryKeyboardFocusTests: XCTestCase {
         XCTAssertTrue(window.firstResponder === other, "yerine getirilmiş istek odağı geri çaldı")
     }
 
+    func testFocusedViewKeepsFocusWhenMovedToAnotherHost() {
+        // Karar 103: repo → All Terminals geçişinde odaklı kart ekrandayken yeni
+        // route'un host'una taşınır; AppKit taşımada first responder'ı düşürür.
+        let id = TerminalID()
+        let (registry, view) = makeRegistry(id: id)
+        let window = makeWindow()
+        let oldHost = NSView()
+        let newHost = NSView()
+        window.contentView?.addSubview(oldHost)
+        window.contentView?.addSubview(newHost)
+        registry.attachView(for: id, into: oldHost)
+        registry.requestKeyboardFocus(for: id)
+        XCTAssertTrue(window.firstResponder === view)
+
+        // Act
+        registry.attachView(for: id, into: newHost)
+
+        // Assert
+        XCTAssertTrue(view.superview === newHost)
+        XCTAssertTrue(window.firstResponder === view, "taşıma odağı düşürdü")
+    }
+
+    func testFocusedViewMovedOffWindowRegainsFocusWhenHostJoinsWindow() {
+        // Yeni host henüz pencerede değilse odak, host pencereye girince gelir.
+        let id = TerminalID()
+        let (registry, view) = makeRegistry(id: id)
+        let window = makeWindow()
+        let oldHost = NSView()
+        window.contentView?.addSubview(oldHost)
+        registry.attachView(for: id, into: oldHost)
+        registry.requestKeyboardFocus(for: id)
+
+        let newHost = NSView()
+        registry.attachView(for: id, into: newHost)
+        window.contentView?.addSubview(newHost)
+        registry.fulfillPendingKeyboardFocus()
+
+        XCTAssertTrue(window.firstResponder === view)
+    }
+
+    func testMovingFocusedViewDoesNotOverrideAnotherPendingRequest() {
+        // Store başka bir terminalin odağını bekletiyorsa taşınan view onu ezmez.
+        let movedID = TerminalID()
+        let pendingID = TerminalID()
+        let registry = TerminalViewRegistry()
+        let moved = FocusableView()
+        let pending = FocusableView()
+        registry.register(view: moved, for: movedID) { _ in }
+        registry.register(view: pending, for: pendingID) { _ in }
+        let window = makeWindow()
+        let oldHost = NSView()
+        let newHost = NSView()
+        let pendingHost = NSView()
+        window.contentView?.addSubview(oldHost)
+        window.contentView?.addSubview(newHost)
+        window.contentView?.addSubview(pendingHost)
+        registry.attachView(for: movedID, into: oldHost)
+        registry.requestKeyboardFocus(for: movedID)
+        registry.requestKeyboardFocus(for: pendingID) // henüz bağlı değil → bekler
+
+        // Act
+        registry.attachView(for: movedID, into: newHost)
+        registry.attachView(for: pendingID, into: pendingHost)
+
+        // Assert
+        XCTAssertTrue(window.firstResponder === pending)
+    }
+
     func testCancelDropsPendingRequest() {
         // setFocused(nil) (yüzey arka plana alındı) bekleyen isteği düşürür.
         let id = TerminalID()

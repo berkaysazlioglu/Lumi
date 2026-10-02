@@ -258,6 +258,12 @@ public final class TerminalListStore: StoreLifecycle {
             service.setFocused(nil)
             return
         }
+        // Toplu foreground minimize kartları ayırmaz; ekranda olmayan kart 16 ms
+        // akışa geçmesin diye niyeti geri yazılır (All Terminals'ta bu TÜM
+        // projelerin minimize kartları demektir).
+        for meta in terminals(in: scope) where minimizedIDs.contains(meta.id) {
+            service.setSurfaceState(.minimized, for: meta.id)
+        }
         guard let active = activeTerminalID,
               let activeMeta = meta(for: active), scope.contains(activeMeta),
               !minimizedIDs.contains(active) else { return }

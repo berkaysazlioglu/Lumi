@@ -97,7 +97,17 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         // Reassert yolu (host her layout'ta çağırır): view zaten burada — no-op.
         // Frame'i host oturtur, çizim kararını da o verir (fit true → needsDisplay).
         guard entry.view.superview !== container else { return }
+        // Karar 103: yüzey→yüzey geçişinde (repo ⇄ All Terminals, grid ⇄
+        // maximize) odaklı view ekrandayken yeni host'a taşınır; AppKit
+        // `removeFromSuperview`'da first responder'ı pencereye düşürür. Odak
+        // taşıma sırasında kaybolmasın diye istek yeniden kurulur — yalnız view
+        // GERÇEKTEN odaktaysa (kullanıcının başka yere verdiği odak çalınmaz) ve
+        // store başka bir terminal için istek bekletmiyorsa.
+        let carriesKeyboardFocus = entry.view.window?.firstResponder === entry.view
         entry.view.removeFromSuperview()
+        if carriesKeyboardFocus, pendingKeyboardFocusID == nil {
+            pendingKeyboardFocusID = id
+        }
         // Frame'in tek otoritesi host'tur (TerminalHostContainer her setFrameSize/
         // layout'ta yeniden oturtur). autoresizing view'ı ızgara katı olmayan bir
         // boyuta esnetip aradaki her karede gereksiz cols/rows değişimi doğururdu.
