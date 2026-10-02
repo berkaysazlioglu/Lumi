@@ -19,6 +19,9 @@ struct TerminalChipStrip: View {
     let items: [TerminalMeta]
     let onSelect: (TerminalID) -> Void
 
+    /// Karar 103: All Terminals'ta chip de checkout adını taşır.
+    @Environment(\.terminalCheckoutLabels) private var checkoutLabels
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Spacing.sm) {
@@ -51,6 +54,15 @@ struct TerminalChipStrip: View {
                     .truncationMode(.tail)
                     .frame(maxWidth: Self.titleMaxWidth, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                if let checkout = checkoutLabels[meta.repoPath] {
+                    Text(checkout)
+                        .font(Theme.Typography.mono(.label))
+                        .foregroundStyle(Theme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: Self.titleMaxWidth, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, Theme.scaled(3))
@@ -63,6 +75,6 @@ struct TerminalChipStrip: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.textSecondary)
-        .accessibilityLabel(meta.displayTitle)
+        .accessibilityLabel(checkoutLabels[meta.repoPath].map { "\(meta.displayTitle) in \($0)" } ?? meta.displayTitle)
     }
 }

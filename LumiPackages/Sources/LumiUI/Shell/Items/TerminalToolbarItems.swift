@@ -3,28 +3,28 @@ import SwiftUI
 
 /// Üretim bölgesi öğeleri (terminal feature'ının katkısı, Faz 6.4).
 ///
-/// İkisi de yalnız **aktif repo route'unda** görünür — descriptor'ların
-/// `isVisible` kapısı `TerminalFeatureAssembly`'de yazılıdır; repo-dışı bir
-/// route (`.content`) veya hiç tab yokken (`.none`) `activeRepoPath` nil olduğu
-/// için bar'dan düşerler (eski `if let active = shell.activeRepoPath` bloğunun
-/// yapısal karşılığı).
+/// Grid ayarı ve Edit **terminal yüzeyinde** (repo route'u ya da All
+/// Terminals — karar 103) görünür; `New <Provider>` ise yalnız **repo
+/// route'unda** — spawn bir checkout ister. Descriptor'ların `isVisible`
+/// kapısı `TerminalFeatureAssembly`'de yazılıdır; view'lar aynı koşulu
+/// yapısal olarak tekrarlar (eski `if let active = shell.activeRepoPath`).
 public struct GridSettingsToolbarItem: View {
     @Shell private var shell
 
     public init() {}
 
     public var body: some View {
-        if let repoPath = shell.activeRepoPath {
+        if let scope = shell.activeTerminalScope {
             GridSettingsControl(
-                layout: shell.layout.gridLayout(for: repoPath),
-                onChange: { shell.layout.setGridLayout($0, for: repoPath) }
+                layout: shell.layout.gridLayout(for: scope),
+                onChange: { shell.layout.setGridLayout($0, for: scope) }
             )
         }
     }
 }
 
 /// Terminal kartlarını elle sıralama modu (karar 97): `Edit` ↔ `Done`.
-/// Repo'da sıralanacak en az iki terminal yoksa (gizliler dahil) çizilmez;
+/// Yüzeyde sıralanacak en az iki terminal yoksa (gizliler dahil) çizilmez;
 /// mod açıkken her durumda görünür ki çıkış kapısı kaybolmasın.
 public struct ArrangeTerminalsToolbarItem: View {
     @Shell private var shell
@@ -32,10 +32,10 @@ public struct ArrangeTerminalsToolbarItem: View {
     public init() {}
 
     public var body: some View {
-        if let repoPath = shell.activeRepoPath {
-            let isArranging = shell.layout.isArranging(in: repoPath)
-            if isArranging || shell.terminals.terminals(in: repoPath).count > 1 {
-                Button { shell.toggleArrangingTerminals(in: repoPath) } label: {
+        if let scope = shell.activeTerminalScope {
+            let isArranging = shell.layout.isArranging(in: scope)
+            if isArranging || shell.terminals.terminals(in: scope).count > 1 {
+                Button { shell.toggleArrangingTerminals(in: scope) } label: {
                     HStack(spacing: Theme.Spacing.sm) {
                         Image(systemName: isArranging ? "checkmark" : "square.grid.2x2")
                             .font(Theme.Typography.ui(.caption, weight: .semibold))

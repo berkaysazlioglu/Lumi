@@ -49,13 +49,15 @@ enum AppMenuCommands {
         dispatcher.register(.openRepoSelector) {
             shared.dialogs.isRepoSelectorOpen = true
         }
+        // Karar 103: terminal gezinmesi aktif YÜZEYE vurur — repo route'unda
+        // o checkout, All Terminals'ta o görünümün kart sırası.
         dispatcher.register(.focusNextTerminal) {
-            guard let active = shared.navigation.activeRepoPath else { return }
-            shared.terminals.focusNext(in: active)
+            guard let scope = shared.navigation.activeRoute.terminalScope else { return }
+            shared.terminals.focusNext(in: scope)
         }
         dispatcher.register(.focusPreviousTerminal) {
-            guard let active = shared.navigation.activeRepoPath else { return }
-            shared.terminals.focusPrevious(in: active)
+            guard let scope = shared.navigation.activeRoute.terminalScope else { return }
+            shared.terminals.focusPrevious(in: scope)
         }
         // Karar 65: indeks PROJELERE vurur. Eskiden `openTabs`'a vuruyordu —
         // kullanıcının hiçbir yerde GÖREMEDİĞİ bir listeye.
@@ -64,13 +66,13 @@ enum AppMenuCommands {
             shared.navigation.openProject(at: index - 1)
         }
         dispatcher.register(.focusTerminalAtIndex) { index in
-            guard let index, let active = shared.navigation.activeRepoPath else { return }
-            shared.terminals.focusIndex(index - 1, in: active)
+            guard let index, let scope = shared.navigation.activeRoute.terminalScope else { return }
+            shared.terminals.focusIndex(index - 1, in: scope)
         }
         dispatcher.register(.toggleMaximizeTerminal) {
-            guard let active = shared.navigation.activeRepoPath,
+            guard let scope = shared.navigation.activeRoute.terminalScope,
                   let id = shared.terminals.activeTerminalID else { return }
-            shared.layout.toggleMaximize(id, in: active)
+            shared.layout.toggleMaximize(id, in: scope)
         }
         dispatcher.register(.toggleLeftSidebar) { shared.layout.toggleSlot(.left) }
         dispatcher.register(.toggleRightSidebar) { shared.layout.toggleSlot(.right) }

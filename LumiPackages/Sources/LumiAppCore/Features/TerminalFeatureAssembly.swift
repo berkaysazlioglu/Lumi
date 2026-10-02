@@ -33,21 +33,38 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
             icon: "terminal",
             makeView: { repoPath in AnyView(TerminalsRouteView(repoPath: repoPath)) }
         ))
-        // Üretim bölgesi (Faz 6.4): grid ayarı + birincil CTA. Yalnız aktif
-        // repo route'unda görünür — repo-dışı bir route'ta (`.content`) veya
-        // hiç tab yokken `activeRepoPath` nil olur ve ikisi de bar'dan düşer.
+        // Karar 103: tüm projelerin terminalleri — aynı görünüm, `.all` kapsamı.
+        registries.routes.register(ContentRouteDescriptor(
+            id: .allTerminals,
+            title: AllTerminalsRoute.title,
+            icon: AllTerminalsRoute.icon,
+            makeView: { _ in AnyView(TerminalsRouteView(scope: .all)) }
+        ))
+        registries.toolbar.register(ToolbarItemDescriptor(
+            id: ToolbarItemID("route.allTerminals"),
+            region: .center,
+            order: ShellToolbarItems.Order.routeTitle,
+            isVisible: { $0.navigation.activeRoute == AllTerminalsRoute.route },
+            makeView: {
+                AnyView(RouteTitleToolbarItem(title: AllTerminalsRoute.title, icon: AllTerminalsRoute.icon))
+            }
+        ))
+        // Üretim bölgesi (Faz 6.4): grid ayarı + Edit her terminal yüzeyinde
+        // (repo ya da All Terminals); birincil CTA yalnız repo route'unda —
+        // spawn bir checkout ister. Repo-dışı bir route'ta (`.content`) veya
+        // hiç tab yokken hepsi bar'dan düşer.
         registries.toolbar.register(ToolbarItemDescriptor(
             id: .gridSettings,
             region: .center,
             order: ShellToolbarItems.Order.gridSettings,
-            isVisible: { $0.activeRepoPath != nil },
+            isVisible: { $0.activeTerminalScope != nil },
             makeView: { AnyView(GridSettingsToolbarItem()) }
         ))
         registries.toolbar.register(ToolbarItemDescriptor(
             id: .arrangeTerminals,
             region: .center,
             order: ShellToolbarItems.Order.arrangeTerminals,
-            isVisible: { $0.activeRepoPath != nil },
+            isVisible: { $0.activeTerminalScope != nil },
             makeView: { AnyView(ArrangeTerminalsToolbarItem()) }
         ))
         registries.toolbar.register(ToolbarItemDescriptor(

@@ -22,7 +22,7 @@ public struct TasksRouteView: View {
 }
 
 /// Route'un kendi toolbar öğesi: orta bölgede route adı (karar 55). Grid ayarı
-/// ve `New <Provider>` repo route'una bağlı olduğu için bu route'ta zaten
+/// ve `New <Provider>` terminal yüzeyine bağlı olduğu için bu route'ta zaten
 /// bar'dan düşer.
 public struct TasksRouteToolbarItem: View {
     let section: TasksPanelSection
@@ -32,11 +32,27 @@ public struct TasksRouteToolbarItem: View {
     }
 
     public var body: some View {
+        RouteTitleToolbarItem(title: section.title, icon: section.icon)
+    }
+}
+
+/// Repo-dışı bir route'un orta bölgedeki başlığı (karar 55; karar 103'te All
+/// Terminals da kullanır).
+public struct RouteTitleToolbarItem: View {
+    let title: String
+    let icon: String
+
+    public init(title: String, icon: String) {
+        self.title = title
+        self.icon = icon
+    }
+
+    public var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: section.icon)
+            Image(systemName: icon)
                 .font(Theme.Typography.ui(.label))
                 .accessibilityHidden(true)
-            Text(section.title)
+            Text(title)
                 .font(Theme.Typography.mono(.body, weight: .semibold))
         }
         .foregroundStyle(Theme.textSecondary)
