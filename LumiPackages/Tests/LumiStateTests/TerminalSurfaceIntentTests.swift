@@ -98,6 +98,42 @@ final class TerminalSurfaceIntentTests: XCTestCase {
         XCTAssertTrue(service.focusCalls.isEmpty)
     }
 
+    /// Toplu foreground minimize kartı 16 ms akışa almaz — niyet geri yazılır.
+    func testShowingSurfaceKeepsMinimizedCardsMinimized() {
+        let visible = makeTerminal("t1")
+        let hidden = makeTerminal("t2")
+        let otherRepo = makeTerminal("t3", repo: "/repo/b")
+        store.minimize(hidden.id)
+        store.minimize(otherRepo.id)
+        service.resetSurfaceStateCalls()
+
+        store.setTerminalSurfaceVisible(true, in: "/repo/a")
+
+        XCTAssertEqual(service.surfaceStateCalls, [
+            .init(state: .foreground, id: nil, repoPath: "/repo/a"),
+            .init(state: .minimized, id: hidden.id, repoPath: nil),
+        ], "yalnız kapsamdaki minimize kart geri yazılır")
+        _ = visible
+    }
+
+    /// Karar 103: All Terminals'ta bu TÜM projelerin minimize kartlarıdır.
+    func testShowingAllTerminalsKeepsEveryProjectsMinimizedCardsMinimized() {
+        makeTerminal("t1")
+        let hiddenA = makeTerminal("t2")
+        let hiddenB = makeTerminal("t3", repo: "/repo/b")
+        store.minimize(hiddenA.id)
+        store.minimize(hiddenB.id)
+        service.resetSurfaceStateCalls()
+
+        store.setTerminalSurfaceVisible(true, in: .all)
+
+        XCTAssertEqual(service.surfaceStateCalls.first, .init(state: .foreground, id: nil, repoPath: nil))
+        XCTAssertEqual(
+            Set(service.surfaceStateCalls.dropFirst().compactMap { $0.state == .minimized ? $0.id : nil }),
+            [hiddenA.id, hiddenB.id]
+        )
+    }
+
     // MARK: - Beklenen davranış tablosu
 
     /// "Tasks açıkken resize": store yüzey gizliyken PTY'ye resize trafiği üretmez.

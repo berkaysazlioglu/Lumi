@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Ajan ayarları: orchestrator Activity özetleri (karar 103) ve ek ajan arka
+/// Ajan ayarları: orchestrator Activity özetleri (karar 104) ve ek ajan arka
 /// uçları (karar 54 — DeepSeek'i Claude Code CLI'ı üzerinden çalıştıran env).
 struct AgentSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .agent

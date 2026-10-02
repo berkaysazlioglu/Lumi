@@ -174,7 +174,7 @@ Faz 4.3'ten önce **görünürlük ve odak iki bağımsız kanaldı**: registry 
 
 Eski `TerminalSession.setHidden(_:)` yüzeyi **yoktur**; `setHidden` yalnızca `OutputCoalescer`'ın iç aralık anahtarı olarak kalmıştır ve dışarıdan çağrılmaz.
 
-Store tarafındaki tek intent kümesi (Faz 4.9): `TerminalListStore.setTerminalSurfaceVisible(_:in:)`, `deactivateSurface()` ve dahili `surfaceRepoPath` — hangi repo'nun yüzeyinin önde olduğunun tek kaydı. Route geçiş sözleşmesi `NavigationStore.applySurfaceTransition(from:to:)`'dadır (view'da değil):
+Store tarafındaki tek intent kümesi (Faz 4.9): `TerminalListStore.setTerminalSurfaceVisible(_:in:)`, `activateSurface(_:)`, `deactivateSurface()` ve dahili `surfaceScope: TerminalScope?` — hangi kapsamın (bir repo ya da All Terminals, karar 103) yüzeyinin önde olduğunun tek kaydı. `.all` servisin toplu kanalına `repoPath == nil` olarak iner; toplu foreground minimize kartları ayırmadığı için store kapsamdaki minimize kartlara `.minimized`'ı hemen geri yazar. Route geçiş sözleşmesi `NavigationStore.applySurfaceTransition(from:to:)`'dadır (view'da değil):
 
 | Olay | View | PTY | Status makinesi | Coalescer |
 |---|---|---|---|---|

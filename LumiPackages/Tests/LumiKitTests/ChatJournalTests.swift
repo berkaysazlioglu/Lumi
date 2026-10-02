@@ -39,7 +39,7 @@ import LumiWire
         #expect(j.state.turnActive == false)
         #expect(j.state.lastCostUSD == 0.02)
     }
-    /// Karar 103: biten turn'ler sayılır — `turnActive` ilk delta'ya kadar
+    /// Karar 104: biten turn'ler sayılır — `turnActive` ilk delta'ya kadar
     /// false kaldığı için "cevap geldi mi?" sayaçla cevaplanır.
     @Test func turnResultsAreCounted() {
         let j = ChatJournal()

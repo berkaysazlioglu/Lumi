@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Test için sahte `ask_project` (karar 103 Faz 5): sabit cevap ya da hata,
+/// Test için sahte `ask_project` (karar 104 Faz 5): sabit cevap ya da hata,
 /// çağrılar kaydedilir.
 public final class FakeProjectQuestionAnswerer: ProjectQuestionAnswering, @unchecked Sendable {
     private let lock = NSLock()

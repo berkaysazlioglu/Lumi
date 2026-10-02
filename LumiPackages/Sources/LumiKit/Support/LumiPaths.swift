@@ -23,7 +23,7 @@ public struct LumiPaths: Sendable {
     public var claudeAccountsDir: URL { configDir.appendingPathComponent("claude-accounts") }
     /// Hızlı komutların çalıştırılan, çözülmüş script'leri (karar 92).
     public var quickCommandsDir: URL { configDir.appendingPathComponent("quick-commands") }
-    /// Orchestrator Claude'unun çalışma dizini (karar 103): hiçbir projenin
+    /// Orchestrator Claude'unun çalışma dizini (karar 104): hiçbir projenin
     /// `CLAUDE.md`'si yüklenmez, transkriptler projelerin Agent History'sine
     /// karışmaz.
     public var orchestratorDir: URL { configDir.appendingPathComponent("orchestrator") }

@@ -145,7 +145,7 @@ struct ShellComposition {
         registries.overlays.register(OverlayDescriptor(
             id: .focusModeBar,
             alignment: .top,
-            isPresented: { $0.layout.isFocusMode && $0.activeRepoPath != nil },
+            isPresented: { $0.layout.isFocusMode && $0.activeTerminalScope != nil },
             makeView: { AnyView(FocusModeBarOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(

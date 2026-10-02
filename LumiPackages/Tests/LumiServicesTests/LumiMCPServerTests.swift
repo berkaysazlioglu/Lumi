@@ -3,7 +3,7 @@ import LumiKit
 import XCTest
 @testable import LumiServices
 
-/// Karar 103 Faz 2: MCP Streamable HTTP'nin Lumi'nin kullandığı alt kümesi.
+/// Karar 104 Faz 2: MCP Streamable HTTP'nin Lumi'nin kullandığı alt kümesi.
 final class MCPRequestRouterTests: XCTestCase {
     private func request(
         method: String = "POST", path: String = "/mcp", token: String? = "secret", body: String
@@ -81,7 +81,7 @@ final class MCPRequestRouterTests: XCTestCase {
     }
 }
 
-/// Karar 103 Faz 2: gerçek loopback MCP sunucusu.
+/// Karar 104 Faz 2: gerçek loopback MCP sunucusu.
 final class LumiMCPServerTests: XCTestCase {
     private struct EchoTools: OrchestratorToolHandling {
         func call(name: String, arguments: Data) async -> OrchestratorToolResult {

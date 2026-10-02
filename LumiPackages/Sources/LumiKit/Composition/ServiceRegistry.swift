@@ -66,9 +66,9 @@ public protocol ServiceRegistry: AnyObject {
     /// PTY'siz `claude --output-format stream-json` child'larıdır.
     var chatSessions: any ChatSessionServicing { get }
 
-    /// Karar 103: tüm ajan terminallerini yöneten orchestrator Claude'u.
+    /// Karar 104: tüm ajan terminallerini yöneten orchestrator Claude'u.
     var orchestrator: any OrchestratorServicing { get }
-    /// Karar 103 Faz 2: orchestrator'ın Lumi'yi yönettiği loopback MCP sunucusu.
+    /// Karar 104 Faz 2: orchestrator'ın Lumi'yi yönettiği loopback MCP sunucusu.
     var orchestratorControl: any OrchestratorControlServing { get }
     /// Claude terminallerinin transkript kuyruğu (`read_terminal`).
     var terminalTranscripts: any TerminalTranscriptReading { get }

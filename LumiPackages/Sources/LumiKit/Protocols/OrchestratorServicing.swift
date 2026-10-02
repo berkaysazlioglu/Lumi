@@ -1,7 +1,7 @@
 import Foundation
 import LumiWire
 
-/// Orchestrator oturumunun açılışı (karar 103): hangi Claude konuşmasının
+/// Orchestrator oturumunun açılışı (karar 104): hangi Claude konuşmasının
 /// sürdürüleceği. Kimlik Lumi'de üretilir ve `ui-state`'e yazılır; ilk
 /// açılışta `--session-id`, sonrakilerde `--resume` ile aynı konuşma açılır.
 public struct OrchestratorLaunch: Sendable, Equatable {

@@ -67,7 +67,7 @@ final class NavigationStoreTests: XCTestCase {
         XCTAssertTrue(terminals.calls.isEmpty, "repo-dışı route terminal yüzeyini etkilemez")
 
         store.setRoute(.repo("/r/alpha"))
-        XCTAssertEqual(terminals.calls, [.activateRepo("/r/alpha")])
+        XCTAssertEqual(terminals.calls, [.activateSurface(.repo("/r/alpha"))])
     }
 
     // MARK: - Persist (karar 9)

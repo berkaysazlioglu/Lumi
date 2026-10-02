@@ -195,6 +195,45 @@ final class ShellToolbarCompositionTests: XCTestCase {
         }
     }
 
+    // MARK: - All Terminals (karar 103)
+
+    /// Yüzey kontrolleri (Edit + grid) kalır, repo'ya bağlı olanlar (hızlı
+    /// komutlar, New <Provider>) düşer, route başlığı gelir.
+    func testAllTerminalsRouteKeepsSurfaceControlsButDropsRepoActions() {
+        fixture.openRepo()
+        fixture.context.navigation.setRoute(AllTerminalsRoute.route)
+
+        XCTAssertEqual(
+            ids(.center),
+            [.arrangeTerminals, .gridSettings, ToolbarItemID("route.allTerminals")]
+        )
+    }
+
+    func testAllTerminalsRouteIsRegistered() {
+        XCTAssertEqual(registries.routes.resolve(.allTerminals)?.id, .allTerminals)
+    }
+
+    /// Seçili proje yok → sağ panelin (Project Tools) çizilecek öğesi kalmaz;
+    /// kalıcı görünürlük tercihi değişmez, projeye dönünce panel geri gelir.
+    func testRightPanelHasNothingToShowOnAllTerminals() {
+        fixture.openRepo()
+        fixture.context.layout.setSlotVisible(.right, true)
+        fixture.context.navigation.setRoute(AllTerminalsRoute.route)
+
+        let resolved = registries.panels.resolved(
+            slot: .right, layout: fixture.context.layout.panelLayout, context: fixture.context
+        )
+        XCTAssertTrue(resolved.isEmpty)
+        XCTAssertTrue(fixture.context.layout.isSlotVisible(.right), "tercih korunur")
+
+        fixture.openRepo()
+        XCTAssertFalse(
+            registries.panels.resolved(
+                slot: .right, layout: fixture.context.layout.panelLayout, context: fixture.context
+            ).isEmpty
+        )
+    }
+
     /// Kabuğun diğer öğeleri route'tan bağımsızdır (repo-dışı bir görünümde de
     /// gezinme ve global kontroller durur).
     func testShellItemsSurviveANonRepoRoute() {

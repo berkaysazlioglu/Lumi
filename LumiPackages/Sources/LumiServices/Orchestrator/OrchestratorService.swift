@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Orchestrator Claude'unun süreç yöneticisi (karar 103).
+/// Orchestrator Claude'unun süreç yöneticisi (karar 104).
 ///
 /// Mevcut stream-json motorunu (`StreamJsonAgentSession`) kendi bayraklarıyla
 /// çalıştırır:

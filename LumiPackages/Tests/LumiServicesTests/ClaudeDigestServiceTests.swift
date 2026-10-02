@@ -3,7 +3,7 @@ import LumiKit
 import LumiTestSupport
 @testable import LumiServices
 
-/// Karar 103 Faz 4: uzun ajan mesajının haiku özeti.
+/// Karar 104 Faz 4: uzun ajan mesajının haiku özeti.
 final class ClaudeDigestServiceTests: XCTestCase {
     private let claude = "/Users/me/.local/bin/claude"
 

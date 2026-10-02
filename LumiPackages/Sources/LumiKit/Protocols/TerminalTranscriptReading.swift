@@ -1,7 +1,7 @@
 import Foundation
 import LumiWire
 
-/// Bir ajan terminalinin konuşma transkriptini okuyan yüz (karar 103 Faz 2):
+/// Bir ajan terminalinin konuşma transkriptini okuyan yüz (karar 104 Faz 2):
 /// orchestrator'ın `read_terminal` aracı Claude terminallerinde ekranı değil
 /// transkripti okur — TUI çerçevesi, renk ve kırpılmış satırlar olmadan.
 public protocol TerminalTranscriptReading: Sendable {

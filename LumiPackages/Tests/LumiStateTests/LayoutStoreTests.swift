@@ -65,7 +65,7 @@ final class LayoutStoreTests: XCTestCase {
         store.evict("/b")
         XCTAssertTrue(store.isArranging(in: "/a"))
         store.evict("/a")
-        XCTAssertNil(store.arrangingRepoPath)
+        XCTAssertNil(store.arrangingScope)
     }
 
     // MARK: - Arayüz ölçeği (karar 61)

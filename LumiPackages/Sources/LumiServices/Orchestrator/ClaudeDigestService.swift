@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 
 /// Ajan terminalinin son mesajını `claude -p --model haiku` ile 1–3 satıra
-/// indirir ve "kullanıcıdan bir şey istiyor mu?" sorusunu cevaplar (karar 103
+/// indirir ve "kullanıcıdan bir şey istiyor mu?" sorusunu cevaplar (karar 104
 /// Faz 4). Commit mesajı servisinin (karar 47) deseni: binary `BinaryLocating`
 /// ile çözülür, mesaj stdin'den gider, araçsız tek turn, kullanıcı ayarları ve
 /// Lumi hook'ları yüklenmez (`--setting-sources ""`), oturum kaydedilmez.

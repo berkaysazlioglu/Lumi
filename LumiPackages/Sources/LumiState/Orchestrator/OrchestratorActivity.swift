@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Bir ajan terminalinden gelen olay (karar 103 Faz 4): turn bitti, karar
+/// Bir ajan terminalinden gelen olay (karar 104 Faz 4): turn bitti, karar
 /// bekliyor ya da hatayla durdu — özetiyle.
 public struct OrchestratorEvent: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
@@ -39,7 +39,7 @@ public struct OrchestratorEvent: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Orchestrator'ın Activity paneli (karar 103 Faz 4). Olaylar yalnız
+/// Orchestrator'ın Activity paneli (karar 104 Faz 4). Olaylar yalnız
 /// bellektedir (en yeni önce, `capacity` kadar).
 ///
 /// İki ayrı "okundu" kavramı vardır:

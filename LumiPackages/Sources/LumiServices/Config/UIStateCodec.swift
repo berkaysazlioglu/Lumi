@@ -66,13 +66,19 @@ enum UIStateCodec {
         if let raw = dict["projectToolsTab"] as? String {
             state.projectToolsTab = raw
         }
-        // Karar 103 (additive): orchestrator konuşması. Yoksa nil → yeni kimlik.
+        // Karar 104 (additive): orchestrator konuşması. Yoksa nil → yeni kimlik.
         if let raw = dict["orchestratorSessionID"] as? String, !raw.isEmpty {
             state.orchestratorSessionID = raw
         }
-        // Karar 103 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
+        // Karar 104 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
         if let raw = dict["orchestratorWatchedSessions"] as? [Any] {
             state.orchestratorWatchedSessions = raw.compactMap { $0 as? String }.filter { !$0.isEmpty }
+        }
+        // Karar 103 (additive): All Terminals yerleşimi ve kart sırası. Yoksa/
+        // bozuksa varsayılan; sıradaki String olmayan girdiler atılır.
+        state.allTerminalsGridLayout = GridLayoutCodec.decode(dict["allTerminalsGridLayout"] as? [String: Any])
+        if let raw = dict["allTerminalsOrder"] as? [Any] {
+            state.allTerminalsOrder = raw.compactMap { $0 as? String }
         }
         return state
     }
@@ -127,13 +133,22 @@ enum UIStateCodec {
         if let tab = state.projectToolsTab {
             overlay["projectToolsTab"] = tab
         }
-        // Karar 103 (additive): yalnız DOLU iken yazılır (karar 9).
+        // Karar 104 (additive): yalnız DOLU iken yazılır (karar 9).
         if let sessionID = state.orchestratorSessionID {
             overlay["orchestratorSessionID"] = sessionID
         }
         // nil → yazılmaz; boş liste YAZILIR (merge bayat listeyi diskte bırakmasın).
         if let watched = state.orchestratorWatchedSessions {
             overlay["orchestratorWatchedSessions"] = watched
+        }
+        // Karar 103 (additive): ikisi de yalnız DOLU iken yazılır. Sıra boşalınca
+        // diskte kalan eski liste zararsızdır: resume listesi (her yazımda
+        // yazılır) boştur, eşleşecek oturum doğmaz; ilk dolu yazım onu ezer.
+        if let layout = state.allTerminalsGridLayout {
+            overlay["allTerminalsGridLayout"] = GridLayoutCodec.overlay(layout)
+        }
+        if !state.allTerminalsOrder.isEmpty {
+            overlay["allTerminalsOrder"] = state.allTerminalsOrder
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

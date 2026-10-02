@@ -632,7 +632,7 @@ private struct PreviewAppReleaseService: AppReleaseChecking {
         )
     }
 }
-/// Süreçsiz sahte orchestrator (karar 103): sabit bir geçmiş döner.
+/// Süreçsiz sahte orchestrator (karar 104): sabit bir geçmiş döner.
 struct PreviewOrchestratorService: OrchestratorServicing {
     func start(_ launch: OrchestratorLaunch) async throws -> OrchestratorRun {
         let history = [

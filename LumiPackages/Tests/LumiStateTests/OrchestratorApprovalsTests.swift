@@ -3,7 +3,7 @@ import LumiKit
 import XCTest
 @testable import LumiState
 
-/// Karar 103 Faz 3: yazma eylemlerinin onay kapısı.
+/// Karar 104 Faz 3: yazma eylemlerinin onay kapısı.
 @MainActor
 final class OrchestratorApprovalsTests: XCTestCase {
     private func request(_ title: String = "Send") -> OrchestratorApprovalRequest {

@@ -19,19 +19,23 @@ public struct LayoutSnapshot: Equatable, Sendable {
     public var uiFontFamily: UIFontFamily?
     /// karar 72: sağ panelin seçili sekmesi. Varsayılan sekmede `nil` yazılır.
     public var projectToolsTab: ProjectToolsTab?
+    /// Karar 103: All Terminals'ın grid yerleşimi. Hiç seçilmediyse `nil`.
+    public var allTerminalsGridLayout: GridLayout?
 
     public init(
         panelLayout: PanelLayout,
         projectGridLayouts: [String: GridLayout],
         uiScale: Double? = nil,
         uiFontFamily: UIFontFamily? = nil,
-        projectToolsTab: ProjectToolsTab? = nil
+        projectToolsTab: ProjectToolsTab? = nil,
+        allTerminalsGridLayout: GridLayout? = nil
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
         self.uiScale = uiScale
         self.uiFontFamily = uiFontFamily
         self.projectToolsTab = projectToolsTab
+        self.allTerminalsGridLayout = allTerminalsGridLayout
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -40,8 +44,12 @@ public struct LayoutSnapshot: Equatable, Sendable {
     public var rightSidebarOpen: Bool { panelLayout.isVisible(.right) }
 }
 
-/// Panel yerleşimi/görünürlüğü, repo başına grid yerleşimi, maximize/solo ve
-/// focus mode (refactor 5.2, Faz 6.2; design/03 §4, §7).
+/// Panel yerleşimi/görünürlüğü, terminal yüzeyi başına grid yerleşimi,
+/// maximize/solo ve focus mode (refactor 5.2, Faz 6.2; design/03 §4, §7).
+///
+/// Karar 103: yüzeye bağlı durum (maximize, Edit modu, grid) `TerminalScope`
+/// ile anahtarlanır — repo route'u ve All Terminals aynı intent'leri kullanır.
+/// `in repoPath:` imzaları `.repo` kapsamının kısayoludur.
 ///
 /// Tek servis bağımlılığı `ConfigServicing`'dir. Maximize'ın "görünür mü?"
 /// sorusu terminal store'una SOMUT bağ kurmadan `isTerminalVisible`
@@ -61,15 +69,19 @@ public final class LayoutStore {
     /// Hangi öğe hangi yuvada + yuva görünürlükleri + genişlikler (K33/K34).
     public private(set) var panelLayout: PanelLayout = .defaults
     public private(set) var projectGridLayouts: [String: GridLayout] = [:]
-    /// Oturumluk maximize/solo — repo başına en çok bir terminal tam alanı
+    /// Karar 103: All Terminals'ın grid yerleşimi; `nil` = varsayılan.
+    /// `projectGridLayouts`'a yazılmaz — o sözlük repo yolu → yerleşimdir
+    /// (karar 9) ve sahte bir anahtar taşımamalı.
+    public private(set) var allTerminalsGridLayout: GridLayout?
+    /// Oturumluk maximize/solo — yüzey başına en çok bir terminal tam alanı
     /// kaplar; diğer görünürler alt şeride iner. Persist edilmez.
-    public private(set) var maximizedByRepo: [String: TerminalID] = [:]
+    public private(set) var maximizedByScope: [TerminalScope: TerminalID] = [:]
     /// Oturumluk — persist edilmez.
     public private(set) var isFocusMode = false
-    /// Karar 97: kartların elle sıralandığı Edit modu hangi repo'da açık.
-    /// Repo'ya bağlıdır — başka checkout'a geçince o yüzeyde kapalı görünür.
-    /// Oturumluk — persist edilmez.
-    public private(set) var arrangingRepoPath: String?
+    /// Karar 97: kartların elle sıralandığı Edit modu hangi yüzeyde açık.
+    /// Yüzeye bağlıdır — başka checkout'a ya da All Terminals'a geçince o
+    /// yüzeyde kapalı görünür. Oturumluk — persist edilmez.
+    public private(set) var arrangingScope: TerminalScope?
     /// Karar 44: kenar hover'ıyla o an içeriğin ÜSTÜNDE açık duran yuvalar.
     /// Oturumluk — persist edilmez; kalıcı tercih `panelLayout.autoRevealSlots`.
     public private(set) var revealedSlots: Set<PanelSlot> = []
@@ -103,7 +115,7 @@ public final class LayoutStore {
     @ObservationIgnored public var onUIFontFamilyChanged: ((UIFontFamily) -> Void)?
 
     @ObservationIgnored private let config: any ConfigServicing
-    @ObservationIgnored private let isTerminalVisible: (TerminalID, String) -> Bool
+    @ObservationIgnored private let isTerminalVisible: (TerminalID, TerminalScope) -> Bool
     /// Maximize odak da verir. Odaklama terminal store'unun işidir; layout onu
     /// SOMUT olarak tanımasın diye dar bir closure ile enjekte edilir
     /// (`isTerminalVisible` ile aynı gerekçe).
@@ -113,7 +125,7 @@ public final class LayoutStore {
 
     public init(
         config: any ConfigServicing,
-        isTerminalVisible: @escaping (TerminalID, String) -> Bool,
+        isTerminalVisible: @escaping (TerminalID, TerminalScope) -> Bool,
         focusTerminal: @escaping (TerminalID) -> Void = { _ in }
     ) {
         self.config = config
@@ -139,6 +151,7 @@ public final class LayoutStore {
         // karar 72: anahtar yoksa/bozuksa Explorer.
         projectToolsTab = state.projectToolsTab.flatMap(ProjectToolsTab.init(rawValue:)) ?? .explorer
         projectGridLayouts = state.projectGridLayouts
+        allTerminalsGridLayout = state.allTerminalsGridLayout
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
             for tab in openTabs {
                 projectGridLayouts[tab] = legacy
@@ -266,12 +279,29 @@ public final class LayoutStore {
 
     public func gridLayout(for repoPath: String?) -> GridLayout {
         guard let repoPath else { return Self.defaultGridLayout }
-        return projectGridLayouts[repoPath] ?? Self.defaultGridLayout
+        return gridLayout(for: .repo(repoPath))
+    }
+
+    public func gridLayout(for scope: TerminalScope) -> GridLayout {
+        switch scope {
+        case .repo(let repoPath): projectGridLayouts[repoPath] ?? Self.defaultGridLayout
+        case .all: allTerminalsGridLayout ?? Self.defaultGridLayout
+        }
     }
 
     public func setGridLayout(_ layout: GridLayout, for repoPath: String) {
         guard !repoPath.isEmpty else { return }
-        projectGridLayouts[repoPath] = layout
+        setGridLayout(layout, for: .repo(repoPath))
+    }
+
+    public func setGridLayout(_ layout: GridLayout, for scope: TerminalScope) {
+        switch scope {
+        case .repo(let repoPath):
+            guard !repoPath.isEmpty else { return }
+            projectGridLayouts[repoPath] = layout
+        case .all:
+            allTerminalsGridLayout = layout
+        }
         persist() // disk yazımı servis tarafında 500ms debounce'lu
     }
 
@@ -282,36 +312,57 @@ public final class LayoutStore {
     /// terminal listesinin tipini yine tanımaz.
     @discardableResult
     public func maximize(_ id: TerminalID, in repoPath: String) -> Bool {
-        guard isTerminalVisible(id, repoPath) else { return false }
+        maximize(id, in: .repo(repoPath))
+    }
+
+    @discardableResult
+    public func maximize(_ id: TerminalID, in scope: TerminalScope) -> Bool {
+        guard isTerminalVisible(id, scope) else { return false }
         // Edit modu grid üzerinde çalışır (karar 97): solo yüzeye geçiş onu bitirir —
         // aksi hâlde grid unmount olur, mod açık kalır ve klavye terminale döner.
-        if isArranging(in: repoPath) { endArranging() }
-        maximizedByRepo[repoPath] = id
+        if isArranging(in: scope) { endArranging() }
+        maximizedByScope[scope] = id
         focusTerminal(id)
         return true
     }
 
     /// Aynı id ikinci kez → restore (menü Cmd+Ctrl+M ve kart butonu aynı intent).
     public func toggleMaximize(_ id: TerminalID, in repoPath: String) {
-        if isMaximized(id, in: repoPath) {
-            restoreMaximize(in: repoPath)
+        toggleMaximize(id, in: .repo(repoPath))
+    }
+
+    public func toggleMaximize(_ id: TerminalID, in scope: TerminalScope) {
+        if isMaximized(id, in: scope) {
+            restoreMaximize(in: scope)
         } else {
-            maximize(id, in: repoPath)
+            maximize(id, in: scope)
         }
     }
 
     public func restoreMaximize(in repoPath: String) {
-        maximizedByRepo[repoPath] = nil
+        restoreMaximize(in: .repo(repoPath))
+    }
+
+    public func restoreMaximize(in scope: TerminalScope) {
+        maximizedByScope[scope] = nil
     }
 
     public func isMaximized(_ id: TerminalID, in repoPath: String) -> Bool {
-        maximizedByRepo[repoPath] == id
+        isMaximized(id, in: .repo(repoPath))
+    }
+
+    public func isMaximized(_ id: TerminalID, in scope: TerminalScope) -> Bool {
+        maximizedByScope[scope] == id
     }
 
     /// Aktif maximize hedefi — kart kapanmış/minimize olmuşsa nil döner
     /// (görünür değil); stale dict girdisi okuma sırasında zararsızca yok sayılır.
     public func maximizedTerminal(in repoPath: String) -> TerminalID? {
-        guard let id = maximizedByRepo[repoPath], isTerminalVisible(id, repoPath) else {
+        maximizedTerminal(in: .repo(repoPath))
+    }
+
+    public func maximizedTerminal(in scope: TerminalScope) -> TerminalID? {
+        guard let id = maximizedByScope[scope], isTerminalVisible(id, scope) else {
             return nil
         }
         return id
@@ -320,21 +371,29 @@ public final class LayoutStore {
     // MARK: - Elle sıralama (karar 97)
 
     public func isArranging(in repoPath: String) -> Bool {
-        arrangingRepoPath == repoPath
+        isArranging(in: .repo(repoPath))
+    }
+
+    public func isArranging(in scope: TerminalScope) -> Bool {
+        arrangingScope == scope
     }
 
     /// Edit modu grid üzerinde çalışır: açılırken maximize/solo bırakılır.
     public func toggleArranging(in repoPath: String) {
-        if isArranging(in: repoPath) {
+        toggleArranging(in: .repo(repoPath))
+    }
+
+    public func toggleArranging(in scope: TerminalScope) {
+        if isArranging(in: scope) {
             endArranging()
         } else {
-            restoreMaximize(in: repoPath)
-            arrangingRepoPath = repoPath
+            restoreMaximize(in: scope)
+            arrangingScope = scope
         }
     }
 
     public func endArranging() {
-        arrangingRepoPath = nil
+        arrangingScope = nil
     }
 
     // MARK: - Cache eviction (refactor 5.5)
@@ -342,9 +401,10 @@ public final class LayoutStore {
     /// Tab kapanınca oturumluk maximize kaydı düşer. `projectGridLayouts`
     /// KASITLI olarak korunur: persist edilen bir kullanıcı tercihidir
     /// (karar 9) — tab yeniden açıldığında yerleşimi geri gelmelidir.
+    /// All Terminals'ın kayıtları repo'ya ait değildir, dokunulmaz.
     public func evict(_ repoPath: String) {
-        maximizedByRepo.removeValue(forKey: repoPath)
-        if arrangingRepoPath == repoPath { endArranging() }
+        maximizedByScope.removeValue(forKey: .repo(repoPath))
+        if arrangingScope == .repo(repoPath) { endArranging() }
     }
 
     // MARK: - Persistence
@@ -358,7 +418,8 @@ public final class LayoutStore {
             // `.system` varsayılanında nil: aynı gerekçe.
             uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily,
             // Explorer varsayılanında nil: aynı gerekçe.
-            projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab
+            projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab,
+            allTerminalsGridLayout: allTerminalsGridLayout
         )
     }
 
@@ -426,6 +487,7 @@ public final class LayoutStore {
                 state.uiScale = snapshot.uiScale
                 state.uiFontFamily = snapshot.uiFontFamily
                 state.projectToolsTab = snapshot.projectToolsTab?.rawValue
+                state.allTerminalsGridLayout = snapshot.allTerminalsGridLayout
             }
         }
     }

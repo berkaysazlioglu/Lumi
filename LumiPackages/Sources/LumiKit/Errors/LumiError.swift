@@ -11,9 +11,9 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case plasticFailed(operation: String, detail: String)
     /// Commit mesajı üretimi (`claude -p`) başarısız ya da boş yanıt (karar 47).
     case commitMessageGenerationFailed(detail: String)
-    /// Karar 103 Faz 4: ajan mesajı özetlenemedi (haiku).
+    /// Karar 104 Faz 4: ajan mesajı özetlenemedi (haiku).
     case digestFailed(detail: String)
-    /// Karar 103 Faz 5: `ask_project` arka plan ajanı cevap üretemedi.
+    /// Karar 104 Faz 5: `ask_project` arka plan ajanı cevap üretemedi.
     case projectQuestionFailed(detail: String)
     /// Hızlı komut üretimi (`claude -p`, karar 92) başarısız ya da script'siz yanıt.
     case quickCommandGenerationFailed(detail: String)

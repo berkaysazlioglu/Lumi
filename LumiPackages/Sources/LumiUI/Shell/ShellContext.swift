@@ -92,7 +92,7 @@ public final class ShellContext {
     public let resourceUsage: ResourceUsageStore
     /// Settings ▸ About'un sürüm kontrolü (karar 102).
     public let appUpdate: AppUpdateStore
-    /// Karar 103: orchestrator sohbeti.
+    /// Karar 104: orchestrator sohbeti.
     public let orchestrator: OrchestratorStore
 
     // MARK: - Köprüler
@@ -171,6 +171,25 @@ public final class ShellContext {
 
     /// `.repo` route'unun projeksiyonu — panel öğelerinin `isAvailable` kapısı.
     public var activeRepoPath: String? { navigation.activeRepoPath }
+
+    /// Karar 103: orta alan bir terminal yüzeyiyse kapsamı — repo route'u ya
+    /// da All Terminals. Grid/Edit gibi yüzey kontrollerinin kapısı; repo'ya
+    /// bağlı eylemler (spawn, hızlı komutlar) `activeRepoPath`'te kalır.
+    public var activeTerminalScope: TerminalScope? { navigation.activeRoute.terminalScope }
+
+    /// Checkout'un kullanıcıya görünen adı: proje kökü için proje adı,
+    /// yönetilen workspace için `proje / workspace` (Projects panelindeki
+    /// hiyerarşinin tek satırlık hâli).
+    public func checkoutLabel(for repoPath: String) -> String {
+        if let workspace = workspaces.records.first(where: { $0.path == repoPath }) {
+            return "\(projectName(at: workspace.projectPath)) / \(workspace.name)"
+        }
+        return projectName(at: repoPath)
+    }
+
+    private func projectName(at path: String) -> String {
+        repos.repo(at: path)?.name ?? (path as NSString).lastPathComponent
+    }
 
     public var isFocusMode: Bool { layout.isFocusMode }
 
@@ -297,9 +316,15 @@ public final class ShellContext {
     /// alınmıştı) bu repo'nun son aktif terminaline geri verilir — global aktif
     /// terminal başka repo'da olabilir.
     public func toggleArrangingTerminals(in repoPath: String) {
-        layout.toggleArranging(in: repoPath)
-        guard !layout.isArranging(in: repoPath),
-              let id = terminals.lastActiveVisible(in: repoPath) else { return }
+        toggleArrangingTerminals(in: .repo(repoPath))
+    }
+
+    /// Kapsamlı hâli (karar 103): All Terminals'ta çıkış odağı o yüzeyin son
+    /// aktif kartına döner.
+    public func toggleArrangingTerminals(in scope: TerminalScope) {
+        layout.toggleArranging(in: scope)
+        guard !layout.isArranging(in: scope),
+              let id = terminals.lastActiveVisible(in: scope) else { return }
         terminals.focus(id)
     }
 

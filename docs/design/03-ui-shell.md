@@ -89,9 +89,9 @@ Hepsi `@Observable @MainActor final class`. **Tek process ⇒ doğrudan gözlem:
 | Store | Tuttuğu (yalnız UI/metadata) | Beslendiği | Kritik kurallar |
 |---|---|---|---|
 | `NavigationStore` | `openTabs: [String]` (**repo path** — ad-çakışması bug fix'i, karar 11), `activeRoute: WorkspaceRoute` | UI intent'leri; açılışta `ui-state.json` (tek seferlik ad→path migration) | `activeRepoPath` `.repo` projeksiyonudur; `onActiveRepoChanged` yalnız `.repo`'da ateşlenir. Route geçişinin terminal yan etkileri `applySurfaceTransition` sözleşmesinde (§7.3). Tab kapatma: minimize guard'ı → repo terminallerini kill → `onTabClosed` (cache eviction) |
-| `LayoutStore` | `panelLayout: PanelLayout` (slots/visibleSlots/widths), `projectGridLayouts: [String: GridLayout]`, oturumluk `maximizedByRepo: [String: TerminalID]`, `isFocusMode` | UI intent'leri; açılışta `UIState` | Panel intent'leri: `toggleSlot`/`setSlotVisible`/`move(item:to:index:)`/`setWidth` — hepsi `PanelLayout`'un immutable mutasyonlarına iner ve **değişmediyse yazmaz**. Persist tek `LayoutSnapshot` üzerinden; `isFocusMode` ve `maximizedByRepo` persist **edilmez**. `evict(repoPath)` tab kapanınca çağrılır |
+| `LayoutStore` | `panelLayout: PanelLayout` (slots/visibleSlots/widths), `projectGridLayouts: [String: GridLayout]`, `allTerminalsGridLayout: GridLayout?` (karar 103), oturumluk `maximizedByScope: [TerminalScope: TerminalID]` + `arrangingScope: TerminalScope?` (Edit modu, karar 97/103), `isFocusMode` | UI intent'leri; açılışta `UIState` | Panel intent'leri: `toggleSlot`/`setSlotVisible`/`move(item:to:index:)`/`setWidth` — hepsi `PanelLayout`'un immutable mutasyonlarına iner ve **değişmediyse yazmaz**. Persist tek `LayoutSnapshot` üzerinden; `isFocusMode`, `maximizedByScope` ve `arrangingScope` persist **edilmez**. Grid/maximize/Edit intent'leri `TerminalScope` alır; `in repoPath:` imzaları `.repo` kısayoludur. `evict(repoPath)` tab kapanınca çağrılır |
 | `DialogRouter` | `active: ActiveDialog` (5 ayrı bool yerine sum type), `collapsedRepoGroups` | UI intent'leri + AppKit quit akışı | `isInputBlockingOverlayOpen` elle `\|\|` listesinden değil `active`'den **türer**. Quit sonucu `onQuitResolved` ile AppDelegate'e döner |
-| `TerminalListStore` | **Sıralı** `[TerminalMeta]`, `activeTerminalID`, `minimizedIDs`, `awaitingDecisionIDs`, `stalledIDs`, `lastActiveByRepo`, `surfaceRepoPath` | `TerminalEvent` stream | Kapanışta komşu-odak (silmeden önce hesap: önceki → sonraki → ilk, aynı repo); minimize-asla-otomatik-odak (tek istisna: bildirim tıklaması); yüzey intent'leri `setTerminalSurfaceVisible(_:in:)` / `deactivateSurface()` ([01 §3.4](./01-terminal-subsystem.md)); `isFailureExit(_:)` → exit toast'ı |
+| `TerminalListStore` | **Sıralı** `[TerminalMeta]`, `activeTerminalID`, `minimizedIDs`, `awaitingDecisionIDs`, `stalledIDs`, `lastActiveByRepo`, `surfaceScope: TerminalScope?`, `allArrangement: TerminalArrangement` (All Terminals'ın ayrı kart sırası, karar 103) | `TerminalEvent` stream | Kapanışta komşu-odak (silmeden önce hesap: önceki → sonraki → ilk, aynı repo); minimize-asla-otomatik-odak (tek istisna: bildirim tıklaması); yüzey intent'leri `activateSurface(_:)` / `setTerminalSurfaceVisible(_:in:)` / `deactivateSurface()` — toplu foreground'dan sonra kapsamdaki minimize kartlara `.minimized` yeniden yazılır; All Terminals öndeyken komşu-odak kapsamı tüm projelerdir; seçiciler (`terminals/visibleTerminals/minimizedTerminals(in:)`), takas ve ⌘1–9 gezinmesi kapsam alır ([01 §3.4](./01-terminal-subsystem.md)); `isFailureExit(_:)` → exit toast'ı |
 | `PromptQueueStore` | `queues: [TerminalID: [QueuedPrompt]]`, `pausedIDs` | `TerminalEvent` stream | §4.1 |
 | `RepoStore` | `repos`, kaynak-gruplu görünüm, `fileTrees` cache (stale-while-revalidate, scroll-pozisyon korumalı yenileme) | `RepoEvent` stream | Event → tam yeniden çekme (pull-after-push). Aktif tab'ın reposunu watch eder, tab kapanınca unwatch. `additionalPaths` `private(set)` + intent (iki yazar sorunu, Faz 5.4) |
 | `GitStore` | Repo başına commits/branches/status cache'leri; `selectedCommit`, `commitFiles`, `[FilePath: Loadable<UnifiedDiff>]` | `RepoEvent.fileTreeChanged` invalidation + intent'ler | Lazy commit-diff (karar 6). Eşzamanlı `git log` tavanı (TaskGroup sınırı) — N branch × 2 process patlaması kapatıldı |
@@ -262,7 +262,7 @@ struct ContentRouteDescriptor: Identifiable {
 }
 ```
 
-`ContentRouteRegistry` de saftır: `routes()` kayıt sırasını döndürür, `resolve(_:)` bilinmeyen id'de **`terminals` fallback**'ine düşer (eski bir route id'si kabuğu boş bırakmaz). `ContentRouterView` `NavigationStore.activeRoute`'u eşler: `.repo(path)` → `terminals` descriptor'ı + path, `.content(id)` → o descriptor, `.none` → `WelcomeView`.
+`ContentRouteRegistry` de saftır: `routes()` kayıt sırasını döndürür, `resolve(_:)` bilinmeyen id'de **`terminals` fallback**'ine düşer (eski bir route id'si kabuğu boş bırakmaz). `ContentRouterView` `NavigationStore.activeRoute`'u eşler: `.repo(path)` → `terminals` descriptor'ı + path, `.content(id)` → o descriptor, `.none` → `WelcomeView`. **Terminal yüzeyi** `WorkspaceRoute.terminalScope`'tur: `.repo(path)` → `.repo(path)`, `.content(.allTerminals)` → `.all` (karar 103; aynı `TerminalsRouteView` kapsamla çizilir), diğerleri `nil`.
 
 `TerminalsRouteView` eski `RootView.repoContent`'in yerine geçer: minimize şeridi, boş-repo durumu ve `maximized ⇄ grid` seçimi artık **route'un iç meselesidir**; kabuk yalnız "hangi route" sorusunu bilir.
 
@@ -270,10 +270,14 @@ struct ContentRouteDescriptor: Identifiable {
 
 | Geçiş | Terminal yüzeyi | View köprüsü |
 |---|---|---|
-| terminals → başka route | `deactivateSurface()` (arka plan + odak yok) | `detachAll()` |
-| başka route → terminals | `activateRepo(path)` (foreground + odak) | `refreshAttachedViews()` |
-| repo → repo | `activateRepo(path)` (eskiyi arkaya, yeniyi öne) | — (host'lar yerinde) |
+| yüzey → yüzey-dışı route | `deactivateSurface()` (arka plan + odak yok) | `detachAll()` |
+| yüzey-dışı route → yüzey | `activateSurface(scope)` (foreground + odak) | `refreshAttachedViews()` |
+| repo → repo | `activateSurface(.repo(path))` (eskiyi arkaya, yeniyi öne) | — (host'lar yerinde) |
+| repo → All Terminals | `activateSurface(.all)` (önceki repo arkaya ALINMAZ, hepsi tek çağrıda öne) | — (kartlar yeni host'a taşınır, klavye odağı taşımada korunur) |
+| All Terminals → repo | `activateSurface(.repo(path))` (önce hepsi arkaya, sonra repo öne) | — (diğer kartlar ertelenmiş `detachView` ile iner) |
 | route-dışı → route-dışı | — | — |
+
+Klavye odağı (first responder) taşımada korunur: `TerminalViewRegistry.attachView` odaklı bir view'ı yeni host'a taşırken odak isteğini yeniden kurar (AppKit `removeFromSuperview`'da odağı düşürür); yeni host pencerede değilse istek pencereye girişte yerine gelir. Odakta olmayan view'ın taşınması odak çalmaz.
 
 PTY hiçbir adımda durmaz, view'lar yok edilmez: detach yalnız reparent eder (§3). Kalkan testler: `RouteTransitionTests`, `TerminalGridFitIntegrationTests`.
 

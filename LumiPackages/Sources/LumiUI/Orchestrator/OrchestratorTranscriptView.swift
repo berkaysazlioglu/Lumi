@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Orchestrator sohbetinin mesaj listesi (karar 103). Yeni mesaj ya da akan
+/// Orchestrator sohbetinin mesaj listesi (karar 104). Yeni mesaj ya da akan
 /// metin geldikçe en alta kayar.
 struct OrchestratorTranscriptView: View {
     let store: OrchestratorStore

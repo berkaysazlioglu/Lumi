@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Araç çıktılarının biçimi (karar 103): model için kısa, kararlı ve
+/// Araç çıktılarının biçimi (karar 104): model için kısa, kararlı ve
 /// tekdüze. View'sız saf fonksiyonlar — test edilir.
 enum OrchestratorToolFormat {
     /// Tek mesaj metninin üst sınırı — uzun cevaplar bağlamı doldurmasın.

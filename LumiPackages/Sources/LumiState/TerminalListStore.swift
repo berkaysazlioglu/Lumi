@@ -24,6 +24,9 @@ public final class TerminalListStore: StoreLifecycle {
     /// Feed akışı donmuş terminaller (design/00 Ek A §A.2-10) — ephemeral,
     /// persist EDİLMEZ: `TerminalMeta` formatı değişmez (karar 9).
     public private(set) var stalledIDs: Set<TerminalID> = []
+    /// Karar 103: All Terminals görünümünün kendi kart sırası. Tam liste
+    /// (`terminals`) repo görünümlerinin sırasıdır ve bundan etkilenmez.
+    public private(set) var allArrangement = TerminalArrangement()
 
     /// Karar 24: açıkken working'e geçen terminal otomatik minimize edilir ve
     /// turn bitince / girdi beklenince otomatik restore edilir. Config aynası —
@@ -34,11 +37,12 @@ public final class TerminalListStore: StoreLifecycle {
     @ObservationIgnored private var autoMinimizedIDs: Set<TerminalID> = []
 
     @ObservationIgnored private var lastActiveByRepo: [String: TerminalID] = [:]
-    /// Terminal yüzeyinin şu an hangi repo için önde olduğu (Faz 4.9). Tab/route
-    /// geçişinde eski repo'yu arkaya almanın tek kaynağıdır; `activeTerminalID`
-    /// bundan ayrıdır (yüzey gizliyken de korunur).
-    @ObservationIgnored private var surfaceRepoPath: String?
-    /// Faz 6.3: orta alan terminals route'unda DEĞİL. `surfaceRepoPath` bilerek
+    /// Terminal yüzeyinin şu an hangi kapsam için önde olduğu (Faz 4.9; karar
+    /// 103'te repo → kapsam). Tab/route geçişinde eski kapsamı arkaya almanın
+    /// tek kaynağıdır; `activeTerminalID` bundan ayrıdır (yüzey gizliyken de
+    /// korunur).
+    @ObservationIgnored private var surfaceScope: TerminalScope?
+    /// Faz 6.3: orta alan bir terminal yüzeyinde DEĞİL. `surfaceScope` bilerek
     /// korunur (dönüşte aynı repoya foreground uygulanabilsin diye), ama yüzey
     /// arka plandadır — bu aradaki restore/spawn'lar terminali öne almaz.
     @ObservationIgnored private var isSurfaceDeactivated = false
@@ -88,6 +92,23 @@ public final class TerminalListStore: StoreLifecycle {
         terminals.filter { $0.repoPath == repoPath && minimizedIDs.contains($0.id) }
     }
 
+    /// Karar 103: kapsamın terminalleri GÖRÜNTÜLENDİKLERİ sırayla — repo'da tam
+    /// listenin sırası, All Terminals'ta `allArrangement`.
+    public func terminals(in scope: TerminalScope) -> [TerminalMeta] {
+        switch scope {
+        case .repo(let repoPath): terminals(in: repoPath)
+        case .all: allArrangement.ordered(terminals)
+        }
+    }
+
+    public func visibleTerminals(in scope: TerminalScope) -> [TerminalMeta] {
+        terminals(in: scope).filter { !minimizedIDs.contains($0.id) }
+    }
+
+    public func minimizedTerminals(in scope: TerminalScope) -> [TerminalMeta] {
+        terminals(in: scope).filter { minimizedIDs.contains($0.id) }
+    }
+
     /// Karar 100 "Mention in Chat" hedefleri: repo'daki ajan koşan terminaller
     /// (minimize edilmişler dahil). İlk eleman varsayılan hedeftir — aktif
     /// terminal, yoksa repo'nun son aktifi, yoksa listedeki sıra.
@@ -109,7 +130,7 @@ public final class TerminalListStore: StoreLifecycle {
     }
 
     /// Metni prompt'a yapıştırıp GÖNDERİR (bracketed paste + CR) — prompt
-    /// kuyruğunun enjeksiyonuyla aynı biçim (karar 103 `send_to_terminal`).
+    /// kuyruğunun enjeksiyonuyla aynı biçim (karar 104 `send_to_terminal`).
     @discardableResult
     public func submit(_ text: String, to id: TerminalID) -> Bool {
         toasts.reporting {
@@ -138,7 +159,7 @@ public final class TerminalListStore: StoreLifecycle {
     // MARK: - Intent'ler
 
     /// Açılan terminalin meta'sı döner (orchestrator kimliği bildirir —
-    /// karar 103); hata toast olur ve `nil` döner.
+    /// karar 104); hata toast olur ve `nil` döner.
     @discardableResult
     public func spawn(
         in repoPath: String,
@@ -182,6 +203,29 @@ public final class TerminalListStore: StoreLifecycle {
         onOrderChanged?()
     }
 
+    /// Takasın kapsamlı hâli (karar 103): repo'da tam listede takas (yukarıdaki
+    /// kural), All Terminals'ta yalnız o görünümün sırasında — repo sınırı
+    /// yoktur ve proje görünümlerinin sırası değişmez.
+    public func swap(_ first: TerminalID, _ second: TerminalID, in scope: TerminalScope) {
+        switch scope {
+        case .repo(let repoPath):
+            guard meta(for: first)?.repoPath == repoPath else { return }
+            swap(first, second)
+        case .all:
+            guard allArrangement.swap(first, second, among: terminals) else { return }
+            onOrderChanged?()
+        }
+    }
+
+    /// Karar 103: açılışta diskteki All Terminals sırası (`persistedKeys`)
+    /// kurulur. Resume spawn'larından ÖNCE çağrılır ki doğan oturumlar eski
+    /// yerlerine otursun; o ana dek doğmuş terminaller sona dizilir.
+    public func restoreAllArrangement(_ keys: [String]) {
+        var restored = TerminalArrangement(restoring: keys)
+        restored.pin(terminals)
+        allArrangement = restored
+    }
+
     public func closeAll(in repoPath: String) {
         for meta in terminals(in: repoPath) {
             close(meta.id)
@@ -217,24 +261,36 @@ public final class TerminalListStore: StoreLifecycle {
     /// ama `activeTerminalID` KORUNUR, böylece dönüşte aynı terminal geri
     /// odaklanır. Route değişimi (Faz 6.3) ve tab geçişi aynı intent'i kullanır.
     public func setTerminalSurfaceVisible(_ visible: Bool, in repoPath: String) {
-        service.setSurfaceState(visible ? .foreground : .background, in: repoPath)
+        setTerminalSurfaceVisible(visible, in: .repo(repoPath))
+    }
+
+    /// Kapsamlı hâli (karar 103): `.all` servisin "tüm terminaller" kanalına
+    /// (`repoPath == nil`) iner.
+    public func setTerminalSurfaceVisible(_ visible: Bool, in scope: TerminalScope) {
+        service.setSurfaceState(visible ? .foreground : .background, in: scope.repoPath)
         guard visible else {
             service.setFocused(nil)
             return
         }
+        // Toplu foreground minimize kartları ayırmaz; ekranda olmayan kart 16 ms
+        // akışa geçmesin diye niyeti geri yazılır (All Terminals'ta bu TÜM
+        // projelerin minimize kartları demektir).
+        for meta in terminals(in: scope) where minimizedIDs.contains(meta.id) {
+            service.setSurfaceState(.minimized, for: meta.id)
+        }
         guard let active = activeTerminalID,
-              meta(for: active)?.repoPath == repoPath,
+              let activeMeta = meta(for: active), scope.contains(activeMeta),
               !minimizedIDs.contains(active) else { return }
         service.setFocused(active)
     }
 
-    /// Faz 6.3 route geçişi: aktif repo yüzeyi arka plana alınır. Hangi
-    /// reponun önde olduğu KORUNUR — aynı repoya dönüşte `activateRepo`
+    /// Faz 6.3 route geçişi: aktif yüzey arka plana alınır. Hangi kapsamın
+    /// önde olduğu KORUNUR — aynı kapsama dönüşte `activateSurface`
     /// foreground'u yeniden uygular (idempotent tur).
     public func deactivateSurface() {
-        guard let repoPath = surfaceRepoPath, !isSurfaceDeactivated else { return }
+        guard let scope = surfaceScope, !isSurfaceDeactivated else { return }
         isSurfaceDeactivated = true
-        setTerminalSurfaceVisible(false, in: repoPath)
+        setTerminalSurfaceVisible(false, in: scope)
     }
 
     /// Minimize: aktifse görünür komşuya proaktif odak kayar.
@@ -245,8 +301,8 @@ public final class TerminalListStore: StoreLifecycle {
         // (coalescer 100ms + onBlur) — "görünmüyor ama odaklı" hâli kalmaz.
         service.setSurfaceState(.minimized, for: id)
         if activeTerminalID == id {
-            let visibleBefore = terminals.filter {
-                $0.repoPath == repoPath && ($0.id == id || !minimizedIDs.contains($0.id))
+            let visibleBefore = terminals(in: neighborScope(for: repoPath)).filter {
+                $0.id == id || !minimizedIDs.contains($0.id)
             }
             focus(Self.neighborID(closing: id, among: visibleBefore))
         }
@@ -271,7 +327,14 @@ public final class TerminalListStore: StoreLifecycle {
     /// edilmediyse (bootstrap penceresi) kısıtlama uygulanmaz.
     private func isSurfaceForeground(_ repoPath: String) -> Bool {
         guard !isSurfaceDeactivated else { return false }
-        return surfaceRepoPath == nil || surfaceRepoPath == repoPath
+        return surfaceScope?.contains(repoPath: repoPath) ?? true
+    }
+
+    /// Odak kaydığında komşu adaylarının kapsamı: All Terminals öndeyse ekranda
+    /// yan yana duran kartlar tüm projelerindir; aksi hâlde odak başka repo'ya
+    /// atlamaz (Electron paritesi).
+    private func neighborScope(for repoPath: String) -> TerminalScope {
+        surfaceScope == .all && !isSurfaceDeactivated ? .all : .repo(repoPath)
     }
 
     /// Bildirim tıklaması istisnası: önce restore, sonra odak.
@@ -290,14 +353,21 @@ public final class TerminalListStore: StoreLifecycle {
     /// `activeTerminalID` hâlâ eski repoya aittir, dolayısıyla foreground
     /// geçişi odağı yeniden yaymaz — odağı aşağıdaki tek `focus` çağrısı verir.
     public func activateRepo(_ repoPath: String) {
-        if let previous = surfaceRepoPath, previous != repoPath, !isSurfaceDeactivated {
+        activateSurface(.repo(repoPath))
+    }
+
+    /// Karar 103: yüzeyi bir kapsama alır. All Terminals'a geçişte önceki repo
+    /// arkaya ALINMAZ — zaten yeni kapsamın içindedir; tersi yönde (All →
+    /// repo) önce hepsi arkaya alınır, sonra yalnız seçilen repo öne gelir.
+    public func activateSurface(_ scope: TerminalScope) {
+        if let previous = surfaceScope, previous != scope, scope != .all, !isSurfaceDeactivated {
             setTerminalSurfaceVisible(false, in: previous)
         }
         isSurfaceDeactivated = false
-        surfaceRepoPath = repoPath
-        setTerminalSurfaceVisible(true, in: repoPath)
+        surfaceScope = scope
+        setTerminalSurfaceVisible(true, in: scope)
 
-        focus(lastActiveVisible(in: repoPath))
+        focus(lastActiveVisible(in: scope))
     }
 
     /// Repo'nun son aktif görünür terminali; yoksa ilk görünür terminal.
@@ -309,24 +379,53 @@ public final class TerminalListStore: StoreLifecycle {
         return visible.first?.id
     }
 
-    // MARK: - Klavye navigasyonu (görünür küme, aynı repo)
+    /// Kapsamlı hâli (karar 103). All Terminals'ta "son aktif" global aktif
+    /// terminaldir — hangi projede olursa olsun ekrandadır.
+    public func lastActiveVisible(in scope: TerminalScope) -> TerminalID? {
+        switch scope {
+        case .repo(let repoPath):
+            return lastActiveVisible(in: repoPath)
+        case .all:
+            let visible = visibleTerminals(in: scope)
+            if let active = activeTerminalID, visible.contains(where: { $0.id == active }) {
+                return active
+            }
+            return visible.first?.id
+        }
+    }
+
+    // MARK: - Klavye navigasyonu (görünür küme, aynı kapsam)
 
     public func focusIndex(_ index: Int, in repoPath: String) {
-        let visible = visibleTerminals(in: repoPath)
+        focusIndex(index, in: .repo(repoPath))
+    }
+
+    public func focusNext(in repoPath: String) {
+        stepFocus(in: .repo(repoPath), offset: 1)
+    }
+
+    public func focusPrevious(in repoPath: String) {
+        stepFocus(in: .repo(repoPath), offset: -1)
+    }
+
+    /// Karar 103: indeks ekranda görünen kart sırasına vurur — All Terminals'ta
+    /// o görünümün kendi sırası.
+    public func focusIndex(_ index: Int, in scope: TerminalScope) {
+        let visible = visibleTerminals(in: scope)
         guard visible.indices.contains(index) else { return }
         focus(visible[index].id)
     }
 
-    public func focusNext(in repoPath: String) {
-        stepFocus(in: repoPath, offset: 1)
+    public func focusNext(in scope: TerminalScope) {
+        stepFocus(in: scope, offset: 1)
     }
 
-    public func focusPrevious(in repoPath: String) {
-        stepFocus(in: repoPath, offset: -1)
+    public func focusPrevious(in scope: TerminalScope) {
+        stepFocus(in: scope, offset: -1)
     }
 
-    private func stepFocus(in repoPath: String, offset: Int) {
-        let visible = visibleTerminals(in: repoPath)
+    private func stepFocus(in scope: TerminalScope, offset: Int) {
+        let visible = visibleTerminals(in: scope)
         guard !visible.isEmpty else { return }
         guard let current = activeTerminalID,
               let index = visible.firstIndex(where: { $0.id == current }) else {
@@ -385,6 +484,25 @@ public final class TerminalListStore: StoreLifecycle {
     @ObservationIgnored public var onOrderChanged: (() -> Void)?
 
     func apply(_ event: TerminalEvent) {
+        applyToList(event)
+        if Self.affectsArrangement(event) {
+            allArrangement.pin(terminals)
+        }
+    }
+
+    /// Karar 103: All Terminals sırasının kimlik eşlemesini değiştiren olaylar —
+    /// küme değişimi ve resume kimliği değişimi (`TerminalArrangement.pin`).
+    static func affectsArrangement(_ event: TerminalEvent) -> Bool {
+        switch event {
+        case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged:
+            return true
+        case .statusChanged, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
+             .writeFailed, .stalled, .viewFocused, .linkActivated:
+            return false
+        }
+    }
+
+    private func applyToList(_ event: TerminalEvent) {
         switch event {
         case .spawned(let meta):
             terminals.append(meta)
@@ -501,13 +619,14 @@ public final class TerminalListStore: StoreLifecycle {
         let repoPath = terminals[index].repoPath
 
         if activeTerminalID == id {
-            let candidates = terminals.filter {
-                $0.repoPath == repoPath && ($0.id == id || !minimizedIDs.contains($0.id))
+            let candidates = terminals(in: neighborScope(for: repoPath)).filter {
+                $0.id == id || !minimizedIDs.contains($0.id)
             }
             let neighbor = Self.neighborID(closing: id, among: candidates)
             activeTerminalID = neighbor
             if let neighbor {
-                lastActiveByRepo[repoPath] = neighbor
+                // All Terminals'ta komşu başka projede olabilir (karar 103).
+                lastActiveByRepo[meta(for: neighbor)?.repoPath ?? repoPath] = neighbor
                 service.setFocused(neighbor)
             } else {
                 service.setFocused(nil)

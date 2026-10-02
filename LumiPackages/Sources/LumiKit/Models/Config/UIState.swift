@@ -47,15 +47,23 @@ public struct UIState: Sendable, Equatable {
     /// dahil) sıfırlanıyordu. Ham `String`: `ProjectToolsTab` LumiState'te
     /// tanımlı, LumiKit onu göremez; bilinmeyen değer okumada varsayılana iner.
     public var projectToolsTab: String?
-    /// Karar 103 (additive): orchestrator'ın sürdürülen Claude konuşması.
+    /// Karar 104 (additive): orchestrator'ın sürdürülen Claude konuşması.
     /// nil = dosyada yok → ilk açılışta yeni kimlik üretilir.
     public var orchestratorSessionID: String?
-    /// Karar 103 (additive): orchestrator'ın izlediği Claude terminallerinin
+    /// Karar 104 (additive): orchestrator'ın izlediği Claude terminallerinin
     /// oturum kimlikleri — terminal kimliği yeniden açılışta değiştiği için
     /// oturum kimliğiyle tutulur. nil = orchestrator hiç izleme yapmadı (anahtar
     /// yazılmaz); izleme bir kez başladıysa boş liste de yazılır ki son
     /// terminalin bırakılması diske insin.
     public var orchestratorWatchedSessions: [String]?
+    /// Karar 103 (additive): All Terminals görünümünün grid yerleşimi. nil =
+    /// dosyada yok → varsayılan yerleşim. `projectGridLayouts`'a girmez: o
+    /// sözlüğün anahtarı repo yoludur (karar 9).
+    public var allTerminalsGridLayout: GridLayout?
+    /// Karar 103 (additive): All Terminals'ın kart sırası — resume edilebilen
+    /// terminallerin oturum kimlikleri (resume listesiyle aynı kimlik). Resume
+    /// listesiyle birlikte checkpoint'te yazılır.
+    public var allTerminalsOrder: [String]
 
     public static let defaults = UIState(
         openTabs: [],
@@ -84,7 +92,9 @@ public struct UIState: Sendable, Equatable {
         lastCheckouts: [String: String] = [:],
         projectToolsTab: String? = nil,
         orchestratorSessionID: String? = nil,
-        orchestratorWatchedSessions: [String]? = nil
+        orchestratorWatchedSessions: [String]? = nil,
+        allTerminalsGridLayout: GridLayout? = nil,
+        allTerminalsOrder: [String] = []
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -103,6 +113,8 @@ public struct UIState: Sendable, Equatable {
         self.projectToolsTab = projectToolsTab
         self.orchestratorSessionID = orchestratorSessionID
         self.orchestratorWatchedSessions = orchestratorWatchedSessions
+        self.allTerminalsGridLayout = allTerminalsGridLayout
+        self.allTerminalsOrder = allTerminalsOrder
     }
 }
 

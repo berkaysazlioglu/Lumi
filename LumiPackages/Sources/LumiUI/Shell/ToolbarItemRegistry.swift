@@ -71,7 +71,7 @@ public extension ToolbarItemID {
     /// Terminal kartlarını elle sıralama modu (karar 97).
     static let arrangeTerminals = ToolbarItemID("arrangeTerminals")
     static let focusMode = ToolbarItemID("focusMode")
-    /// Orchestrator popup'ı (karar 103).
+    /// Orchestrator popup'ı (karar 104).
     static let orchestrator = ToolbarItemID("orchestrator")
     static let settings = ToolbarItemID("settings")
     /// Alt bar segmentleri (karar 43).

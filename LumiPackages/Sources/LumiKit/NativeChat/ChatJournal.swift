@@ -10,7 +10,7 @@ public struct ChatJournalState: Equatable, Sendable {
     public var lastCostUSD: Double?
     /// Biten turn sayısı (`result` olayları). `turnActive` ilk metin
     /// delta'sına kadar `false` kalır; "gönderilen mesaja cevap geldi mi?"
-    /// sorusu bu sayaçla cevaplanır (karar 103).
+    /// sorusu bu sayaçla cevaplanır (karar 104).
     public var completedTurns: Int
     public init() {
         messages = []; streamingText = nil; turnActive = false; lastCostUSD = nil; completedTurns = 0

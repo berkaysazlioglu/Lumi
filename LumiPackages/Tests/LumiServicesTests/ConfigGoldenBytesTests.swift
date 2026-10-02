@@ -79,7 +79,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.computerAwakeMode = .auto
             config.agentHooksEnabled = false
             config.terminalLinkActionsEnabled = false
-            // Karar 103 Faz 4 additive anahtar.
+            // Karar 104 Faz 4 additive anahtar.
             config.orchestratorDigestsEnabled = false
         }
 

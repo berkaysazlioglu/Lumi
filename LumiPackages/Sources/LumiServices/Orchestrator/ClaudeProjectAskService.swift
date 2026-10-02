@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// `ask_project` (karar 103 Faz 5): orchestrator'ın "şu projeyi özetle / şu
+/// `ask_project` (karar 104 Faz 5): orchestrator'ın "şu projeyi özetle / şu
 /// projede X nerede?" sorularını, o projenin kökünde arka planda koşan
 /// salt-okunur bir `claude -p` ile cevaplar. Orchestrator'ın kendi bağlamı
 /// dosya içerikleriyle dolmaz; yalnız cevap döner.

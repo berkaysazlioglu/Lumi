@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Bekleyen onaylar (karar 103 Faz 3): composer'ın hemen üstünde, sohbetle
+/// Bekleyen onaylar (karar 104 Faz 3): composer'ın hemen üstünde, sohbetle
 /// birlikte kaymaz — kullanıcı "doğru chat'e mi gidiyor?" sorusunu hedef
 /// satırından, ne gideceğini gövdeden görür. ⌘↩ ilk kartı onaylar.
 struct OrchestratorApprovalList: View {

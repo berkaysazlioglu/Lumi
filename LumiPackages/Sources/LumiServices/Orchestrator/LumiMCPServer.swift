@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import OSLog
 
-/// Orchestrator'ın kontrol yüzeyi (karar 103 Faz 2): loopback MCP sunucusu.
+/// Orchestrator'ın kontrol yüzeyi (karar 104 Faz 2): loopback MCP sunucusu.
 /// Claude `--mcp-config` ile `http://127.0.0.1:<port>/mcp`'ye bağlanır;
 /// `tools/call` istekleri `OrchestratorToolHandling`'e gider ve yanıt araç
 /// bitince yazılır. Sunucu orchestrator ilk başladığında tembel açılır.

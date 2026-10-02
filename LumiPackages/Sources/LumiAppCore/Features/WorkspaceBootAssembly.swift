@@ -17,6 +17,8 @@ import LumiTerminal
 ///   yeniden yazılır; böylece crash / SIGKILL / güç kesintisinde de son
 ///   snapshot diskte durur. Kapanışta tüketici ÖNCE susturulur ki `killAll()`'ın
 ///   `.exited`'ları son snapshot'ı boş listeyle ezmesin.
+/// - **Karar 103 All Terminals sırası:** resume listesinin eşidir — aynı
+///   checkpoint'te yazılır, açılışta resume spawn'larından ÖNCE geri kurulur.
 @MainActor
 final class WorkspaceBootAssembly: FeatureAssembly {
     let bootstrapPhase = BootstrapPhase.ui
@@ -58,7 +60,13 @@ final class WorkspaceBootAssembly: FeatureAssembly {
     private func checkpointResumeSessions() async {
         let live = Self.inDisplayOrder(services.terminal.terminals, order: shared.terminals.terminals)
         let resumeSessions = Self.resumeSessions(from: live)
-        await services.config.updateUIState { $0.resumeSessions = resumeSessions }
+        // Servisin canlı kümesi üzerinden: store spawn'ı henüz uygulamamış
+        // olsa da yeni terminal sıranın sonunda diske iner.
+        let allTerminalsOrder = shared.terminals.allArrangement.persistedKeys(live)
+        await services.config.updateUIState {
+            $0.resumeSessions = resumeSessions
+            $0.allTerminalsOrder = allTerminalsOrder
+        }
     }
 
     /// Terminal kümesini değiştiren her olayda snapshot yenilenir. Stream,
@@ -124,7 +132,10 @@ final class WorkspaceBootAssembly: FeatureAssembly {
     /// kapanmış repo'nun bayat kaydı sonraki açılışa sarkmaz; başarılı resume
     /// aynı kimliği taşıdığından zincir kesintisiz sürer.
     private func resumeAgentSessions() async {
-        let entries = await services.config.uiState().resumeSessions
+        let state = await services.config.uiState()
+        // Karar 103: doğacak oturumlar All Terminals'taki eski yerlerine otursun.
+        shared.terminals.restoreAllArrangement(state.allTerminalsOrder)
+        let entries = state.resumeSessions
         guard !entries.isEmpty else { return }
         await spawnResumedSessions(entries)
         await checkpointResumeSessions()

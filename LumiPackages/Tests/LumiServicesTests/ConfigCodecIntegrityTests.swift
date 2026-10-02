@@ -241,7 +241,9 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
         projectToolsTab: "agentHistory",
         orchestratorSessionID: "orch-1",
-        orchestratorWatchedSessions: ["s-1"]
+        orchestratorWatchedSessions: ["s-1"],
+        allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
+        allTerminalsOrder: ["s-1", "s-2"]
     )
 }
 

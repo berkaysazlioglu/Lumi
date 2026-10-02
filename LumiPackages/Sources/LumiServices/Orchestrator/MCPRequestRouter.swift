@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// MCP Streamable HTTP'nin Lumi'nin ihtiyacı kadarı (karar 103): tek uç
+/// MCP Streamable HTTP'nin Lumi'nin ihtiyacı kadarı (karar 104): tek uç
 /// (`POST /mcp`), yalnız JSON yanıt (SSE yok — `GET` 405 döner, istemci
 /// akışsız devam eder), oturum başlığı yok. Saf yönlendirici: HTTP isteğini
 /// yanıta ya da araç çağrısına çevirir, sunucudan bağımsız test edilir.

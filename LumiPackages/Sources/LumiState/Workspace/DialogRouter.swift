@@ -85,7 +85,7 @@ public enum ActiveDialog: Equatable, Sendable {
     /// Projenin hızlı komut düzenleyicisi (karar 92).
     case quickCommands(projectPath: String)
     case settings
-    /// Karar 103: orchestrator sohbet popup'ı.
+    /// Karar 104: orchestrator sohbet popup'ı.
     case orchestrator
     case onboarding
     case closeTab(CloseTabDialogState)
@@ -189,7 +189,7 @@ public final class DialogRouter {
         set { setPresented(.settings, newValue) }
     }
 
-    /// Karar 103: orchestrator popup'ı (⌘J / top bar butonu).
+    /// Karar 104: orchestrator popup'ı (⌘J / top bar butonu).
     public var isOrchestratorOpen: Bool {
         get { isPresenting(.orchestrator) }
         set { setPresented(.orchestrator, newValue) }

@@ -4,11 +4,11 @@ import SwiftUI
 
 /// Focus mode hover-reveal kontrol çubuğu: mouse üst bölgeye gelince
 /// 500ms gecikmeyle belirir; içerik: terminal sayısı, grid menüsü, yeni
-/// terminal, çıkış.
+/// terminal (yalnız repo yüzeyinde — karar 103), çıkış.
 struct FocusModeBar: View {
     static let revealDelay = Theme.Motion.hoverRevealDelay
 
-    let repoPath: String
+    let scope: TerminalScope
 
     @Shell private var shell
 
@@ -49,17 +49,19 @@ struct FocusModeBar: View {
 
     private var bar: some View {
         HStack(spacing: Theme.Spacing.lg) {
-            Text("\(shell.terminals.visibleTerminals(in: repoPath).count) terminal")
+            Text("\(shell.terminals.visibleTerminals(in: scope).count) terminal")
                 .font(Theme.Typography.mono(.body))
                 .foregroundStyle(Theme.textSecondary)
 
             gridLayoutMenu
 
-            Button("New \(provider.displayName)") {
-                shell.terminals.spawn(in: repoPath, command: provider.launchCommand)
+            if let repoPath = scope.repoPath {
+                Button("New \(provider.displayName)") {
+                    shell.terminals.spawn(in: repoPath, command: provider.launchCommand)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accentVivid)
             }
-            .buttonStyle(.bordered)
-            .tint(Theme.accentVivid)
 
             Spacer()
 
@@ -86,15 +88,15 @@ struct FocusModeBar: View {
 
     private var gridLayoutMenu: some View {
         GridSettingsControl(
-            layout: shell.layout.gridLayout(for: repoPath),
-            onChange: { shell.layout.setGridLayout($0, for: repoPath) }
+            layout: shell.layout.gridLayout(for: scope),
+            onChange: { shell.layout.setGridLayout($0, for: scope) }
         )
     }
 }
 
 #if DEBUG
 #Preview("FocusModeBar") {
-    FocusModeBar(repoPath: "/Users/preview/Projects/lumi")
+    FocusModeBar(scope: .repo("/Users/preview/Projects/lumi"))
         .frame(width: 720, height: 120)
         .background(Theme.bgDeep)
         .environment(\.shell, ShellContext.preview())

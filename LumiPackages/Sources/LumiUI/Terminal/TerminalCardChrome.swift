@@ -97,6 +97,9 @@ struct TerminalCardHeader: View {
     /// kuyruk/zoom/kapat ve tık jestleri sürüklemeyle yarışmasın diye çekilir.
     var isArranging = false
 
+    /// Karar 103: All Terminals'ta başlığın yanında checkout adı.
+    @Environment(\.terminalCheckoutLabels) private var checkoutLabels
+
     var body: some View {
         HStack(spacing: style.spacing) {
             AgentActivityIcon(
@@ -118,6 +121,15 @@ struct TerminalCardHeader: View {
                 .accessibilityLabel(
                     needsAttention ? "\(meta.displayTitle), needs attention" : meta.displayTitle
                 )
+            if let checkout = checkoutLabels[meta.repoPath] {
+                Text(checkout)
+                    .font(Theme.Typography.mono(style.titleSize))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .layoutPriority(-1)
+                    .accessibilityLabel("in \(checkout)")
+            }
             Spacer()
             if !isArranging {
                 PromptQueueToggleButton(

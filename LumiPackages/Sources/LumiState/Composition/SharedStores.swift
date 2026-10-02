@@ -70,8 +70,8 @@ public final class SharedStores {
             ),
             layout: LayoutStore(
                 config: config,
-                isTerminalVisible: { [terminals] id, repoPath in
-                    terminals.visibleTerminals(in: repoPath).contains { $0.id == id }
+                isTerminalVisible: { [terminals] id, scope in
+                    terminals.visibleTerminals(in: scope).contains { $0.id == id }
                 },
                 focusTerminal: { [terminals] id in terminals.focus(id) }
             ),
