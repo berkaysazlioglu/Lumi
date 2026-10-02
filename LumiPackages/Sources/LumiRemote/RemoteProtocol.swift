@@ -15,7 +15,7 @@ struct SessionMeta {
     let kind: String?   // oturum türü (örn. "chat", "terminal"); Faz 2 — yoksa nil
     let provider: String?
     let lastActivityAt: Double?
-    /// Karar 97: telefon "karar bekliyor"u (izin/soru promptu) "bitti"den ayırır.
+    /// Karar 105: telefon "karar bekliyor"u (izin/soru promptu) "bitti"den ayırır.
     let awaitingDecision: Bool
 
     init(id: String, repoName: String, status: String,

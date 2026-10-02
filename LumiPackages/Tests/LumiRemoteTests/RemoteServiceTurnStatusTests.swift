@@ -94,7 +94,7 @@ import LumiTestSupport
         svc.stop()
     }
 
-    /// Karar 96: Stop hook'u gelmeyen kesmede terminal kesmeyi çıkarınca
+    /// Karar 104: Stop hook'u gelmeyen kesmede terminal kesmeyi çıkarınca
     /// (`interruptInferred`) telefona working=false ve prompt iptali gider.
     @Test func inferredInterruptEmitsIdleAndCancelsPrompts() async throws {
         let conn = FakeRelayConnection()

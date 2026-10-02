@@ -553,7 +553,7 @@ public final class TerminalListStore: StoreLifecycle {
             // kuralları aynen geçerli (minimize edilmiş odak alamaz).
             focus(id)
         case .interruptInferred:
-            // Karar 96: yalnız remote turn-status'ü içindir; status ayrıca akar.
+            // Karar 104: yalnız remote turn-status'ü içindir; status ayrıca akar.
             break
         case .linkActivated(let activation):
             // Karar 57: hedef çözümlemesi ve eylemler link store'unda; burada

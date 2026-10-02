@@ -3,7 +3,7 @@ import Foundation
 /// Agent row status glyph semantics — mirrors the Mac's `AgentActivityState`
 /// (decisions 51/81): running → spinner, needs input → bell, done → check,
 /// failed → x, idle → muted dot. `waiting-*` (turn closed) is "done", so a
-/// finished agent no longer looks like one awaiting a decision (decision 97).
+/// finished agent no longer looks like one awaiting a decision (decision 105).
 public enum AgentActivity: Sendable, Equatable {
     case running, awaitingDecision, done, failed, idle
 

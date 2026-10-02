@@ -41,7 +41,7 @@ public final class TurnStatusReducer {
         return next
     }
 
-    /// Karar 96: Esc/Ctrl+C kesmesinde Claude Stop hook'u göndermez. Terminal
+    /// Karar 104: Esc/Ctrl+C kesmesinde Claude Stop hook'u göndermez. Terminal
     /// kesmeyi çıkardığında (`inferInterrupt` → status non-working) çağrılır.
     /// Çalışıyorsa `.idle` döner, değilse `nil` (idempotent).
     public func interrupt() -> ChatTurnStatus? {

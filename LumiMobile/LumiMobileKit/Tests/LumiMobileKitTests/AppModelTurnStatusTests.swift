@@ -32,7 +32,7 @@ final class AppModelTurnStatusTests: XCTestCase {
         XCTAssertNil(model.turnStatus["s1"])
     }
 
-    // MARK: Decision 96 — Stop sends Esc, "Stopping…" + local fallback
+    // MARK: Decision 104 — Stop sends Esc, "Stopping…" + local fallback
 
     private func prompt(_ id: String, state: ChatPromptState = .pending) -> ChatPrompt {
         ChatPrompt(itemId: id, revision: 0, kind: .approval, title: "t", detail: nil,

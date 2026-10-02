@@ -103,10 +103,10 @@ public final class AppModel {
     /// "sessionId\u{0}itemId". Lives here (not the card's @State) so selections
     /// survive leaving the chat and the card being re-created.
     private var promptDrafts: [String: PromptDraft] = [:]
-    /// Decision 96: sessions whose Stop was pressed and whose idle status has not
+    /// Decision 104: sessions whose Stop was pressed and whose idle status has not
     /// arrived yet — the bar shows "Stopping…" and the button is disabled.
     public private(set) var stoppingSessions: Set<String> = []
-    /// Decision 96: if the Mac never reports idle after a Stop, close the turn locally.
+    /// Decision 104: if the Mac never reports idle after a Stop, close the turn locally.
     public var stopFallbackDelay: Duration = .seconds(5)
 
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
@@ -418,7 +418,7 @@ public final class AppModel {
         Task { await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: data)) }
     }
 
-    /// Decision 96: interrupt the running turn. Esc (0x1B), not Ctrl-C — Esc is
+    /// Decision 104: interrupt the running turn. Esc (0x1B), not Ctrl-C — Esc is
     /// Claude's interrupt key; a second Ctrl-C on an idle Claude asks it to exit.
     public func requestStop(_ sessionId: String) {
         guard !stoppingSessions.contains(sessionId) else { return }

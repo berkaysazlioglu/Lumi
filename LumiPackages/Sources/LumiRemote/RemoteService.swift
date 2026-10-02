@@ -73,7 +73,7 @@ public final class RemoteService: RemoteServicing {
     private var seqCounters: [TerminalID: Int] = [:]
     /// Set edilen modellerin son-bilinen değeri (sessions meta'sı için).
     private var modelCache: [TerminalID: String] = [:]
-    /// Karar 97: "karar bekliyor" (izin/soru promptu) olan terminaller — `sessions`'a yansır.
+    /// Karar 105: "karar bekliyor" (izin/soru promptu) olan terminaller — `sessions`'a yansır.
     private var awaitingDecision: Set<TerminalID> = []
 
     public init(
@@ -251,13 +251,13 @@ public final class RemoteService: RemoteServicing {
             await sendSessions()
             await sendProjects()
         case .interruptInferred(let id):
-            // Karar 96: düz non-working status DEĞİL — art arda Stop→UserPromptSubmit
+            // Karar 104: düz non-working status DEĞİL — art arda Stop→UserPromptSubmit
             // yarışında yeni turn'ü düşürürdü; yalnız gerçek kesme çıkarımı kapatır.
             await settleInterruptIfNeeded(id: id)
         case .claudeSessionIDChanged(let id, let sessionID):
             await retargetChat(id: id, sessionID: sessionID)
         case .awaitingDecisionChanged(let id, let awaiting):
-            // Karar 97: telefon "karar bekliyor"u "bitti"den ayırır.
+            // Karar 105: telefon "karar bekliyor"u "bitti"den ayırır.
             let changed = awaiting ? awaitingDecision.insert(id).inserted : awaitingDecision.remove(id) != nil
             if changed { await sendSessions() }
         case .titleChanged, .bell, .providerChanged, .codexSessionIDChanged, .writeFailed, .stalled,
@@ -603,7 +603,7 @@ public final class RemoteService: RemoteServicing {
 
     // MARK: - Turn status (Faz 2)
 
-    /// Karar 96: Claude Esc/Ctrl+C kesmesinde Stop hook'u göndermez; terminal
+    /// Karar 104: Claude Esc/Ctrl+C kesmesinde Stop hook'u göndermez; terminal
     /// kesmeyi çıkarınca ayrık `TerminalEvent.interruptInferred` sinyali gelir
     /// ve turn burada kapanır. Canlı status kapısı derinlemesine savunmadır —
     /// hook ve terminal akışları ayrı stream'ler olduğundan yeni turn başlamışken

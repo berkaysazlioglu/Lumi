@@ -15,7 +15,7 @@
 - `~/.lumi` persistence formatı değişmez (karar 9).
 - Bloklayıcı bekleme cooperative pool'da koşmaz (karar 86) — telefondaki zaman aşımı `Task.sleep` ile yapılır.
 - Mac kodundaki yorumlar Türkçe, `LumiMobile/` altındaki yorumlar İngilizce (mevcut dosyalarla uyumlu).
-- Bilinçli davranış/protokol değişikliği `docs/decisions.md`'ye karar olarak yazılır (son karar 95 → bu plan 96 ve 97'yi ekler).
+- Bilinçli davranış/protokol değişikliği `docs/decisions.md`'ye karar olarak yazılır (son karar 103 → bu plan 104 ve 105.i ekler).
 - Mac testleri: `cd LumiPackages && swift test --filter <Suite>`; tam koşu `swift build && swift test`.
 - Telefon testleri: `cd LumiMobile/LumiMobileKit && swift test --filter <Class>`.
 - iOS build: `cd LumiMobile && xcodegen generate && xcodebuild -project LumiMobile.xcodeproj -scheme LumiMobile -destination 'generic/platform=iOS Simulator' build | tail -20` → `** BUILD SUCCEEDED **`. Yeni `.swift` dosyası App'e eklenirse `xcodegen generate` şart (`.xcodeproj` gitignore'da).
@@ -41,7 +41,7 @@
 | `LumiMobile/App/MobileChatPromptCard.swift` | taslak binding'leri + seçim görseli | 3 |
 | `LumiMobile/App/AgentActivityGlyph.swift` (yeni), `ProjectsView.swift`, `TerminalSessionView.swift` | durum glifi + etiket + chat başlığı | 5 |
 | `LumiMobile/App/ChatMarkdownView.swift` (yeni), `MobileChatMessageView.swift` | renkli render | 6 |
-| `docs/decisions.md`, `CLAUDE.md` | karar 96, 97 | 1, 4 |
+| `docs/decisions.md`, `CLAUDE.md` | karar 104, 105 | 1, 4 |
 
 ---
 

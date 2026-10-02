@@ -266,7 +266,7 @@ final class FakeTerminalServicing: TerminalServicing {
         svc.stop()
     }
 
-    /// Karar 97: `awaitingDecisionChanged` olayı `sessions`'ı yeniden yayınlar;
+    /// Karar 105: `awaitingDecisionChanged` olayı `sessions`'ı yeniden yayınlar;
     /// ilgili terminalin meta'sında `awaitingDecision` güncel değeri taşır.
     @Test func awaitingDecisionChangeRebroadcastsSessions() async throws {
         let conn = FakeRelayConnection()

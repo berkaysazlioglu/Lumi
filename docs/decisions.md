@@ -1071,7 +1071,7 @@ Saha bulgusu: iOS'tan Stop'a basınca Claude duruyordu ama telefonda "Running" b
 - **Telefon:** Stop artık `0x03` değil `0x1B` (Esc) gönderir — Claude'un kesme tuşu, çıkış riski yok. Basınca bar "Stopping…" olur ve tekrar basılamaz; 5 sn içinde `working=false` gelmezse turn yerelde kapatılır (bekleyen kart düşer).
 - Protokol değişmez.
 
-### 97. Telefonda ajan durumu Mac'in durum dilini kullanır; `sessions`'a additive `awaitingDecision` (2026-10-02)
+### 105. Telefonda ajan durumu Mac'in durum dilini kullanır; `sessions`'a additive `awaitingDecision` (2026-10-02)
 
 Saha bulgusu: telefonda hangi ajanın çalıştığı, hangisinin beklediği belli değildi. Satırda yalnız 10pt'lik renkli bir nokta vardı ve tüm `waiting-*` durumları (bitmiş-görülmüş dahil) aynı turuncuydu; izin/soru bekleyen ajan bitmiş ajandan ayırt edilemiyordu, chat ekranında durum hiç yoktu.
 

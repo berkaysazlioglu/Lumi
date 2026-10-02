@@ -5,7 +5,7 @@ import Foundation
 
 /// Phase 2: live turn-status bar above the chat composer. Visible while working.
 /// Left: spinner + "Running {n}s" (live via TimelineView). Middle: tool chip.
-/// Right: Stop → Esc (0x1B), decision 96.
+/// Right: Stop → Esc (0x1B), decision 104.
 struct TurnStatusBar: View {
     let status: ChatTurnStatus
     let isStopping: Bool

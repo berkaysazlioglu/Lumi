@@ -41,7 +41,7 @@ public final class PromptJournal {
         }
     }
 
-    /// Karar 96: kesilen turn'ün bekleyen kartları düşer (Stop hook gelmez).
+    /// Karar 104: kesilen turn'ün bekleyen kartları düşer (Stop hook gelmez).
     public func cancelAllPending() -> [ChatPrompt] {
         cancel(where: { _ in true })
     }

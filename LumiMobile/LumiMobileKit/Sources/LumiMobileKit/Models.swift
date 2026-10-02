@@ -124,7 +124,7 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     /// Last activity, epoch ms; nil if omitted by an older Mac (relative-time label).
     public let lastActivityAt: Double?
     /// Awaiting a decision (permission/question prompt) separate from status; defaults
-    /// to false if omitted by an older Mac (decision 97).
+    /// to false if omitted by an older Mac (decision 105).
     public let awaitingDecision: Bool
 
     public init(id: String, repoName: String, status: String,
@@ -171,7 +171,7 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
         (SessionStatus(rawValue: status) ?? .idle).badge
     }
 
-    /// Mac's AgentActivityState mapping (decision 97): status + awaitingDecision → glyph state.
+    /// Mac's AgentActivityState mapping (decision 105): status + awaitingDecision → glyph state.
     public var activity: AgentActivity { AgentActivity(status: status, awaitingDecision: awaitingDecision) }
 }
 

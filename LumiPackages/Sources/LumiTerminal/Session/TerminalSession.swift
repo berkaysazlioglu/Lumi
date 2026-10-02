@@ -18,7 +18,7 @@ protocol TerminalSessionDelegate: AnyObject {
     /// Karar 94: lider Claude hook'u terminalin yeni konuşma kimliğini bildirdi.
     func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
-    /// Karar 96: Esc/Ctrl+C sonrası hook gelmedi, lider turn kesilmiş sayıldı.
+    /// Karar 104: Esc/Ctrl+C sonrası hook gelmedi, lider turn kesilmiş sayıldı.
     func sessionDidInferInterrupt(_ session: TerminalSession)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)

@@ -46,7 +46,7 @@ final class TerminalPipeline: @unchecked Sendable {
     var onFlushBatch: (@Sendable (Data) -> Void)?
     /// Feed akışı durdu / düzeldi (Ek A §A.2-10). UI "stalled" rozeti gösterir.
     var onStallChange: (@Sendable (Bool) -> Void)?
-    /// Karar 96: kesme çıkarımı GERÇEKTEN etki üretti (lider turn kesildi).
+    /// Karar 104: kesme çıkarımı GERÇEKTEN etki üretti (lider turn kesildi).
     /// Aynı adımın status etkilerinden SONRA çağrılır.
     var onInterruptInferred: (@Sendable () -> Void)?
 
