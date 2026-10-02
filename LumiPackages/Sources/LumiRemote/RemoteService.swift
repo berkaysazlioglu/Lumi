@@ -235,6 +235,9 @@ public final class RemoteService: RemoteServicing {
     private func handleTerminalEvent(_ event: TerminalEvent) async {
         switch event {
         case .spawned, .exited, .statusChanged:
+            if case let .statusChanged(id, status) = event, status != .working {
+                await settleInterruptIfNeeded(id: id)
+            }
             if case let .exited(id, _) = event {
                 chatModeTerminals.remove(id)
                 cancelSubscription(id)
@@ -589,6 +592,22 @@ public final class RemoteService: RemoteServicing {
     }
 
     // MARK: - Turn status (Faz 2)
+
+    /// Karar 96: Claude Esc/Ctrl+C kesmesinde Stop hook'u göndermez; terminal
+    /// kesmeyi çıkarıp status'ü non-working'e düşürünce turn burada kapanır.
+    /// Otorite terminalin CANLI status'üdür — hook ve terminal akışları ayrı
+    /// stream'ler olduğundan yeni turn başlamışken gelen bayat olay yok sayılır.
+    private func settleInterruptIfNeeded(id: TerminalID) async {
+        guard terminal.terminals.first(where: { $0.id == id })?.status != .working else { return }
+        let status = turnReducers[id]?.interrupt()
+        let cancelled = promptJournals[id]?.cancelAllPending() ?? []
+        guard chatModeTerminals.contains(id) else { return }
+        if let status {
+            rlog("turn: inferred interrupt sid=\(id.description.prefix(8)) → idle")
+            await emitTurnStatus(id: id, status: status)
+        }
+        for item in cancelled { await emitPrompt(id: id, prompt: item) }
+    }
 
     private func handleHookEvent(_ event: AgentHookEvent) async {
         let id = event.terminalID

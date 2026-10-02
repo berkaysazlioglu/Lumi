@@ -126,4 +126,17 @@ import Foundation
         let b = j.reduce(ev(.permissionRequest, tool: "Bash", input: "{}"))
         #expect(b.count == 1 && b[0].kind == .approval)
     }
+
+    @Test func cancelAllPendingCancelsOnlyPending() {
+        let j = PromptJournal()
+        let event = AgentHookEvent(provider: .claude, terminalID: TerminalID(), kind: .permissionRequest,
+                                agentID: nil, teammateName: nil, toolName: "Bash", source: nil,
+                                trigger: nil, isInterrupt: false, promptHead: nil,
+                                runningBackgroundAgentIDs: nil, toolInput: "{\"command\":\"ls\"}", toolUseID: "t1")
+        #expect(j.reduce(event).count == 1)
+        let cancelled = j.cancelAllPending()
+        #expect(cancelled.map(\.itemId) == ["t1"])
+        #expect(cancelled.first?.state == .cancelled)
+        #expect(j.cancelAllPending().isEmpty)   // idempotent
+    }
 }

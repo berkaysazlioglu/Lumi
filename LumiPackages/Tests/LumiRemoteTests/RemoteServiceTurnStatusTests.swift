@@ -93,6 +93,77 @@ import LumiTestSupport
 
         svc.stop()
     }
+
+    /// Karar 96: Stop hook'u gelmeyen kesmede terminal status'ü non-working'e
+    /// düşünce telefona working=false ve prompt iptali gider.
+    @Test func inferredInterruptEmitsIdleAndCancelsPrompts() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let hooks = FakeAgentHookServer()
+        let uuid = UUID()
+        var meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                createdAt: Date(), claudeSessionID: uuid.uuidString)
+        term.metas.append(meta)
+        let sid = meta.id.description
+        let id = TerminalID(raw: uuid)
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { hooks.events() },
+            turnClock: { Date(timeIntervalSince1970: 100) },
+            config: FakeConfigService())
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForCount(type: "chat_status", atLeast: 1)
+
+        hooks.emit(hookEvent(.userPromptSubmit, terminalID: id))
+        try await conn.waitForCount(type: "chat_status", atLeast: 2)
+        hooks.emit(AgentHookEvent(provider: .claude, terminalID: id, kind: .permissionRequest,
+                                  agentID: nil, teammateName: nil, toolName: "Bash", source: nil,
+                                  trigger: nil, isInterrupt: false, promptHead: nil,
+                                  runningBackgroundAgentIDs: nil, toolInput: "{}", toolUseID: "p1"))
+        try await conn.waitForCount(type: "prompt", atLeast: 1)
+
+        // Kesme çıkarıldı: terminal status working değil, Stop hook'u YOK.
+        meta.status = .waitingFocused
+        term.metas = [meta]
+        term.emit(.statusChanged(id, .waitingFocused))
+        try await conn.waitForCount(type: "chat_status", atLeast: 3)
+        #expect(await conn.lastBool(type: "chat_status", key: "working") == false)
+        try await conn.waitForCount(type: "prompt", atLeast: 2)
+        #expect(await conn.lastString(type: "prompt", key: "state") == "cancelled")
+        svc.stop()
+    }
+
+    /// Yeni turn başlamışken gelen gecikmiş non-working olayı turn'ü düşürmez:
+    /// otorite terminalin CANLI status'üdür.
+    @Test func staleNonWorkingEventIgnoredWhileTerminalWorking() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let hooks = FakeAgentHookServer()
+        let uuid = UUID()
+        var meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                createdAt: Date(), claudeSessionID: uuid.uuidString)
+        meta.status = .working
+        term.metas.append(meta)
+        let sid = meta.id.description
+        let id = TerminalID(raw: uuid)
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { hooks.events() },
+            config: FakeConfigService())
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForCount(type: "chat_status", atLeast: 1)
+        hooks.emit(hookEvent(.userPromptSubmit, terminalID: id))
+        try await conn.waitForCount(type: "chat_status", atLeast: 2)
+
+        term.emit(.statusChanged(id, .waitingSeen))   // bayat olay; canlı meta hâlâ .working
+        try await conn.waitForNoSent(type: "chat_status", after: 2, for: .milliseconds(200))
+        #expect(await conn.lastBool(type: "chat_status", key: "working") == true)
+        svc.stop()
+    }
 }
 
 // MARK: - Restart dayanıklılığı (2026-09-17 cihaz bug'ı)

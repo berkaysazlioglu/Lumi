@@ -41,6 +41,11 @@ public final class PromptJournal {
         }
     }
 
+    /// Karar 96: kesilen turn'ün bekleyen kartları düşer (Stop hook gelmez).
+    public func cancelAllPending() -> [ChatPrompt] {
+        cancel(where: { _ in true })
+    }
+
     /// Bir item'ı resolved yapar (revision+1). Güncellenen item'ı döndürür (yoksa/
     /// zaten çözülmüşse nil) — `reduce` ile tutarlı API. Cevap actuation sonrası çağrılır.
     @discardableResult
