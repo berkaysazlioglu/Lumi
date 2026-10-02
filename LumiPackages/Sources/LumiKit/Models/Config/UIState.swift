@@ -137,8 +137,8 @@ public struct GridLayout: Sendable, Equatable {
     public var mode: Mode
     public var count: Int
     public var heightMode: HeightMode
-    /// Yalnız `scroll` modunda anlamlı: satır min yüksekliği = kolon genişliği ×
-    /// bu oran. Büyük oran → uzun terminaller → daha çok dikey kaydırma.
+    /// Yalnız `scroll` modunda anlamlı: satır yüksekliği = terminal alanının
+    /// (maximize yüksekliği) bu oranı (karar 104). Büyük oran → uzun terminaller.
     public var heightRatio: HeightRatio
 
     /// Kolon ekseni. `rows` EMEKLİ — yeni yazımda üretilmez, eski dosyada
@@ -155,10 +155,10 @@ public struct GridLayout: Sendable, Equatable {
         case scroll
     }
 
-    /// Scroll modunda satır min yüksekliğinin kolon genişliğine oranı.
+    /// Scroll modunda satır yüksekliğinin terminal alanı yüksekliğine oranı.
     /// Kullanıcıya dönük etiketi LumiUI'daki presenter verir (refactor 5.9).
     public enum HeightRatio: String, Sendable, CaseIterable {
-        case full   // %100 — yükseklik = genişlik
+        case full   // %100 — maximize yüksekliği
         case half   // %50
         case third  // %33
 
