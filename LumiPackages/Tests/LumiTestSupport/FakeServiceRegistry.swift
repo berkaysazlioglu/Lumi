@@ -39,6 +39,8 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var agentHookInstaller: any AgentHookInstalling
     public var chatSessions: any ChatSessionServicing = FakeChatSessionService()
     public var orchestrator: any OrchestratorServicing = FakeOrchestratorService()
+    public var orchestratorControl: any OrchestratorControlServing = FakeOrchestratorControlServer()
+    public var terminalTranscripts: any TerminalTranscriptReading = FakeTerminalTranscripts()
     public var usageServices: [AgentProvider: any UsageServicing]
 
     /// Somut fake'lere tipli erişim (kayıt okumak için).

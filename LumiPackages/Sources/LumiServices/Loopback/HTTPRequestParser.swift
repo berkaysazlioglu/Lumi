@@ -78,11 +78,15 @@ enum HTTPRequestParser {
     /// stdout'ta fail-closed olduğu için script de bunu basar; sunucu cevabı
     /// script tarafından /dev/null'a atılır ama simetrik durur).
     static func response(status: Int, reason: String) -> Data {
-        let body = "{}"
-        let head = "HTTP/1.1 \(status) \(reason)\r\n"
-            + "Content-Type: application/json\r\n"
-            + "Content-Length: \(body.utf8.count)\r\n"
+        response(status: status, reason: reason, body: Data("{}".utf8))
+    }
+
+    /// Gövdeli JSON yanıtı; `body` nil ise gövdesiz (ör. MCP bildirimine 202).
+    static func response(status: Int, reason: String, body: Data?) -> Data {
+        var head = "HTTP/1.1 \(status) \(reason)\r\n"
+        if body != nil { head += "Content-Type: application/json\r\n" }
+        head += "Content-Length: \(body?.count ?? 0)\r\n"
             + "Connection: close\r\n\r\n"
-        return Data((head + body).utf8)
+        return Data(head.utf8) + (body ?? Data())
     }
 }

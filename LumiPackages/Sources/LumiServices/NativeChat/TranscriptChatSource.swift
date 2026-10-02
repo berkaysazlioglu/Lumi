@@ -48,6 +48,18 @@ public struct TranscriptChatSource: ChatTranscriptSourcing {
         return readAppended(file, from: 0, index: 0).0
     }
 
+    /// Kuyruk okuması: büyük transkriptin yalnız son `maxBytes`'ı çözülür
+    /// (ortadan başlayan ilk yarım satır JSON olmadığı için kendiliğinden atlanır).
+    public func tailMessages(sessionID: String, repoPath: String, maxBytes: Int = Self.tailBytes) -> [ChatMessage] {
+        let file = Self.transcriptURL(home: home, sessionID: sessionID, repoPath: repoPath)
+        let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.uint64Value ?? 0
+        let offset = size > UInt64(maxBytes) ? size - UInt64(maxBytes) : 0
+        return readAppended(file, from: offset, index: 0).0
+    }
+
+    /// `read_terminal` için yeterli kuyruk (son birkaç düzine mesaj).
+    public static let tailBytes = 2 * 1024 * 1024
+
     /// `<home>/.claude/projects/<encoded-cwd>/<sid>.jsonl`. Klasör adı Claude'un
     /// kuralıyla kodlanır: cwd'deki alfanümerik OLMAYAN her karakter `-` olur
     /// (`_`, `.` dahil). Yalnız `/`→`-` yapmak alt çizgili/nokta içeren repo'da
@@ -76,5 +88,14 @@ public struct TranscriptChatSource: ChatTranscriptSourcing {
             idx += 1
         }
         return (messages, offset + UInt64(complete.count), idx)
+    }
+}
+
+extension TranscriptChatSource: TerminalTranscriptReading {
+    /// Dosya okuması main actor'ı tutmasın diye ayrık görevde koşar.
+    public func recentClaudeMessages(sessionID: String, cwd: String) async -> [ChatMessage] {
+        await Task.detached(priority: .utility) {
+            self.tailMessages(sessionID: sessionID, repoPath: cwd)
+        }.value
     }
 }

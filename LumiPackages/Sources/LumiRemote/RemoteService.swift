@@ -333,31 +333,29 @@ public final class RemoteService: RemoteServicing {
     private func sendProjects() async {
         let cfg = await appConfig.config()
         let allRepos = await repos.repos()
-        let repoByPath = Dictionary(allRepos.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
         let managedPaths = Set(cfg.workspaces.map(\.path))
-
-        func agentIds(at path: String) -> [String] {
-            terminal.terminals
-                .filter { $0.repoPath == path }
-                .sorted { $0.lastActivityAt > $1.lastActivityAt }
-                .map { $0.id.description }
-        }
-
+        // Karar 103: ağaç orchestrator'ın `list_projects`'iyle ortak tek kaynaktan.
+        let tree = ProjectTree.build(
+            favoritePaths: cfg.sidebarProjectPaths,
+            repos: allRepos,
+            workspaces: cfg.workspaces,
+            terminals: terminal.terminals
+        )
+        // Döngü (map değil): `[String: Any]` Sendable değildir ve closure'dan
+        // dönen değer bölge analizinde aktör sınırını geçemiyor.
         var projects: [[String: Any]] = []
-        for favPath in cfg.sidebarProjectPaths {
-            guard let repo = repoByPath[favPath] else { continue }
-            var checkouts: [[String: Any]] = [[
-                "kind": "original", "title": "main",
-                "scm": repo.isGitRepo ? "git" : "none",
-                "path": repo.path, "agentIds": agentIds(at: repo.path),
-            ]]
-            for ws in cfg.workspaces where ws.projectPath == favPath {
-                checkouts.append([
-                    "kind": "workspace", "title": ws.name, "branch": ws.branch,
-                    "scm": ws.scm.rawValue, "path": ws.path, "agentIds": agentIds(at: ws.path),
-                ])
+        for project in tree {
+            var checkouts: [[String: Any]] = []
+            for checkout in project.checkouts {
+                var dict: [String: Any] = [
+                    "kind": checkout.kind.rawValue, "title": checkout.title,
+                    "scm": checkout.scm, "path": checkout.path,
+                    "agentIds": checkout.terminalIDs.map(\.description),
+                ]
+                if let branch = checkout.branch { dict["branch"] = branch }
+                checkouts.append(dict)
             }
-            projects.append(["name": repo.name, "path": repo.path, "checkouts": checkouts])
+            projects.append(["name": project.name, "path": project.path, "checkouts": checkouts])
         }
 
         let favorited = Set(cfg.sidebarProjectPaths)

@@ -57,7 +57,7 @@ public actor OrchestratorService: OrchestratorServicing {
             // Konuşmanın transkripti yoksa (silinmiş / hiç mesaj gitmemiş)
             // `--resume` hata verir; yeni konuşma aynı kimlikle açılır.
             resume: launch.resume && !history.isEmpty,
-            extraArguments: Self.arguments(),
+            extraArguments: try arguments(control: launch.control),
             spawner: spawner,
             binaryLocator: FixedLocator(path: binary)
         )
@@ -77,8 +77,8 @@ public actor OrchestratorService: OrchestratorServicing {
         session = nil
     }
 
-    static func arguments() -> [String] {
-        [
+    static func arguments(mcpConfigPath: String?) -> [String] {
+        var args = [
             "--replay-user-messages",
             "--system-prompt", OrchestratorPrompt.systemPrompt,
             "--system-prompt-snapshot", "off",
@@ -87,6 +87,35 @@ public actor OrchestratorService: OrchestratorServicing {
             "--tools", "",
             "--model", model,
         ]
+        if let mcpConfigPath {
+            // Yalnız Lumi sunucusunun araçları izinli; izin onayı Lumi'nin
+            // kendi araç yürütücüsündedir (yazma araçları popup'ta onaylanır).
+            args += ["--mcp-config", mcpConfigPath, "--allowedTools", OrchestratorTools.allowRule]
+        }
+        return args
+    }
+
+    /// MCP bağlantısı token taşıdığı için argv'ye değil 0600 bir dosyaya yazılır
+    /// (`ps` çıktısında görünmesin).
+    private func arguments(control: OrchestratorControlEndpoint?) throws -> [String] {
+        guard let control else { return Self.arguments(mcpConfigPath: nil) }
+        let file = workingDirectory.appendingPathComponent(Self.mcpConfigFileName)
+        try Self.mcpConfig(control).write(to: file, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        return Self.arguments(mcpConfigPath: file.path)
+    }
+
+    static let mcpConfigFileName = "mcp.json"
+
+    static func mcpConfig(_ control: OrchestratorControlEndpoint) throws -> Data {
+        let config: [String: Any] = ["mcpServers": [
+            OrchestratorTools.serverName: [
+                "type": "http",
+                "url": control.url,
+                "headers": ["Authorization": "Bearer \(control.token)"],
+            ],
+        ]]
+        return try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys])
     }
 }
 

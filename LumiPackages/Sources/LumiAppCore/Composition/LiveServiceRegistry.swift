@@ -42,6 +42,8 @@ final class LiveServiceRegistry: ServiceRegistry {
     let agentHookInstaller: any AgentHookInstalling
     let chatSessions: any ChatSessionServicing
     let orchestrator: any OrchestratorServicing
+    let orchestratorControl: any OrchestratorControlServing
+    let terminalTranscripts: any TerminalTranscriptReading
 
     private let usageServices: [AgentProvider: any UsageServicing]
     /// P1 ölçüm harness'ı somut manager'a bağlıdır (debug-only araç, design/04).
@@ -122,6 +124,8 @@ final class LiveServiceRegistry: ServiceRegistry {
             workingDirectory: paths.orchestratorDir,
             environment: AgentChildEnvironment.cleaned()
         )
+        orchestratorControl = LumiMCPServer(serverVersion: AppAboutInfo.current.version)
+        terminalTranscripts = TranscriptChatSource()
         let manager = TerminalSessionManager()
         terminalManager = manager
         terminal = manager

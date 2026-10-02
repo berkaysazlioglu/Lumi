@@ -61,6 +61,43 @@ import Testing
         await service.stop()
     }
 
+    /// Faz 2: MCP ucu token taşıdığı için argv'ye değil 0600 dosyaya yazılır;
+    /// yalnız Lumi sunucusunun araçları izinlidir.
+    @Test func controlEndpointIsPassedThroughPrivateMCPConfigFile() async throws {
+        let sandbox = try Sandbox()
+        let spawner = FakeStreamingProcess()
+        let service = sandbox.service(spawner: spawner)
+        let control = OrchestratorControlEndpoint(port: 5150, token: "s3cret")
+
+        _ = try await service.start(OrchestratorLaunch(sessionID: "s-1", resume: false, control: control))
+
+        let args = try #require(spawner.spawns.first?.arguments)
+        let path = try #require(value(after: "--mcp-config", in: args))
+        #expect(value(after: "--allowedTools", in: args) == "mcp__lumi")
+        #expect(!args.joined(separator: " ").contains("s3cret"), "token argv'de görünmez")
+        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+        #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+        let config = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as? [String: Any]
+        )
+        let lumi = try #require((config["mcpServers"] as? [String: Any])?["lumi"] as? [String: Any])
+        #expect(lumi["type"] as? String == "http")
+        #expect(lumi["url"] as? String == "http://127.0.0.1:5150/mcp")
+        #expect((lumi["headers"] as? [String: String])?["Authorization"] == "Bearer s3cret")
+        await service.stop()
+    }
+
+    @Test func withoutControlNoMCPFlagsArePassed() async throws {
+        let sandbox = try Sandbox()
+        let spawner = FakeStreamingProcess()
+        let service = sandbox.service(spawner: spawner)
+        _ = try await service.start(OrchestratorLaunch(sessionID: "s-1", resume: false))
+        let args = try #require(spawner.spawns.first?.arguments)
+        #expect(!args.contains("--mcp-config"))
+        #expect(!args.contains("--allowedTools"))
+        await service.stop()
+    }
+
     @Test func resumeReadsHistoryFromTranscript() async throws {
         let sandbox = try Sandbox()
         try sandbox.writeTranscript(sessionID: "s-1", lines: [

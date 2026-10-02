@@ -61,6 +61,12 @@ struct OrchestratorMessageRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// `mcp__lumi__list_terminals` → `list_terminals` (Lumi'nin kendi araçları).
+    static func displayName(_ toolName: String) -> String {
+        let prefix = OrchestratorTools.allowRule + "__"
+        return toolName.hasPrefix(prefix) ? String(toolName.dropFirst(prefix.count)) : toolName
+    }
+
     @ViewBuilder
     private func blockView(_ block: ChatBlock) -> some View {
         switch block {
@@ -71,7 +77,7 @@ struct OrchestratorMessageRow: View {
                 OrchestratorAssistantText(text: text)
             }
         case let .toolCall(name, preview, _):
-            OrchestratorToolLine(icon: "chevron.right", text: "\(name) \(preview)", isError: false)
+            OrchestratorToolLine(icon: "chevron.right", text: "\(Self.displayName(name)) \(preview)", isError: false)
         case let .toolResult(output, isError):
             OrchestratorToolLine(icon: "arrow.turn.down.right", text: output, isError: isError)
         case .imageRef, .subagentGroup, .unknown:

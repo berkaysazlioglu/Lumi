@@ -8,10 +8,13 @@ public struct OrchestratorLaunch: Sendable, Equatable {
     public let sessionID: String
     /// `true` = konuşma daha önce başladı, transkriptten geçmiş okunur.
     public let resume: Bool
+    /// Lumi'nin MCP ucu (Faz 2) — nil = araçsız sohbet.
+    public let control: OrchestratorControlEndpoint?
 
-    public init(sessionID: String, resume: Bool) {
+    public init(sessionID: String, resume: Bool, control: OrchestratorControlEndpoint? = nil) {
         self.sessionID = sessionID
         self.resume = resume
+        self.control = control
     }
 }
 

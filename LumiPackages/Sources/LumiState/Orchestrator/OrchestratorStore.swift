@@ -30,6 +30,10 @@ public final class OrchestratorStore {
 
     @ObservationIgnored private let service: any OrchestratorServicing
     @ObservationIgnored private let config: any ConfigServicing
+    /// Lumi'nin MCP ucu + araç yürütücüsü (Faz 2). İkisinden biri yoksa
+    /// orchestrator araçsız sohbet eder.
+    @ObservationIgnored private let control: (any OrchestratorControlServing)?
+    @ObservationIgnored private let tools: (any OrchestratorToolHandling)?
     @ObservationIgnored private let makeSessionID: @Sendable () -> String
     @ObservationIgnored private var sessionID: String?
     @ObservationIgnored private var updatesTask: Task<Void, Never>?
@@ -43,10 +47,14 @@ public final class OrchestratorStore {
     public init(
         service: any OrchestratorServicing,
         config: any ConfigServicing,
+        control: (any OrchestratorControlServing)? = nil,
+        tools: (any OrchestratorToolHandling)? = nil,
         makeSessionID: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() }
     ) {
         self.service = service
         self.config = config
+        self.control = control
+        self.tools = tools
         self.makeSessionID = makeSessionID
     }
 
@@ -109,6 +117,7 @@ public final class OrchestratorStore {
         updatesTask?.cancel()
         updatesTask = nil
         await service.stop()
+        await control?.stop()
         phase = .idle
     }
 
@@ -120,7 +129,10 @@ public final class OrchestratorStore {
         generation += 1
         let current = generation
         do {
-            let run = try await service.start(OrchestratorLaunch(sessionID: id, resume: resume ?? isKnown))
+            let endpoint = try await controlEndpoint()
+            let run = try await service.start(OrchestratorLaunch(
+                sessionID: id, resume: resume ?? isKnown, control: endpoint
+            ))
             guard current == generation else { return }
             history = run.history
             live = ChatJournalState()
@@ -131,6 +143,12 @@ public final class OrchestratorStore {
             guard current == generation else { return }
             settleStopped(error: (error as? LumiError)?.errorDescription ?? error.localizedDescription)
         }
+    }
+
+    /// MCP sunucusu ilk süreçte tembel açılır; sonrakilerde aynı uç döner.
+    private func controlEndpoint() async throws -> OrchestratorControlEndpoint? {
+        guard let control, let tools else { return nil }
+        return try await control.start(handler: tools)
     }
 
     private func observe(_ updates: AsyncStream<ChatJournalState>, generation current: Int) {

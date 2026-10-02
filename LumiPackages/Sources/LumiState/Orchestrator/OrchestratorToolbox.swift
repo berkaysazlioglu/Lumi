@@ -1,0 +1,211 @@
+import Foundation
+import LumiKit
+
+/// Orchestrator araçlarının yürütücüsü (karar 103 Faz 2) — MCP sunucusunun
+/// `tools/call` istekleri buraya düşer. Store'ların CANLI durumunu okur:
+/// Projects paneliyle aynı ağaç (`ProjectTree`), terminal listesiyle aynı
+/// durumlar. Yalnız okuma araçları; yazma araçları onay akışıyla sonraki fazda.
+@MainActor
+public final class OrchestratorToolbox: OrchestratorToolHandling {
+    private let terminals: TerminalListStore
+    private let workspaces: ProjectWorkspaceStore
+    private let repos: RepoStore
+    private let transcripts: any TerminalTranscriptReading
+    /// Terminal ekranının düz metni (scrollback + görünür satırlar).
+    private let screenText: @MainActor (TerminalID) -> String
+    private let now: @MainActor () -> Date
+
+    public init(
+        terminals: TerminalListStore,
+        workspaces: ProjectWorkspaceStore,
+        repos: RepoStore,
+        transcripts: any TerminalTranscriptReading,
+        screenText: @escaping @MainActor (TerminalID) -> String,
+        now: @escaping @MainActor () -> Date = { Date() }
+    ) {
+        self.terminals = terminals
+        self.workspaces = workspaces
+        self.repos = repos
+        self.transcripts = transcripts
+        self.screenText = screenText
+        self.now = now
+    }
+
+    public func call(name: String, arguments: Data) async -> OrchestratorToolResult {
+        let args = (try? JSONSerialization.jsonObject(with: arguments)) as? [String: Any] ?? [:]
+        switch name {
+        case OrchestratorTools.listProjects:
+            return listProjects()
+        case OrchestratorTools.listTerminals:
+            return listTerminals(query: args["query"] as? String)
+        case OrchestratorTools.readTerminal:
+            return await readTerminal(args)
+        default:
+            return .failure("Unknown tool: \(name)")
+        }
+    }
+
+    // MARK: - list_projects
+
+    private func listProjects() -> OrchestratorToolResult {
+        let tree = projectTree()
+        guard !tree.isEmpty else {
+            return OrchestratorToolResult(text: "No projects in Lumi's Projects panel yet.")
+        }
+        let projects: [[String: Any]] = tree.map { project in
+            [
+                "name": project.name,
+                "path": project.path,
+                "checkouts": project.checkouts.map { checkout -> [String: Any] in
+                    var dict: [String: Any] = [
+                        "title": checkout.title,
+                        "kind": checkout.kind.rawValue,
+                        "path": checkout.path,
+                        "terminals": checkout.terminalIDs.compactMap(terminals.meta(for:)).map(terminalSummary),
+                    ]
+                    if let branch = checkout.branch { dict["branch"] = branch }
+                    return dict
+                },
+            ]
+        }
+        return OrchestratorToolResult(text: OrchestratorToolFormat.json(["projects": projects]))
+    }
+
+    // MARK: - list_terminals
+
+    private func listTerminals(query: String?) -> OrchestratorToolResult {
+        let locations = checkoutLocations()
+        let filter = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let rows: [[String: Any]] = terminals.terminals
+            .sorted { $0.lastActivityAt > $1.lastActivityAt }
+            .compactMap { meta in
+                let location = locations[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
+                let row = terminalRow(meta, location: location)
+                guard filter.isEmpty || Self.haystack(meta, location: location).contains(filter) else { return nil }
+                return row
+            }
+        guard !rows.isEmpty else {
+            let text = filter.isEmpty ? "No terminals are open in Lumi." : "No terminal matches \"\(filter)\"."
+            return OrchestratorToolResult(text: text)
+        }
+        return OrchestratorToolResult(text: OrchestratorToolFormat.json(["terminals": rows]))
+    }
+
+    // MARK: - read_terminal
+
+    private func readTerminal(_ args: [String: Any]) async -> OrchestratorToolResult {
+        guard let rawID = args["terminal_id"] as? String, !rawID.isEmpty else {
+            return .failure("terminal_id is required.")
+        }
+        let meta: TerminalMeta
+        switch resolveTerminal(rawID) {
+        case .found(let found): meta = found
+        case .failure(let message): return .failure(message)
+        }
+        let limit = Self.clampedLimit(args["limit"])
+        let header = OrchestratorToolFormat.header(for: meta, status: status(of: meta))
+
+        if meta.provider == .claude, let sessionID = meta.claudeSessionID {
+            let messages = await transcripts.recentClaudeMessages(sessionID: sessionID, cwd: meta.repoPath)
+            if !messages.isEmpty {
+                return OrchestratorToolResult(text: header + "\n\n" + OrchestratorToolFormat.transcript(messages, limit: limit))
+            }
+        }
+        let screen = OrchestratorToolFormat.screenTail(screenText(meta.id))
+        let body = screen.isEmpty ? "(screen is empty)" : screen
+        return OrchestratorToolResult(text: header + "\n\nLast screen lines:\n" + body)
+    }
+
+    enum Resolution {
+        case found(TerminalMeta)
+        case failure(String)
+    }
+
+    /// Tam UUID ya da en az 6 karakterlik TEKİL önek (büyük/küçük harf duyarsız).
+    func resolveTerminal(_ raw: String) -> Resolution {
+        let needle = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let all = terminals.terminals
+        if let exact = all.first(where: { $0.id.description.lowercased() == needle }) {
+            return .found(exact)
+        }
+        guard needle.count >= Self.minimumPrefix else {
+            return .failure("Unknown terminal id \"\(raw)\". Use an id from list_terminals.")
+        }
+        let matches = all.filter { $0.id.description.lowercased().hasPrefix(needle) }
+        switch matches.count {
+        case 1: return .found(matches[0])
+        case 0: return .failure("Unknown terminal id \"\(raw)\". Use an id from list_terminals.")
+        default: return .failure("Terminal id prefix \"\(raw)\" is ambiguous; use the full id.")
+        }
+    }
+
+    static let minimumPrefix = 6
+
+    static func clampedLimit(_ raw: Any?) -> Int {
+        let value = (raw as? NSNumber)?.intValue ?? OrchestratorTools.defaultReadLimit
+        return min(max(value, 1), OrchestratorTools.maxReadLimit)
+    }
+
+    // MARK: - Ortak
+
+    private struct Location {
+        let project: String
+        let checkout: String?
+        let branch: String?
+    }
+
+    private func projectTree() -> [ProjectTreeNode] {
+        ProjectTree.build(
+            favoritePaths: workspaces.sidebarProjectPaths,
+            repos: repos.repos,
+            workspaces: workspaces.records,
+            terminals: terminals.terminals
+        )
+    }
+
+    private func checkoutLocations() -> [String: Location] {
+        var locations: [String: Location] = [:]
+        for project in projectTree() {
+            for checkout in project.checkouts {
+                locations[checkout.path] = Location(project: project.name, checkout: checkout.title, branch: checkout.branch)
+            }
+        }
+        return locations
+    }
+
+    /// Projects panelinde olmayan bir yolda koşan terminal (ör. favoriden çıkarılmış proje).
+    private func fallbackLocation(for path: String) -> Location {
+        Location(project: repos.repo(at: path)?.name ?? (path as NSString).lastPathComponent, checkout: nil, branch: nil)
+    }
+
+    private func status(of meta: TerminalMeta) -> String {
+        OrchestratorToolFormat.status(meta.status, isAwaitingDecision: terminals.awaitingDecisionIDs.contains(meta.id))
+    }
+
+    private func terminalSummary(_ meta: TerminalMeta) -> [String: Any] {
+        [
+            "id": meta.id.description,
+            "title": meta.displayTitle,
+            "provider": meta.provider?.rawValue ?? "shell",
+            "status": status(of: meta),
+            "lastActivity": OrchestratorToolFormat.ago(meta.lastActivityAt, now: now()),
+        ]
+    }
+
+    private func terminalRow(_ meta: TerminalMeta, location: Location) -> [String: Any] {
+        var row = terminalSummary(meta)
+        row["project"] = location.project
+        row["path"] = meta.repoPath
+        if let checkout = location.checkout { row["checkout"] = checkout }
+        if let branch = location.branch { row["branch"] = branch }
+        if terminals.isMinimized(meta.id) { row["minimized"] = true }
+        if terminals.activeTerminalID == meta.id { row["focused"] = true }
+        return row
+    }
+
+    private static func haystack(_ meta: TerminalMeta, location: Location) -> String {
+        [meta.displayTitle, meta.repoPath, location.project, location.checkout ?? "", location.branch ?? ""]
+            .joined(separator: " ")
+            .lowercased()
+    }
+}

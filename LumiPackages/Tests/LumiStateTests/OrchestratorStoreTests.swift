@@ -174,6 +174,40 @@ final class OrchestratorStoreTests: XCTestCase {
         XCTAssertEqual(saved, "s-1")
     }
 
+    /// Faz 2: araç yürütücüsü varsa MCP sunucusu ilk süreçte açılır ve uç
+    /// sürece verilir; sonraki süreçler aynı sunucuyu kullanır.
+    func testControlServerStartsWithFirstLaunchAndEndpointReachesProcess() async {
+        let service = FakeOrchestratorService()
+        let control = FakeOrchestratorControlServer()
+        let store = OrchestratorStore(
+            service: service, config: FakeConfigService(),
+            control: control, tools: NoTools(), makeSessionID: { "s-1" }
+        )
+
+        await store.activate()
+
+        XCTAssertEqual(control.startCount, 1)
+        XCTAssertEqual(service.launches.last?.control, FakeOrchestratorControlServer.endpoint)
+        await store.shutdown()
+        XCTAssertEqual(control.stopCount, 1)
+    }
+
+    func testControlServerFailureSurfacesAsStartError() async {
+        let service = FakeOrchestratorService()
+        let control = FakeOrchestratorControlServer()
+        control.stubStartError(.underlying(domain: "LumiMCPServer", message: "port busy"))
+        let store = OrchestratorStore(
+            service: service, config: FakeConfigService(),
+            control: control, tools: NoTools(), makeSessionID: { "s-1" }
+        )
+
+        await store.activate()
+
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertNotNil(store.errorMessage)
+        XCTAssertTrue(service.launches.isEmpty)
+    }
+
     func testShutdownStopsProcess() async {
         let service = FakeOrchestratorService()
         let store = makeStore(service: service)
@@ -192,4 +226,8 @@ private final class IDQueue: @unchecked Sendable {
     func next() -> String {
         lock.withLock { ids.isEmpty ? UUID().uuidString : ids.removeFirst() }
     }
+}
+
+private struct NoTools: OrchestratorToolHandling {
+    func call(name: String, arguments: Data) async -> OrchestratorToolResult { .failure("none") }
 }

@@ -68,6 +68,10 @@ public protocol ServiceRegistry: AnyObject {
 
     /// Karar 103: tüm ajan terminallerini yöneten orchestrator Claude'u.
     var orchestrator: any OrchestratorServicing { get }
+    /// Karar 103 Faz 2: orchestrator'ın Lumi'yi yönettiği loopback MCP sunucusu.
+    var orchestratorControl: any OrchestratorControlServing { get }
+    /// Claude terminallerinin transkript kuyruğu (`read_terminal`).
+    var terminalTranscripts: any TerminalTranscriptReading { get }
 
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.
