@@ -56,7 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppMenuCommands.register(
             in: dispatcher,
             shared: shared,
-            openSettings: { [weak self] in self?.openSettings() },
+            openSettings: { [weak self] in self?.openSettings(tab: .general) },
+            openAbout: { [weak self] in self?.openSettings(tab: .about) },
             closeActiveProject: { [weak self] in
                 self?.composition.shell.context.requestCloseActiveProject()
             }
@@ -93,10 +94,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainMenuBuilder.install(dispatcher: dispatcher, style: style)
     }
 
-    private func openSettings() {
+    /// Karar 102: `Settings…` her zaman General'de, `About Lumi` About'ta açar.
+    private func openSettings(tab: SettingsTab) {
         Task { @MainActor in
             await shared.settings.refresh() // her açılışta taze
-            shared.dialogs.isSettingsOpen = true
+            shared.dialogs.openSettings(tab: tab.rawValue)
         }
     }
 

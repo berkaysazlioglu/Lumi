@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// Yeni bir sekme eklemek = `Tabs/` altında bir dosya + buraya bir `case`
 /// (+ `content`'te bir satır). Panel kabuğu (`SettingsShell`) hiç değişmez.
-enum SettingsTab: String, CaseIterable, Identifiable {
+public enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case agent
     case accounts
@@ -15,8 +15,10 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case usage
     case shortcuts
     case remote
+    /// Sürüm, sistem, linkler ve yeni sürüm kontrolü (karar 102). Hep en sonda.
+    case about
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     var title: String {
         switch self {
@@ -30,6 +32,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .usage: return "Usage"
         case .shortcuts: return "Shortcuts"
         case .remote: return "Remote"
+        case .about: return "About"
         }
     }
 
@@ -46,6 +49,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .usage: return "gauge.with.dots.needle.bottom.50percent"
         case .shortcuts: return "keyboard"
         case .remote: return "iphone.and.arrow.forward"
+        case .about: return "info.circle"
         }
     }
 
@@ -65,6 +69,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .usage: UsageSettingsTab()
         case .shortcuts: ShortcutsSettingsTab()
         case .remote: RemoteSettingsTab()
+        case .about: AboutSettingsTab()
         }
     }
 }

@@ -313,6 +313,7 @@ final class ShellContextTests: XCTestCase {
             terminalLinks: context.terminalLinks,
             computerAwake: context.computerAwake,
             resourceUsage: context.resourceUsage,
+            appUpdate: context.appUpdate,
             viewProvider: context.viewProvider,
             highlighter: context.highlighter,
             actions: ShellActions(

@@ -25,7 +25,7 @@ struct SettingsShell: View {
                     header
                     divider
                     HStack(spacing: 0) {
-                        SettingsNav(selection: $selectedTab)
+                        SettingsNav(selection: $selectedTab, badgedTabs: badgedTabs)
                             .frame(width: Self.navigationWidth)
                         Rectangle()
                             .fill(Theme.border)
@@ -38,11 +38,20 @@ struct SettingsShell: View {
         }
         // Karar 56: popover'daki "Manage Accounts…" paneli doğrudan ilgili
         // sekmede açar; istek bir kez tüketilir.
-        .onAppear {
-            if let raw = shell.dialogs.consumeRequestedSettingsTab(),
-               let tab = SettingsTab(rawValue: raw) {
-                selectedTab = tab
-            }
+        .onAppear(perform: applyRequestedTab)
+        // Karar 102: panel açıkken menüden `About Lumi` / `Settings…` gelirse
+        // de istenen sekmeye geçilir.
+        .onChange(of: shell.dialogs.requestedSettingsTab) { _, _ in applyRequestedTab() }
+    }
+
+    private var badgedTabs: Set<SettingsTab> {
+        shell.appUpdate.availableRelease == nil ? [] : [.about]
+    }
+
+    private func applyRequestedTab() {
+        if let raw = shell.dialogs.consumeRequestedSettingsTab(),
+           let tab = SettingsTab(rawValue: raw) {
+            selectedTab = tab
         }
     }
 

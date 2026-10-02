@@ -14,6 +14,7 @@ enum AppMenuCommands {
         in dispatcher: MenuActionDispatcher,
         shared: SharedStores,
         openSettings: @escaping () -> Void,
+        openAbout: @escaping () -> Void,
         closeActiveProject: @escaping () -> Void
     ) {
         dispatcher.register(.newTerminal) {
@@ -78,5 +79,6 @@ enum AppMenuCommands {
         dispatcher.register(.zoomOut) { shared.layout.zoomOut() }
         dispatcher.register(.resetZoom) { shared.layout.resetZoom() }
         dispatcher.register(.openSettings, openSettings)
+        dispatcher.register(.openAbout, openAbout)
     }
 }

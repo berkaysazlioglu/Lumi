@@ -41,6 +41,7 @@ struct ShellComposition {
         claudeAccounts: ClaudeAccountsAssembly,
         codexAccounts: CodexAccountsAssembly,
         terminalLinks: TerminalLinkActionsAssembly,
+        appUpdate: AppUpdateFeatureAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
         let registries = makeRegistries(contributors: contributors)
@@ -72,6 +73,7 @@ struct ShellComposition {
             terminalLinks: terminalLinks.makeStore(shared: shared, repo: repo),
             computerAwake: statusBar.computerAwake,
             resourceUsage: statusBar.resourceUsage,
+            appUpdate: appUpdate.appUpdate,
             viewProvider: registry.viewProvider,
             highlighter: registry.highlighter,
             actions: makeActions(registry: registry, shared: shared, repo: repo)

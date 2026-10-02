@@ -14,9 +14,12 @@ public enum AppCommands {
     /// Ham tablo: indeksli komutların değiştiricileri VARSAYILAN düzendedir.
     private static let table: [AppCommand] = [
         // MARK: App
+        // Karar 102: macOS'un standart About paneli yerine Settings ▸ About.
+        // Kısayolu yoktur (platform geleneği) — Shortcuts tablosunda görünmez.
+        AppCommand(id: .openAbout, title: "About Lumi", menu: .app, key: nil),
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
-            referenceTitle: "Settings", referenceOrder: 16
+            separatorBefore: true, referenceTitle: "Settings", referenceOrder: 16
         ),
         // Standart `NSApplication.terminate(_:)` selector'ına gider ama
         // kullanıcıya sunulan tabloda listelenir.

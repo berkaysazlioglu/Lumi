@@ -27,7 +27,7 @@ final class SettingsTabTests: XCTestCase {
     func testTabOrderIsTheDeclaredOne() {
         XCTAssertEqual(
             SettingsTab.allCases,
-            [.general, .agent, .accounts, .terminal, .appearance, .notifications, .session, .usage, .shortcuts, .remote]
+            [.general, .agent, .accounts, .terminal, .appearance, .notifications, .session, .usage, .shortcuts, .remote, .about]
         )
     }
 

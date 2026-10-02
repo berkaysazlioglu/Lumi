@@ -34,6 +34,8 @@ public protocol ServiceRegistry: AnyObject {
     var deepSeek: any DeepSeekEnvironmentServicing { get }
     /// DeepSeek bakiye okuması (karar 75).
     var deepSeekBalance: any DeepSeekBalanceServicing { get }
+    /// GitHub Releases'ten son sürüm kontrolü (karar 102).
+    var appReleases: any AppReleaseChecking { get }
     /// Claude hesap yönetimi (karar 56).
     var claudeAccounts: any ClaudeAccountServicing { get }
     /// Codex accounts stored as isolated CODEX_HOME directories.

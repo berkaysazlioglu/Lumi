@@ -21,6 +21,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let agentSessionTransfer: any AgentSessionTransferring
     let deepSeek: any DeepSeekEnvironmentServicing
     let deepSeekBalance: any DeepSeekBalanceServicing
+    let appReleases: any AppReleaseChecking
     let claudeAccounts: any ClaudeAccountServicing
     let codexAccounts: any CodexAccountServicing
     let git: any GitServicing
@@ -84,6 +85,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         deepSeek = deepSeekEnvironment
         // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
         deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
+        appReleases = GitHubReleaseService()
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
         let codexAccountService = CodexAccountService(config: configService, paths: paths)
         codexAccounts = codexAccountService

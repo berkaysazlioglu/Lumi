@@ -90,6 +90,8 @@ public final class ShellContext {
     /// Alt bar store'ları (karar 43).
     public let computerAwake: ComputerAwakeStore
     public let resourceUsage: ResourceUsageStore
+    /// Settings ▸ About'un sürüm kontrolü (karar 102).
+    public let appUpdate: AppUpdateStore
 
     // MARK: - Köprüler
 
@@ -124,6 +126,7 @@ public final class ShellContext {
         terminalLinks: TerminalLinkActionStore,
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
+        appUpdate: AppUpdateStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
         actions: ShellActions
@@ -154,6 +157,7 @@ public final class ShellContext {
         self.terminalLinks = terminalLinks
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage
+        self.appUpdate = appUpdate
         self.viewProvider = viewProvider
         self.highlighter = highlighter
         self.actions = actions

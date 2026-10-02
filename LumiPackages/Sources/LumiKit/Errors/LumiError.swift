@@ -22,6 +22,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case usageUnavailable(detail: String)
     /// DeepSeek bakiyesi okunamadı (karar 75): anahtar yok, ağ ya da 4xx.
     case deepSeekBalanceUnavailable(detail: String)
+    /// GitHub'dan son sürüm okunamadı (karar 102).
+    case updateCheckFailed(detail: String)
     case sessionStartFailed(detail: String)
     /// Agent History oturumu dışa/içe aktarımı (karar 52) başarısız.
     case sessionTransferFailed(detail: String)
@@ -60,6 +62,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Could not read usage: \(detail)"
         case .deepSeekBalanceUnavailable(let detail):
             return "Could not read DeepSeek balance: \(detail)"
+        case .updateCheckFailed(let detail):
+            return "Could not check for updates: \(detail)"
         case .sessionStartFailed(let detail):
             return "Could not start session: \(detail)"
         case .sessionTransferFailed(let detail):

@@ -57,12 +57,14 @@ struct AppComposition {
             Task { await store.refreshAfterSourceChange() }
         })
         let terminalLinks = TerminalLinkActionsAssembly()
+        let appUpdate = AppUpdateFeatureAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
             assemblies: [
                 agentHooks, terminal, notifications, sessionSchedule, usage, repo, codexAccounts,
                 workspaceBoot, statusBar, remote, deepSeek, tasks, claudeAccounts, terminalLinks,
+                appUpdate,
             ]
         )
         let shell = ShellComposition.make(
@@ -79,6 +81,7 @@ struct AppComposition {
             claudeAccounts: claudeAccounts,
             codexAccounts: codexAccounts,
             terminalLinks: terminalLinks,
+            appUpdate: appUpdate,
             contributors: [
                 tasks, terminal, repo, usage, statusBar, claudeAccounts, codexAccounts, terminalLinks,
             ]

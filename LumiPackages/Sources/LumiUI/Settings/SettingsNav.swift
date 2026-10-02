@@ -3,11 +3,13 @@ import SwiftUI
 /// Settings panelinin sol dikey navigasyonu (Faz 7.3).
 struct SettingsNav: View {
     @Binding var selection: SettingsTab
+    /// Dikkat noktası taşıyan sekmeler (karar 102: yeni sürüm → About).
+    var badgedTabs: Set<SettingsTab> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
             ForEach(SettingsTab.allCases) { tab in
-                SettingsNavItem(tab: tab, isActive: selection == tab) {
+                SettingsNavItem(tab: tab, isActive: selection == tab, hasBadge: badgedTabs.contains(tab)) {
                     selection = tab
                 }
             }
@@ -24,6 +26,7 @@ struct SettingsNav: View {
 private struct SettingsNavItem: View {
     let tab: SettingsTab
     let isActive: Bool
+    let hasBadge: Bool
     let action: () -> Void
 
     var body: some View {
@@ -41,6 +44,12 @@ private struct SettingsNavItem: View {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                     Spacer(minLength: 0)
+                    if hasBadge {
+                        Circle()
+                            .fill(Theme.warning)
+                            .frame(width: Theme.Spacing.sm, height: Theme.Spacing.sm)
+                            .accessibilityHidden(true)
+                    }
                 }
                 // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
                 .padding(Theme.scaled(10))
@@ -50,7 +59,7 @@ private struct SettingsNavItem: View {
             }
             .buttonStyle(.plain)
         }
-        .accessibilityLabel(tab.title)
+        .accessibilityLabel(hasBadge ? "\(tab.title), update available" : tab.title)
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 

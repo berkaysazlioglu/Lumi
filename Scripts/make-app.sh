@@ -40,6 +40,7 @@ PKG="$ROOT/LumiPackages"
 DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
 APP="$DIST/Lumi.app"
 VERSION="${VERSION:-0.8.0}"
+GIT_COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 # Kişisel, commit'lenmeyen ayarlar: varsa burada source edilir (.gitignore'da).
 # Değişkenler (IDENTITY / VERSION / DIST / NOTARY_PROFILE) burada ezilebilir,
@@ -115,6 +116,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <string>${VERSION}</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
+    <key>LumiGitCommit</key>
+    <string>${GIT_COMMIT}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSPrincipalClass</key>

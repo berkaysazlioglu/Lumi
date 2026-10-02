@@ -263,6 +263,7 @@ private struct ShellFixture {
             resourceUsage: ResourceUsageStore(
                 terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()
             ),
+            appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService()),
             viewProvider: FakeTerminalViewProvider(),
             highlighter: NoopHighlighter(),
             actions: ShellActions(chooseFolder: { nil }, reveal: { _, _ in }, trash: { _, _ in })

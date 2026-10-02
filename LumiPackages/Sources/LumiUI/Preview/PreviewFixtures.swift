@@ -75,6 +75,7 @@ public extension ShellContext {
             resourceUsage: ResourceUsageStore(
                 terminals: shared.terminals, terminalService: terminal, sampler: PreviewProcessSampler()
             ),
+            appUpdate: .preview,
             viewProvider: viewProvider,
             highlighter: PreviewHighlighter(),
             actions: ShellActions(
@@ -608,5 +609,26 @@ private final class PreviewRemoteService: RemoteServicing {
     func start() async {}
     func stop() {}
     func events() -> AsyncStream<RemoteEvent> { AsyncStream { _ in } }
+}
+
+public extension AppUpdateStore {
+    /// Yeni sürüm bulunmuş hâl (karar 102 preview'ları).
+    @MainActor
+    static var preview: AppUpdateStore {
+        let store = AppUpdateStore(currentVersion: "0.8.0", service: PreviewAppReleaseService())
+        Task { await store.check() }
+        return store
+    }
+}
+
+/// Ağsız sahte sürüm (karar 102).
+private struct PreviewAppReleaseService: AppReleaseChecking {
+    func latestRelease() async throws -> AppRelease {
+        AppRelease(
+            version: AppVersion("0.9.0")!,
+            pageURL: URL(string: "https://github.com/berkaysazlioglu/Lumi/releases/tag/v0.9.0")!,
+            publishedAt: Date()
+        )
+    }
 }
 #endif

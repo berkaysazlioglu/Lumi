@@ -12,7 +12,9 @@ final class AppCommandsTests: XCTestCase {
     /// Her komutun ya bir tuşu ya da bir indeks aralığı vardır — kısayolsuz
     /// komut menüde sessizce kaybolurdu.
     func testEveryCommandCarriesAShortcut() {
-        for command in AppCommands.all() {
+        // Karar 102: About platform geleneği gereği kısayolsuzdur — istisna açık.
+        let shortcutless: Set<CommandID> = [.openAbout]
+        for command in AppCommands.all() where !shortcutless.contains(command.id) {
             XCTAssertTrue(
                 command.key != nil || command.indexRange != nil,
                 "\(command.title) kısayolsuz"

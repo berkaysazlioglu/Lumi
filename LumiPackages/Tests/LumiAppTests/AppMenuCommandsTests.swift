@@ -32,6 +32,7 @@ final class AppMenuCommandsTests: XCTestCase {
             in: dispatcher,
             shared: shared,
             openSettings: {},
+            openAbout: {},
             closeActiveProject: { [weak self] in self?.closeProjectCount += 1 }
         )
         // Terminal listesi servis stream'inden akar: lifecycle başlamadan
