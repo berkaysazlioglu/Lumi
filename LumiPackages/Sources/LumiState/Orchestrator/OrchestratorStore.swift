@@ -27,6 +27,8 @@ public final class OrchestratorStore {
     public private(set) var pendingPrompt: String?
     /// Son başarısızlık (başlatma hatası, beklenmedik çıkış) — satır içi gösterilir.
     public private(set) var errorMessage: String?
+    /// Faz 3: yazma araçlarının bekleyen onayları (popup kartları).
+    public let approvals: OrchestratorApprovals
 
     @ObservationIgnored private let service: any OrchestratorServicing
     @ObservationIgnored private let config: any ConfigServicing
@@ -49,12 +51,14 @@ public final class OrchestratorStore {
         config: any ConfigServicing,
         control: (any OrchestratorControlServing)? = nil,
         tools: (any OrchestratorToolHandling)? = nil,
+        approvals: OrchestratorApprovals = OrchestratorApprovals(),
         makeSessionID: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() }
     ) {
         self.service = service
         self.config = config
         self.control = control
         self.tools = tools
+        self.approvals = approvals
         self.makeSessionID = makeSessionID
     }
 
@@ -113,6 +117,7 @@ public final class OrchestratorStore {
     }
 
     public func shutdown() async {
+        approvals.rejectAll()
         generation += 1
         updatesTask?.cancel()
         updatesTask = nil
@@ -175,6 +180,8 @@ public final class OrchestratorStore {
 
     /// Süreç yok: canlı journal geçmişe katlanır, bir sonraki mesaj resume eder.
     private func settleStopped(error: String?) {
+        // Süreç yok: cevabı bekleyen araç çağrısı da yok — kartlar asılı kalmasın.
+        approvals.rejectAll()
         if !live.messages.isEmpty, phase == .running {
             history += live.messages
         }

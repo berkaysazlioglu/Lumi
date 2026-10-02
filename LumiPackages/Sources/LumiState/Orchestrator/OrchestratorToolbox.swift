@@ -4,16 +4,22 @@ import LumiKit
 /// Orchestrator araçlarının yürütücüsü (karar 103 Faz 2) — MCP sunucusunun
 /// `tools/call` istekleri buraya düşer. Store'ların CANLI durumunu okur:
 /// Projects paneliyle aynı ağaç (`ProjectTree`), terminal listesiyle aynı
-/// durumlar. Yalnız okuma araçları; yazma araçları onay akışıyla sonraki fazda.
+/// durumlar. Yazma araçları (Faz 3, `OrchestratorToolbox+Actions`) kullanıcı
+/// onayı olmadan hiçbir şeye dokunmaz.
 @MainActor
 public final class OrchestratorToolbox: OrchestratorToolHandling {
-    private let terminals: TerminalListStore
-    private let workspaces: ProjectWorkspaceStore
-    private let repos: RepoStore
-    private let transcripts: any TerminalTranscriptReading
+    let terminals: TerminalListStore
+    let workspaces: ProjectWorkspaceStore
+    let repos: RepoStore
+    let transcripts: any TerminalTranscriptReading
     /// Terminal ekranının düz metni (scrollback + görünür satırlar).
-    private let screenText: @MainActor (TerminalID) -> String
-    private let now: @MainActor () -> Date
+    let screenText: @MainActor (TerminalID) -> String
+    /// Faz 3: yazma eylemlerinin onay kapısı, meşgul ajan için kuyruk ve
+    /// Claude'un ilk-açılış güven menüsünü atlatma.
+    let approvals: OrchestratorApprovals
+    let promptQueue: PromptQueueStore?
+    let trust: (any ClaudeWorkspaceTrusting)?
+    let now: @MainActor () -> Date
 
     public init(
         terminals: TerminalListStore,
@@ -21,6 +27,9 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         repos: RepoStore,
         transcripts: any TerminalTranscriptReading,
         screenText: @escaping @MainActor (TerminalID) -> String,
+        approvals: OrchestratorApprovals = OrchestratorApprovals(),
+        promptQueue: PromptQueueStore? = nil,
+        trust: (any ClaudeWorkspaceTrusting)? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.terminals = terminals
@@ -28,6 +37,9 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         self.repos = repos
         self.transcripts = transcripts
         self.screenText = screenText
+        self.approvals = approvals
+        self.promptQueue = promptQueue
+        self.trust = trust
         self.now = now
     }
 
@@ -40,6 +52,10 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
             return listTerminals(query: args["query"] as? String)
         case OrchestratorTools.readTerminal:
             return await readTerminal(args)
+        case OrchestratorTools.sendToTerminal:
+            return await sendToTerminal(args)
+        case OrchestratorTools.startTerminal:
+            return await startTerminal(args)
         default:
             return .failure("Unknown tool: \(name)")
         }
@@ -148,13 +164,13 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
 
     // MARK: - Ortak
 
-    private struct Location {
+    struct Location {
         let project: String
         let checkout: String?
         let branch: String?
     }
 
-    private func projectTree() -> [ProjectTreeNode] {
+    func projectTree() -> [ProjectTreeNode] {
         ProjectTree.build(
             favoritePaths: workspaces.sidebarProjectPaths,
             repos: repos.repos,
@@ -163,7 +179,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         )
     }
 
-    private func checkoutLocations() -> [String: Location] {
+    func checkoutLocations() -> [String: Location] {
         var locations: [String: Location] = [:]
         for project in projectTree() {
             for checkout in project.checkouts {
@@ -174,11 +190,11 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     }
 
     /// Projects panelinde olmayan bir yolda koşan terminal (ör. favoriden çıkarılmış proje).
-    private func fallbackLocation(for path: String) -> Location {
+    func fallbackLocation(for path: String) -> Location {
         Location(project: repos.repo(at: path)?.name ?? (path as NSString).lastPathComponent, checkout: nil, branch: nil)
     }
 
-    private func status(of meta: TerminalMeta) -> String {
+    func status(of meta: TerminalMeta) -> String {
         OrchestratorToolFormat.status(meta.status, isAwaitingDecision: terminals.awaitingDecisionIDs.contains(meta.id))
     }
 

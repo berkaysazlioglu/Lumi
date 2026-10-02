@@ -108,6 +108,15 @@ public final class TerminalListStore: StoreLifecycle {
         }
     }
 
+    /// Metni prompt'a yapıştırıp GÖNDERİR (bracketed paste + CR) — prompt
+    /// kuyruğunun enjeksiyonuyla aynı biçim (karar 103 `send_to_terminal`).
+    @discardableResult
+    public func submit(_ text: String, to id: TerminalID) -> Bool {
+        toasts.reporting {
+            try self.service.write(id: id, text: PromptInjection.encode(text))
+        }
+    }
+
     public func isMinimized(_ id: TerminalID) -> Bool {
         minimizedIDs.contains(id)
     }
@@ -128,17 +137,22 @@ public final class TerminalListStore: StoreLifecycle {
 
     // MARK: - Intent'ler
 
+    /// Açılan terminalin meta'sı döner (orchestrator kimliği bildirir —
+    /// karar 103); hata toast olur ve `nil` döner.
+    @discardableResult
     public func spawn(
         in repoPath: String,
         command: String? = nil,
         task: String? = nil,
         environment: [String: String] = [:]
-    ) {
+    ) -> TerminalMeta? {
+        var spawned: TerminalMeta?
         toasts.reporting {
-            _ = try self.service.spawn(
+            spawned = try self.service.spawn(
                 repoPath: repoPath, task: task, command: command, environment: environment
             )
         }
+        return spawned
     }
 
     public func close(_ id: TerminalID) {

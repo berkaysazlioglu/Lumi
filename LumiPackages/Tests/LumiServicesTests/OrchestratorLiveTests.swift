@@ -47,4 +47,53 @@ final class OrchestratorLiveTests: XCTestCase {
         }
         XCTAssertTrue(replies.joined().contains("zebra-refactor"), "cevap araç çıktısını kullanmadı: \(replies)")
     }
+
+    /// Faz 3: onay beklerken araç çağrısı uzun süre açık kalır — Claude'un
+    /// MCP zaman aşımına (`MCP_TOOL_TIMEOUT`) düşmemeli. Varsayılan bekleme
+    /// 70 sn (`LUMI_LIVE_APPROVAL_DELAY` ile değişir).
+    private struct SlowApproval: OrchestratorToolHandling {
+        let delay: Duration
+        func call(name: String, arguments: Data) async -> OrchestratorToolResult {
+            switch name {
+            case OrchestratorTools.listTerminals:
+                return OrchestratorToolResult(text: #"{"terminals":[{"id":"t-1","title":"zebra-refactor","provider":"claude","status":"waiting"}]}"#)
+            case OrchestratorTools.sendToTerminal:
+                try? await Task.sleep(for: delay)
+                return OrchestratorToolResult(text: "Sent to \"zebra-refactor\" (t-1).")
+            default:
+                return .failure("unexpected tool \(name)")
+            }
+        }
+    }
+
+    func testLongApprovalWaitDoesNotTimeOutTheToolCall() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["LUMI_LIVE_ORCHESTRATOR"] == "1" else {
+            throw XCTSkip("canlı test: LUMI_LIVE_ORCHESTRATOR=1 ile koşar")
+        }
+        let delay = Duration.seconds(Int(env["LUMI_LIVE_APPROVAL_DELAY"] ?? "") ?? 70)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("orchestrator-live-\(UUID().uuidString)")
+        let server = LumiMCPServer()
+        let control = try await server.start(handler: SlowApproval(delay: delay))
+        let service = OrchestratorService(workingDirectory: directory, environment: AgentChildEnvironment.cleaned())
+        let run = try await service.start(OrchestratorLaunch(
+            sessionID: UUID().uuidString.lowercased(), resume: false, control: control
+        ))
+
+        await service.send("Send the message 'run the tests' to the zebra-refactor terminal, then tell me the tool's exact result.")
+
+        var final = ChatJournalState()
+        for await state in run.updates {
+            final = state
+            if state.completedTurns >= 1 { break }
+        }
+        await service.stop()
+        await server.stop()
+
+        let results = final.messages.flatMap(\.blocks).compactMap { block -> (String, Bool)? in
+            if case let .toolResult(output, isError) = block { return (output, isError) }
+            return nil
+        }
+        XCTAssertTrue(results.contains { $0.0.contains("Sent to") && !$0.1 }, "araç sonucu dönmedi: \(results)")
+    }
 }

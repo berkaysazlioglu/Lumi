@@ -1,5 +1,6 @@
 import Foundation
 import LumiKit
+import LumiServices
 import LumiState
 import LumiUI
 import SwiftUI
@@ -18,25 +19,33 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     /// Araçlar Projects ağacını okur — repo/workspace store'ları repo
     /// assembly'sinde doğar (`.repo` fazı `.ui`'dan önce kurulur).
     private let repo: RepoFeatureAssembly
+    /// `send_to_terminal` meşgul ajana prompt kuyruğundan gider (`.system` fazı).
+    private let terminal: TerminalFeatureAssembly
 
-    init(repo: RepoFeatureAssembly) {
+    init(repo: RepoFeatureAssembly, terminal: TerminalFeatureAssembly) {
         self.repo = repo
+        self.terminal = terminal
     }
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
-        let terminal = services.terminal
+        let terminalService = services.terminal
+        let approvals = OrchestratorApprovals()
         let toolbox = OrchestratorToolbox(
             terminals: shared.terminals,
             workspaces: repo.workspaceStore,
             repos: repo.repoStore,
             transcripts: services.terminalTranscripts,
-            screenText: { id in String(decoding: terminal.serializeScrollback(id).data, as: UTF8.self) }
+            screenText: { id in String(decoding: terminalService.serializeScrollback(id).data, as: UTF8.self) },
+            approvals: approvals,
+            promptQueue: terminal.promptQueue,
+            trust: ClaudeWorkspaceTrust()
         )
         orchestrator = OrchestratorStore(
             service: services.orchestrator,
             config: services.config,
             control: services.orchestratorControl,
-            tools: toolbox
+            tools: toolbox,
+            approvals: approvals
         )
     }
 

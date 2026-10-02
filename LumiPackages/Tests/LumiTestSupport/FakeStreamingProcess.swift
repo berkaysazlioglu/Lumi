@@ -8,6 +8,9 @@ public final class FakeStreamingProcess: StreamingProcessSpawning, @unchecked Se
     private var _handles: [FakeStreamingHandle] = []
     public var handles: [FakeStreamingHandle] { lock.lock(); defer { lock.unlock() }; return _handles }
     private var _spawns: [(executable: String, arguments: [String], currentDirectory: String?)] = []
+    private var _environments: [[String: String]] = []
+    /// Her spawn'ın ortamı (sıra `spawns` ile aynı).
+    public var environments: [[String: String]] { lock.lock(); defer { lock.unlock() }; return _environments }
     /// Her spawn'ın binary'si, argümanları ve CWD'si (bayrak testleri).
     public var spawns: [(executable: String, arguments: [String], currentDirectory: String?)] {
         lock.lock(); defer { lock.unlock() }; return _spawns
@@ -21,6 +24,7 @@ public final class FakeStreamingProcess: StreamingProcessSpawning, @unchecked Se
         lock.lock()
         _handles.append(h)
         _spawns.append((executable, arguments, currentDirectory))
+        _environments.append(environment)
         lock.unlock()
         return h
     }

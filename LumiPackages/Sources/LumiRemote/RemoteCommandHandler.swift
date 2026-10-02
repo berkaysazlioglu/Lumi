@@ -1,11 +1,6 @@
 import Foundation
 import LumiKit
 
-/// POSIX tek-tırnak quoting: ' → '\'' .
-func shellQuoted(_ s: String) -> String {
-    "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
-}
-
 /// Telefona dönen `command_result` gövdesi.
 ///
 /// Sonuç doğrudan `[String: Any]` olarak dönmez: sözlük `Sendable` değildir ve

@@ -208,6 +208,25 @@ final class OrchestratorStoreTests: XCTestCase {
         XCTAssertTrue(service.launches.isEmpty)
     }
 
+    /// Faz 3: süreç durunca bekleyen onay kartları asılı kalmaz.
+    func testStopRejectsPendingApprovals() async {
+        let service = FakeOrchestratorService()
+        let approvals = OrchestratorApprovals()
+        let store = OrchestratorStore(
+            service: service, config: FakeConfigService(), approvals: approvals, makeSessionID: { "s-1" }
+        )
+        await store.activate()
+        let request = OrchestratorApprovalRequest(kind: .sendMessage, title: "t", target: "x", body: "y")
+        let waiting = Task { await approvals.request(request) }
+        while approvals.pending.isEmpty { await Task.yield() }
+
+        await store.stopResponse()
+
+        let decision = await waiting.value
+        XCTAssertEqual(decision, .rejected)
+        XCTAssertTrue(approvals.pending.isEmpty)
+    }
+
     func testShutdownStopsProcess() async {
         let service = FakeOrchestratorService()
         let store = makeStore(service: service)

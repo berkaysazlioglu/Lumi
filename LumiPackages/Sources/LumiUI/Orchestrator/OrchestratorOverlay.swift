@@ -23,6 +23,7 @@ public struct OrchestratorOverlay: View {
                         OrchestratorHeader(store: shell.orchestrator, onClose: dismiss)
                         divider
                         OrchestratorTranscriptView(store: shell.orchestrator)
+                        OrchestratorApprovalList(approvals: shell.orchestrator.approvals)
                         divider
                         OrchestratorComposer(store: shell.orchestrator, draft: $draft)
                     }

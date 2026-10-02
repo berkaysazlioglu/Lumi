@@ -26,6 +26,8 @@ public enum OrchestratorTools {
     public static let listProjects = "list_projects"
     public static let listTerminals = "list_terminals"
     public static let readTerminal = "read_terminal"
+    public static let sendToTerminal = "send_to_terminal"
+    public static let startTerminal = "start_terminal"
 
     /// `read_terminal` sınırları.
     public static let defaultReadLimit = 6
@@ -61,6 +63,25 @@ public enum OrchestratorTools {
             did, or to check whether it is asking the user something.
             """,
             inputSchema: #"{"type":"object","properties":{"terminal_id":{"type":"string","description":"Terminal id from list_terminals (a unique prefix of at least 6 characters is accepted)."},"limit":{"type":"integer","minimum":1,"maximum":30,"description":"How many recent messages to return (default 6)."}},"required":["terminal_id"],"additionalProperties":false}"#
+        ),
+        OrchestratorToolSpec(
+            name: sendToTerminal,
+            description: """
+            Send a message to an agent terminal's prompt (Claude Code or Codex) as if the user typed it \
+            and pressed Enter. The user must approve it in Lumi first; you get the outcome back. If the \
+            agent is busy, the message is queued and delivered when it finishes its current turn. Send \
+            the user's words as they asked — do not rewrite their intent.
+            """,
+            inputSchema: #"{"type":"object","properties":{"terminal_id":{"type":"string","description":"Terminal id from list_terminals (unique prefix of 6+ characters accepted)."},"message":{"type":"string","description":"The text to send."}},"required":["terminal_id","message"],"additionalProperties":false}"#
+        ),
+        OrchestratorToolSpec(
+            name: startTerminal,
+            description: """
+            Open a new agent terminal in a checkout and optionally give it a first prompt. The user must \
+            approve it in Lumi first. `path` must be a checkout path from list_projects (a project root or \
+            one of its workspaces). Returns the new terminal's id.
+            """,
+            inputSchema: #"{"type":"object","properties":{"path":{"type":"string","description":"Checkout path from list_projects."},"provider":{"type":"string","enum":["claude","codex"],"description":"Agent to start (default claude)."},"prompt":{"type":"string","description":"Optional first message for the new agent."}},"required":["path"],"additionalProperties":false}"#
         ),
     ]
 }

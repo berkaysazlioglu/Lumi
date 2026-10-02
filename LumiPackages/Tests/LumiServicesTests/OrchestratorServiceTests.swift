@@ -58,6 +58,8 @@ import Testing
         #expect(value(after: "--model", in: args) == "sonnet")
         #expect(args.contains("--strict-mcp-config"))
         #expect(args.contains("--replay-user-messages"))
+        // Faz 3: onay bekleyen araç çağrısı Claude tarafında kopmasın.
+        #expect(spawner.environments.first?["MCP_TOOL_TIMEOUT"] == String(OrchestratorService.toolTimeoutMilliseconds))
         await service.stop()
     }
 

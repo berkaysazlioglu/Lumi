@@ -19,6 +19,10 @@ import LumiKit
 public actor OrchestratorService: OrchestratorServicing {
     public static let binaryName = "claude"
     public static let model = "sonnet"
+    /// MCP araç çağrısı zaman aşımı (`MCP_TOOL_TIMEOUT`, ms). Yazma araçları
+    /// kullanıcı onayını bekler; onay kapısının 10 dk'lık sınırından uzun
+    /// olmalı ki karar Lumi'de verilsin, Claude'da kopmasın.
+    public static let toolTimeoutMilliseconds = 15 * 60 * 1000
 
     private let workingDirectory: URL
     private let environment: [String: String]
@@ -53,7 +57,9 @@ public actor OrchestratorService: OrchestratorServicing {
         let session = StreamJsonAgentSession(
             sessionID: launch.sessionID,
             repoPath: workingDirectory.path,
-            environment: environment,
+            environment: environment.merging(
+                ["MCP_TOOL_TIMEOUT": String(Self.toolTimeoutMilliseconds)], uniquingKeysWith: { _, new in new }
+            ),
             // Konuşmanın transkripti yoksa (silinmiş / hiç mesaj gitmemiş)
             // `--resume` hata verir; yeni konuşma aynı kimlikle açılır.
             resume: launch.resume && !history.isEmpty,

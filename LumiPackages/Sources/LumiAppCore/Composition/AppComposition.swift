@@ -58,7 +58,7 @@ struct AppComposition {
         })
         let terminalLinks = TerminalLinkActionsAssembly()
         let appUpdate = AppUpdateFeatureAssembly()
-        let orchestrator = OrchestratorFeatureAssembly(repo: repo)
+        let orchestrator = OrchestratorFeatureAssembly(repo: repo, terminal: terminal)
         let container = AppContainer(
             services: registry,
             shared: shared,
