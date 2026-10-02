@@ -18,6 +18,9 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var orchestrator: OrchestratorStore!
     /// Faz 4: bitiş/soru özetleri Activity paneline.
     private var digests: TerminalDigestCoordinator!
+    /// Raporu gelen, izlenen terminaller — açılışta diskten geri bağlanır.
+    private var watchList: OrchestratorWatchList!
+    private var terminals: TerminalListStore!
     /// Araçlar Projects ağacını okur — repo/workspace store'ları repo
     /// assembly'sinde doğar (`.repo` fazı `.ui`'dan önce kurulur).
     private let repo: RepoFeatureAssembly
@@ -32,6 +35,9 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     func build(services: any ServiceRegistry, shared: SharedStores) {
         let terminalService = services.terminal
         let approvals = OrchestratorApprovals()
+        let watchList = OrchestratorWatchList(config: services.config)
+        self.watchList = watchList
+        terminals = shared.terminals
         let toolbox = OrchestratorToolbox(
             terminals: shared.terminals,
             workspaces: repo.workspaceStore,
@@ -41,7 +47,9 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             approvals: approvals,
             promptQueue: terminal.promptQueue,
             trust: ClaudeWorkspaceTrust(),
-            projectAsker: services.projectAsker
+            projectAsker: services.projectAsker,
+            watchList: watchList,
+            summarizer: services.terminalDigests
         )
         let activity = OrchestratorActivityFeed()
         orchestrator = OrchestratorStore(
@@ -50,7 +58,8 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             control: services.orchestratorControl,
             tools: toolbox,
             approvals: approvals,
-            activity: activity
+            activity: activity,
+            watchList: watchList
         )
         let config = services.config
         digests = TerminalDigestCoordinator(
@@ -59,12 +68,10 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             toolbox: toolbox,
             summarizer: services.terminalDigests,
             feed: activity,
-            // Ayar açık VE orchestrator en az bir kez kullanılmış olmalı —
-            // hiç açmayan kullanıcı için haiku çağrısı yapılmaz.
-            isEnabled: {
-                guard await config.config().orchestratorDigestsEnabled else { return false }
-                return await config.uiState().orchestratorSessionID != nil
-            }
+            watchList: watchList,
+            // Yalnız izlenen terminaller raporlanır; izleme orchestrator'dan
+            // doğduğu için hiç kullanmayan kullanıcıda haiku çağrısı yapılmaz.
+            isEnabled: { await config.config().orchestratorDigestsEnabled }
         )
     }
 
@@ -84,10 +91,12 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
 
     func start() async {
         digests.start()
+        await watchList.load(matching: terminals.terminals)
     }
 
     func shutdown() async {
         digests.stop()
         await orchestrator.shutdown()
+        await watchList.flush()
     }
 }

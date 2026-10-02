@@ -240,7 +240,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         uiFontFamily: .jetBrainsMono,
         lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
         projectToolsTab: "agentHistory",
-        orchestratorSessionID: "orch-1"
+        orchestratorSessionID: "orch-1",
+        orchestratorWatchedSessions: ["s-1"]
     )
 }
 

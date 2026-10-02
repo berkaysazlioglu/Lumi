@@ -38,6 +38,22 @@ final class ClaudeDigestServiceTests: XCTestCase {
         XCTAssertTrue(stdin.hasSuffix("uzun mesaj"))
     }
 
+    func testSessionSummaryUsesItsOwnInstructionAndSendsTheTranscript() async throws {
+        let runner = FakeProcessRunner()
+        await runner.setDefaultResult(.success(Self.envelope(#"{"summary":"Login akışını yazıyor.","needsUser":false}"#)))
+        let service = makeService(runner: runner)
+
+        let digest = try await service.summarizeSession(transcript: "[user] login yaz", terminalTitle: "api")
+
+        XCTAssertEqual(digest.summary, "Login akışını yazıyor.")
+        let invocation = await runner.invocations.first
+        XCTAssertEqual(invocation?.arguments, ClaudeDigestService.sessionArguments)
+        XCTAssertNotEqual(ClaudeDigestService.sessionArguments, ClaudeDigestService.arguments)
+        XCTAssertEqual(invocation?.arguments.contains("--strict-mcp-config"), true)
+        let stdin = String(decoding: invocation?.standardInput ?? Data(), as: UTF8.self)
+        XCTAssertTrue(stdin.hasSuffix("[user] login yaz"))
+    }
+
     func testUnreadableReplyAndFailuresThrow() async {
         let runner = FakeProcessRunner()
         await runner.setDefaultResult(.success(Self.envelope("Sorry, I can't.")))

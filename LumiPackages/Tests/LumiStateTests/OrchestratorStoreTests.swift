@@ -41,6 +41,24 @@ final class OrchestratorStoreTests: XCTestCase {
         XCTAssertEqual(saved, "s-1")
     }
 
+    func testNewConversationForgetsWatchedTerminals() async {
+        let config = FakeConfigService()
+        let watchList = OrchestratorWatchList(config: config)
+        let store = OrchestratorStore(
+            service: FakeOrchestratorService(), config: config, watchList: watchList, makeSessionID: { "s-new" }
+        )
+        let meta = TerminalMeta(id: TerminalID(), name: "api", repoPath: "/p", createdAt: Date(),
+                                claudeSessionID: "c-1", provider: .claude)
+        watchList.watch(meta)
+
+        await store.newConversation()
+        await watchList.flush()
+
+        XCTAssertTrue(watchList.terminalIDs.isEmpty)
+        let saved = await config.uiState().orchestratorWatchedSessions
+        XCTAssertEqual(saved, [], "boşalan liste diske de iner")
+    }
+
     func testStoredConversationIsResumedWithHistory() async {
         let service = FakeOrchestratorService()
         service.stubHistory([userText("u0", "eski"), assistantText("a0", "cevap")])

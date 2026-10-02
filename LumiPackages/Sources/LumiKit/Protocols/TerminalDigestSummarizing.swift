@@ -13,7 +13,11 @@ public struct TerminalDigest: Sendable, Equatable {
     }
 }
 
-/// Uzun ajan mesajlarını özetleyen yüz — `claude -p --model haiku`.
+/// Ajan terminallerini özetleyen yüz — `claude -p --model haiku`.
 public protocol TerminalDigestSummarizing: Sendable {
+    /// Bir turn'ün son (uzun) mesajı → 1–3 satır.
     func summarize(agentMessage: String, terminalTitle: String) async throws -> TerminalDigest
+    /// Orchestrator bir terminali SONRADAN izlemeye aldığında: oturumun o ana
+    /// kadarki konuşması → hedef, yapılanlar, son durum.
+    func summarizeSession(transcript: String, terminalTitle: String) async throws -> TerminalDigest
 }

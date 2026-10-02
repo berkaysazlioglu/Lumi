@@ -2,12 +2,16 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Popup'ın sağ sütunu (karar 103 Faz 4): ajan terminallerinden gelen
-/// "bitti / soru soruyor / karar bekliyor / hata" kartları, en yeni üstte.
-/// Kartlar model turu açmaz; kullanıcının bir sonraki mesajına not olarak
-/// iliştirilir.
+/// Popup'ın sağ sütunu (karar 103 Faz 4): üstte orchestrator'ın İZLEDİĞİ
+/// Claude terminalleri, altında onlardan gelen "bitti / soru soruyor / karar
+/// bekliyor / hata" kartları, en yeni üstte. Kartlar model turu açmaz;
+/// kullanıcının bir sonraki mesajına not olarak iliştirilir.
 struct OrchestratorActivityPanel: View {
     let feed: OrchestratorActivityFeed
+    /// İzlenen canlı terminaller.
+    let watched: [TerminalMeta]
+    let onFocus: (TerminalMeta) -> Void
+    let onUnwatch: (TerminalMeta) -> Void
     /// Terminal hâlâ açık mı (Open düğmesi için).
     let isOpen: (TerminalID) -> Bool
     let onOpen: (OrchestratorEvent) -> Void
@@ -15,16 +19,10 @@ struct OrchestratorActivityPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("ACTIVITY")
-                    .font(Theme.Typography.ui(.caption, weight: .semibold))
-                    .foregroundStyle(Theme.textMuted)
-                Spacer()
-            }
-            .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.vertical, Theme.Spacing.md)
+            OrchestratorWatchingSection(watched: watched, onFocus: onFocus, onUnwatch: onUnwatch)
+            sectionTitle("ACTIVITY")
             if feed.events.isEmpty {
-                Text("Finished turns, questions and errors from your agents appear here.")
+                Text("Finished turns, questions and errors from watched terminals appear here.")
                     .font(Theme.Typography.ui(.body))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.horizontal, Theme.Spacing.lg)
@@ -49,6 +47,65 @@ struct OrchestratorActivityPanel: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.bgDeep.opacity(0.4))
+    }
+}
+
+private func sectionTitle(_ title: String) -> some View {
+    HStack {
+        Text(title)
+            .font(Theme.Typography.ui(.caption, weight: .semibold))
+            .foregroundStyle(Theme.textMuted)
+        Spacer()
+    }
+    .padding(.horizontal, Theme.Spacing.lg)
+    .padding(.vertical, Theme.Spacing.md)
+}
+
+/// İzlenen terminaller: ada tıklamak terminali öne getirir, ✕ izlemeyi bırakır.
+/// Liste boşken orchestrator'a nasıl ekleneceği söylenir.
+struct OrchestratorWatchingSection: View {
+    let watched: [TerminalMeta]
+    let onFocus: (TerminalMeta) -> Void
+    let onUnwatch: (TerminalMeta) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionTitle("WATCHING")
+            if watched.isEmpty {
+                Text("No terminal yet. Terminals the orchestrator starts or messages are watched; ask it to watch any other one.")
+                    .font(Theme.Typography.ui(.label))
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.horizontal, Theme.Spacing.lg)
+                    .padding(.bottom, Theme.Spacing.md)
+            } else {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    ForEach(watched) { meta in
+                        row(meta)
+                    }
+                }
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.bottom, Theme.Spacing.md)
+            }
+            Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
+        }
+    }
+
+    private func row(_ meta: TerminalMeta) -> some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            HoverReader { isHovering in
+                Button { onFocus(meta) } label: {
+                    Label(meta.displayTitle, systemImage: "eye")
+                        .font(Theme.Typography.mono(.label, weight: .medium))
+                        .foregroundStyle(isHovering ? Theme.accentPrimary : Theme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .buttonStyle(.plain)
+                .help("Show terminal")
+            }
+            Spacer(minLength: Theme.Spacing.xs)
+            IconButton(systemName: "xmark", label: "Stop watching", size: .caption) { onUnwatch(meta) }
+        }
     }
 }
 
@@ -145,7 +202,11 @@ struct OrchestratorActivityCard: View {
         terminalID: TerminalID(), terminalTitle: "ios-fix", location: "ios · ios-wt · fix/crash",
         kind: .finished, summary: "Crash'i giderdi, build yeşil.", needsUser: false, at: Date()
     ))
-    return OrchestratorActivityPanel(feed: feed, isOpen: { _ in true }, onOpen: { _ in }, onReply: { _ in })
+    let watched = [TerminalMeta(id: TerminalID(), name: "api-refactor", repoPath: "/p/api", createdAt: Date(), provider: .claude)]
+    return OrchestratorActivityPanel(
+        feed: feed, watched: watched, onFocus: { _ in }, onUnwatch: { _ in },
+        isOpen: { _ in true }, onOpen: { _ in }, onReply: { _ in }
+    )
         .frame(width: 320, height: 520)
 }
 #endif

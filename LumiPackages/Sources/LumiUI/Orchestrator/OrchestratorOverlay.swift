@@ -33,6 +33,9 @@ public struct OrchestratorOverlay: View {
                             Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
                             OrchestratorActivityPanel(
                                 feed: shell.orchestrator.activity,
+                                watched: watchedTerminals,
+                                onFocus: focus,
+                                onUnwatch: { shell.orchestrator.watchList.unwatch($0) },
                                 isOpen: { shell.terminals.meta(for: $0) != nil },
                                 onOpen: open,
                                 onReply: reply
@@ -57,9 +60,18 @@ public struct OrchestratorOverlay: View {
 
     private static var activityWidth: CGFloat { Theme.scaled(320) }
 
+    /// İzlenen canlı terminaller, terminal listesinin sırasıyla.
+    private var watchedTerminals: [TerminalMeta] {
+        shell.terminals.terminals.filter { shell.orchestrator.watchList.isWatched($0) }
+    }
+
     /// Terminali grid'de öne getirir; popup kapanır ki terminal görülsün.
     private func open(_ event: OrchestratorEvent) {
         guard let meta = shell.terminals.meta(for: event.terminalID) else { return }
+        focus(meta)
+    }
+
+    private func focus(_ meta: TerminalMeta) {
         dismiss()
         shell.focusAgent(meta)
     }

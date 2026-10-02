@@ -101,7 +101,23 @@ final class OrchestratorToolboxTests: XCTestCase {
 
         let none = await call(OrchestratorTools.listTerminals, ["query": "android"])
         XCTAssertFalse(none.isError)
-        XCTAssertTrue(none.text.contains("No terminal matches"))
+        XCTAssertTrue(none.text.contains("No Claude terminal matches"))
+    }
+
+    func testOnlyClaudeTerminalsAreListedAndReachable() async throws {
+        let claude = terminal("login", repo: "/p/api-wt")
+        let codex = terminal("codex", repo: "/p/api-wt", provider: .codex)
+        terminal("zsh", repo: "/p/api-wt", provider: nil)
+
+        let rows = try jsonList(await call(OrchestratorTools.listTerminals), key: "terminals")
+        XCTAssertEqual(rows.map { $0["id"] as? String }, [claude.id.description])
+        let projects = try jsonList(await call(OrchestratorTools.listProjects), key: "projects")
+        let checkouts = try XCTUnwrap(projects[0]["checkouts"] as? [[String: Any]])
+        XCTAssertEqual((checkouts[1]["terminals"] as? [[String: Any]])?.count, 1)
+
+        let read = await call(OrchestratorTools.readTerminal, ["terminal_id": codex.id.description])
+        XCTAssertTrue(read.isError)
+        XCTAssertTrue(read.text.contains("not a Claude Code terminal"), read.text)
     }
 
     // MARK: - list_projects
@@ -142,8 +158,8 @@ final class OrchestratorToolboxTests: XCTestCase {
         XCTAssertFalse(result.text.contains("eski"), "limit metinli mesaj sayar")
     }
 
-    func testReadNonClaudeTerminalFallsBackToScreenTail() async {
-        let meta = terminal("build", repo: ios.path, provider: nil)
+    func testReadTerminalWithoutTranscriptFallsBackToScreenTail() async {
+        let meta = terminal("build", repo: ios.path)
         screens[meta.id] = "line 1\nline 2   \n\n\n"
 
         let result = await call(OrchestratorTools.readTerminal, ["terminal_id": meta.id.description])
@@ -153,7 +169,7 @@ final class OrchestratorToolboxTests: XCTestCase {
     }
 
     func testTerminalIDAcceptsUniquePrefixAndRejectsUnknown() async {
-        let meta = terminal("build", repo: ios.path, provider: nil)
+        let meta = terminal("build", repo: ios.path)
         screens[meta.id] = "ok"
         let prefix = String(meta.id.description.prefix(8)).lowercased()
 

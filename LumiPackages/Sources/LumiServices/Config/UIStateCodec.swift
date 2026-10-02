@@ -70,6 +70,10 @@ enum UIStateCodec {
         if let raw = dict["orchestratorSessionID"] as? String, !raw.isEmpty {
             state.orchestratorSessionID = raw
         }
+        // Karar 103 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
+        if let raw = dict["orchestratorWatchedSessions"] as? [Any] {
+            state.orchestratorWatchedSessions = raw.compactMap { $0 as? String }.filter { !$0.isEmpty }
+        }
         return state
     }
 
@@ -126,6 +130,10 @@ enum UIStateCodec {
         // Karar 103 (additive): yalnız DOLU iken yazılır (karar 9).
         if let sessionID = state.orchestratorSessionID {
             overlay["orchestratorSessionID"] = sessionID
+        }
+        // nil → yazılmaz; boş liste YAZILIR (merge bayat listeyi diskte bırakmasın).
+        if let watched = state.orchestratorWatchedSessions {
+            overlay["orchestratorWatchedSessions"] = watched
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

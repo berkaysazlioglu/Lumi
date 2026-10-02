@@ -6,6 +6,9 @@ import LumiKit
 /// Projects paneliyle aynı ağaç (`ProjectTree`), terminal listesiyle aynı
 /// durumlar. Yazma araçları (Faz 3, `OrchestratorToolbox+Actions`) kullanıcı
 /// onayı olmadan hiçbir şeye dokunmaz.
+///
+/// Orchestrator yalnız Claude Code terminalleriyle çalışır: listelerde Codex
+/// ve düz shell terminalleri görünmez, kimlikleri verilirse açıkça reddedilir.
 @MainActor
 public final class OrchestratorToolbox: OrchestratorToolHandling {
     let terminals: TerminalListStore
@@ -21,6 +24,9 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     let trust: (any ClaudeWorkspaceTrusting)?
     /// Faz 5: `ask_project`'in salt-okunur arka plan ajanı.
     let projectAsker: (any ProjectQuestionAnswering)?
+    /// İzlenen terminaller ve sonradan izlemeye alınanın oturum özeti.
+    public let watchList: OrchestratorWatchList
+    let summarizer: (any TerminalDigestSummarizing)?
     let now: @MainActor () -> Date
 
     public init(
@@ -33,6 +39,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         promptQueue: PromptQueueStore? = nil,
         trust: (any ClaudeWorkspaceTrusting)? = nil,
         projectAsker: (any ProjectQuestionAnswering)? = nil,
+        watchList: OrchestratorWatchList = OrchestratorWatchList(),
+        summarizer: (any TerminalDigestSummarizing)? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.terminals = terminals
@@ -44,6 +52,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         self.promptQueue = promptQueue
         self.trust = trust
         self.projectAsker = projectAsker
+        self.watchList = watchList
+        self.summarizer = summarizer
         self.now = now
     }
 
@@ -62,6 +72,10 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
             return await startTerminal(args)
         case OrchestratorTools.askProject:
             return await askProject(args)
+        case OrchestratorTools.watchTerminal:
+            return await watchTerminal(args)
+        case OrchestratorTools.unwatchTerminal:
+            return unwatchTerminal(args)
         default:
             return .failure("Unknown tool: \(name)")
         }
@@ -83,7 +97,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
                         "title": checkout.title,
                         "kind": checkout.kind.rawValue,
                         "path": checkout.path,
-                        "terminals": checkout.terminalIDs.compactMap(terminals.meta(for:)).map(terminalSummary),
+                        "terminals": checkout.terminalIDs.compactMap(terminals.meta(for:))
+                            .filter(Self.isClaude).map(terminalSummary),
                     ]
                     if let branch = checkout.branch { dict["branch"] = branch }
                     return dict
@@ -99,6 +114,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         let locations = checkoutLocations()
         let filter = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let rows: [[String: Any]] = terminals.terminals
+            .filter(Self.isClaude)
             .sorted { $0.lastActivityAt > $1.lastActivityAt }
             .compactMap { meta in
                 let location = locations[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
@@ -107,7 +123,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
                 return row
             }
         guard !rows.isEmpty else {
-            let text = filter.isEmpty ? "No terminals are open in Lumi." : "No terminal matches \"\(filter)\"."
+            let text = filter.isEmpty ? "No Claude terminals are open in Lumi." : "No Claude terminal matches \"\(filter)\"."
             return OrchestratorToolResult(text: text)
         }
         return OrchestratorToolResult(text: OrchestratorToolFormat.json(["terminals": rows]))
@@ -127,7 +143,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         let limit = Self.clampedLimit(args["limit"])
         let header = OrchestratorToolFormat.header(for: meta, status: status(of: meta))
 
-        if meta.provider == .claude, let sessionID = meta.claudeSessionID {
+        if let sessionID = meta.claudeSessionID {
             let messages = await transcripts.recentClaudeMessages(sessionID: sessionID, cwd: meta.repoPath)
             if !messages.isEmpty {
                 return OrchestratorToolResult(text: header + "\n\n" + OrchestratorToolFormat.transcript(messages, limit: limit))
@@ -143,8 +159,18 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         case failure(String)
     }
 
-    /// Tam UUID ya da en az 6 karakterlik TEKİL önek (büyük/küçük harf duyarsız).
+    /// Tam UUID ya da en az 6 karakterlik TEKİL önek (büyük/küçük harf
+    /// duyarsız). Claude olmayan terminal bulunsa da reddedilir.
     func resolveTerminal(_ raw: String) -> Resolution {
+        switch resolveAnyTerminal(raw) {
+        case .found(let meta) where !Self.isClaude(meta):
+            return .failure("\"\(meta.displayTitle)\" is not a Claude Code terminal; the orchestrator only works with Claude terminals.")
+        case let other:
+            return other
+        }
+    }
+
+    private func resolveAnyTerminal(_ raw: String) -> Resolution {
         let needle = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let all = terminals.terminals
         if let exact = all.first(where: { $0.id.description.lowercased() == needle }) {
@@ -162,6 +188,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     }
 
     static let minimumPrefix = 6
+
+    static func isClaude(_ meta: TerminalMeta) -> Bool { meta.provider == .claude }
 
     static func clampedLimit(_ raw: Any?) -> Int {
         let value = (raw as? NSNumber)?.intValue ?? OrchestratorTools.defaultReadLimit
@@ -214,8 +242,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         [
             "id": meta.id.description,
             "title": meta.displayTitle,
-            "provider": meta.provider?.rawValue ?? "shell",
             "status": status(of: meta),
+            "watched": watchList.isWatched(meta),
             "lastActivity": OrchestratorToolFormat.ago(meta.lastActivityAt, now: now()),
         ]
     }

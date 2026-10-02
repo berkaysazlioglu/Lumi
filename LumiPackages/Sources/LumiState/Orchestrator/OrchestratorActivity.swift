@@ -6,7 +6,7 @@ import Observation
 /// bekliyor ya da hatayla durdu — özetiyle.
 public struct OrchestratorEvent: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
-        /// Kullanıcının görmediği bir turn'ü kapattı (`waitingUnseen`).
+        /// İzlenen terminal bir turn'ü kapattı.
         case finished
         /// İzin/soru promptunda bekliyor (karar bekleme).
         case needsDecision

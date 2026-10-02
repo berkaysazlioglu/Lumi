@@ -78,11 +78,13 @@ final class OrchestratorToolboxActionTests: XCTestCase {
 
         XCTAssertFalse(result.isError, result.text)
         XCTAssertEqual(card?.title, "Send to “login”")
-        XCTAssertEqual(card?.target, "api · api-wt · feature/login · claude · needs-attention")
+        XCTAssertEqual(card?.target, "api · api-wt · feature/login · needs-attention")
         XCTAssertEqual(card?.body, "testleri koş")
         XCTAssertNil(card?.note)
         XCTAssertEqual(service.writtenTexts.map(\.text), [PromptInjection.encode("testleri koş")])
         XCTAssertEqual(service.writtenTexts.first?.id, meta.id)
+        XCTAssertTrue(toolbox.watchList.isWatched(meta), "mesaj gönderilen terminal izlemeye alınır")
+        XCTAssertTrue(result.text.contains("now watches"))
     }
 
     func testBusyAgentGetsTheMessageQueued() async {
@@ -116,6 +118,7 @@ final class OrchestratorToolboxActionTests: XCTestCase {
         XCTAssertTrue(result.text.contains("declined"))
         XCTAssertTrue(service.writtenTexts.isEmpty)
         XCTAssertTrue(promptQueue.prompts(for: meta.id).isEmpty)
+        XCTAssertFalse(toolbox.watchList.isWatched(meta), "reddedilen eylem izleme başlatmaz")
     }
 
     func testTerminalClosedWhileWaitingForApprovalFails() async {
@@ -132,11 +135,15 @@ final class OrchestratorToolboxActionTests: XCTestCase {
         XCTAssertTrue(service.writtenTexts.isEmpty)
     }
 
-    func testShellsAndBadArgumentsAreRefusedWithoutAsking() async {
+    func testNonClaudeTerminalsAndBadArgumentsAreRefusedWithoutAsking() async {
         let shell = agent("zsh", status: .idle, provider: nil)
         let (toShell, _) = await run(OrchestratorTools.sendToTerminal,
                                      ["terminal_id": shell.id.description, "message": "rm -rf"], answer: nil)
         XCTAssertTrue(toShell.isError)
+        let codex = agent("codex", status: .waitingSeen, provider: .codex)
+        let (toCodex, _) = await run(OrchestratorTools.sendToTerminal,
+                                     ["terminal_id": codex.id.description, "message": "selam"], answer: nil)
+        XCTAssertTrue(toCodex.text.contains("not a Claude Code terminal"), toCodex.text)
         let (empty, _) = await run(OrchestratorTools.sendToTerminal,
                                    ["terminal_id": shell.id.description, "message": "  "], answer: nil)
         XCTAssertTrue(empty.isError)
@@ -157,14 +164,13 @@ final class OrchestratorToolboxActionTests: XCTestCase {
         XCTAssertEqual(trust.trusted, ["/p/api-wt"])
         let spawned = try? XCTUnwrap(service.spawnedMetas.first)
         XCTAssertTrue(result.text.contains(spawned?.id.description ?? "-"))
+        XCTAssertEqual(toolbox.watchList.terminalIDs, spawned.map { [$0.id] }, "açılan terminal izlenir")
     }
 
-    func testCodexStartWithoutPromptUsesBareCommand() async {
-        let (result, _) = await run(OrchestratorTools.startTerminal,
-                                    ["path": "/p/api", "provider": "codex"], answer: approve)
+    func testStartWithoutPromptUsesBareClaude() async {
+        let (result, _) = await run(OrchestratorTools.startTerminal, ["path": "/p/api"], answer: approve)
         XCTAssertFalse(result.isError, result.text)
-        XCTAssertEqual(service.spawnCalls.first?.command, "codex")
-        XCTAssertTrue(trust.trusted.isEmpty, "güven işareti yalnız Claude için")
+        XCTAssertEqual(service.spawnCalls.first?.command, "claude")
     }
 
     func testRejectedStartSpawnsNothing() async {
@@ -173,11 +179,9 @@ final class OrchestratorToolboxActionTests: XCTestCase {
         XCTAssertTrue(service.spawnCalls.isEmpty)
     }
 
-    func testUnknownPathOrProviderIsRefusedWithoutAsking() async {
+    func testUnknownPathIsRefusedWithoutAsking() async {
         let (path, _) = await run(OrchestratorTools.startTerminal, ["path": "/etc"], answer: nil)
         XCTAssertTrue(path.isError)
-        let (provider, _) = await run(OrchestratorTools.startTerminal, ["path": "/p/api", "provider": "bash"], answer: nil)
-        XCTAssertTrue(provider.isError)
         XCTAssertTrue(approvals.pending.isEmpty)
         XCTAssertTrue(service.spawnCalls.isEmpty)
     }

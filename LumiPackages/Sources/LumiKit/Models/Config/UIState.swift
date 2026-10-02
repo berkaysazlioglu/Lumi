@@ -50,6 +50,12 @@ public struct UIState: Sendable, Equatable {
     /// Karar 103 (additive): orchestrator'ın sürdürülen Claude konuşması.
     /// nil = dosyada yok → ilk açılışta yeni kimlik üretilir.
     public var orchestratorSessionID: String?
+    /// Karar 103 (additive): orchestrator'ın izlediği Claude terminallerinin
+    /// oturum kimlikleri — terminal kimliği yeniden açılışta değiştiği için
+    /// oturum kimliğiyle tutulur. nil = orchestrator hiç izleme yapmadı (anahtar
+    /// yazılmaz); izleme bir kez başladıysa boş liste de yazılır ki son
+    /// terminalin bırakılması diske insin.
+    public var orchestratorWatchedSessions: [String]?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -77,7 +83,8 @@ public struct UIState: Sendable, Equatable {
         uiFontFamily: UIFontFamily? = nil,
         lastCheckouts: [String: String] = [:],
         projectToolsTab: String? = nil,
-        orchestratorSessionID: String? = nil
+        orchestratorSessionID: String? = nil,
+        orchestratorWatchedSessions: [String]? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -95,6 +102,7 @@ public struct UIState: Sendable, Equatable {
         self.lastCheckouts = lastCheckouts
         self.projectToolsTab = projectToolsTab
         self.orchestratorSessionID = orchestratorSessionID
+        self.orchestratorWatchedSessions = orchestratorWatchedSessions
     }
 }
 

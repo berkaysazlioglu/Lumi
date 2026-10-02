@@ -31,6 +31,8 @@ public final class OrchestratorStore {
     public let approvals: OrchestratorApprovals
     /// Faz 4: ajan terminallerinden gelen bitiş/soru özetleri (Activity paneli).
     public let activity: OrchestratorActivityFeed
+    /// Raporu Activity'ye düşen, izlenen terminaller (konuşmaya aittir).
+    public let watchList: OrchestratorWatchList
 
     @ObservationIgnored private let service: any OrchestratorServicing
     @ObservationIgnored private let config: any ConfigServicing
@@ -55,6 +57,7 @@ public final class OrchestratorStore {
         tools: (any OrchestratorToolHandling)? = nil,
         approvals: OrchestratorApprovals = OrchestratorApprovals(),
         activity: OrchestratorActivityFeed = OrchestratorActivityFeed(),
+        watchList: OrchestratorWatchList = OrchestratorWatchList(),
         makeSessionID: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() }
     ) {
         self.service = service
@@ -63,6 +66,7 @@ public final class OrchestratorStore {
         self.tools = tools
         self.approvals = approvals
         self.activity = activity
+        self.watchList = watchList
         self.makeSessionID = makeSessionID
     }
 
@@ -109,8 +113,10 @@ public final class OrchestratorStore {
         settleStopped(error: nil)
     }
 
-    /// Yeni konuşma: yeni kimlik, boş geçmiş.
+    /// Yeni konuşma: yeni kimlik, boş geçmiş, boş izleme listesi — yeni
+    /// model eski konuşmada izlemeye alınan terminalleri bilmez.
     public func newConversation() async {
+        watchList.clear()
         generation += 1
         updatesTask?.cancel()
         await service.stop()

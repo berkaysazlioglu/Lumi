@@ -65,6 +65,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
     private var transcripts: FakeTerminalTranscripts!
     private var summarizer: FakeTerminalDigestSummarizer!
     private var feed: OrchestratorActivityFeed!
+    private var watchList: OrchestratorWatchList!
     private var enabled = true
     private var coordinator: TerminalDigestCoordinator!
 
@@ -83,21 +84,34 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         transcripts = FakeTerminalTranscripts()
         summarizer = FakeTerminalDigestSummarizer()
         feed = OrchestratorActivityFeed()
+        watchList = OrchestratorWatchList()
         enabled = true
-        let toolbox = OrchestratorToolbox(
+        self.service = service
+        toolbox = OrchestratorToolbox(
             terminals: terminals, workspaces: workspaces, repos: repos,
             transcripts: transcripts, screenText: { _ in "" }
         )
+        setUpCoordinator()
+    }
+
+    private var service: FakeTerminalService!
+    private var toolbox: OrchestratorToolbox!
+
+    private func setUpCoordinator() {
         coordinator = TerminalDigestCoordinator(
             service: service, terminals: terminals, toolbox: toolbox, summarizer: summarizer, feed: feed,
-            isEnabled: { [unowned self] in self.enabled }, settleDelay: .milliseconds(20)
+            watchList: watchList, isEnabled: { [unowned self] in self.enabled }, settleDelay: .milliseconds(20)
         )
     }
 
-    private func agent(provider: AgentProvider? = .claude, session: String? = "s-1") -> TerminalMeta {
+    private func agent(
+        provider: AgentProvider? = .claude, session: String? = "s-1", watched: Bool = true
+    ) -> TerminalMeta {
         let meta = TerminalMeta(id: TerminalID(), name: "refactor", repoPath: api.path, createdAt: Date(),
                                 status: .working, claudeSessionID: session, provider: provider)
         terminals.apply(.spawned(meta))
+        coordinator.apply(.spawned(meta))
+        if watched { watchList.watch(meta) }
         coordinator.apply(.statusChanged(meta.id, .working))
         return meta
     }
@@ -149,9 +163,17 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         XCTAssertTrue(fallback.hasSuffix("(truncated)"), fallback)
     }
 
-    func testSeenFinishesBouncesShellsAndDisabledGateProduceNothing() async {
-        let seen = agent()
-        coordinator.apply(.statusChanged(seen.id, .waitingFocused))
+    func testWatchedTerminalReportsEvenAFinishTheUserSaw() async {
+        let meta = agent()
+        reply("Bitti.")
+        coordinator.apply(.statusChanged(meta.id, .waitingFocused))
+        await settle()
+        XCTAssertEqual(feed.events.map(\.summary), ["Bitti."])
+    }
+
+    func testUnwatchedBouncesNonClaudeAndDisabledGateProduceNothing() async {
+        let unwatched = agent(watched: false)
+        coordinator.apply(.statusChanged(unwatched.id, .waitingUnseen))
 
         let bounce = agent()
         coordinator.apply(.statusChanged(bounce.id, .waitingUnseen))
@@ -159,6 +181,8 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
 
         let shell = agent(provider: nil, session: nil)
         coordinator.apply(.statusChanged(shell.id, .waitingUnseen))
+        let codex = agent(provider: .codex, session: nil)
+        coordinator.apply(.statusChanged(codex.id, .waitingUnseen))
         await settle()
         XCTAssertTrue(feed.events.isEmpty)
 
@@ -183,6 +207,20 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         XCTAssertEqual(kinds[broken.id]?.kind, .failed)
         XCTAssertEqual(kinds[broken.id]?.summary, "Stopped with an error.")
         XCTAssertTrue(summarizer.requests.isEmpty)
+    }
+
+    func testExitForgetsAndSpawnAdoptsARestoredSession() async throws {
+        let closed = agent()
+        coordinator.apply(.exited(closed.id, code: 0))
+        XCTAssertFalse(watchList.isWatched(closed))
+
+        let config = FakeConfigService()
+        await config.updateUIState { $0.orchestratorWatchedSessions = ["s-restored"] }
+        watchList = OrchestratorWatchList(config: config)
+        await watchList.load(matching: [])
+        setUpCoordinator()
+        let restored = agent(session: "s-restored", watched: false)
+        XCTAssertEqual(watchList.terminalIDs, [restored.id], "resume edilen terminal izlemeye geri bağlanır")
     }
 
     func testDecisionResolvedBeforeSettleIsDropped() async {

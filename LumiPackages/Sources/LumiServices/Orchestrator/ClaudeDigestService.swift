@@ -12,6 +12,8 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
     public static let timeout: TimeInterval = 60
     /// Stdin'e giden mesajın üst sınırı — özet için fazlası gereksiz.
     public static let maxInputCharacters = 12_000
+    /// Oturum özeti birden çok mesaj görür; yine de son kısımla sınırlı.
+    public static let maxSessionInputCharacters = 30_000
 
     private let runner: any ProcessRunning
     private let locator: any BinaryLocating
@@ -29,14 +31,24 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
     }
 
     public func summarize(agentMessage: String, terminalTitle: String) async throws -> TerminalDigest {
+        let input = "Terminal: \(terminalTitle)\n\nAgent's last message:\n"
+            + String(agentMessage.suffix(Self.maxInputCharacters))
+        return try await run(arguments: Self.arguments, input: input)
+    }
+
+    public func summarizeSession(transcript: String, terminalTitle: String) async throws -> TerminalDigest {
+        let input = "Terminal: \(terminalTitle)\n\nConversation so far (oldest first, may start mid-way):\n"
+            + String(transcript.suffix(Self.maxSessionInputCharacters))
+        return try await run(arguments: Self.sessionArguments, input: input)
+    }
+
+    private func run(arguments: [String], input: String) async throws -> TerminalDigest {
         guard let binary = await binary() else {
             throw LumiError.cliNotFound(binary: Self.binaryName)
         }
-        let input = "Terminal: \(terminalTitle)\n\nAgent's last message:\n"
-            + String(agentMessage.suffix(Self.maxInputCharacters))
         let output = await runner.run(
             binary,
-            arguments: Self.arguments,
+            arguments: arguments,
             currentDirectory: workingDirectory,
             standardInput: Data(input.utf8),
             timeout: Self.timeout
@@ -67,7 +79,18 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
     continue without the user; otherwise false>}
     """
 
-    static let arguments: [String] = [
+    static let sessionInstruction = """
+    You catch a supervisor up on an AI coding agent's session they just started watching. \
+    Reply with ONLY a JSON object, no prose, no code fence: \
+    {"summary": "<two to five short lines in Turkish: the goal, what is done (key files/changes), \
+    what it is doing or waiting on now>", "needsUser": <true if the agent's latest message asks \
+    the user something or waits for a decision; otherwise false>}
+    """
+
+    static let arguments = arguments(instruction: instruction)
+    static let sessionArguments = arguments(instruction: sessionInstruction)
+
+    private static func arguments(instruction: String) -> [String] { [
         "-p", instruction,
         "--model", model,
         "--output-format", "json",
@@ -76,7 +99,7 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
         // Kullanıcı genelindeki MCP araç şemaları özet için gereksiz yük (Faz 5 ölçümü).
         "--strict-mcp-config",
         "--no-session-persistence",
-    ]
+    ] }
 
     /// Cevaptaki ilk `{…}` JSON nesnesi (model kod çiti eklese de bulunur).
     static func parse(_ reply: String) -> TerminalDigest? {

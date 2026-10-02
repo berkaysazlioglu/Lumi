@@ -41,7 +41,7 @@ enum OrchestratorToolFormat {
     }
 
     static func header(for meta: TerminalMeta, status: String) -> String {
-        "Terminal \"\(meta.displayTitle)\" (\(meta.provider?.rawValue ?? "shell"), \(status)) at \(meta.repoPath)"
+        "Terminal \"\(meta.displayTitle)\" (\(status)) at \(meta.repoPath)"
     }
 
     /// Son `limit` METİNLİ mesaj ve aralarındaki araç satırları. Yalnız

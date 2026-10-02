@@ -115,6 +115,27 @@ final class OrchestratorLiveTests: XCTestCase {
         print("haiku digest:", digest.summary)
     }
 
+    /// Sonradan izlemeye alınan terminalin oturum özeti: hedef + son durum.
+    func testHaikuSessionCatchUpFollowsTheJSONContract() async throws {
+        guard ProcessInfo.processInfo.environment["LUMI_LIVE_ORCHESTRATOR"] == "1" else {
+            throw XCTSkip("canlı test: LUMI_LIVE_ORCHESTRATOR=1 ile koşar")
+        }
+        let transcript = """
+        [user] Add a dark mode toggle to the settings screen.
+        [assistant] I'll add it to `SettingsView` and persist it in `UserDefaults`.
+          · tool Edit Sources/Settings/SettingsView.swift
+          · result: ok
+          · tool Bash swift test
+          · result: 48 passed
+        [assistant] The toggle is in place and tests pass. Do you want the app to follow the \
+        system appearance by default, or start in light mode?
+        """
+        let digest = try await ClaudeDigestService().summarizeSession(transcript: transcript, terminalTitle: "settings")
+        XCTAssertFalse(digest.summary.isEmpty)
+        XCTAssertTrue(digest.needsUser, "soru yakalanmadı: \(digest)")
+        print("haiku catch-up:", digest.summary)
+    }
+
     /// Faz 5: gerçek salt-okunur ajan proje CLAUDE.md'sini ve dosyaları okur,
     /// dosya yolu gösterir, hiçbir şey yazmaz.
     func testAskProjectReadsProjectContextReadOnly() async throws {
