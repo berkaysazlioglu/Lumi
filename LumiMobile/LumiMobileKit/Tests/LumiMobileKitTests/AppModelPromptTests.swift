@@ -16,6 +16,17 @@ final class AppModelPromptTests: XCTestCase {
                    state: state, selectedOptionId: nil)
     }
 
+    private func pendingPrompt(itemId: String) -> ChatPrompt {
+        prompt(itemId, state: .pending)
+    }
+
+    private func resolved(_ p: ChatPrompt) -> ChatPrompt {
+        var copy = p
+        copy.state = .resolved
+        copy.revision += 1
+        return copy
+    }
+
     func testPendingPromptAddedResolvedRemoved() {
         let m = makeModel()
         m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .pending)))
@@ -47,5 +58,15 @@ final class AppModelPromptTests: XCTestCase {
         m.subscribeChat("s1")   // active session = s1
         m.handle(.sessions([]))  // s1 is no longer live
         XCTAssertNil(m.prompts["s1"])
+    }
+
+    func testPromptDraftSurvivesAndIsDroppedOnResolve() {
+        let model = makeModel()
+        model.handle(.prompt(sessionId: "s1", prompt: pendingPrompt(itemId: "q1")))
+        model.updatePromptDraft("s1", itemId: "q1",
+                                PromptDraft().toggling(question: 0, option: 1, multiSelect: true))
+        XCTAssertEqual(model.promptDraft("s1", itemId: "q1").selections[0], [1])
+        model.handle(.prompt(sessionId: "s1", prompt: resolved(pendingPrompt(itemId: "q1"))))
+        XCTAssertEqual(model.promptDraft("s1", itemId: "q1"), PromptDraft())
     }
 }

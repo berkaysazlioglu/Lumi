@@ -111,6 +111,8 @@ struct MobileChatView: View {
                     MobileChatPromptCard(
                         prompt: pending,
                         maxHeight: geo.size.height * 0.45,
+                        draft: model.promptDraft(sessionId, itemId: pending.itemId),
+                        onDraftChange: { model.updatePromptDraft(sessionId, itemId: pending.itemId, $0) },
                         onApproval: { optionId in
                             model.respondPrompt(sessionId, itemId: pending.itemId, revision: pending.revision, optionId: optionId)
                         },
@@ -118,8 +120,8 @@ struct MobileChatView: View {
                             model.respondPromptSelections(sessionId, itemId: pending.itemId, revision: pending.revision, selections: selections)
                         }
                     )
-                    // Fresh @State for each pending prompt (prevent selection/free-text/sending leaking);
-                    // avoids stale selection or a stuck button across consecutive different prompts.
+                    // Fresh `sending` @State for each pending prompt (selection draft lives in
+                    // AppModel.promptDrafts, keyed by itemId, so it survives this reset).
                     .id(pending.itemId)
                 }
                 composer
