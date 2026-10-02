@@ -19,6 +19,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     let approvals: OrchestratorApprovals
     let promptQueue: PromptQueueStore?
     let trust: (any ClaudeWorkspaceTrusting)?
+    /// Faz 5: `ask_project`'in salt-okunur arka plan ajanı.
+    let projectAsker: (any ProjectQuestionAnswering)?
     let now: @MainActor () -> Date
 
     public init(
@@ -30,6 +32,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         approvals: OrchestratorApprovals = OrchestratorApprovals(),
         promptQueue: PromptQueueStore? = nil,
         trust: (any ClaudeWorkspaceTrusting)? = nil,
+        projectAsker: (any ProjectQuestionAnswering)? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.terminals = terminals
@@ -40,6 +43,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         self.approvals = approvals
         self.promptQueue = promptQueue
         self.trust = trust
+        self.projectAsker = projectAsker
         self.now = now
     }
 
@@ -56,6 +60,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
             return await sendToTerminal(args)
         case OrchestratorTools.startTerminal:
             return await startTerminal(args)
+        case OrchestratorTools.askProject:
+            return await askProject(args)
         default:
             return .failure("Unknown tool: \(name)")
         }
@@ -187,6 +193,12 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
             }
         }
         return locations
+    }
+
+    /// Bir checkout yolu (Projects ağacından) ya da bilinen bir repo kökü;
+    /// başka yol nil — araçlar rastgele dizinlere uzanmaz.
+    func resolveCheckout(_ path: String) -> Location? {
+        checkoutLocations()[path] ?? repos.repo(at: path).map { _ in fallbackLocation(for: path) }
     }
 
     /// Projects panelinde olmayan bir yolda koşan terminal (ör. favoriden çıkarılmış proje).

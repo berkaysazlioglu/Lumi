@@ -74,6 +74,8 @@ public protocol ServiceRegistry: AnyObject {
     var terminalTranscripts: any TerminalTranscriptReading { get }
     /// Faz 4: uzun ajan mesajlarının haiku özeti.
     var terminalDigests: any TerminalDigestSummarizing { get }
+    /// Faz 5: `ask_project` arka plan ajanı.
+    var projectAsker: any ProjectQuestionAnswering { get }
 
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.

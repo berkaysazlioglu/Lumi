@@ -13,6 +13,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case commitMessageGenerationFailed(detail: String)
     /// Karar 103 Faz 4: ajan mesajı özetlenemedi (haiku).
     case digestFailed(detail: String)
+    /// Karar 103 Faz 5: `ask_project` arka plan ajanı cevap üretemedi.
+    case projectQuestionFailed(detail: String)
     /// Hızlı komut üretimi (`claude -p`, karar 92) başarısız ya da script'siz yanıt.
     case quickCommandGenerationFailed(detail: String)
     case pathOutsideRepo(path: String)
@@ -48,6 +50,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Could not generate commit message: \(detail)"
         case .digestFailed(let detail):
             return "Could not summarize agent message: \(detail)"
+        case .projectQuestionFailed(let detail):
+            return "Could not answer the project question: \(detail)"
         case .quickCommandGenerationFailed(let detail):
             return "Could not generate command: \(detail)"
         case .pathOutsideRepo(let path):

@@ -77,7 +77,7 @@ extension OrchestratorToolbox {
         guard let provider = AgentProvider(rawValue: rawProvider) else {
             return .failure("provider must be \"claude\" or \"codex\".")
         }
-        guard let location = checkoutLocations()[path] ?? repos.repo(at: path).map({ _ in fallbackLocation(for: path) }) else {
+        guard let location = resolveCheckout(path) else {
             return .failure("Unknown checkout path \"\(path)\". Use a checkout path from list_projects.")
         }
         let prompt = (args["prompt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

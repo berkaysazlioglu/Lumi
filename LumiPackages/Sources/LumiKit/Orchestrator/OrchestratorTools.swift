@@ -28,6 +28,7 @@ public enum OrchestratorTools {
     public static let readTerminal = "read_terminal"
     public static let sendToTerminal = "send_to_terminal"
     public static let startTerminal = "start_terminal"
+    public static let askProject = "ask_project"
 
     /// `read_terminal` sınırları.
     public static let defaultReadLimit = 6
@@ -82,6 +83,17 @@ public enum OrchestratorTools {
             one of its workspaces). Returns the new terminal's id.
             """,
             inputSchema: #"{"type":"object","properties":{"path":{"type":"string","description":"Checkout path from list_projects."},"provider":{"type":"string","enum":["claude","codex"],"description":"Agent to start (default claude)."},"prompt":{"type":"string","description":"Optional first message for the new agent."}},"required":["path"],"additionalProperties":false}"#
+        ),
+        OrchestratorToolSpec(
+            name: askProject,
+            description: """
+            Ask a question about a project's code and docs ("summarize this project", "where is X \
+            implemented?", "how is the build set up?"). A separate read-only agent explores the checkout \
+            with Read/Glob/Grep (it also sees the project's CLAUDE.md) and returns only its answer, so \
+            your context stays small. It cannot run commands or change files. Takes from a few seconds to \
+            a few minutes; `path` must be a checkout path from list_projects.
+            """,
+            inputSchema: #"{"type":"object","properties":{"path":{"type":"string","description":"Checkout path from list_projects."},"question":{"type":"string","description":"The question, self-contained (the helper has no chat context)."}},"required":["path","question"],"additionalProperties":false}"#
         ),
     ]
 }

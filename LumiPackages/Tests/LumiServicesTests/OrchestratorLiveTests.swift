@@ -114,4 +114,30 @@ final class OrchestratorLiveTests: XCTestCase {
         XCTAssertTrue(digest.needsUser, "soru yakalanmadı: \(digest)")
         print("haiku digest:", digest.summary)
     }
+
+    /// Faz 5: gerçek salt-okunur ajan proje CLAUDE.md'sini ve dosyaları okur,
+    /// dosya yolu gösterir, hiçbir şey yazmaz.
+    func testAskProjectReadsProjectContextReadOnly() async throws {
+        guard ProcessInfo.processInfo.environment["LUMI_LIVE_ORCHESTRATOR"] == "1" else {
+            throw XCTSkip("canlı test: LUMI_LIVE_ORCHESTRATOR=1 ile koşar")
+        }
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent("ask-project-\(UUID().uuidString)")
+        let sources = project.appendingPathComponent("Sources")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try "Codename of this project: BLUE-HERON.\n".write(to: project.appendingPathComponent("CLAUDE.md"), atomically: true, encoding: .utf8)
+        try "func retryBackoff(attempt: Int) -> Double { pow(2, Double(attempt)) * 0.25 }\n"
+            .write(to: sources.appendingPathComponent("Network.swift"), atomically: true, encoding: .utf8)
+        let before = try FileManager.default.subpathsOfDirectory(atPath: project.path).sorted()
+
+        let answer = try await ClaudeProjectAskService().ask(
+            projectPath: project.path,
+            question: "What is this project's codename, and in which file is the retry backoff implemented?"
+        )
+        print("ask_project:", answer)
+
+        XCTAssertTrue(answer.text.contains("BLUE-HERON"), "CLAUDE.md okunmadı: \(answer.text)")
+        XCTAssertTrue(answer.text.contains("Network.swift"), "dosya bulunamadı: \(answer.text)")
+        let after = try FileManager.default.subpathsOfDirectory(atPath: project.path).sorted()
+        XCTAssertEqual(before, after, "salt-okunur ajan dosya oluşturmamalı")
+    }
 }

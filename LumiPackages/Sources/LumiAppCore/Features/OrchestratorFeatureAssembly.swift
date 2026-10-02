@@ -40,7 +40,8 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             screenText: { id in String(decoding: terminalService.serializeScrollback(id).data, as: UTF8.self) },
             approvals: approvals,
             promptQueue: terminal.promptQueue,
-            trust: ClaudeWorkspaceTrust()
+            trust: ClaudeWorkspaceTrust(),
+            projectAsker: services.projectAsker
         )
         let activity = OrchestratorActivityFeed()
         orchestrator = OrchestratorStore(

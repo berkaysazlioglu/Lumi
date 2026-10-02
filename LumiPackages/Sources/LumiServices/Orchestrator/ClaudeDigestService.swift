@@ -48,7 +48,11 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
             let detail = output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             throw LumiError.digestFailed(detail: detail.isEmpty ? "exit code \(output.exitCode)" : String(detail.prefix(300)))
         }
-        let reply = try ClaudeCommitMessageService.resultText(fromJSON: output.stdout)
+        guard let envelope = ClaudePrintEnvelope(stdout: output.stdout) else {
+            throw LumiError.digestFailed(detail: "unreadable reply: \(output.stdout.prefix(200))")
+        }
+        if envelope.isError { throw LumiError.digestFailed(detail: envelope.errorDetail) }
+        let reply = envelope.result
         guard let digest = Self.parse(reply) else {
             throw LumiError.digestFailed(detail: "unreadable reply: \(reply.prefix(200))")
         }
@@ -69,6 +73,8 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
         "--output-format", "json",
         "--tools", "",
         "--setting-sources", "",
+        // Kullanıcı genelindeki MCP araç şemaları özet için gereksiz yük (Faz 5 ölçümü).
+        "--strict-mcp-config",
         "--no-session-persistence",
     ]
 

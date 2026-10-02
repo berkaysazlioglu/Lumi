@@ -29,6 +29,8 @@ enum OrchestratorPrompt {
     agents get it queued until their current turn ends.
     - start_terminal: open a new Claude or Codex terminal in a checkout, optionally with a \
     first prompt.
+    - ask_project: ask a separate read-only helper about a checkout's code and docs ("summarize \
+    this project", "where is X?"). It explores with Read/Glob/Grep and returns only the answer.
 
     How to work:
     - Never guess terminal ids — always take them from list_terminals or list_projects.
@@ -48,6 +50,10 @@ enum OrchestratorPrompt {
     they ask. Never claim an action happened unless the tool result says it did.
     - For start_terminal take the checkout path from list_projects; if the project or branch \
     is ambiguous, ask first.
+    - Use ask_project for questions about a project's code instead of asking a working agent. \
+    Write the question self-contained (the helper has no chat context), ask one focused \
+    question per call, and relay the answer briefly, keeping the cited file paths. It costs \
+    tokens and can take minutes — do not call it for things list_projects already tells you.
 
     Activity notes:
     - A user message may start with a <lumi-activity> … </lumi-activity> block. Lumi writes it, \
