@@ -345,6 +345,26 @@ final class GitServiceTests: XCTestCase {
         }
     }
 
+    /// Karar 110: yazım içeriği değiştirir, çalıştırma iznini korur ve repo
+    /// dışına taşan yolu reddeder.
+    func testWriteFileReplacesContentKeepsPermissionsAndGuardsPath() async throws {
+        let script = repoDir.appendingPathComponent("run.sh")
+        try "echo old\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        try await service.writeFile(repoPath: repoDir.path, file: "run.sh", contents: "echo new\n")
+
+        XCTAssertEqual(try String(contentsOf: script, encoding: .utf8), "echo new\n")
+        let permissions = try FileManager.default.attributesOfItem(atPath: script.path)[.posixPermissions] as? Int
+        XCTAssertEqual(permissions, 0o755)
+        do {
+            try await service.writeFile(repoPath: repoDir.path, file: "../escape.txt", contents: "x")
+            XCTFail("writeFile traversal'a izin verdi")
+        } catch let error as LumiError {
+            XCTAssertEqual(error, .pathOutsideRepo(path: "../escape.txt"))
+        }
+    }
+
     /// 1.12: guard `standardizedFileURL` ile symlink'i çözmüyordu — repo içindeki
     /// bir symlink repo DIŞINA işaret ettiğinde okuma geçiyordu.
     func testSymlinkEscapingRepoIsRejected() async throws {

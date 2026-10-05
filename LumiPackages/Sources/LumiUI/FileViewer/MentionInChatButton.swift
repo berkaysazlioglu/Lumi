@@ -35,19 +35,7 @@ struct MentionInChatButton: View {
         Button {
             if let target { shell.mentionSelection(in: target) }
         } label: {
-            HStack(spacing: Theme.Spacing.xs) {
-                Image(systemName: "at")
-                    .accessibilityHidden(true)
-                Text("Mention in Chat")
-            }
-            .font(Theme.Typography.mono(.caption, weight: .semibold))
-            .foregroundStyle(Theme.accentPrimary)
-            .padding(.horizontal, Theme.Spacing.md)
-            // 3pt: markdown rozetiyle aynı ölçek dışı ara değer.
-            .padding(.vertical, Theme.scaled(3))
-            .background(Theme.accentPrimary.opacity(0.18))
-            .clipShape(Capsule())
-            .contentShape(Capsule())
+            ViewerPillLabel(title: "Mention in Chat", systemImage: "at")
         }
         .buttonStyle(.plain)
         .disabled(target == nil)

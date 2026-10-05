@@ -5,7 +5,7 @@ import LumiKit
 /// (`GitReading`/`GitContentReading`/`GitWriting`) uygular, böylece hem tam
 /// `GitServicing` bekleyen hem de tek yüzey bekleyen tüketicilere verilebilir. Dönüşler ayarlanabilir,
 /// çağrılar kaydedilir; içerik operasyonları için hata enjeksiyonu vardır.
-public actor FakeGitService: GitReading, GitContentReading, GitWriting {
+public actor FakeGitService: GitReading, GitContentReading, GitWriting, FileContentWriting {
     public struct ImagePreviewCall: Equatable, Sendable {
         public let file: String
         public let sha: String?
@@ -13,6 +13,16 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
         public init(file: String, sha: String?) {
             self.file = file
             self.sha = sha
+        }
+    }
+
+    public struct WriteFileCall: Equatable, Sendable {
+        public let file: String
+        public let contents: String
+
+        public init(file: String, contents: String) {
+            self.file = file
+            self.contents = contents
         }
     }
 
@@ -48,9 +58,13 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     public var commitFilesToReturn: [CommitFile] = []
     /// Fırlatan operasyonların (readFile/diff'ler/commit) ortak hata enjeksiyonu.
     public var errorToThrow: LumiError?
+    /// Yalnız `writeFile`'ın hatası (okuma başarılı, yazım başarısız senaryosu).
+    public var writeErrorToThrow: LumiError?
 
     // MARK: Çağrı kaydı
     public private(set) var readFileCalls: [String] = []
+    /// Karar 110: `writeFile` çağrıları (dosya, içerik).
+    public private(set) var writeFileCalls: [WriteFileCall] = []
     public private(set) var fileDiffCalls: [String] = []
     public private(set) var commitFileDiffCalls: [String] = []
     public private(set) var imagePreviewCalls: [ImagePreviewCall] = []
@@ -114,6 +128,10 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
 
     public func setCommitsDelay(_ delay: Duration) {
         commitsDelay = delay
+    }
+
+    public func setWriteError(_ error: LumiError?) {
+        writeErrorToThrow = error
     }
 
     public func setError(_ error: LumiError?) {
@@ -194,6 +212,13 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
         if readFileDelay > .zero { try? await Task.sleep(for: readFileDelay) }
         if let errorToThrow { throw errorToThrow }
         return fileContent
+    }
+
+    /// Başarılı yazım `fileContent`'i günceller — sonraki okuma diski görür.
+    public func writeFile(repoPath: String, file: String, contents: String) async throws {
+        writeFileCalls.append(WriteFileCall(file: file, contents: contents))
+        if let writeErrorToThrow { throw writeErrorToThrow }
+        fileContent = contents
     }
 
     public func fileDiff(repoPath: String, file: String) async throws -> UnifiedDiff {

@@ -376,6 +376,8 @@ private struct PreviewGitService: GitServicing {
     }
 
     func commit(repoPath: String, message: String, files: [String]) async throws {}
+
+    func writeFile(repoPath: String, file: String, contents: String) async throws {}
 }
 
 /// Sağlayıcı başına sabit bir yüzde döndürür; ağ/CLI yoktur.

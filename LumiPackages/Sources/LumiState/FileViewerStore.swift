@@ -88,10 +88,36 @@ public final class FileViewerStore {
 
     public private(set) var presentation: ViewerPresentation = .hidden {
         didSet {
-            // Seçim yalnız gösterildiği dosyaya aittir (karar 100).
-            if oldValue.selectionIdentity != presentation.selectionIdentity { selectedLines = nil }
+            // Seçim ve taslak yalnız gösterildiği dosyaya aittir (karar 100/110).
+            guard oldValue.selectionIdentity != presentation.selectionIdentity else { return }
+            selectedLines = nil
+            resetEditing()
         }
     }
+
+    /// Karar 110: kaydedilmemiş düzenleme. `nil` = metin diskte okunanla aynı.
+    public private(set) var draft: String?
+
+    /// Karar 110: kaydetme durumu. `.conflict` — dosya yüklendikten sonra
+    /// diskte değişti (ajan düzenlemesi); kullanıcı üzerine yazmayı ya da
+    /// yeniden yüklemeyi seçer.
+    public enum SaveState: Equatable, Sendable {
+        case idle
+        case saving
+        case conflict
+    }
+
+    public private(set) var saveState: SaveState = .idle
+
+    /// Editör metninin yeniden kurulma sayacı: yükleme, yeniden yükleme ve
+    /// vazgeçmede artar. View metni yalnız bu değişince baştan basar; aradaki
+    /// her değişiklik kullanıcının kendi yazdığıdır (karar 110).
+    public private(set) var editorRevision = 0
+
+    /// Kaydedilmemiş taslak varken istenen geçiş (kapatma, başka dosya) onay
+    /// bekler; `true` iken viewer `Save / Discard / Cancel` sorar.
+    public private(set) var isConfirmingDiscard = false
+    @ObservationIgnored private var pendingTransition: (@MainActor () async -> Void)?
 
     /// Kod görünümündeki seçimin 1 tabanlı satır aralığı (karar 100); view
     /// katmanı NSTextView seçiminden yazar. Persist edilmez.
@@ -103,10 +129,10 @@ public final class FileViewerStore {
 
     /// ISP (refactor 3.8): fırlatan içerik okumaları + sessiz `commitFiles`/
     /// `imagePreview`. Commit YAZIMI (`GitWriting`) bu store'un yüzeyinde yok.
-    @ObservationIgnored private let git: any GitContentReading & GitReading
+    @ObservationIgnored private let git: any GitContentReading & GitReading & FileContentWriting
     @ObservationIgnored private let toasts: ToastStore
 
-    public init(git: any GitContentReading & GitReading, toasts: ToastStore) {
+    public init(git: any GitContentReading & GitReading & FileContentWriting, toasts: ToastStore) {
         self.git = git
         self.toasts = toasts
     }
@@ -169,25 +195,143 @@ public final class FileViewerStore {
     /// "Mention in Chat" ile ajana yapıştırılacak referans (karar 100).
     /// Yalnız çalışma kopyasının ham metin görünümünde vardır: diff ve
     /// render'lı markdown satırları dosyanın satırlarına birebir eşlenmez.
+    /// Kaydedilmemiş taslakta da yoktur: ajan dosyayı diskten okur, satırlar
+    /// kaymış olabilir (karar 110).
     public var mentionReference: String? {
-        guard mode == .view, !isRenderedMarkdown, let lines = selectedLines,
+        guard mode == .view, !isRenderedMarkdown, draft == nil, let lines = selectedLines,
               case .loaded(.text) = content else { return nil }
         return CodeMention.reference(filePath: filePath, repoPath: repoPath, lines: lines)
+    }
+
+    // MARK: - Düzenleme (karar 110)
+
+    /// Diskte okunan metin — taslağın karşılaştırma tabanı.
+    public var loadedText: String? {
+        guard case .file(_, _, .view, .loaded(.text(let text))) = presentation else { return nil }
+        return text
+    }
+
+    /// Ekranda olması gereken metin: taslak varsa o, yoksa diskteki.
+    public var displayedText: String? { draft ?? loadedText }
+
+    public var hasUnsavedChanges: Bool { draft != nil }
+
+    /// Düzenlenebilir mi: çalışma kopyasının ham metin görünümü. Diff, commit
+    /// ve render'lı markdown satırları dosyaya birebir eşlenmez; UTF-8 olmayan
+    /// dosya okumada `U+FFFD`'ye çevrildiği için yazmak onu bozardı.
+    public var isEditable: Bool {
+        !isRenderedMarkdown && loadedText != nil && isLosslessText
+    }
+
+    /// Yüklenen metin UTF-8'den kayıpsız mı çözüldü (yüklemede bir kez
+    /// hesaplanır — her tuşta 8 MB'lık taramayı önler).
+    private var isLosslessText = true
+
+    /// Editörden gelen metin; diskle aynıya dönerse taslak düşer.
+    public func updateDraft(_ text: String) {
+        guard isEditable else { return }
+        let next = text == loadedText ? nil : text
+        guard next != draft else { return }
+        draft = next
+        if saveState == .conflict { saveState = .idle }
+    }
+
+    /// Taslağı diske yazar. Dosya yüklendikten sonra diskte değiştiyse
+    /// (`overwrite` istenmedikçe) yazmaz, `.conflict`'e geçer. Başarıda
+    /// yazılan metin yeni taban olur; başarısızlık toast + taslak korunur.
+    @discardableResult
+    public func save(overwrite: Bool = false) async -> Bool {
+        guard let draft, saveState != .saving,
+              case .file(let repoPath, let filePath, .view, .loaded(.text(let original))) = presentation
+        else { return false }
+        saveState = .saving
+        do {
+            if !overwrite {
+                let onDisk = try await git.readFile(repoPath: repoPath, file: filePath)
+                guard onDisk == original else {
+                    if isStillPresenting(repoPath: repoPath, filePath: filePath, mode: .view) { saveState = .conflict }
+                    return false
+                }
+            }
+            try await git.writeFile(repoPath: repoPath, file: filePath, contents: draft)
+        } catch {
+            saveState = .idle
+            toasts.show(error: (error as? LumiError) ?? .underlying(domain: "unknown", message: "\(error)"))
+            return false
+        }
+        guard isStillPresenting(repoPath: repoPath, filePath: filePath, mode: .view) else { return true }
+        // Taban yeni metne geçer; editörün metni zaten bu — yeniden basılmaz.
+        let savedDraft = draft
+        presentation = .file(repoPath: repoPath, filePath: filePath, mode: .view, content: .loaded(.text(savedDraft)))
+        if self.draft == savedDraft { self.draft = nil }
+        saveState = .idle
+        return true
+    }
+
+    /// Çakışmada diskteki sürümü yükler; taslak atılır.
+    public func reloadFromDisk() async {
+        guard case .file(let repoPath, let filePath, .view, _) = presentation else { return }
+        resetEditing()
+        await presentFile(mode: .view, repoPath: repoPath, filePath: filePath)
+    }
+
+    /// Onay: taslağı at ve bekleyen geçişi sürdür.
+    public func confirmDiscard() async {
+        let transition = pendingTransition
+        resetEditing()
+        await transition?()
+    }
+
+    /// Onay: kaydet, başarılıysa bekleyen geçişi sürdür.
+    public func saveAndContinue() async {
+        let transition = pendingTransition
+        isConfirmingDiscard = false
+        pendingTransition = nil
+        guard await save() else { return }
+        await transition?()
+    }
+
+    public func cancelDiscard() {
+        isConfirmingDiscard = false
+        pendingTransition = nil
+    }
+
+    /// Taslak varsa geçişi onaya bağlar ve `false` döner (çağıran durur).
+    private func allowsTransition(_ transition: @escaping @MainActor () async -> Void) -> Bool {
+        guard draft != nil else { return true }
+        pendingTransition = transition
+        isConfirmingDiscard = true
+        return false
+    }
+
+    private func resetEditing() {
+        draft = nil
+        saveState = .idle
+        isConfirmingDiscard = false
+        pendingTransition = nil
+        editorRevision += 1
     }
 
     // MARK: - Sunum modları
 
     public func presentView(repoPath: String, filePath: String) async {
+        guard allowsTransition({ [weak self] in await self?.presentView(repoPath: repoPath, filePath: filePath) })
+        else { return }
         await presentFile(mode: .view, repoPath: repoPath, filePath: filePath)
     }
 
     public func presentDiff(repoPath: String, filePath: String) async {
+        guard allowsTransition({ [weak self] in await self?.presentDiff(repoPath: repoPath, filePath: filePath) })
+        else { return }
         await presentFile(mode: .diff, repoPath: repoPath, filePath: filePath)
     }
 
     /// Karar 6: commit seçilince yalnız dosya listesi; ilk dosya (ya da
     /// listede varsa `initialFile`) seçilir ve onun diff'i lazy yüklenir.
     public func presentCommit(repoPath: String, commit: GitCommit, initialFile: String? = nil) async {
+        guard allowsTransition({ [weak self] in
+            await self?.presentCommit(repoPath: repoPath, commit: commit, initialFile: initialFile)
+        }) else { return }
         let files = await git.commitFiles(repoPath: repoPath, sha: commit.hash)
         guard !files.isEmpty else {
             toasts.show(.info, title: commit.shortHash, message: "Commit has no file changes")
@@ -222,7 +366,9 @@ public final class FileViewerStore {
         )
     }
 
+    /// Kaydedilmemiş taslak varsa önce onay sorulur (karar 110).
     public func close() {
+        guard allowsTransition({ [weak self] in self?.close() }) else { return }
         presentation = .hidden
     }
 
@@ -247,6 +393,8 @@ public final class FileViewerStore {
             mode: mode,
             content: loaded
         )
+        if case .loaded(.text(let text)) = loaded { isLosslessText = !text.contains("\u{FFFD}") }
+        editorRevision += 1
     }
 
     /// Tek yükleme koridoru: dosya türü yolu seçer, hata tek kurala düşer.

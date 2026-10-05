@@ -28,6 +28,8 @@ struct FileViewerView: View {
         static var headerInsetV: CGFloat { Theme.scaled(10) }
         /// `Raw | Preview` anahtarı — iki eşit bölme (karar 109).
         static var markdownSwitchWidth: CGFloat { Theme.scaled(150) }
+        /// Kaydedilmemiş değişiklik noktası (karar 110).
+        static var unsavedDotSide: CGFloat { Theme.scaled(7) }
     }
 
     var body: some View {
@@ -38,6 +40,9 @@ struct FileViewerView: View {
                         width: geometry.size.width * Metrics.widthRatio,
                         height: geometry.size.height * Metrics.heightRatio
                     )
+            }
+            if store.isConfirmingDiscard {
+                UnsavedChangesPrompt(store: store)
             }
         }
     }
@@ -62,9 +67,19 @@ struct FileViewerView: View {
                 .font(Theme.Typography.baseMono)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
+            if store.hasUnsavedChanges {
+                Circle()
+                    .fill(Theme.warning)
+                    .frame(width: Metrics.unsavedDotSide, height: Metrics.unsavedDotSide)
+                    .help("Unsaved changes")
+                    .accessibilityLabel("Unsaved changes")
+            }
             Spacer()
             if store.mentionReference != nil {
                 MentionInChatButton(store: store)
+            }
+            if store.isEditable || store.hasUnsavedChanges {
+                SaveFileButton(store: store)
             }
             if store.previewKind == .markdown {
                 markdownToggle
@@ -183,18 +198,22 @@ struct FileViewerView: View {
             ImagePreviewView(preview: preview, showsComparison: showsImageComparison)
         case .text(let text):
             if store.isRenderedMarkdown {
+                // Karar 110: Preview kaydedilmemiş taslağı da gösterir.
                 RenderedMarkdownDocumentView(
-                    text: text,
+                    text: store.draft ?? text,
                     parser: markdownParser,
                     highlighter: highlighter,
                     onOpenLink: openMarkdownLink
                 )
             } else {
                 HighlightedCodeView(
-                    code: text,
+                    code: store.draft ?? text,
+                    revision: store.editorRevision,
                     fileName: store.filePath,
                     highlighter: highlighter,
-                    onSelectLines: { store.selectedLines = $0 }
+                    onSelectLines: { store.selectedLines = $0 },
+                    onTextChange: store.isEditable ? { store.updateDraft($0) } : nil,
+                    onCancel: store.close
                 )
             }
         case .diff(let diff):
@@ -350,29 +369,64 @@ private struct RenderedMarkdownDiffView: View {
 }
 
 /// view modu içeriği: async highlight + 1MB üstü düz metin (HighlightrEngine).
+///
+/// Karar 110: düzenlenirken her değişiklik yeniden vurgulanır; `task(id:)`
+/// iptali kısa bekleme ile birleşince yazarken vurgulama ertelenir. Vurgu
+/// hangi revizyon için üretildiyse onunla editöre iner (bayat vurgu yeni
+/// yüklenen metni ezmesin).
 private struct HighlightedCodeView: View {
     let code: String
+    let revision: Int
     let fileName: String
     let highlighter: any SyntaxHighlighting
     let onSelectLines: (ClosedRange<Int>?) -> Void
+    let onTextChange: ((String) -> Void)?
+    let onCancel: () -> Void
 
-    @State private var attributed: NSAttributedString?
+    private struct Highlighted {
+        let revision: Int
+        let code: String
+        let text: NSAttributedString
+    }
+
+    private struct Request: Equatable {
+        let revision: Int
+        let code: String
+    }
+
+    @State private var highlighted: Highlighted?
+
+    /// Yazarken yeniden vurgulamadan önceki sükûnet süresi.
+    private static let editDebounce: Duration = .milliseconds(250)
 
     var body: some View {
         Group {
-            if let attributed {
-                AttributedTextView(text: attributed, onSelectLines: onSelectLines)
+            if let highlighted {
+                AttributedTextView(
+                    text: highlighted.text,
+                    revision: highlighted.revision,
+                    onSelectLines: onSelectLines,
+                    onTextChange: onTextChange,
+                    onCancel: onCancel
+                )
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: code) {
-            attributed = await highlighter.highlight(
+        .task(id: Request(revision: revision, code: code)) {
+            let isEdit = highlighted?.revision == revision
+            if isEdit {
+                try? await Task.sleep(for: Self.editDebounce)
+                guard !Task.isCancelled else { return }
+            }
+            let text = await highlighter.highlight(
                 code: code,
                 fileName: fileName,
                 fontSize: Theme.Typography.Size.base.scaledPoints
             )
+            guard !Task.isCancelled else { return }
+            highlighted = Highlighted(revision: revision, code: code, text: text)
         }
     }
 }

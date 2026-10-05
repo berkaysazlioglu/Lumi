@@ -282,6 +282,23 @@ public struct GitService: GitServicing {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// Karar 110: atomik yazım (yarım dosya kalmaz) + eski POSIX izinlerinin
+    /// geri konması — atomik değiştirme yeni inode açtığı için çalıştırılabilir
+    /// script'ler `+x`'ini kaybederdi. Symlink guard'ın çözdüğü hedefe yazılır.
+    public func writeFile(repoPath: String, file: String, contents: String) async throws {
+        let absolute = try resolveInsideRepo(repoPath, file)
+        let fileManager = FileManager.default
+        let permissions = (try? fileManager.attributesOfItem(atPath: absolute))?[.posixPermissions]
+        do {
+            try Data(contents.utf8).write(to: URL(fileURLWithPath: absolute), options: .atomic)
+        } catch {
+            throw LumiError.fileOperationFailed(path: file, detail: error.localizedDescription)
+        }
+        if let permissions {
+            try? fileManager.setAttributes([.posixPermissions: permissions], ofItemAtPath: absolute)
+        }
+    }
+
     /// İlk 8 KB'de NUL byte varsa binary sayılır.
     static func looksBinary(_ data: Data) -> Bool {
         data.prefix(Self.binarySniffBytes).contains(0)
