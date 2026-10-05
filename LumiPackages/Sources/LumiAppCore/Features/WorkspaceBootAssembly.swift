@@ -8,7 +8,8 @@ import LumiTerminal
 ///
 /// - **Onboarding kapısı:** ilk çalıştırmada sihirbaz açılır (design/03 §4).
 /// - **Karar 23/80 oturum devamı:** önceki çalıştırmada persist edilen
-///   Claude/Codex oturumları, açık tab'ı duran repo'larda yeniden spawn edilir. `shutdown()`
+///   Claude/Codex oturumları, açık tab'ı duran repo'larda ve dizini duran
+///   serbest konumlarda (karar 108) yeniden spawn edilir. `shutdown()`
 ///   simetriktir ve canlı oturumları persist eder — `.ui` fazı ilk yıkılan faz
 ///   olduğu için persist, terminal feature'ının `killAll()`'undan ÖNCE koşar.
 /// - **Karar 90 crash checkpoint'i:** aynı liste yalnız quit'te değil, canlı
@@ -141,8 +142,29 @@ final class WorkspaceBootAssembly: FeatureAssembly {
         await checkpointResumeSessions()
     }
 
+    /// Karar 108: açık tab'ı duran repo'nun kaydı ile, dizini hâlâ duran
+    /// serbest terminal kaydı geri açılır. Projeye ait ama tab'ı kapalı yol
+    /// atlanır (eski davranış); silinmiş serbest dizin sessizce düşer —
+    /// spawn sonrası liste canlı terminallerden yeniden yazılır.
+    static func resumableEntries(
+        _ entries: [ResumeSession],
+        isOpenTab: (String) -> Bool,
+        isLoose: (String) -> Bool,
+        directoryExists: (String) -> Bool = LooseTerminalStore.isDirectory
+    ) -> [ResumeSession] {
+        entries.filter { entry in
+            isOpenTab(entry.repoPath) || (isLoose(entry.repoPath) && directoryExists(entry.repoPath))
+        }
+    }
+
     private func spawnResumedSessions(_ entries: [ResumeSession]) async {
-        for entry in entries where shared.navigation.openTabs.contains(entry.repoPath) {
+        let navigation = shared.navigation
+        let resumable = Self.resumableEntries(
+            entries,
+            isOpenTab: { navigation.openTabs.contains($0) },
+            isLoose: { navigation.isLooseTerminalPath($0) }
+        )
+        for entry in resumable {
             switch entry.provider {
             case .claude:
                 shared.terminals.spawn(
