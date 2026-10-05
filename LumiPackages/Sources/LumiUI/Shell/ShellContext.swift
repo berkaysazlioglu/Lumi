@@ -303,12 +303,16 @@ public final class ShellContext {
     /// minimize edilmişse geri getirilip odaklanır. Checkout zaten maximize
     /// modundaysa seçim aynı solo yüzeyde terminal değiştirir; Projects ve
     /// maximize altındaki switcher böylece aynı davranışı taşır.
+    ///
+    /// Karar 108: serbest terminal repo tab'ı açmaz, All Terminals'ta öne gelir
+    /// (`NavigationStore.openTerminalSurface`).
     public func focusAgent(_ meta: TerminalMeta) {
-        let shouldSwitchMaximizedTerminal = layout.maximizedTerminal(in: meta.repoPath) != nil
-        if navigation.activeRepoPath != meta.repoPath { navigation.openTab(meta.repoPath) }
+        navigation.openTerminalSurface(for: meta.repoPath)
+        guard let scope = navigation.activeRoute.terminalScope else { return }
+        let shouldSwitchMaximizedTerminal = layout.maximizedTerminal(in: scope) != nil
         terminals.restoreAndFocus(meta.id)
         if shouldSwitchMaximizedTerminal {
-            layout.maximize(meta.id, in: meta.repoPath)
+            layout.maximize(meta.id, in: scope)
         }
     }
 
