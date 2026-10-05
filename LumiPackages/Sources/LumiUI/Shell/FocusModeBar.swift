@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Focus mode hover-reveal kontrol çubuğu: mouse üst bölgeye gelince
 /// 500ms gecikmeyle belirir; içerik: terminal sayısı, grid menüsü, yeni
-/// terminal (yalnız repo yüzeyinde — karar 103), çıkış.
+/// terminal (repo'da checkout'ta, All Terminals'ta serbest konumda — karar
+/// 108), çıkış.
 struct FocusModeBar: View {
     static let revealDelay = Theme.Motion.hoverRevealDelay
 
@@ -55,13 +56,11 @@ struct FocusModeBar: View {
 
             gridLayoutMenu
 
-            if let repoPath = scope.repoPath {
-                Button("New \(provider.displayName)") {
-                    shell.terminals.spawn(in: repoPath, command: provider.launchCommand)
-                }
-                .buttonStyle(.bordered)
-                .tint(Theme.accentVivid)
+            Button(newTerminalTitle) {
+                shell.spawnTerminal(in: scope, command: provider.launchCommand)
             }
+            .buttonStyle(.bordered)
+            .tint(Theme.accentVivid)
 
             Spacer()
 
@@ -85,6 +84,13 @@ struct FocusModeBar: View {
     }
 
     private var provider: AgentProvider { shell.settings.current.aiProvider }
+
+    private var newTerminalTitle: String {
+        guard let location = NewTerminalMenu.locationLabel(shell: shell, scope: scope) else {
+            return "New \(provider.displayName)"
+        }
+        return "New \(provider.displayName) in \(location)"
+    }
 
     private var gridLayoutMenu: some View {
         GridSettingsControl(

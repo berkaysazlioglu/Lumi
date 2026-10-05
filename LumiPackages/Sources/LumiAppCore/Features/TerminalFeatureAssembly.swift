@@ -14,6 +14,8 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.system
 
     private(set) var promptQueue: PromptQueueStore!
+    /// Serbest terminallerin konumu (karar 108).
+    private(set) var looseTerminals: LooseTerminalStore!
     private var services: (any ServiceRegistry)!
     private var shared: SharedStores!
 
@@ -21,6 +23,7 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
         self.services = services
         self.shared = shared
         promptQueue = PromptQueueStore(service: services.terminal, toasts: shared.toasts)
+        looseTerminals = LooseTerminalStore(config: services.config, toasts: shared.toasts)
     }
 
     /// Faz 6.6: orta alanın terminals route'u BU assembly'nin katkısıdır.
@@ -49,10 +52,10 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
                 AnyView(RouteTitleToolbarItem(title: AllTerminalsRoute.title, icon: AllTerminalsRoute.icon))
             }
         ))
-        // Üretim bölgesi (Faz 6.4): grid ayarı + Edit her terminal yüzeyinde
-        // (repo ya da All Terminals); birincil CTA yalnız repo route'unda —
-        // spawn bir checkout ister. Repo-dışı bir route'ta (`.content`) veya
-        // hiç tab yokken hepsi bar'dan düşer.
+        // Üretim bölgesi (Faz 6.4): grid ayarı, Edit ve birincil CTA her
+        // terminal yüzeyinde (repo ya da All Terminals — CTA orada serbest
+        // terminal açar, karar 108). Repo-dışı bir route'ta (Tasks/Remote)
+        // veya hiç tab yokken hepsi bar'dan düşer.
         registries.toolbar.register(ToolbarItemDescriptor(
             id: .gridSettings,
             region: .center,
@@ -71,13 +74,14 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
             id: .newTerminal,
             region: .center,
             order: ShellToolbarItems.Order.newTerminal,
-            isVisible: { $0.activeRepoPath != nil },
+            isVisible: { $0.activeTerminalScope != nil },
             makeView: { AnyView(NewTerminalToolbarItem()) }
         ))
     }
 
     func start() async {
         let config = await services.config.config()
+        looseTerminals.load(recent: await services.config.uiState().recentLooseLocations)
         applyAppearance(config)
         shared.terminals.applyAutoMinimize(config.autoMinimizeOnSend)
         promptQueue.start()

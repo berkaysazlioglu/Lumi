@@ -198,14 +198,15 @@ final class ShellToolbarCompositionTests: XCTestCase {
     // MARK: - All Terminals (karar 103)
 
     /// Yüzey kontrolleri (Edit + grid) kalır, repo'ya bağlı olanlar (hızlı
-    /// komutlar, New <Provider>) düşer, route başlığı gelir.
+    /// komutlar, favori dosyalar) düşer, route başlığı gelir. New <Provider>
+    /// kalır — All Terminals'ta serbest terminal açar (karar 108).
     func testAllTerminalsRouteKeepsSurfaceControlsButDropsRepoActions() {
         fixture.openRepo()
         fixture.context.navigation.setRoute(AllTerminalsRoute.route)
 
         XCTAssertEqual(
             ids(.center),
-            [.arrangeTerminals, .gridSettings, ToolbarItemID("route.allTerminals")]
+            [.arrangeTerminals, .gridSettings, .newTerminal, ToolbarItemID("route.allTerminals")]
         )
     }
 
@@ -282,6 +283,7 @@ private struct ShellFixture {
             remote: RemoteStore(service: FakeRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminalService, toasts: toasts),
+            looseTerminals: LooseTerminalStore(config: config, toasts: toasts),
             toasts: toasts,
             onboarding: OnboardingStore(
                 system: FakeSystemService(),

@@ -304,6 +304,7 @@ final class ShellContextTests: XCTestCase {
             remote: context.remote,
             sessionSchedule: context.sessionSchedule,
             promptQueue: context.promptQueue,
+            looseTerminals: context.looseTerminals,
             toasts: context.toasts,
             onboarding: context.onboarding,
             usage: context.usage,

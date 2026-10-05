@@ -64,6 +64,7 @@ struct ShellComposition {
             remote: remote.remoteStore,
             sessionSchedule: sessionSchedule.sessionSchedule,
             promptQueue: terminal.promptQueue,
+            looseTerminals: terminal.looseTerminals,
             toasts: shared.toasts,
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,

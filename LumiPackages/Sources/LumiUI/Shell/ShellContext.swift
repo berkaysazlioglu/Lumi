@@ -75,6 +75,8 @@ public final class ShellContext {
     public let remote: RemoteStore
     public let sessionSchedule: SessionScheduleStore
     public let promptQueue: PromptQueueStore
+    /// Serbest terminallerin konumu (karar 108).
+    public let looseTerminals: LooseTerminalStore
     public let toasts: ToastStore
     public let onboarding: OnboardingStore
     /// Sağlayıcı başına kullanım store'u (karar 32).
@@ -119,6 +121,7 @@ public final class ShellContext {
         remote: RemoteStore,
         sessionSchedule: SessionScheduleStore,
         promptQueue: PromptQueueStore,
+        looseTerminals: LooseTerminalStore,
         toasts: ToastStore,
         onboarding: OnboardingStore,
         usage: [AgentProvider: UsageStore],
@@ -151,6 +154,7 @@ public final class ShellContext {
         self.remote = remote
         self.sessionSchedule = sessionSchedule
         self.promptQueue = promptQueue
+        self.looseTerminals = looseTerminals
         self.toasts = toasts
         self.onboarding = onboarding
         self.usage = usage
@@ -176,6 +180,22 @@ public final class ShellContext {
     /// da All Terminals. Grid/Edit gibi yüzey kontrollerinin kapısı; repo'ya
     /// bağlı eylemler (spawn, hızlı komutlar) `activeRepoPath`'te kalır.
     public var activeTerminalScope: TerminalScope? { navigation.activeRoute.terminalScope }
+
+    /// Yüzeyden terminal açmanın TEK intent'i (top bar, boş durum, focus bar,
+    /// dropdown). Repo yüzeyi kendi checkout'unda açar; All Terminals serbest
+    /// terminali geçerli konumda açar (karar 108) — konum silinmişse store
+    /// uyarır ve terminal açılmaz.
+    public func spawnTerminal(in scope: TerminalScope, command: String?, task: String? = nil) {
+        let directory: String
+        switch scope {
+        case .repo(let repoPath):
+            directory = repoPath
+        case .all:
+            guard let location = looseTerminals.locationForSpawn() else { return }
+            directory = location
+        }
+        terminals.spawn(in: directory, command: command, task: task)
+    }
 
     /// Checkout'un kullanıcıya görünen adı: proje kökü için proje adı,
     /// yönetilen workspace için `proje / workspace` (Projects panelindeki

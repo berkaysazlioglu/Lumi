@@ -48,6 +48,7 @@ public extension ShellContext {
             remote: RemoteStore(service: PreviewRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: PreviewSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminal, toasts: shared.toasts),
+            looseTerminals: LooseTerminalStore(config: config, toasts: shared.toasts),
             toasts: shared.toasts,
             onboarding: OnboardingStore(
                 system: PreviewSystemService(),

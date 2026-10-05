@@ -3,9 +3,9 @@ import SwiftUI
 
 /// Üretim bölgesi öğeleri (terminal feature'ının katkısı, Faz 6.4).
 ///
-/// Grid ayarı ve Edit **terminal yüzeyinde** (repo route'u ya da All
-/// Terminals — karar 103) görünür; `New <Provider>` ise yalnız **repo
-/// route'unda** — spawn bir checkout ister. Descriptor'ların `isVisible`
+/// Grid ayarı, Edit ve `New <Provider>` **terminal yüzeyinde** (repo route'u
+/// ya da All Terminals — karar 103) görünür; All Terminals'ta `New` serbest
+/// terminali seçili konumda açar (karar 108). Descriptor'ların `isVisible`
 /// kapısı `TerminalFeatureAssembly`'de yazılıdır; view'lar aynı koşulu
 /// yapısal olarak tekrarlar (eski `if let active = shell.activeRepoPath`).
 public struct GridSettingsToolbarItem: View {
@@ -73,17 +73,8 @@ public struct NewTerminalToolbarItem: View {
     public init() {}
 
     public var body: some View {
-        if let repoPath = shell.activeRepoPath {
-            NewTerminalButton(
-                provider: shell.settings.current.aiProvider,
-                onNewProvider: {
-                    shell.terminals.spawn(
-                        in: repoPath,
-                        command: shell.settings.current.aiProvider.launchCommand
-                    )
-                },
-                items: NewTerminalMenu.items(shell: shell, repoPath: repoPath)
-            )
+        if let scope = shell.activeTerminalScope {
+            ScopedNewTerminalButton(scope: scope)
         }
     }
 }

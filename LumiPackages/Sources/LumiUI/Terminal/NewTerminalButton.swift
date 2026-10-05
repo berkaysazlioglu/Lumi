@@ -13,13 +13,16 @@ struct NewTerminalMenuItem: Identifiable {
 
     let label: String
     let glyph: Glyph
+    /// Seçilebilir satırlarda (konum bölümü — karar 108) sağda tik.
+    let isSelected: Bool
     let action: () -> Void
 
     var id: String { label }
 
-    init(label: String, glyph: Glyph, action: @escaping () -> Void) {
+    init(label: String, glyph: Glyph, isSelected: Bool = false, action: @escaping () -> Void) {
         self.label = label
         self.glyph = glyph
+        self.isSelected = isSelected
         self.action = action
     }
 }
@@ -34,8 +37,12 @@ struct NewTerminalButton: View {
     static let leaveCloseDelay = Theme.Motion.menuLeaveCloseDelay
 
     let provider: AgentProvider
+    /// Karar 108: All Terminals'ta terminalin açılacağı konum (`~`); repo'da nil.
+    var locationLabel: String?
     let onNewProvider: () -> Void
     let items: [NewTerminalMenuItem]
+    /// Karar 108: dropdown'un "Open in" bölümü; boşsa bölüm çizilmez.
+    var locationItems: [NewTerminalMenuItem] = []
 
     @State private var isOpen = false
     @State private var closeTask: Task<Void, Never>?
@@ -49,6 +56,15 @@ struct NewTerminalButton: View {
                         .accessibilityHidden(true)
                     Text("New \(provider.displayName)")
                         .font(Theme.Typography.mono(.label, weight: .semibold))
+                    if let locationLabel {
+                        Text(locationLabel)
+                            .font(Theme.Typography.mono(.label))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: Theme.scaled(140), alignment: .leading)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                 }
                 .foregroundStyle(.white)
                 // 10/7pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
@@ -58,7 +74,11 @@ struct NewTerminalButton: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("New \(provider.displayName) terminal")
+            .help(locationLabel.map { "New \(provider.displayName) terminal in \($0)" } ?? "")
+            .accessibilityLabel(
+                locationLabel.map { "New \(provider.displayName) terminal in \($0)" }
+                    ?? "New \(provider.displayName) terminal"
+            )
 
             Rectangle()
                 .fill(Color.white.opacity(0.18))
@@ -112,15 +132,56 @@ struct NewTerminalButton: View {
     private var dropdown: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
             ForEach(items) { item in
-                NewTerminalDropdownItem(glyph: item.glyph, label: item.label) {
-                    isOpen = false
-                    item.action()
+                dropdownRow(item)
+            }
+            if !locationItems.isEmpty {
+                Rectangle()
+                    .fill(Theme.border)
+                    .frame(height: Theme.Stroke.hairline)
+                    .padding(.vertical, Theme.Spacing.xs)
+                    .accessibilityHidden(true)
+                Text("Open in")
+                    .font(Theme.Typography.mono(.caption, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.horizontal, Theme.scaled(10))
+                    .padding(.vertical, Theme.Spacing.xxs)
+                ForEach(locationItems) { item in
+                    dropdownRow(item)
                 }
             }
         }
         .padding(Theme.Spacing.sm)
-        .frame(width: Theme.scaled(220))
+        .frame(width: Theme.scaled(locationItems.isEmpty ? 220 : 260))
         .background(Theme.bgElevated)
+    }
+}
+
+extension NewTerminalButton {
+    fileprivate func dropdownRow(_ item: NewTerminalMenuItem) -> some View {
+        NewTerminalDropdownItem(glyph: item.glyph, label: item.label, isSelected: item.isSelected) {
+            isOpen = false
+            item.action()
+        }
+    }
+}
+
+/// Kapsama bağlı split-button (karar 108): top bar ve boş durum aynı butonu
+/// buradan kurar — spawn `ShellContext.spawnTerminal(in:)`'e gider, All
+/// Terminals'ta konum etiketi ve "Open in" bölümü eklenir.
+struct ScopedNewTerminalButton: View {
+    let scope: TerminalScope
+
+    @Shell private var shell
+
+    var body: some View {
+        let provider = shell.settings.current.aiProvider
+        NewTerminalButton(
+            provider: provider,
+            locationLabel: NewTerminalMenu.locationLabel(shell: shell, scope: scope),
+            onNewProvider: { shell.spawnTerminal(in: scope, command: provider.launchCommand) },
+            items: NewTerminalMenu.items(shell: shell, scope: scope),
+            locationItems: NewTerminalMenu.locationItems(shell: shell, scope: scope)
+        )
     }
 }
 
@@ -128,6 +189,7 @@ struct NewTerminalButton: View {
 private struct NewTerminalDropdownItem: View {
     let glyph: NewTerminalMenuItem.Glyph
     let label: String
+    let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
@@ -138,7 +200,15 @@ private struct NewTerminalDropdownItem: View {
                     .accessibilityHidden(true)
                 Text(label)
                     .font(Theme.Typography.mono(.body))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(Theme.Typography.ui(.caption, weight: .semibold))
+                        .foregroundStyle(Theme.accentPrimary)
+                        .accessibilityHidden(true)
+                }
             }
             // 10/7pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
             .padding(.horizontal, Theme.scaled(10))
@@ -151,6 +221,7 @@ private struct NewTerminalDropdownItem: View {
             )
         )
         .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder

@@ -61,6 +61,7 @@ struct ShellContextFixture {
             remote: RemoteStore(service: FakeRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminalService, toasts: toasts),
+            looseTerminals: LooseTerminalStore(config: config, toasts: toasts),
             toasts: toasts,
             onboarding: OnboardingStore(
                 system: system,
