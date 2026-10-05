@@ -1,96 +1,104 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import LumiServices
 
-/// `HighlightrEngine`'in SAF dil eşlemesi ve düz-metin cutoff sınırı
-/// (refactor plan 2.8). JSCore'a hiç girilmez — yalnız tablo davranışı.
+/// Karar 111: dosya adı → dil tablosu ve düz-metin cutoff sınırları
+/// (refactor plan 2.8). JSCore'a girilmez — yalnız tablo davranışı.
 @MainActor
 final class SyntaxHighlightingLanguageTests: XCTestCase {
     private func language(_ name: String) -> String? {
-        HighlightrEngine.language(forFileName: name)
+        HighlightLanguage.id(forFileName: name)
     }
 
     // MARK: - Dosya adı özel durumları
 
-    func testDockerfileIsMatchedByNameNotExtension() {
+    func testExactNamesWinOverExtensions() {
         XCTAssertEqual(language("Dockerfile"), "dockerfile")
-        XCTAssertEqual(language("dockerfile"), "dockerfile")
         XCTAssertEqual(language("build/Dockerfile"), "dockerfile", "yalnız son bileşene bakılır")
+        XCTAssertEqual(language("Makefile"), "makefile")
+        XCTAssertEqual(language("CMakeLists.txt"), "cmake", "tam ad .txt'yi ezer")
+        XCTAssertEqual(language("Podfile"), "ruby")
+        XCTAssertEqual(language("Jenkinsfile"), "groovy")
+        XCTAssertEqual(language(".zshrc"), "bash")
     }
 
-    func testDockerfileWithSuffixIsNotMatched() {
-        // Mevcut davranış: tam ad eşleşmesi — "Dockerfile.dev" uzantı yoluna düşer
-        // ("dev" tabloda yok) → nil.
-        XCTAssertNil(language("Dockerfile.dev"))
+    func testPrefixPatterns() {
+        XCTAssertEqual(language("Dockerfile.dev"), "dockerfile")
+        XCTAssertEqual(language(".env.local"), "properties")
+        XCTAssertEqual(language(".env"), "properties")
     }
 
-    func testExtensionlessFileHasNoLanguage() {
+    func testPlainFilesStayUnhighlighted() {
         XCTAssertNil(language("LICENSE"))
-        XCTAssertNil(language("Makefile"))
-        XCTAssertNil(language(""))
-    }
-
-    func testPlainTextExtensionIsExplicitlyUnhighlighted() {
         XCTAssertNil(language("notes.txt"))
-    }
-
-    func testUnknownExtensionFallsBackToNil() {
+        XCTAssertNil(language(".gitignore"))
         XCTAssertNil(language("data.parquet"))
-        XCTAssertNil(language("archive.tar.gz"))
+        XCTAssertNil(language(""))
     }
 
     func testLookupIsCaseInsensitive() {
         XCTAssertEqual(language("Main.SWIFT"), "swift")
         XCTAssertEqual(language("App.TSX"), "typescript")
-        XCTAssertEqual(language("Style.CSS"), "css")
+        XCTAssertEqual(language("PODFILE"), "ruby")
     }
 
-    func testExtensionAliasesShareOneLanguage() {
-        XCTAssertEqual(language("a.ts"), language("a.tsx"))
-        XCTAssertEqual(language("a.js"), "javascript")
-        XCTAssertEqual(language("a.mjs"), "javascript")
-        XCTAssertEqual(language("a.cjs"), "javascript")
-        XCTAssertEqual(language("a.yml"), language("a.yaml"))
-        XCTAssertEqual(language("a.htm"), "xml", "html → xml grameri")
-        XCTAssertEqual(language("a.svg"), "xml")
-        XCTAssertEqual(language("a.markdown"), "markdown")
+    func testCommonLanguagesAreMapped() {
+        let expected: [String: String] = [
+            "a.cs": "csharp", "a.m": "objectivec", "a.mm": "objectivec", "a.dart": "dart",
+            "a.php": "php", "a.lua": "lua", "a.kt": "kotlin", "a.gradle": "gradle",
+            "a.ps1": "powershell", "a.vue": "xml", "a.scala": "scala", "a.ex": "elixir",
+            "a.proto": "protobuf", "a.toml": "ini", "a.plist": "xml", "a.csproj": "xml",
+        ]
+        for (file, id) in expected { XCTAssertEqual(language(file), id, file) }
     }
 
-    func testDotfileIsTreatedAsExtensionByFoundation() {
-        // Mevcut davranışın belgelenmesi: `(".gitignore" as NSString).pathExtension`
-        // boş döner → nil (dosya adı "gitignore" gibi ele alınmaz).
-        XCTAssertNil(language(".gitignore"))
+    func testUnityFilesAreMapped() {
+        XCTAssertEqual(language("Main.unity"), "yaml")
+        XCTAssertEqual(language("Player.prefab"), "yaml")
+        XCTAssertEqual(language("Player.prefab.meta"), "yaml")
+        XCTAssertEqual(language("Game.asmdef"), "json")
+        XCTAssertEqual(language("Panel.uxml"), "xml")
+        XCTAssertEqual(language("Panel.uss"), "css")
+        XCTAssertEqual(language("Lit.shader"), "shaderlab")
+        XCTAssertEqual(language("Common.cginc"), "hlsl")
+        XCTAssertEqual(language("Blur.compute"), "hlsl")
+    }
+
+    func testTerraformUsesLumiGrammar() {
+        XCTAssertEqual(language("main.tf"), "hcl")
+        XCTAssertEqual(language("prod.tfvars"), "hcl")
     }
 
     // MARK: - Cutoff sınırı
 
-    func testPlainTextCutoffIsOneMegabyte() {
-        XCTAssertEqual(HighlightrEngine.plainTextCutoffBytes, 1_000_000)
+    func testHeavyLanguagesHaveLowerCutoff() {
+        XCTAssertEqual(HighlightJSEngine.cutoff(for: "swift"), 1_000_000)
+        XCTAssertEqual(HighlightJSEngine.cutoff(for: "typescript"), 400_000)
+        XCTAssertEqual(HighlightJSEngine.cutoff(for: "xml"), 400_000)
     }
 
     func testCutoffCompareUsesUTF8ByteCountNotCharacterCount() async {
-        // Sınırın hemen ALTINDA çok baytlı içerik: karakter sayısı sınırın altında
-        // olsa da UTF-8 bayt sayısı aşarsa düz metne düşmeli.
-        let engine = HighlightrEngine()
-        let multibyte = String(repeating: "ü", count: HighlightrEngine.plainTextCutoffBytes / 2 + 1)
-        XCTAssertGreaterThan(multibyte.utf8.count, HighlightrEngine.plainTextCutoffBytes)
-        XCTAssertLessThan(multibyte.count, HighlightrEngine.plainTextCutoffBytes)
+        let engine = HighlightJSEngine()
+        let multibyte = String(repeating: "ü", count: HighlightJSEngine.plainTextCutoffBytes / 2 + 1)
+        XCTAssertGreaterThan(multibyte.utf8.count, HighlightJSEngine.plainTextCutoffBytes)
+        XCTAssertLessThan(multibyte.count, HighlightJSEngine.plainTextCutoffBytes)
 
         let result = await engine.highlight(code: multibyte, fileName: "big.swift", fontSize: 12)
-        // Düz metin yolu: attribute'lar tek run halinde (highlight edilmiş metinde
-        // birden çok renk run'ı olurdu).
         XCTAssertEqual(result.string, multibyte)
-        var runCount = 0
-        result.enumerateAttributes(in: NSRange(location: 0, length: result.length)) { _, _, _ in
-            runCount += 1
-        }
-        XCTAssertEqual(runCount, 1, "cutoff üstü içerik tek run'lı düz metin olmalı")
+        XCTAssertEqual(runCount(result), 1, "cutoff üstü içerik tek run'lı düz metin olmalı")
     }
 
     func testUnknownLanguageAlwaysUsesPlainTextPath() async {
-        let engine = HighlightrEngine()
-        let code = "hello world"
-        let result = await engine.highlight(code: code, fileName: "notes.txt", fontSize: 12)
-        XCTAssertEqual(result.string, code)
+        let engine = HighlightJSEngine()
+        let result = await engine.highlight(code: "hello world", fileName: "notes.txt", fontSize: 12)
+        XCTAssertEqual(result.string, "hello world")
+        XCTAssertEqual(runCount(result), 1)
+    }
+
+    private func runCount(_ text: NSAttributedString) -> Int {
+        var count = 0
+        text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { _, _, _ in count += 1 }
+        return count
     }
 }

@@ -143,7 +143,7 @@ enum ShellFixtureError: Error {
     case terminalDidNotAppear
 }
 
-/// FileViewer'ın gerçek `HighlightrEngine`'ini (JSCore) testlere sokmamak için.
+/// FileViewer'ın gerçek `HighlightJSEngine`'ini (JSCore) testlere sokmamak için.
 final class StubHighlighter: SyntaxHighlighting {
     func highlight(code: String, fileName: String, fontSize: CGFloat) async -> NSAttributedString {
         NSAttributedString(string: code)

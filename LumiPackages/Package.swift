@@ -23,7 +23,6 @@ let package = Package(
             url: "https://github.com/migueldeicaza/SwiftTerm.git",
             revision: "24a68bcadc479d945c7ca32f21ac0a8ab895c690"
         ),
-        .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
         // GFM ayrıştırması (cmark-gfm) — yalnız LumiServices'te, `MarkdownParsing`
         // dikişinin arkasında (karar 109).
         .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.9.0"),
@@ -39,14 +38,19 @@ let package = Package(
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
             ]
         ),
-        // Highlightr (highlight.js/JSCore) refactor 7.5'te LumiUI'dan buraya
-        // taşındı: view modülü artık ne JSCore'u ne de arka plan kuyruğunu tanır.
+        // Vurgulama (highlight.js/JSCore) refactor 7.5'te LumiUI'dan buraya
+        // taşındı; karar 111'de Highlightr sarmalayıcısı bırakıldı — highlight.js
+        // ve Lumi gramerleri bu modülün kaynaklarıdır.
         .target(
             name: "LumiServices",
             dependencies: [
                 "LumiKit",
-                .product(name: "Highlightr", package: "Highlightr"),
                 .product(name: "Markdown", package: "swift-markdown"),
+            ],
+            resources: [
+                .copy("Highlighting/Resources/highlight.min.js"),
+                .copy("Highlighting/Resources/highlight.js-LICENSE"),
+                .copy("Highlighting/Resources/grammars"),
             ]
         ),
         .target(name: "LumiState", dependencies: ["LumiKit"]),

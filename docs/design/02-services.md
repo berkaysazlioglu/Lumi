@@ -22,7 +22,7 @@ Genel kurallar:
 | `SystemServicing` + `SystemCheck` + `TerminalSmokeTesting` | `SystemService` (+ `ShellCheck`, `PTYSmokeCheck`, `AgentCLICheck`, `PathEnvironmentFixer`, `ExternalURLOpener`, `FileSystemOperations`, `FolderChooser`); smoke tester `PTYSmokeTester` (LumiTerminal) | [§8](#8-systemservicing) |
 | `ProcessRunning` / `BinaryLocating` | `SystemProcessRunner` / `SystemBinaryLocator` | [§8](#8-systemservicing) |
 | `UsageServicing` + `UsageCacheInvalidating` | `ClaudeUsageService`, `CodexUsageService`, `CachingUsageService` dekoratörü | [05](./05-usage-indicator.md) |
-| `SyntaxHighlighting` | `HighlightrEngine` (+ `HighlightrStyle`) | [§8](#8-systemservicing) |
+| `SyntaxHighlighting` | `HighlightJSEngine` (+ `HighlightStyle`) | [§8](#8-systemservicing) |
 | `SessionStarterServicing` | `SessionStarterService` (actor) | [§7](#7-notificationservicing) |
 | `ActivityMonitoring` | `SystemActivityMonitor` | [05 §6.1](./05-usage-indicator.md) |
 | `TerminalSessionControlling` / `TerminalAppearanceControlling` / `TerminalViewProviding` | `TerminalSessionManager` / `TerminalViewRegistry` | [01](./01-terminal-subsystem.md) |
@@ -354,7 +354,7 @@ public protocol SyntaxHighlighting: AnyObject {
 }
 ```
 
-Refactor 7.5'te tek implementasyon `HighlightrEngine` LumiUI'dan **LumiServices**'e taşındı: view modülü artık ne Highlightr paketini (JSCore) ne de arka plan kuyruğunu tanır. Görsel parametreler `HighlightrStyle` ile composition root'tan enjekte edilir (tema adı, düz metin rengi, punto→font closure'ı) — motor `Theme`/`LumiFonts`'u göremez (katman kuralı). `plainTextCutoffBytes` (1 MB) üstünde düz metne düşülür. Highlightr yetersiz kalırsa view'a dokunmadan başka bir motora geçilebilir.
+Refactor 7.5'te tek implementasyon LumiUI'dan **LumiServices**'e taşındı: view modülü artık ne JSCore'u ne de arka plan kuyruğunu tanır. Karar 111'de Highlightr sarmalayıcısı bırakıldı: `HighlightJSEngine` highlight.js'i (+ Lumi gramerleri `hlsl`/`shaderlab`/`hcl`) modül kaynaklarından kendi JSContext'ine yükler, HTML çıktısını `HighlightHTMLRenderer` boyar. Görsel parametreler `HighlightStyle` ile composition root'tan enjekte edilir (düz metin rengi, punto→font closure'ı, kapsam→renk tablosu) — motor `Theme`/`LumiFonts`'u göremez (katman kuralı). `plainTextCutoffBytes` (1 MB; JS/TS/XML/PHP'de 400 KB) üstünde düz metne düşülür. highlight.js yetersiz kalırsa view'a dokunmadan başka bir motora geçilebilir.
 
 ---
 

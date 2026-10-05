@@ -44,7 +44,7 @@ LumiPackages/Package.swift
 │                    TerminalEventMonitor)          → SwiftTerm (internal detay)
 ├── LumiServices   — Config/ (ConfigService + bölüm codec'leri), Repo/, Git/,
 │                    System/ (+ Checks/), Notification/, Usage/, Session/,
-│                    Highlighting/, Markdown/       → Highlightr, swift-markdown
+│                    Highlighting/, Markdown/       → highlight.js (kaynak), swift-markdown
 │                                                     (internal detay)
 ├── LumiState      — @Observable @MainActor store'lar; Composition/
 │                    (FeatureAssembly + BootstrapPhase, SharedStores,
@@ -72,13 +72,13 @@ LumiPackages/Package.swift
 
 ```
 LumiApp (exe) ──► LumiAppCore ──► LumiUI ──► LumiState ──► LumiKit
-                       ├────────► LumiServices ─────────► LumiKit  (+ Highlightr, swift-markdown)
+                       ├────────► LumiServices ─────────► LumiKit  (+ swift-markdown; highlight.js kaynak olarak)
                        └────────► LumiTerminal ─────────► LumiKit  (+ SwiftTerm)
 LumiKit ──► (dış bağımlılık yok)
 ```
 
 - `LumiUI` ve `LumiState`, `LumiServices`/`LumiTerminal`'i **import edemez** — yalnız `LumiKit` protokollerini görürler. Somut implementasyonları yalnız `LumiAppCore` (composition root) tanır.
-- SwiftTerm yalnız `LumiTerminal`, Highlightr ve swift-markdown yalnız `LumiServices` içinde import edilir; hiçbiri public yüzeye sızmaz (swift-markdown'ın dikişi `MarkdownParsing` + saf `MarkdownDocument` modelidir — karar 109). (Highlightr refactor 7.5'te LumiUI'dan LumiServices'e taşındı: view modülü artık ne JSCore'u ne de bir arka plan kuyruğunu tanır; dikiş `SyntaxHighlighting` protokolüdür — [02 §8](./02-services.md).)
+- SwiftTerm yalnız `LumiTerminal`, swift-markdown (ve highlight.js'in JSCore'u) yalnız `LumiServices` içinde import edilir; hiçbiri public yüzeye sızmaz (swift-markdown'ın dikişi `MarkdownParsing` + saf `MarkdownDocument` modelidir — karar 109). (Highlightr refactor 7.5'te LumiUI'dan LumiServices'e taşındı: view modülü artık ne JSCore'u ne de bir arka plan kuyruğunu tanır; dikiş `SyntaxHighlighting` protokolüdür — [02 §8](./02-services.md).)
 - Sınır hilesi: `TerminalViewProviding` protokolü (NSView tipli `attachView`/`detachView`/`isAttached`/`detachAll`/`refreshAttachedViews`) **LumiKit'te** yaşar; böylece `LumiUI`, `LumiTerminal`'i import etmeden canlı terminal view'larını host eder ([03 §3](./03-ui-shell.md)).
 - `FeatureAssembly`/`SharedStores` neden LumiKit'te değil LumiState'te? İkisi de `SharedStores`'a (yani somut store tiplerine) bağlıdır; LumiKit store katmanını göremez. `ServiceRegistry` ise yalnız protokollere bağlı olduğu için LumiKit'tedir.
 

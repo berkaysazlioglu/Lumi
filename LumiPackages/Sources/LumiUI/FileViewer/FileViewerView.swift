@@ -368,7 +368,7 @@ private struct RenderedMarkdownDiffView: View {
     }
 }
 
-/// view modu içeriği: async highlight + 1MB üstü düz metin (HighlightrEngine).
+/// view modu içeriği: async highlight + 1MB üstü düz metin (HighlightJSEngine).
 ///
 /// Karar 110: düzenlenirken her değişiklik yeniden vurgulanır; `task(id:)`
 /// iptali kısa bekleme ile birleşince yazarken vurgulama ertelenir. Vurgu

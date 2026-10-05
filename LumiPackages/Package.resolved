@@ -1,15 +1,6 @@
 {
-  "originHash" : "c5b986971ce0cb98f2d5b9f6c0f855b6ad2ff32f7d102c28f3bdd406cf8ea815",
+  "originHash" : "ad1cc7458e7a5ea14d95fe1ec973cbb09b19627c4ce64e22d03216df27d4bdc1",
   "pins" : [
-    {
-      "identity" : "highlightr",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/raspu/Highlightr.git",
-      "state" : {
-        "revision" : "05e7fcc63b33925cd0c1faaa205cdd5681e7bbef",
-        "version" : "2.3.0"
-      }
-    },
     {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",

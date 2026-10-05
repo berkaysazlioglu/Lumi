@@ -335,7 +335,7 @@ private struct ShellFixture {
     }
 }
 
-/// FileViewer'ın gerçek `HighlightrEngine`'ini (JSCore) testlere sokmamak için.
+/// FileViewer'ın gerçek `HighlightJSEngine`'ini (JSCore) testlere sokmamak için.
 private final class NoopHighlighter: SyntaxHighlighting {
     func highlight(code: String, fileName: String, fontSize: CGFloat) async -> NSAttributedString {
         NSAttributedString(string: code)

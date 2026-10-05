@@ -49,7 +49,7 @@ public protocol ServiceRegistry: AnyObject {
     var viewProvider: any TerminalViewProviding { get }
 
     /// FileViewer'ın sözdizimi vurgulayıcısı (refactor 7.5). Somut motor
-    /// (`HighlightrEngine`, JSCore) LumiServices'te; kabuk yalnız protokolü görür.
+    /// (`HighlightJSEngine`, JSCore) LumiServices'te; kabuk yalnız protokolü görür.
     var highlighter: any SyntaxHighlighting { get }
     /// Karar 109: FileViewer'ın render'lı markdown ayrıştırıcısı (cmark-gfm,
     /// LumiServices'te); kabuk yalnız saf `MarkdownDocument` modelini görür.
