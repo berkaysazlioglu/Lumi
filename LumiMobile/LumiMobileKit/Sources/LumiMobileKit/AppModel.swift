@@ -99,6 +99,15 @@ public final class AppModel {
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
     /// Phase 3: active (pending) interactive prompts per session.
     public private(set) var prompts: [String: [ChatPrompt]] = [:]
+    /// Task 3: in-progress answer drafts for pending prompt cards, keyed by
+    /// "sessionId\u{0}itemId". Lives here (not the card's @State) so selections
+    /// survive leaving the chat and the card being re-created.
+    private var promptDrafts: [String: PromptDraft] = [:]
+    /// Decision 104: sessions whose Stop was pressed and whose idle status has not
+    /// arrived yet — the bar shows "Stopping…" and the button is disabled.
+    public private(set) var stoppingSessions: Set<String> = []
+    /// Decision 104: if the Mac never reports idle after a Stop, close the turn locally.
+    public var stopFallbackDelay: Duration = .seconds(5)
 
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
@@ -172,6 +181,7 @@ public final class AppModel {
         streamingGates = [:]
         gatedStreaming = [:]
         turnStatus = [:]
+        stoppingSessions = []
         prompts = [:]
         models = [:]
         lastCommandError = [:]
@@ -279,7 +289,13 @@ public final class AppModel {
 
         case .chatStatus(let sessionId, let status):
             macOnline = true
+            let previousStart = turnStatus[sessionId]?.startedAtMs
             turnStatus[sessionId] = status
+            // "Stopping…" belongs to one turn: clear it on idle, and also when a
+            // new turn (different startedAtMs) starts without an idle in between.
+            if !status.working || status.startedAtMs != previousStart {
+                stoppingSessions.remove(sessionId)
+            }
             recomputeStreaming(sessionId)
 
         case .prompt(let sessionId, let p):
@@ -287,6 +303,7 @@ public final class AppModel {
             var list = prompts[sessionId] ?? []
             list.removeAll { $0.itemId == p.itemId }
             if p.state == .pending { list.append(p) }   // resolved/cancelled → listede tutma
+            if p.state != .pending { promptDrafts[sessionId + "\u{0}" + p.itemId] = nil }
             prompts[sessionId] = list
 
         case .projects(let snap):
@@ -345,6 +362,7 @@ public final class AppModel {
             streamingGates[active] = nil
             gatedStreaming[active] = nil
             turnStatus[active] = nil
+            stoppingSessions.remove(active)
             prompts[active] = nil
         }
     }
@@ -400,6 +418,31 @@ public final class AppModel {
         Task { await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: data)) }
     }
 
+    /// Decision 104: interrupt the running turn. Esc (0x1B), not Ctrl-C — Esc is
+    /// Claude's interrupt key; a second Ctrl-C on an idle Claude asks it to exit.
+    public func requestStop(_ sessionId: String) {
+        guard !stoppingSessions.contains(sessionId) else { return }
+        stoppingSessions.insert(sessionId)
+        sendInput(sessionId, Data([0x1B]))
+        let startedAt = turnStatus[sessionId]?.startedAtMs
+        let delay = stopFallbackDelay
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            self?.applyStopFallback(sessionId, startedAt: startedAt)
+        }
+    }
+
+    private func applyStopFallback(_ sessionId: String, startedAt: Int?) {
+        guard stoppingSessions.contains(sessionId) else { return }
+        stoppingSessions.remove(sessionId)
+        // Only close the SAME turn — a new turn started meanwhile stays live.
+        guard let status = turnStatus[sessionId], status.working, status.startedAtMs == startedAt else { return }
+        DiagLog.shared.log("model", "stop fallback sid=\(sessionId.prefix(8)) → local idle")
+        turnStatus[sessionId] = .idle
+        prompts[sessionId] = []
+        recomputeStreaming(sessionId)
+    }
+
     /// Phase 3: interactive prompt response. No optimistic dismiss — the card is removed
     /// via `handle(.prompt)` when a resolution broadcast (state=resolved/cancelled) arrives.
     public func respondPrompt(_ sessionId: String, itemId: String, revision: Int, optionId: String) {
@@ -412,6 +455,17 @@ public final class AppModel {
                                         selections: [(indices: [Int], other: String?)]) {
         Task { await client.send(frame: PhoneProtocol.promptRespondSelectionsFrame(
             sessionId: sessionId, itemId: itemId, expectedRevision: revision, selections: selections)) }
+    }
+
+    /// Task 3: current in-progress draft for a pending prompt card (empty if none).
+    public func promptDraft(_ sessionId: String, itemId: String) -> PromptDraft {
+        promptDrafts[sessionId + "\u{0}" + itemId] ?? PromptDraft()
+    }
+
+    /// Task 3: the card calls this on every selection/text change — draft lives here,
+    /// not in the card's @State, so it survives leaving the chat and card re-creation.
+    public func updatePromptDraft(_ sessionId: String, itemId: String, _ draft: PromptDraft) {
+        promptDrafts[sessionId + "\u{0}" + itemId] = draft
     }
 
     /// The "settle" window between the text and Enter in `submitText`.
@@ -585,7 +639,9 @@ public final class AppModel {
         streamingGates[id] = nil
         gatedStreaming[id] = nil
         turnStatus[id] = nil
+        stoppingSessions.remove(id)
         prompts[id] = nil
+        promptDrafts = promptDrafts.filter { !$0.key.hasPrefix(id + "\u{0}") }
         models[id] = nil
         lastCommandError[id] = nil
         if activeSessionId == id { activeSessionId = nil; activeChatMode = false }

@@ -36,6 +36,7 @@ public extension ShellContext {
             workspaces: ProjectWorkspaceStore(service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts),
             quickCommands: QuickCommandStore(config: config, generator: PreviewQuickCommandGenerator(),
                 scripts: PreviewQuickCommandScripts(), launcher: PreviewQuickCommandLauncher(), toasts: shared.toasts),
+            favoriteFiles: FavoriteFileStore(config: config, toasts: shared.toasts),
             git: GitStore(git: git, toasts: shared.toasts),
             plastic: PlasticStore(service: PreviewPlasticService(), toasts: shared.toasts),
             commitAssistant: CommitMessageAssistant(generator: PreviewCommitMessageGenerator(), toasts: shared.toasts),
@@ -47,6 +48,7 @@ public extension ShellContext {
             remote: RemoteStore(service: PreviewRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: PreviewSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminal, toasts: shared.toasts),
+            looseTerminals: LooseTerminalStore(config: config, toasts: shared.toasts),
             toasts: shared.toasts,
             onboarding: OnboardingStore(
                 system: PreviewSystemService(),
@@ -79,6 +81,7 @@ public extension ShellContext {
             orchestrator: OrchestratorStore(service: PreviewOrchestratorService(), config: config),
             viewProvider: viewProvider,
             highlighter: PreviewHighlighter(),
+            markdownParser: PreviewMarkdownParser(),
             actions: ShellActions(
                 chooseFolder: { repoPath },
                 reveal: { _, _ in },
@@ -374,6 +377,8 @@ private struct PreviewGitService: GitServicing {
     }
 
     func commit(repoPath: String, message: String, files: [String]) async throws {}
+
+    func writeFile(repoPath: String, file: String, contents: String) async throws {}
 }
 
 /// Sağlayıcı başına sabit bir yüzde döndürür; ağ/CLI yoktur.
@@ -593,6 +598,15 @@ private struct PreviewSystemService: SystemServicing {
     func trash(path: String) async throws {}
     func revealInFinder(path: String) {}
     @MainActor func chooseFolder() async -> String? { nil }
+}
+
+/// Preview'da gerçek ayrıştırıcı (LumiServices) yoktur: her satır paragraf.
+private struct PreviewMarkdownParser: MarkdownParsing {
+    func parse(_ text: String) -> MarkdownDocument {
+        MarkdownDocument(blocks: text
+            .split(separator: "\n")
+            .map { .paragraph([.text(String($0))]) })
+    }
 }
 
 private final class PreviewHighlighter: SyntaxHighlighting {

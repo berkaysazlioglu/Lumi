@@ -18,6 +18,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var repoStore: RepoStore!
     private(set) var workspaceStore: ProjectWorkspaceStore!
     private(set) var quickCommands: QuickCommandStore!
+    private(set) var favoriteFiles: FavoriteFileStore!
     private(set) var gitStore: GitStore!
     private(set) var plasticStore: PlasticStore!
     private(set) var commitAssistant: CommitMessageAssistant!
@@ -44,6 +45,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             scripts: services.quickCommandScripts, launcher: services.quickCommandLauncher,
             toasts: shared.toasts
         )
+        favoriteFiles = FavoriteFileStore(config: services.config, toasts: shared.toasts)
         agentHistory = AgentHistoryStore(
             service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts
         )
@@ -77,6 +79,14 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             makeView: { AnyView(QuickCommandsOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
+            id: .favoriteFiles,
+            isPresented: {
+                if case .favoriteFiles = $0.dialogs.active { return true }
+                return false
+            },
+            makeView: { AnyView(FavoriteFilesOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
             id: .deleteWorkspaceDialog,
             isPresented: { $0.dialogs.deleteWorkspaceDialog != nil },
             makeView: { AnyView(DeleteWorkspaceDialogOverlay()) }
@@ -93,6 +103,14 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             order: ShellToolbarItems.Order.quickCommands,
             isVisible: { $0.activeRepoPath != nil },
             makeView: { AnyView(QuickCommandsToolbarItem()) }
+        ))
+        // Karar 107: favori dosyalar, hızlı komutların solunda.
+        registries.toolbar.register(ToolbarItemDescriptor(
+            id: .favoriteFiles,
+            region: .center,
+            order: ShellToolbarItems.Order.favoriteFiles,
+            isVisible: { $0.activeRepoPath != nil },
+            makeView: { AnyView(FavoriteFilesToolbarItem()) }
         ))
         registries.panels.register(PanelItemDescriptor(
             id: .projectTools,
@@ -117,6 +135,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         await repoStore.reload()
         await workspaceStore.load()
         await quickCommands.load()
+        await favoriteFiles.load()
         // SIRA: workspace yüklemesi repoStore.reload'dan SONRA (migration repo
         // listesini okur); tek ui-state okumasıyla önce navigation, sonra layout.
         let uiState = await services.config.uiState()
@@ -137,6 +156,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         }
         if old.projectQuickCommands != new.projectQuickCommands {
             quickCommands.update(new.projectQuickCommands)
+        }
+        if old.projectFavoriteFiles != new.projectFavoriteFiles {
+            favoriteFiles.update(new.projectFavoriteFiles)
         }
         guard old.projectsRoot != new.projectsRoot
             || old.additionalPaths != new.additionalPaths else { return }

@@ -62,6 +62,8 @@ public final class ShellContext {
     public let workspaces: ProjectWorkspaceStore
     /// Proje hızlı komutları (karar 92).
     public let quickCommands: QuickCommandStore
+    /// Proje favori dosyaları (karar 107).
+    public let favoriteFiles: FavoriteFileStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
     /// Plastic SCM panel store'u (karar 46).
@@ -73,6 +75,8 @@ public final class ShellContext {
     public let remote: RemoteStore
     public let sessionSchedule: SessionScheduleStore
     public let promptQueue: PromptQueueStore
+    /// Serbest terminallerin konumu (karar 108).
+    public let looseTerminals: LooseTerminalStore
     public let toasts: ToastStore
     public let onboarding: OnboardingStore
     /// Sağlayıcı başına kullanım store'u (karar 32).
@@ -99,6 +103,7 @@ public final class ShellContext {
 
     @ObservationIgnored public let viewProvider: any TerminalViewProviding
     @ObservationIgnored public let highlighter: any SyntaxHighlighting
+    @ObservationIgnored public let markdownParser: any MarkdownParsing
     @ObservationIgnored public let actions: ShellActions
 
     public init(
@@ -109,6 +114,7 @@ public final class ShellContext {
         repos: RepoStore,
         workspaces: ProjectWorkspaceStore,
         quickCommands: QuickCommandStore,
+        favoriteFiles: FavoriteFileStore,
         git: GitStore,
         plastic: PlasticStore,
         commitAssistant: CommitMessageAssistant,
@@ -118,6 +124,7 @@ public final class ShellContext {
         remote: RemoteStore,
         sessionSchedule: SessionScheduleStore,
         promptQueue: PromptQueueStore,
+        looseTerminals: LooseTerminalStore,
         toasts: ToastStore,
         onboarding: OnboardingStore,
         usage: [AgentProvider: UsageStore],
@@ -132,6 +139,7 @@ public final class ShellContext {
         orchestrator: OrchestratorStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
+        markdownParser: any MarkdownParsing,
         actions: ShellActions
     ) {
         self.navigation = navigation
@@ -141,6 +149,7 @@ public final class ShellContext {
         self.repos = repos
         self.workspaces = workspaces
         self.quickCommands = quickCommands
+        self.favoriteFiles = favoriteFiles
         self.git = git
         self.plastic = plastic
         self.commitAssistant = commitAssistant
@@ -150,6 +159,7 @@ public final class ShellContext {
         self.remote = remote
         self.sessionSchedule = sessionSchedule
         self.promptQueue = promptQueue
+        self.looseTerminals = looseTerminals
         self.toasts = toasts
         self.onboarding = onboarding
         self.usage = usage
@@ -164,6 +174,7 @@ public final class ShellContext {
         self.orchestrator = orchestrator
         self.viewProvider = viewProvider
         self.highlighter = highlighter
+        self.markdownParser = markdownParser
         self.actions = actions
     }
 
@@ -177,6 +188,22 @@ public final class ShellContext {
     /// bağlı eylemler (spawn, hızlı komutlar) `activeRepoPath`'te kalır.
     public var activeTerminalScope: TerminalScope? { navigation.activeRoute.terminalScope }
 
+    /// Yüzeyden terminal açmanın TEK intent'i (top bar, boş durum, focus bar,
+    /// dropdown). Repo yüzeyi kendi checkout'unda açar; All Terminals serbest
+    /// terminali geçerli konumda açar (karar 108) — konum silinmişse store
+    /// uyarır ve terminal açılmaz.
+    public func spawnTerminal(in scope: TerminalScope, command: String?, task: String? = nil) {
+        let directory: String
+        switch scope {
+        case .repo(let repoPath):
+            directory = repoPath
+        case .all:
+            guard let location = looseTerminals.locationForSpawn() else { return }
+            directory = location
+        }
+        terminals.spawn(in: directory, command: command, task: task)
+    }
+
     /// Checkout'un kullanıcıya görünen adı: proje kökü için proje adı,
     /// yönetilen workspace için `proje / workspace` (Projects panelindeki
     /// hiyerarşinin tek satırlık hâli).
@@ -184,7 +211,32 @@ public final class ShellContext {
         if let workspace = workspaces.records.first(where: { $0.path == repoPath }) {
             return "\(projectName(at: workspace.projectPath)) / \(workspace.name)"
         }
+        if let repo = repos.repo(at: repoPath) { return repo.name }
+        // Karar 108: serbest terminalin "checkout"u bir proje değil, dizindir —
+        // klasör adı (`Desktop`) yerine kısa yol (`~/Desktop`).
+        if navigation.isLooseTerminalPath(repoPath) {
+            return LooseTerminalPath.displayLabel(repoPath)
+        }
         return projectName(at: repoPath)
+    }
+
+    /// Karar 108: Projects ▸ `Other` grubu — serbest terminaller dizinlerine
+    /// göre, etiket sırasıyla. Grup içi sıra panelin ajan sıralamasıdır
+    /// (`AgentRow.Model.sorted`), burada terminal listesinin sırası korunur.
+    public var looseTerminalGroups: [LooseTerminalGroup] {
+        let loose = terminals.terminals.filter { navigation.isLooseTerminalPath($0.repoPath) }
+        let paths = loose.reduce(into: [String]()) { paths, meta in
+            if !paths.contains(meta.repoPath) { paths.append(meta.repoPath) }
+        }
+        return paths
+            .map { path in
+                LooseTerminalGroup(
+                    path: path,
+                    label: LooseTerminalPath.displayLabel(path),
+                    terminals: loose.filter { $0.repoPath == path }
+                )
+            }
+            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
     private func projectName(at path: String) -> String {
@@ -303,12 +355,16 @@ public final class ShellContext {
     /// minimize edilmişse geri getirilip odaklanır. Checkout zaten maximize
     /// modundaysa seçim aynı solo yüzeyde terminal değiştirir; Projects ve
     /// maximize altındaki switcher böylece aynı davranışı taşır.
+    ///
+    /// Karar 108: serbest terminal repo tab'ı açmaz, All Terminals'ta öne gelir
+    /// (`NavigationStore.openTerminalSurface`).
     public func focusAgent(_ meta: TerminalMeta) {
-        let shouldSwitchMaximizedTerminal = layout.maximizedTerminal(in: meta.repoPath) != nil
-        if navigation.activeRepoPath != meta.repoPath { navigation.openTab(meta.repoPath) }
+        navigation.openTerminalSurface(for: meta.repoPath)
+        guard let scope = navigation.activeRoute.terminalScope else { return }
+        let shouldSwitchMaximizedTerminal = layout.maximizedTerminal(in: scope) != nil
         terminals.restoreAndFocus(meta.id)
         if shouldSwitchMaximizedTerminal {
-            layout.maximize(meta.id, in: meta.repoPath)
+            layout.maximize(meta.id, in: scope)
         }
     }
 
@@ -409,6 +465,21 @@ public final class ShellContext {
     public func presentFile(_ filePath: String) {
         guard let repoPath = activeRepoPath else { return }
         Task { await fileViewer.presentView(repoPath: repoPath, filePath: filePath) }
+    }
+
+    /// Karar 107: favori dosyayı checkout'ta Lumi viewer'ında açar ya da
+    /// Finder'da gösterir. Dosya tık anında yeniden doğrulanır — menü açıkken
+    /// silinen dosya boş viewer ya da sessiz Finder yerine uyarı verir.
+    public func openFavoriteFile(_ relativePath: String, in checkoutPath: String, revealInFinder: Bool) {
+        guard favoriteFiles.fileExists(relativePath, in: checkoutPath) else {
+            toasts.show(.error, title: "File not found", message: "\(relativePath) was moved or deleted.")
+            return
+        }
+        if revealInFinder {
+            actions.revealPath(FavoriteFilePath.absolute(relativePath, in: checkoutPath))
+        } else {
+            Task { await fileViewer.presentView(repoPath: checkoutPath, filePath: relativePath) }
+        }
     }
 
     public func presentDiff(_ filePath: String) {

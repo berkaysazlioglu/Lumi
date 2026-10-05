@@ -98,7 +98,8 @@ public final class TerminalDigestCoordinator {
         case .claudeSessionIDChanged(let id, let session):
             if let meta = terminals.meta(for: id) { watchList.adopt(meta) }
             watchList.sessionChanged(id, to: session)
-        case .titleChanged, .providerChanged, .codexSessionIDChanged, .bell, .writeFailed, .viewFocused, .stalled, .linkActivated:
+        case .titleChanged, .providerChanged, .codexSessionIDChanged, .interruptInferred, .bell, .writeFailed, .viewFocused,
+             .stalled, .linkActivated:
             break
         }
     }

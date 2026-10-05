@@ -64,6 +64,12 @@ public protocol GitWriting: Sendable {
     func commit(repoPath: String, message: String, files: [String]) async throws
 }
 
+/// Karar 110: FileViewer'da düzenlenen dosyanın diske yazılması. Okumayla
+/// aynı path guard'ından (karar 11) geçer; başarısızlık görünür hatadır.
+public protocol FileContentWriting: Sendable {
+    func writeFile(repoPath: String, file: String, contents: String) async throws
+}
+
 /// Tam git yüzeyi — composition root ve `GitService` bu bileşimi kullanır.
 /// Tüketiciler (store'lar) dar protokollere bağlanır.
-public typealias GitServicing = GitReading & GitContentReading & GitWriting
+public typealias GitServicing = GitReading & GitContentReading & GitWriting & FileContentWriting

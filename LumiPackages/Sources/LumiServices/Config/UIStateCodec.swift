@@ -80,6 +80,13 @@ enum UIStateCodec {
         if let raw = dict["allTerminalsOrder"] as? [Any] {
             state.allTerminalsOrder = raw.compactMap { $0 as? String }
         }
+        // Karar 108 (additive): serbest terminal konumları. String olmayan
+        // girdiler atılır; üst sınır okumada da uygulanır.
+        if let raw = dict["recentLooseLocations"] as? [Any] {
+            state.recentLooseLocations = Array(
+                raw.compactMap { $0 as? String }.prefix(LooseTerminalLocations.recentLimit)
+            )
+        }
         return state
     }
 
@@ -149,6 +156,10 @@ enum UIStateCodec {
         }
         if !state.allTerminalsOrder.isEmpty {
             overlay["allTerminalsOrder"] = state.allTerminalsOrder
+        }
+        // Karar 108 (additive): yalnız DOLU iken yazılır.
+        if !state.recentLooseLocations.isEmpty {
+            overlay["recentLooseLocations"] = state.recentLooseLocations
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

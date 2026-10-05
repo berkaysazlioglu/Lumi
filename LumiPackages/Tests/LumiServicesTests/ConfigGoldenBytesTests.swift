@@ -154,6 +154,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "unseenIntervalMinutes" : 7
       },
       "orchestratorDigestsEnabled" : false,
+      "projectFavoriteFiles" : [
+
+      ],
       "projectQuickCommands" : [
 
       ],

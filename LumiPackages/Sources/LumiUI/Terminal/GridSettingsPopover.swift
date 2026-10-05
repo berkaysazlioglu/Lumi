@@ -83,7 +83,7 @@ struct GridSettingsControl: View {
                 )
             }
             if layout.heightMode == .scroll {
-                section(title: "Row ratio (of width)") {
+                section(title: "Row height (of view)") {
                     SegmentedRow(
                         options: LumiKit.GridLayout.HeightRatio.allCases,
                         isSelected: { $0 == layout.heightRatio },
@@ -94,7 +94,7 @@ struct GridSettingsControl: View {
             }
             Text(layout.heightMode == .fit
                  ? "All terminals fit in the window (no scroll)."
-                 : "Min terminal height = width × ratio; scrolls vertically when it overflows.")
+                 : "Terminal height = view height × ratio (100% = maximized); scrolls vertically when it overflows.")
                 .font(Theme.Typography.ui(.caption))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)

@@ -155,6 +155,31 @@ public final class NavigationStore {
         viewProvider?.detachAll()
     }
 
+    // MARK: - Serbest terminaller (karar 108)
+
+    /// Yol hiçbir projenin checkout'u (kök + yönetilen workspace'ler) ya da
+    /// açık bir tab değilse serbesttir. Proje köprüsü enjekte edilmemişse
+    /// yalnız `openTabs` sahiplik sayılır.
+    public func isLooseTerminalPath(_ path: String) -> Bool {
+        let checkouts = (projectOrder?() ?? []).flatMap { projectCheckouts?($0) ?? [$0] }
+        return LooseTerminalRule.isLoose(
+            path: path, projectPaths: checkouts, workspacePaths: [], openTabs: openTabs
+        )
+    }
+
+    /// Terminale gitmenin TEK kapısı: serbest terminal hiçbir zaman repo tab'ı
+    /// olmaz — `openTab(~)` aktif repo köprüsünü (`onActiveRepoChanged`) ev
+    /// dizini için ateşler, dosya izleyici + ağaç taraması + git yüklemesi
+    /// başlar ve sağ panel `~` için açılırdı. Serbest terminal All Terminals'ta
+    /// öne gelir; checkout terminali bugünkü gibi kendi repo'suna geçer.
+    public func openTerminalSurface(for repoPath: String) {
+        if isLooseTerminalPath(repoPath) {
+            if activeRoute.terminalScope != .all { setRoute(.content(.allTerminals)) }
+        } else if activeRepoPath != repoPath {
+            openTab(repoPath)
+        }
+    }
+
     // MARK: - Proje gezinmesi (karar 65)
 
     /// `index` (0 tabanlı) sıradaki projeye geçer: o projede en son kullanılan

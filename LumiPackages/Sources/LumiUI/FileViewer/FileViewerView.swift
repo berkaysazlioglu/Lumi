@@ -12,6 +12,7 @@ import SwiftUI
 struct FileViewerView: View {
     let store: FileViewerStore
     let highlighter: any SyntaxHighlighting
+    let markdownParser: any MarkdownParsing
 
     @Shell private var shell
 
@@ -25,6 +26,12 @@ struct FileViewerView: View {
         /// Başlık şeridinin iç kenar payları (ölçek dışı ara değerler).
         static var headerInsetH: CGFloat { Theme.scaled(14) }
         static var headerInsetV: CGFloat { Theme.scaled(10) }
+        /// `Raw | Preview` anahtarı — iki eşit bölme (karar 109).
+        static var markdownSwitchWidth: CGFloat { Theme.scaled(150) }
+        /// `Raw | Both | Preview` — üç eşit bölme (karar 112).
+        static var markdownSwitchWideWidth: CGFloat { Theme.scaled(216) }
+        /// Kaydedilmemiş değişiklik noktası (karar 110).
+        static var unsavedDotSide: CGFloat { Theme.scaled(7) }
     }
 
     var body: some View {
@@ -35,6 +42,9 @@ struct FileViewerView: View {
                         width: geometry.size.width * Metrics.widthRatio,
                         height: geometry.size.height * Metrics.heightRatio
                     )
+            }
+            if store.isConfirmingDiscard {
+                UnsavedChangesPrompt(store: store)
             }
         }
     }
@@ -59,9 +69,19 @@ struct FileViewerView: View {
                 .font(Theme.Typography.baseMono)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
+            if store.hasUnsavedChanges {
+                Circle()
+                    .fill(Theme.warning)
+                    .frame(width: Metrics.unsavedDotSide, height: Metrics.unsavedDotSide)
+                    .help("Unsaved changes")
+                    .accessibilityLabel("Unsaved changes")
+            }
             Spacer()
             if store.mentionReference != nil {
                 MentionInChatButton(store: store)
+            }
+            if store.isEditable || store.hasUnsavedChanges {
+                SaveFileButton(store: store)
             }
             if store.previewKind == .markdown {
                 markdownToggle
@@ -90,29 +110,47 @@ struct FileViewerView: View {
         }
     }
 
-    /// Markdown'da render'lı ↔ ham geçişi (karar 21; oturumluk, persist edilmez).
+    /// Markdown'da ham ↔ render'lı geçişi (karar 21; oturumluk, persist
+    /// edilmez). Karar 109: header'ın sağında hep görünen anahtar. Karar 112:
+    /// view modunda üçüncü seçenek `Both` — solda düzenlenebilir ham metin,
+    /// sağda canlı önizleme; diff'te yan yana zaten iki taraf olduğu için yok.
     private var markdownToggle: some View {
-        let isRendered = store.rendersMarkdown
-        return Button {
-            store.rendersMarkdown.toggle()
-            store.selectedLines = nil
-        } label: {
-            HStack(spacing: Theme.Spacing.xs) {
-                Image(systemName: isRendered ? "textformat" : "chevron.left.slash.chevron.right")
-                    .accessibilityHidden(true)
-                Text(isRendered ? "Rendered" : "Raw")
-            }
-            .font(Theme.Typography.mono(.caption, weight: .semibold))
-            .foregroundStyle(isRendered ? Theme.accentPrimary : Theme.textSecondary)
-            .padding(.horizontal, Theme.Spacing.md)
-            // 3pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-            .padding(.vertical, Theme.scaled(3))
-            .background((isRendered ? Theme.accentPrimary : Theme.textMuted).opacity(0.18))
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help(isRendered ? "Show raw markdown diff" : "Show rendered markdown")
+        let isView = store.mode == .view
+        let options: [MarkdownDisplay] = isView ? [.raw, .both, .preview] : [.raw, .preview]
+        return SegmentedModeSwitch(
+            options: options,
+            selection: Binding(
+                get: { store.effectiveMarkdownDisplay },
+                set: { display in
+                    guard display != store.effectiveMarkdownDisplay else { return }
+                    store.markdownDisplay = display
+                    store.selectedLines = nil
+                }
+            ),
+            title: { display in
+                switch display {
+                case .raw: return "Raw"
+                case .both: return "Both"
+                case .preview: return "Preview"
+                }
+            },
+            help: { display in
+                switch (display, isView) {
+                case (.preview, true): return "Show rendered markdown"
+                case (.raw, true): return "Show raw markdown source"
+                case (.both, _): return "Edit the source with a live preview beside it"
+                case (.preview, false): return "Show rendered markdown diff"
+                case (.raw, false): return "Show raw side-by-side diff"
+                }
+            },
+            accessibilityLabel: "Markdown display"
+        )
+        .frame(width: isView ? Metrics.markdownSwitchWideWidth : Metrics.markdownSwitchWidth)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.border, lineWidth: Theme.Stroke.hairline)
+                .allowsHitTesting(false)
+        )
     }
 
     private var headerTitle: String {
@@ -172,14 +210,18 @@ struct FileViewerView: View {
             ImagePreviewView(preview: preview, showsComparison: showsImageComparison)
         case .text(let text):
             if store.isRenderedMarkdown {
-                RenderedMarkdownDocumentView(text: text)
+                // Karar 110: Preview kaydedilmemiş taslağı da gösterir.
+                markdownPreview(store.draft ?? text)
+            } else if store.isSplitMarkdown {
+                // Karar 112: solda editör, sağda aynı taslağın canlı önizlemesi;
+                // karar 113: iki bölme birlikte kayar.
+                MarkdownSplitView { sync in
+                    codeView(text, scrollSync: sync)
+                } preview: { sync in
+                    markdownPreview(store.draft ?? text, scrollSync: sync)
+                }
             } else {
-                HighlightedCodeView(
-                    code: text,
-                    fileName: store.filePath,
-                    highlighter: highlighter,
-                    onSelectLines: { store.selectedLines = $0 }
-                )
+                codeView(text)
             }
         case .diff(let diff):
             if store.isRenderedMarkdown {
@@ -189,6 +231,43 @@ struct FileViewerView: View {
             }
         case .unsupported(let reason):
             unsupportedState(reason)
+        }
+    }
+
+    private func markdownPreview(_ text: String, scrollSync: MarkdownScrollSync? = nil) -> some View {
+        RenderedMarkdownDocumentView(
+            text: text,
+            parser: markdownParser,
+            highlighter: highlighter,
+            onOpenLink: openMarkdownLink,
+            scrollSync: scrollSync
+        )
+    }
+
+    private func codeView(_ text: String, scrollSync: MarkdownScrollSync? = nil) -> some View {
+        HighlightedCodeView(
+            code: store.draft ?? text,
+            revision: store.editorRevision,
+            fileName: store.filePath,
+            highlighter: highlighter,
+            onSelectLines: { store.selectedLines = $0 },
+            onTextChange: store.isEditable ? { store.updateDraft($0) } : nil,
+            onCancel: store.close,
+            scrollSync: scrollSync
+        )
+    }
+
+    /// Karar 109: göreli link aynı viewer'da açılır (GitHub paritesi), şemalı
+    /// link sisteme gider; `#bölüm` ve kökten taşan yol yutulur.
+    private func openMarkdownLink(_ url: URL) {
+        switch MarkdownLinkTarget.resolve(url, from: store.filePath) {
+        case .external(let url):
+            shell.actions.openURL(url)
+        case .file(let path):
+            let repoPath = store.repoPath
+            Task { await store.presentView(repoPath: repoPath, filePath: path) }
+        case .anchor, .invalid:
+            break
         }
     }
 
@@ -273,24 +352,57 @@ struct FileViewerView: View {
     }
 }
 
-/// Markdown dökümanı: model GeometryReader altında her body'de yeniden parse
-/// ediliyordu; içerik değişince BİR KEZ kurulur (HighlightedCodeView kalıbı).
+/// Markdown dökümanı (karar 109): cmark-gfm ağacı içerik değişince BİR KEZ
+/// kurulur (HighlightedCodeView kalıbı) ve GitHub düzeninde çizilir.
 private struct RenderedMarkdownDocumentView: View {
     let text: String
+    let parser: any MarkdownParsing
+    let highlighter: any SyntaxHighlighting
+    let onOpenLink: (URL) -> Void
+    var scrollSync: MarkdownScrollSync?
 
-    @State private var model: MarkdownDiffBuilder.Model?
+    @State private var document: MarkdownDocument?
 
     var body: some View {
         Group {
-            if let model {
-                MarkdownDiffView(model: model)
+            if let document {
+                MarkdownDocumentView(
+                    document: document,
+                    highlighter: highlighter,
+                    onOpenLink: onOpenLink,
+                    scrollSync: scrollSync
+                )
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: text) {
-            model = MarkdownDiffBuilder.buildDocument(text)
+            // Karar 112: Both'ta her tuşta yeniden ayrıştırma — yazarken kısa
+            // sükûnet beklenir; ilk açılış beklemez.
+            if document != nil {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+            }
+            document = parser.parse(text)
+        }
+    }
+}
+
+/// Karar 112/113: `Both` — eşit iki bölme; senkron nesnesi bölmeler kadar yaşar.
+private struct MarkdownSplitView<Editor: View, Preview: View>: View {
+    @ViewBuilder let editor: (MarkdownScrollSync) -> Editor
+    @ViewBuilder let preview: (MarkdownScrollSync) -> Preview
+
+    @State private var sync = MarkdownScrollSync()
+
+    var body: some View {
+        HStack(spacing: 0) {
+            editor(sync)
+                .frame(maxWidth: .infinity)
+            Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
+            preview(sync)
+                .frame(maxWidth: .infinity)
         }
     }
 }
@@ -316,30 +428,67 @@ private struct RenderedMarkdownDiffView: View {
     }
 }
 
-/// view modu içeriği: async highlight + 1MB üstü düz metin (HighlightrEngine).
+/// view modu içeriği: async highlight + 1MB üstü düz metin (HighlightJSEngine).
+///
+/// Karar 110: düzenlenirken her değişiklik yeniden vurgulanır; `task(id:)`
+/// iptali kısa bekleme ile birleşince yazarken vurgulama ertelenir. Vurgu
+/// hangi revizyon için üretildiyse onunla editöre iner (bayat vurgu yeni
+/// yüklenen metni ezmesin).
 private struct HighlightedCodeView: View {
     let code: String
+    let revision: Int
     let fileName: String
     let highlighter: any SyntaxHighlighting
     let onSelectLines: (ClosedRange<Int>?) -> Void
+    let onTextChange: ((String) -> Void)?
+    let onCancel: () -> Void
+    var scrollSync: MarkdownScrollSync?
 
-    @State private var attributed: NSAttributedString?
+    private struct Highlighted {
+        let revision: Int
+        let code: String
+        let text: NSAttributedString
+    }
+
+    private struct Request: Equatable {
+        let revision: Int
+        let code: String
+    }
+
+    @State private var highlighted: Highlighted?
+
+    /// Yazarken yeniden vurgulamadan önceki sükûnet süresi.
+    private static let editDebounce: Duration = .milliseconds(250)
 
     var body: some View {
         Group {
-            if let attributed {
-                AttributedTextView(text: attributed, onSelectLines: onSelectLines)
+            if let highlighted {
+                AttributedTextView(
+                    text: highlighted.text,
+                    revision: highlighted.revision,
+                    onSelectLines: onSelectLines,
+                    onTextChange: onTextChange,
+                    onCancel: onCancel,
+                    scrollSync: scrollSync
+                )
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: code) {
-            attributed = await highlighter.highlight(
+        .task(id: Request(revision: revision, code: code)) {
+            let isEdit = highlighted?.revision == revision
+            if isEdit {
+                try? await Task.sleep(for: Self.editDebounce)
+                guard !Task.isCancelled else { return }
+            }
+            let text = await highlighter.highlight(
                 code: code,
                 fileName: fileName,
                 fontSize: Theme.Typography.Size.base.scaledPoints
             )
+            guard !Task.isCancelled else { return }
+            highlighted = Highlighted(revision: revision, code: code, text: text)
         }
     }
 }
@@ -347,7 +496,7 @@ private struct HighlightedCodeView: View {
 #if DEBUG
 #Preview("FileViewerView — view") {
     let shell = ShellContext.preview()
-    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter)
+    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter, markdownParser: shell.markdownParser)
         .frame(width: 900, height: 600)
         .background(Theme.bgDeep)
         .task {
@@ -360,7 +509,7 @@ private struct HighlightedCodeView: View {
 
 #Preview("FileViewerView — diff") {
     let shell = ShellContext.preview()
-    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter)
+    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter, markdownParser: shell.markdownParser)
         .frame(width: 900, height: 600)
         .background(Theme.bgDeep)
         .task {

@@ -33,6 +33,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
     let highlighter: any SyntaxHighlighting
+    let markdownParser: any MarkdownParsing = SwiftMarkdownParser()
     let notifications: any NotificationServicing
     let sessionStarter: any SessionStarterServicing
     let activityMonitor: any ActivityMonitoring
@@ -94,7 +95,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
         let codexAccountService = CodexAccountService(config: configService, paths: paths)
         codexAccounts = codexAccountService
-        highlighter = HighlightrEngine(style: HighlightrStyle(
+        highlighter = HighlightJSEngine(style: HighlightStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }
         ))

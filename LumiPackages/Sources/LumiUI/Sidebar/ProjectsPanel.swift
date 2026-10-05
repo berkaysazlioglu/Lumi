@@ -66,6 +66,9 @@ public struct ProjectsPanel: View {
                     }
                     .padding(.bottom, Theme.Spacing.xs)
                 }
+                // Karar 108: projesiz terminaller en altta; proje değildir,
+                // ⌃1–9 indekslemesine girmez.
+                OtherTerminalsSection(searchText: searchText)
             }
         }
     }
@@ -168,9 +171,6 @@ public struct ProjectsPanel: View {
                 shell.dialogs.present(.createWorkspace(projectPath: project.path))
             },
             .divider,
-            .action("Open CLAUDE.md", icon: "doc.text", isEnabled: hasClaudeInstructions(project)) {
-                Task { await shell.fileViewer.presentView(repoPath: project.path, filePath: Self.claudeInstructionsFile) }
-            },
             .action("Reveal in Finder", icon: "folder") { shell.actions.revealPath(project.path) },
             .action("Copy Path", icon: "doc.on.doc") { Pasteboard.copy(project.path) },
             .divider,
@@ -181,16 +181,6 @@ public struct ProjectsPanel: View {
                 shell.requestRemoveProject(project)
             },
         ]
-    }
-
-    /// Proje kökündeki CLAUDE.md. Menü yalnız sağ tıkta kurulduğu için
-    /// dosya kontrolü her çizimde değil, açılışta bir kez yapılır.
-    static let claudeInstructionsFile = "CLAUDE.md"
-
-    private func hasClaudeInstructions(_ project: Repo) -> Bool {
-        FileManager.default.fileExists(
-            atPath: URL(fileURLWithPath: project.path).appendingPathComponent(Self.claudeInstructionsFile).path
-        )
     }
 
     private func projectRowContent(_ project: Repo, isHovering: Bool) -> some View {

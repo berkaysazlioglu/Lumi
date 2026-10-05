@@ -294,6 +294,7 @@ final class ShellContextTests: XCTestCase {
             repos: context.repos,
             workspaces: context.workspaces,
             quickCommands: context.quickCommands,
+            favoriteFiles: context.favoriteFiles,
             git: context.git,
             plastic: context.plastic,
             commitAssistant: context.commitAssistant,
@@ -303,6 +304,7 @@ final class ShellContextTests: XCTestCase {
             remote: context.remote,
             sessionSchedule: context.sessionSchedule,
             promptQueue: context.promptQueue,
+            looseTerminals: context.looseTerminals,
             toasts: context.toasts,
             onboarding: context.onboarding,
             usage: context.usage,
@@ -317,6 +319,7 @@ final class ShellContextTests: XCTestCase {
             orchestrator: context.orchestrator,
             viewProvider: context.viewProvider,
             highlighter: context.highlighter,
+            markdownParser: context.markdownParser,
             actions: ShellActions(
                 chooseFolder: { nil },
                 reveal: { repo, path in revealed.append(repo + "|" + path) },

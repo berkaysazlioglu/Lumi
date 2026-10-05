@@ -55,6 +55,7 @@ struct ShellComposition {
             repos: repo.repoStore,
             workspaces: repo.workspaceStore,
             quickCommands: repo.quickCommands,
+            favoriteFiles: repo.favoriteFiles,
             git: repo.gitStore,
             plastic: repo.plasticStore,
             commitAssistant: repo.commitAssistant,
@@ -64,6 +65,7 @@ struct ShellComposition {
             remote: remote.remoteStore,
             sessionSchedule: sessionSchedule.sessionSchedule,
             promptQueue: terminal.promptQueue,
+            looseTerminals: terminal.looseTerminals,
             toasts: shared.toasts,
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
@@ -78,6 +80,7 @@ struct ShellComposition {
             orchestrator: orchestrator.orchestrator,
             viewProvider: registry.viewProvider,
             highlighter: registry.highlighter,
+            markdownParser: registry.markdownParser,
             actions: makeActions(registry: registry, shared: shared, repo: repo)
         )
         // Niyet → kabuk yürütmesi (sekme / FileViewer / Finder / tarayıcı).

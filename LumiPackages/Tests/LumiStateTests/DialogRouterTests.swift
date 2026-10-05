@@ -41,6 +41,7 @@ final class DialogRouterTests: XCTestCase {
             .sidebarProjectSelector,
             .createWorkspace(projectPath: "/r"),
             .quickCommands(projectPath: "/r"),
+            .favoriteFiles(FavoriteFilesDialogState(projectPath: "/r", checkoutPath: "/r")),
             .settings,
             .onboarding,
             .closeTab(CloseTabDialogState(repoPath: "/r", repoName: "r", minimizedCount: 1)),

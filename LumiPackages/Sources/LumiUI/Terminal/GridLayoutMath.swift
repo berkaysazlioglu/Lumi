@@ -49,9 +49,9 @@ public enum GridLayoutMath {
 
     /// Görünür kart frame'leri (yerleşim sırası soldan sağa, satır satır).
     /// `fit`: tüm satırlar viewport'a sığar (scroll yok; rowHeight = viewport/satır).
-    /// `scroll`: rowHeight = **kolon genişliği × `heightRatio`** (terminal sayısından
-    /// bağımsız sabit oran); içerik viewport'u aşınca dikey scroll. Oran büyüdükçe
-    /// terminaller uzar → daha çok kaydırma.
+    /// `scroll`: rowHeight = **viewport yüksekliğinin `heightRatio`'su** (karar 106 —
+    /// terminal sayısından ve kolon genişliğinden bağımsız); içerik viewport'u
+    /// aşınca dikey scroll. %100 = maximize edilmiş terminalin yüksekliği.
     public static func frames(
         layout: GridLayout,
         container: CGSize,
@@ -67,9 +67,7 @@ public enum GridLayoutMath {
         case .fit:
             rowHeight = floor((container.height - CGFloat(rows - 1) * gap) / CGFloat(rows))
         case .scroll:
-            // Yükseklik doğrudan ayrılan genişliğin oranı — fit yüksekliğiyle
-            // max'lanmaz, böylece oran her zaman görünür şekilde uygulanır.
-            rowHeight = floor(columnWidth * CGFloat(layout.heightRatio.multiplier))
+            rowHeight = scrollRowHeight(viewportHeight: container.height, ratio: layout.heightRatio)
         }
 
         let spanList = spans(
@@ -99,6 +97,14 @@ public enum GridLayoutMath {
             }
         }
         return result
+    }
+
+    /// Scroll satır yüksekliği: oran viewport'a aralıklarıyla birlikte uygulanır —
+    /// `(h + gap) × r − gap`. %100 tam viewport, %50 tam iki satır, %33 tam üç
+    /// satır sığar (aynı satır sayısındaki `fit` ile birebir).
+    static func scrollRowHeight(viewportHeight: CGFloat, ratio: GridLayout.HeightRatio) -> CGFloat {
+        let height = (viewportHeight + gap) * CGFloat(ratio.multiplier) - gap
+        return max(0, floor(height))
     }
 
     public static func contentHeight(frames: [CGRect]) -> CGFloat {

@@ -316,6 +316,7 @@ final class SpyDelegate: TerminalSessionDelegate {
     }
 
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32) {}
+    func sessionDidInferInterrupt(_ session: TerminalSession) {}
 
     func sessionDidBell(_ session: TerminalSession) {
         bells += 1

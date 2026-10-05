@@ -108,6 +108,40 @@ final class WorkspaceBootResumeTests: XCTestCase {
         await assembly.shutdown()
     }
 
+    // MARK: - Karar 108: serbest terminallerin resume'u
+
+    func testResumableKeepsOpenTabsAndExistingLooseDirectories() {
+        let entries = ["/r/open", "/r/project-closed", "/loose/here", "/loose/gone"].enumerated().map {
+            ResumeSession(repoPath: $1, sessionID: "aaaaaaaa-0000-0000-0000-00000000000\($0)")
+        }
+        let resumable = WorkspaceBootAssembly.resumableEntries(
+            entries,
+            isOpenTab: { $0 == "/r/open" },
+            isLoose: { $0.hasPrefix("/loose") },
+            directoryExists: { $0 == "/loose/here" }
+        )
+        XCTAssertEqual(resumable.map(\.repoPath), ["/r/open", "/loose/here"])
+    }
+
+    func testStartResumesLooseSessionInExistingDirectory() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("loose-resume-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var seed = UIState.defaults
+        seed.resumeSessions = [
+            ResumeSession(repoPath: dir.path, sessionID: "aaaaaaaa-0000-0000-0000-000000000003"),
+        ]
+        let (registry, shared, assembly) = await makeHarness(seed: seed)
+        defer { registry.removeTemporaryDirectories() }
+
+        await assembly.start()
+
+        XCTAssertEqual(registry.fakeTerminal.spawnCalls.map(\.repoPath), [dir.path])
+        XCTAssertTrue(shared.navigation.openTabs.isEmpty, "serbest resume repo tab'ı açmamalı")
+        await assembly.shutdown()
+    }
+
     func testSpawnAfterStartCheckpointsWithoutQuit() async throws {
         let (registry, _, assembly) = await makeHarness()
         defer { registry.removeTemporaryDirectories() }

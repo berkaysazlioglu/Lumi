@@ -10,8 +10,8 @@ import SwiftUI
 /// Karar 103: aynı görünüm hem repo route'unu hem All Terminals'ı çizer —
 /// fark yalnız `TerminalScope`'tadır. Grid, maximize, minimize, kapatma ve
 /// Edit modu kapsamın intent'lerine gider; All Terminals'ta kartlar checkout
-/// etiketini taşır ve boş durumda spawn düğmesi yoktur (hangi projede
-/// açılacağı belli değil).
+/// etiketini taşır. Boş durumdaki spawn düğmesi All Terminals'ta serbest
+/// terminali seçili konumda (varsayılan `~`) açar (karar 108).
 public struct TerminalsRouteView: View {
     private let scope: TerminalScope?
 
@@ -102,27 +102,12 @@ public struct TerminalsRouteView: View {
 
     @ViewBuilder
     private func emptyState(_ scope: TerminalScope) -> some View {
-        switch scope {
-        case .repo(let repoPath):
-            EmptyStatePlaceholder("No terminals in this repo", density: .full) {
-                // Topbar ile aynı modern split-button (DRY): hover'da dropdown açılır.
-                NewTerminalButton(
-                    provider: shell.settings.current.aiProvider,
-                    onNewProvider: {
-                        shell.terminals.spawn(
-                            in: repoPath,
-                            command: shell.settings.current.aiProvider.launchCommand
-                        )
-                    },
-                    items: NewTerminalMenu.items(shell: shell, repoPath: repoPath)
-                )
-            }
-        case .all:
-            EmptyStatePlaceholder("No terminals in any project", density: .full) {
-                Text("Open a project from Projects to start one")
-                    .font(Theme.Typography.mono(.label))
-                    .foregroundStyle(Theme.textMuted)
-            }
+        // Topbar ile aynı split-button (DRY): chevron dropdown'u açar.
+        EmptyStatePlaceholder(
+            scope == .all ? "No terminals yet" : "No terminals in this repo",
+            density: .full
+        ) {
+            ScopedNewTerminalButton(scope: scope)
         }
     }
 

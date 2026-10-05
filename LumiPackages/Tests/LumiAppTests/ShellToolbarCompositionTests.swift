@@ -135,7 +135,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
     /// ayraç kaldırıldı; karar 96: hızlı komutlar grubun en soluna geldi).
     func testCenterRegionOrder() {
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.favoriteFiles, .quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
     }
 
     /// `.bottom` yuvasının kayıtlı öğesi yok → toggle'ı bar'da görünmez.
@@ -152,13 +152,13 @@ final class ShellToolbarCompositionTests: XCTestCase {
 
     func testProductionItemsAreHiddenOnANonRepoRoute() {
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.favoriteFiles, .quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
 
         fixture.context.navigation.setRoute(.content(ContentRouteID("placeholder")))
         XCTAssertEqual(ids(.center), [], "repo-dışı route'ta üretim grubu bar'dan düşer")
 
         fixture.context.navigation.setRoute(.repo("/r/alpha"))
-        XCTAssertEqual(ids(.center), [.quickCommands, .arrangeTerminals, .gridSettings, .newTerminal], "geri dönüşte geri gelir")
+        XCTAssertEqual(ids(.center), [.favoriteFiles, .quickCommands, .arrangeTerminals, .gridSettings, .newTerminal], "geri dönüşte geri gelir")
     }
 
     // MARK: - Tasks/Remote route'ları (karar 55)
@@ -167,7 +167,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
     /// CTA düşer, yerine route başlığı gelir.
     func testTasksRouteReplacesTheProductionGroupWithItsOwnItem() {
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.favoriteFiles, .quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
 
         fixture.context.navigation.setRoute(.content(TasksPanelSection.tasks.routeID))
         XCTAssertEqual(ids(.center), [ToolbarItemID("route.tasks")])
@@ -182,7 +182,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertEqual(ids(.center), [ToolbarItemID("route.tasks")])
 
         fixture.openRepo()
-        XCTAssertEqual(ids(.center), [.quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
+        XCTAssertEqual(ids(.center), [.favoriteFiles, .quickCommands, .arrangeTerminals, .gridSettings, .newTerminal])
     }
 
     func testEachSectionRegistersItsContentRoute() {
@@ -198,14 +198,15 @@ final class ShellToolbarCompositionTests: XCTestCase {
     // MARK: - All Terminals (karar 103)
 
     /// Yüzey kontrolleri (Edit + grid) kalır, repo'ya bağlı olanlar (hızlı
-    /// komutlar, New <Provider>) düşer, route başlığı gelir.
+    /// komutlar, favori dosyalar) düşer, route başlığı gelir. New <Provider>
+    /// kalır — All Terminals'ta serbest terminal açar (karar 108).
     func testAllTerminalsRouteKeepsSurfaceControlsButDropsRepoActions() {
         fixture.openRepo()
         fixture.context.navigation.setRoute(AllTerminalsRoute.route)
 
         XCTAssertEqual(
             ids(.center),
-            [.arrangeTerminals, .gridSettings, ToolbarItemID("route.allTerminals")]
+            [.arrangeTerminals, .gridSettings, .newTerminal, ToolbarItemID("route.allTerminals")]
         )
     }
 
@@ -272,6 +273,7 @@ private struct ShellFixture {
             repos: repos,
             workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts),
             quickCommands: QuickCommandStore(config: config, generator: FakeQuickCommandGenerator(), scripts: FakeQuickCommandScriptWriter(), launcher: FakeQuickCommandBackgroundLauncher(), toasts: toasts),
+            favoriteFiles: FavoriteFileStore(config: config, toasts: toasts),
             git: GitStore(git: git, toasts: toasts),
             plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
             commitAssistant: CommitMessageAssistant(generator: FakeCommitMessageGenerator(), toasts: toasts),
@@ -281,6 +283,7 @@ private struct ShellFixture {
             remote: RemoteStore(service: FakeRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminalService, toasts: toasts),
+            looseTerminals: LooseTerminalStore(config: config, toasts: toasts),
             toasts: toasts,
             onboarding: OnboardingStore(
                 system: FakeSystemService(),
@@ -306,6 +309,7 @@ private struct ShellFixture {
             orchestrator: OrchestratorStore(service: FakeOrchestratorService(), config: FakeConfigService()),
             viewProvider: FakeTerminalViewProvider(),
             highlighter: NoopHighlighter(),
+            markdownParser: FakeMarkdownParser(),
             actions: ShellActions(chooseFolder: { nil }, reveal: { _, _ in }, trash: { _, _ in })
         )
         return ShellFixture(context: context, shared: shared)
@@ -332,7 +336,7 @@ private struct ShellFixture {
     }
 }
 
-/// FileViewer'ın gerçek `HighlightrEngine`'ini (JSCore) testlere sokmamak için.
+/// FileViewer'ın gerçek `HighlightJSEngine`'ini (JSCore) testlere sokmamak için.
 private final class NoopHighlighter: SyntaxHighlighting {
     func highlight(code: String, fileName: String, fontSize: CGFloat) async -> NSAttributedString {
         NSAttributedString(string: code)

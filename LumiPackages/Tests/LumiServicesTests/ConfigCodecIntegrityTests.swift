@@ -214,7 +214,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         codexAccountSelection: .account(ConfigCodecIntegrityTests.accountID),
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"],
-        projectQuickCommands: [ProjectQuickCommand(id: "qc", projectPath: "/p", name: "Open", script: "open \"{path}\"", request: "open it")]
+        projectQuickCommands: [ProjectQuickCommand(id: "qc", projectPath: "/p", name: "Open", script: "open \"{path}\"", request: "open it")],
+        projectFavoriteFiles: [ProjectFavoriteFile(id: "fav", projectPath: "/p", relativePath: "Assets/Scripts/Player.cs")]
     )
 
     private static let fullyPopulatedUIState = UIState(
@@ -243,7 +244,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         orchestratorSessionID: "orch-1",
         orchestratorWatchedSessions: ["s-1"],
         allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
-        allTerminalsOrder: ["s-1", "s-2"]
+        allTerminalsOrder: ["s-1", "s-2"],
+        recentLooseLocations: ["/Users/me", "/Users/me/Desktop"]
     )
 }
 

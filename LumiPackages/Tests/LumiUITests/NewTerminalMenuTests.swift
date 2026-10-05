@@ -12,7 +12,7 @@ final class NewTerminalMenuTests: XCTestCase {
     func testListsTheOtherProviderThenDeepSeekThenBash() async {
         let fixture = await ShellContextFixture.make()
 
-        let labels = NewTerminalMenu.items(shell: fixture.context, repoPath: repoPath).map(\.label)
+        let labels = NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath)).map(\.label)
 
         XCTAssertEqual(labels, ["New Codex", "New DeepSeek", "New Bash"])
     }
@@ -21,7 +21,7 @@ final class NewTerminalMenuTests: XCTestCase {
         let fixture = await ShellContextFixture.make()
         fixture.context.settings.setProvider(.codex)
 
-        let labels = NewTerminalMenu.items(shell: fixture.context, repoPath: repoPath).map(\.label)
+        let labels = NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath)).map(\.label)
 
         XCTAssertEqual(labels, ["New Claude", "New DeepSeek", "New Bash"])
     }
@@ -31,7 +31,7 @@ final class NewTerminalMenuTests: XCTestCase {
         await fixture.context.deepSeek.load()
 
         let item = try? XCTUnwrap(
-            NewTerminalMenu.items(shell: fixture.context, repoPath: repoPath)
+            NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath))
                 .first { $0.label == "New DeepSeek" }
         )
         item?.action()
@@ -46,7 +46,7 @@ final class NewTerminalMenuTests: XCTestCase {
         await fixture.context.deepSeek.install()
 
         let item = try? XCTUnwrap(
-            NewTerminalMenu.items(shell: fixture.context, repoPath: repoPath)
+            NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath))
                 .first { $0.label == "New DeepSeek" }
         )
         item?.action()
@@ -61,7 +61,7 @@ final class NewTerminalMenuTests: XCTestCase {
         let fixture = await ShellContextFixture.make()
 
         let item = try? XCTUnwrap(
-            NewTerminalMenu.items(shell: fixture.context, repoPath: repoPath)
+            NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath))
                 .first { $0.label == "New Bash" }
         )
         item?.action()

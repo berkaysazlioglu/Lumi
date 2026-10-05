@@ -113,6 +113,13 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(p["text"] as? String, "Merhaba")
     }
 
+    func testSessionMetaDecodesAwaitingDecisionAndDefaultsFalse() throws {
+        let withField = #"{"id":"a","repoName":"r","status":"working","cols":80,"rows":24,"awaitingDecision":true}"#
+        let without = #"{"id":"a","repoName":"r","status":"working","cols":80,"rows":24}"#
+        XCTAssertTrue(try JSONDecoder().decode(SessionMeta.self, from: Data(withField.utf8)).awaitingDecision)
+        XCTAssertFalse(try JSONDecoder().decode(SessionMeta.self, from: Data(without.utf8)).awaitingDecision)
+    }
+
     func testAddProjectCommandFrameEncodes() {
         let frame = PhoneProtocol.commandFrame(
             OutgoingCommand(commandId: "c1", action: .addProject(path: "/p/orca")))

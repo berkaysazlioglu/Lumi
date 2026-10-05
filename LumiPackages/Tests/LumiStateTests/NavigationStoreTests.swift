@@ -212,6 +212,55 @@ final class NavigationStoreTests: XCTestCase {
         XCTAssertEqual(terminals.calls, [.focus(nil), .closeAll("/r/alpha")])
     }
 
+    // MARK: - Serbest terminaller (karar 108)
+
+    func testPathOutsideProjectsAndTabsIsLoose() {
+        wireProjects(["/r/alpha"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+        XCTAssertTrue(store.isLooseTerminalPath("/Users/me"))
+        XCTAssertFalse(store.isLooseTerminalPath("/r/alpha"))
+        XCTAssertFalse(store.isLooseTerminalPath("/r/alpha/wt"))
+    }
+
+    func testOpenTabCountsAsOwnedWithoutProjectBridge() {
+        store.openTab("/r/beta")
+        XCTAssertFalse(store.isLooseTerminalPath("/r/beta"))
+        XCTAssertTrue(store.isLooseTerminalPath("/Users/me"))
+    }
+
+    /// Serbest terminale gitmek ev dizinini repo tab'ı yapmaz: aktif repo
+    /// köprüsü (dosya izleyici + tarama) hiç ateşlenmez.
+    func testLooseTerminalSurfaceIsAllTerminalsAndNeverOpensTab() {
+        wireProjects(["/r/alpha"])
+        var repoChanges: [String?] = []
+        store.onActiveRepoChanged = { _, new in repoChanges.append(new) }
+
+        store.openTerminalSurface(for: "/Users/me")
+
+        XCTAssertEqual(store.activeRoute, .content(.allTerminals))
+        XCTAssertFalse(store.openTabs.contains("/Users/me"))
+        XCTAssertTrue(repoChanges.allSatisfy { $0 == nil })
+    }
+
+    func testLooseTerminalSurfaceKeepsAllTerminalsRouteWithoutRetransition() {
+        store.setRoute(.content(.allTerminals))
+        let before = terminals.calls.count
+
+        store.openTerminalSurface(for: "/Users/me")
+
+        XCTAssertEqual(store.activeRoute, .content(.allTerminals))
+        XCTAssertEqual(terminals.calls.count, before)
+    }
+
+    func testCheckoutTerminalSurfaceOpensItsRepo() {
+        wireProjects(["/r/alpha"])
+        store.setRoute(.content(.allTerminals))
+
+        store.openTerminalSurface(for: "/r/alpha")
+
+        XCTAssertEqual(store.activeRoute, .repo("/r/alpha"))
+        XCTAssertEqual(store.openTabs, ["/r/alpha"])
+    }
+
     // MARK: - Proje gezinmesi (karar 65)
 
     private func wireProjects(_ projects: [String], checkouts: [String: [String]] = [:]) {

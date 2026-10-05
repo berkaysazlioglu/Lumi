@@ -18,6 +18,8 @@ protocol TerminalSessionDelegate: AnyObject {
     /// Karar 94: lider Claude hook'u terminalin yeni konuşma kimliğini bildirdi.
     func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
+    /// Karar 104: Esc/Ctrl+C sonrası hook gelmedi, lider turn kesilmiş sayıldı.
+    func sessionDidInferInterrupt(_ session: TerminalSession)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)
     func sessionDidBell(_ session: TerminalSession)
@@ -154,6 +156,10 @@ final class TerminalSession {
         pipeline.onStallChange = { [weak self] stalled in
             hopToMain { self?.applyStalled(stalled) }
         }
+        // main queue FIFO: aynı settle'ın status sıçramasından sonra iner.
+        pipeline.onInterruptInferred = { [weak self] in
+            hopToMain { self?.applyInterruptInferred() }
+        }
     }
 
     private func wirePTY() {
@@ -213,6 +219,11 @@ final class TerminalSession {
     private func applyStalled(_ stalled: Bool) {
         guard !isTerminated else { return }
         delegate?.session(self, didChangeStalled: stalled)
+    }
+
+    private func applyInterruptInferred() {
+        guard !isTerminated else { return }
+        delegate?.sessionDidInferInterrupt(self)
     }
 
     private func handleExit(code: Int32) {

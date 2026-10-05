@@ -53,4 +53,17 @@ import Foundation
         _ = r.reduce(event(.stop))
         #expect(r.reduce(event(.stop)) == nil)   // zaten idle → nil
     }
+
+    @Test func interruptResetsWorkingToIdle() {
+        let r = TurnStatusReducer(now: { Date(timeIntervalSince1970: 1) })
+        _ = r.reduce(event(.userPromptSubmit))
+        _ = r.reduce(event(.preToolUse, tool: "Bash"))
+        #expect(r.interrupt() == .idle)
+        #expect(r.status == .idle)
+    }
+
+    @Test func interruptWhenIdleIsNoop() {
+        let r = TurnStatusReducer()
+        #expect(r.interrupt() == nil)
+    }
 }

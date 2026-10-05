@@ -1,7 +1,8 @@
 import LumiKit
 import SwiftUI
 
-/// Markdown dosyaları için render'lı görünüm/diff (karar 21): tek kolon unified
+/// Markdown dosyaları için render'lı diff (karar 21; view modu karar 109'la
+/// `MarkdownDocumentView`'a geçti): tek kolon unified
 /// akış; blok stilleri (başlık, liste, alıntı, kod, tablo, ayraç) görsel olarak
 /// render edilir, satır-içi markdown çözülür. Ekleme/silme gutter işareti +
 /// zemin rengiyle ayrılır — diff okunabilirliği kaybolmaz.
@@ -194,11 +195,6 @@ enum MarkdownRowFormatting {
 }
 
 #if DEBUG
-#Preview("MarkdownDiffView — döküman") {
-    MarkdownDiffView(model: MarkdownDiffBuilder.buildDocument(PreviewSamples.markdown))
-        .frame(width: 620, height: 460)
-}
-
 #Preview("MarkdownDiffView — diff") {
     MarkdownDiffView(model: MarkdownDiffBuilder.build(PreviewSamples.diff(filePath: "README.md")))
         .frame(width: 620, height: 320)

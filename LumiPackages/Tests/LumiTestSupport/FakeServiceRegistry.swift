@@ -30,6 +30,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var terminal: any TerminalServicing
     public var viewProvider: any TerminalViewProviding
     public var highlighter: any SyntaxHighlighting
+    public var markdownParser: any MarkdownParsing = FakeMarkdownParser()
     public var notifications: any NotificationServicing
     public var sessionStarter: any SessionStarterServicing
     public var activityMonitor: any ActivityMonitoring

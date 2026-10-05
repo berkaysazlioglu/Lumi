@@ -310,6 +310,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.stalled(session.id, stalled))
     }
 
+    func sessionDidInferInterrupt(_ session: TerminalSession) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.interruptInferred(session.id))
+    }
+
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32) {
         guard isRegistered(session) else { return }
         broadcaster.send(.writeFailed(session.id, errno: code))

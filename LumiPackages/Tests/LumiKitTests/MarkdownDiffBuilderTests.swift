@@ -121,22 +121,6 @@ final class MarkdownDiffBuilderTests: XCTestCase {
         XCTAssertEqual(secondHunkLine.style, .heading(level: 2))
     }
 
-    func testBuildDocumentNumbersEveryLineAsContext() {
-        let model = MarkdownDiffBuilder.buildDocument("# Başlık\n\n- madde\n")
-
-        XCTAssertEqual(model.rows.count, 4) // sondaki \n boş satır üretir
-        XCTAssertEqual(model.rows, [
-            .line(.init(kind: .context, oldLineNumber: nil, newLineNumber: 1,
-                        style: .heading(level: 1), content: "Başlık")),
-            .line(.init(kind: .context, oldLineNumber: nil, newLineNumber: 2,
-                        style: .blank, content: "")),
-            .line(.init(kind: .context, oldLineNumber: nil, newLineNumber: 3,
-                        style: .bullet(indent: 0), content: "madde")),
-            .line(.init(kind: .context, oldLineNumber: nil, newLineNumber: 4,
-                        style: .blank, content: "")),
-        ])
-    }
-
     // MARK: - Satır-içi markdown
 
     func testInlineMarkdownStripsMarkersAndKeepsIntents() {

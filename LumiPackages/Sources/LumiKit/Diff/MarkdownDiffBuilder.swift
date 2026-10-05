@@ -1,7 +1,9 @@
 import Foundation
 
 /// Markdown dosyalarını "render'lı" göstermek için saf dönüşüm (karar 21):
-/// `UnifiedDiff` (veya tam dosya metni) → blok stili çözülmüş satır modeli.
+/// `UnifiedDiff` → blok stili çözülmüş satır modeli. View modunun (tam
+/// döküman) render'ı karar 109'la `MarkdownDocument` ağacına geçti; satır
+/// modeli yalnız diff'te kalır (ekleme/silme kaynak satırına bağlıdır).
 ///
 /// Düzen bilinçli olarak **tek kolon (unified)**: iki kolona sıkıştırılmış
 /// render'lı markdown okunmuyor (satır sarmalı + başlık ölçekleri hizayı bozuyor).
@@ -86,25 +88,6 @@ public enum MarkdownDiffBuilder {
                     content: parsed.content
                 )))
             }
-        }
-        return Model(rows: rows, isBinary: false)
-    }
-
-    /// view modu: tam dosya metni → aynı satır modeli (tüm satırlar context).
-    public static func buildDocument(_ text: String) -> Model {
-        var rows: [Row] = []
-        var isInsideFence = false
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        for (index, rawLine) in lines.enumerated() {
-            let parsed = parse(String(rawLine), insideFence: isInsideFence)
-            if parsed.style == .fence { isInsideFence.toggle() }
-            rows.append(.line(Line(
-                kind: .context,
-                oldLineNumber: nil,
-                newLineNumber: index + 1,
-                style: parsed.style,
-                content: parsed.content
-            )))
         }
         return Model(rows: rows, isBinary: false)
     }

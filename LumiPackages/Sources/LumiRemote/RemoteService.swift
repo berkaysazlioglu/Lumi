@@ -73,6 +73,8 @@ public final class RemoteService: RemoteServicing {
     private var seqCounters: [TerminalID: Int] = [:]
     /// Set edilen modellerin son-bilinen değeri (sessions meta'sı için).
     private var modelCache: [TerminalID: String] = [:]
+    /// Karar 105: "karar bekliyor" (izin/soru promptu) olan terminaller — `sessions`'a yansır.
+    private var awaitingDecision: Set<TerminalID> = []
 
     public init(
         paths: LumiPaths,
@@ -174,6 +176,7 @@ public final class RemoteService: RemoteServicing {
         for t in promptWriteTasks.values { t.cancel() }
         promptWriteTasks.removeAll()
         seqCounters.removeAll()
+        awaitingDecision.removeAll()
         await connection.stop()
         setState(.disconnected)
     }
@@ -243,12 +246,21 @@ public final class RemoteService: RemoteServicing {
                 turnReducers[id] = nil
                 promptJournals[id] = nil
                 promptWriteTasks[id]?.cancel(); promptWriteTasks[id] = nil
+                awaitingDecision.remove(id)
             }
             await sendSessions()
             await sendProjects()
+        case .interruptInferred(let id):
+            // Karar 104: düz non-working status DEĞİL — art arda Stop→UserPromptSubmit
+            // yarışında yeni turn'ü düşürürdü; yalnız gerçek kesme çıkarımı kapatır.
+            await settleInterruptIfNeeded(id: id)
         case .claudeSessionIDChanged(let id, let sessionID):
             await retargetChat(id: id, sessionID: sessionID)
-        case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .codexSessionIDChanged, .writeFailed, .stalled,
+        case .awaitingDecisionChanged(let id, let awaiting):
+            // Karar 105: telefon "karar bekliyor"u "bitti"den ayırır.
+            let changed = awaiting ? awaitingDecision.insert(id).inserted : awaitingDecision.remove(id) != nil
+            if changed { await sendSessions() }
+        case .titleChanged, .bell, .providerChanged, .codexSessionIDChanged, .writeFailed, .stalled,
              .viewFocused, .linkActivated:
             break
         }
@@ -293,7 +305,8 @@ public final class RemoteService: RemoteServicing {
                 // Bash/Codex/shell terminal'lar nil kalır (terminal view).
                 kind: meta.provider == .claude ? "chat" : nil,
                 provider: meta.provider?.rawValue,
-                lastActivityAt: meta.lastActivityAt.timeIntervalSince1970 * 1000
+                lastActivityAt: meta.lastActivityAt.timeIntervalSince1970 * 1000,
+                awaitingDecision: awaitingDecision.contains(meta.id)
             )
         }
         // Stream-json chat oturumları (Faz 2): kind:"chat" ile listeye eklenir —
@@ -587,6 +600,24 @@ public final class RemoteService: RemoteServicing {
     }
 
     // MARK: - Turn status (Faz 2)
+
+    /// Karar 104: Claude Esc/Ctrl+C kesmesinde Stop hook'u göndermez; terminal
+    /// kesmeyi çıkarınca ayrık `TerminalEvent.interruptInferred` sinyali gelir
+    /// ve turn burada kapanır. Canlı status kapısı derinlemesine savunmadır —
+    /// hook ve terminal akışları ayrı stream'ler olduğundan yeni turn başlamışken
+    /// gelen bayat sinyal yok sayılır. Reducer/journal abone olunmasa da ilerler
+    /// (sonraki subscribe snapshot'ı doğru olsun).
+    private func settleInterruptIfNeeded(id: TerminalID) async {
+        guard terminal.terminals.first(where: { $0.id == id })?.status != .working else { return }
+        let status = turnReducers[id]?.interrupt()
+        let cancelled = promptJournals[id]?.cancelAllPending() ?? []
+        guard chatModeTerminals.contains(id) else { return }
+        if let status {
+            rlog("turn: inferred interrupt sid=\(id.description.prefix(8)) → idle")
+            await emitTurnStatus(id: id, status: status)
+        }
+        for item in cancelled { await emitPrompt(id: id, prompt: item) }
+    }
 
     private func handleHookEvent(_ event: AgentHookEvent) async {
         let id = event.terminalID

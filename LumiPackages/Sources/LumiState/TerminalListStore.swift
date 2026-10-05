@@ -461,6 +461,8 @@ public final class TerminalListStore: StoreLifecycle {
             return "claudeSessionID \(LumiLog.short(id))"
         case .awaitingDecisionChanged(let id, let awaiting):
             return "awaitingDecision \(LumiLog.short(id)) \(awaiting)"
+        case .interruptInferred(let id):
+            return "interruptInferred \(LumiLog.short(id))"
         case .bell(let id):
             return "bell \(LumiLog.short(id))"
         case .writeFailed(let id, let errno):
@@ -497,7 +499,7 @@ public final class TerminalListStore: StoreLifecycle {
         case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged:
             return true
         case .statusChanged, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
-             .writeFailed, .stalled, .viewFocused, .linkActivated:
+             .writeFailed, .stalled, .viewFocused, .linkActivated, .interruptInferred:
             return false
         }
     }
@@ -564,6 +566,9 @@ public final class TerminalListStore: StoreLifecycle {
             // Terminal NSView'ına tıklama: store odağı senkronlanır. `focus`
             // kuralları aynen geçerli (minimize edilmiş odak alamaz).
             focus(id)
+        case .interruptInferred:
+            // Karar 104: yalnız remote turn-status'ü içindir; status ayrıca akar.
+            break
         case .linkActivated(let activation):
             // Karar 57: hedef çözümlemesi ve eylemler link store'unda; burada
             // yalnız kanal köprülenir (repo/workspace bilgisi bu store'da yok).

@@ -219,9 +219,9 @@ final class FileViewerStoreTests: XCTestCase {
 
     func testMarkdownRenderingIsOnByDefaultAndTogglable() async {
         let store = makeStore(FakeGitService())
-        XCTAssertTrue(store.rendersMarkdown)
-        store.rendersMarkdown = false
-        XCTAssertFalse(store.rendersMarkdown)
+        XCTAssertEqual(store.markdownDisplay, .preview)
+        store.markdownDisplay = .raw
+        XCTAssertEqual(store.markdownDisplay, .raw)
     }
 
     /// Render'lı markdown TÜREVDİR: dosya uzantısı + oturumluk tercih.
@@ -232,10 +232,10 @@ final class FileViewerStoreTests: XCTestCase {
         await store.presentView(repoPath: "/repo", filePath: "docs/readme.md")
         XCTAssertTrue(store.isRenderedMarkdown)
 
-        store.rendersMarkdown = false
+        store.markdownDisplay = .raw
         XCTAssertFalse(store.isRenderedMarkdown)
 
-        store.rendersMarkdown = true
+        store.markdownDisplay = .preview
         await store.presentView(repoPath: "/repo", filePath: "src/main.swift")
         XCTAssertFalse(store.isRenderedMarkdown, "markdown olmayan dosyada render yok")
     }
@@ -246,7 +246,7 @@ final class FileViewerStoreTests: XCTestCase {
         let git = FakeGitService()
         let store = makeStore(git)
         await store.presentDiff(repoPath: "/repo", filePath: "a.txt")
-        store.rendersMarkdown = false
+        store.markdownDisplay = .raw
 
         store.close()
 
@@ -256,7 +256,7 @@ final class FileViewerStoreTests: XCTestCase {
         XCTAssertEqual(store.filePath, "")
         XCTAssertNil(store.commitContext)
         XCTAssertNil(store.content)
-        XCTAssertFalse(store.rendersMarkdown, "markdown tercihi oturum boyunca sürer")
+        XCTAssertEqual(store.markdownDisplay, .raw, "markdown tercihi oturum boyunca sürer")
     }
 
     // MARK: - Yarış koruması

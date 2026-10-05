@@ -70,6 +70,24 @@ public struct RemoveCodexAccountDialogState: Equatable, Sendable {
     }
 }
 
+/// Favori dosya modalının bağlamı (karar 107): arama `checkoutPath`'in
+/// ağacında yapılır, kayıt `projectPath`'e yazılır. `relinkID` doluysa modal
+/// kayıp bir favoriyi yeni yerine bağlamak için açılmıştır.
+public struct FavoriteFilesDialogState: Equatable, Sendable {
+    public let projectPath: String
+    public let checkoutPath: String
+    public let relinkID: String?
+    /// Arama kutusunun başlangıç metni (yeniden bağlamada eski dosya adı).
+    public let initialQuery: String
+
+    public init(projectPath: String, checkoutPath: String, relinkID: String? = nil, initialQuery: String = "") {
+        self.projectPath = projectPath
+        self.checkoutPath = checkoutPath
+        self.relinkID = relinkID
+        self.initialQuery = initialQuery
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -84,6 +102,8 @@ public enum ActiveDialog: Equatable, Sendable {
     case createWorkspace(projectPath: String)
     /// Projenin hızlı komut düzenleyicisi (karar 92).
     case quickCommands(projectPath: String)
+    /// Favori dosya arama/yönetim modalı (karar 107).
+    case favoriteFiles(FavoriteFilesDialogState)
     case settings
     /// Karar 104: orchestrator sohbet popup'ı.
     case orchestrator
@@ -102,8 +122,8 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .settings, .orchestrator,
-             .onboarding, .closeTab,
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .favoriteFiles, .settings,
+             .orchestrator, .onboarding, .closeTab,
              .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .removeCodexAccount,
              .quit: true
         }

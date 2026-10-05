@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import LumiKit
 
-/// Gerçek `HighlightrEngine`'i (JSCore) testlere sokmayan vurgulayıcı:
+/// Gerçek `HighlightJSEngine`'i (JSCore) testlere sokmayan vurgulayıcı:
 /// metni olduğu gibi, tek attribute run'ıyla döner.
 @MainActor
 public final class FakeSyntaxHighlighter: SyntaxHighlighting {

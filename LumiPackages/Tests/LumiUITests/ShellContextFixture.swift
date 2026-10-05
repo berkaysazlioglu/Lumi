@@ -51,6 +51,7 @@ struct ShellContextFixture {
             repos: repos,
             workspaces: ProjectWorkspaceStore(service: workspaces, config: config, repos: repos, toasts: toasts),
             quickCommands: QuickCommandStore(config: config, generator: FakeQuickCommandGenerator(), scripts: FakeQuickCommandScriptWriter(), launcher: FakeQuickCommandBackgroundLauncher(), toasts: toasts),
+            favoriteFiles: FavoriteFileStore(config: config, toasts: toasts),
             git: GitStore(git: git, toasts: toasts),
             plastic: PlasticStore(service: FakePlasticService(), toasts: toasts),
             commitAssistant: CommitMessageAssistant(generator: FakeCommitMessageGenerator(), toasts: toasts),
@@ -60,6 +61,7 @@ struct ShellContextFixture {
             remote: RemoteStore(service: FakeRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminalService, toasts: toasts),
+            looseTerminals: LooseTerminalStore(config: config, toasts: toasts),
             toasts: toasts,
             onboarding: OnboardingStore(
                 system: system,
@@ -85,6 +87,7 @@ struct ShellContextFixture {
             orchestrator: OrchestratorStore(service: FakeOrchestratorService(), config: config),
             viewProvider: viewProvider,
             highlighter: StubHighlighter(),
+            markdownParser: FakeMarkdownParser(),
             actions: ShellActions(
                 chooseFolder: { nil },
                 reveal: { _, _ in },
@@ -141,7 +144,7 @@ enum ShellFixtureError: Error {
     case terminalDidNotAppear
 }
 
-/// FileViewer'ın gerçek `HighlightrEngine`'ini (JSCore) testlere sokmamak için.
+/// FileViewer'ın gerçek `HighlightJSEngine`'ini (JSCore) testlere sokmamak için.
 final class StubHighlighter: SyntaxHighlighting {
     func highlight(code: String, fileName: String, fontSize: CGFloat) async -> NSAttributedString {
         NSAttributedString(string: code)

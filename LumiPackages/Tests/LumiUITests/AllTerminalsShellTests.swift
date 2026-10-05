@@ -48,7 +48,11 @@ final class AllTerminalsShellTests: XCTestCase {
 
         XCTAssertEqual(shell.checkoutLabel(for: "/projects/game"), "Game")
         XCTAssertEqual(shell.checkoutLabel(for: "/worktrees/game-feature"), "Game / feature")
-        XCTAssertEqual(shell.checkoutLabel(for: "/elsewhere/tool"), "tool", "bilinmeyen yol klasör adına düşer")
+        XCTAssertEqual(
+            shell.checkoutLabel(for: "/elsewhere/tool"), "/elsewhere/tool",
+            "karar 108: projesiz yol kısa yolunu gösterir"
+        )
+        XCTAssertEqual(shell.checkoutLabel(for: NSHomeDirectory() + "/Desktop"), "~/Desktop")
     }
 
     func testFinishingArrangementRefocusesTheSurfacesLastActiveCard() async throws {
@@ -65,5 +69,39 @@ final class AllTerminalsShellTests: XCTestCase {
         XCTAssertFalse(shell.layout.isArranging(in: .all))
         XCTAssertEqual(shell.terminals.activeTerminalID, first.id, "yüzeyin ilk kartı")
         _ = second
+    }
+
+    // MARK: - Karar 108: Projects ▸ Other
+
+    func testLooseTerminalGroupsListOnlyTerminalsOutsideProjectsByLabel() async throws {
+        shell.navigation.openTab("/projects/game")
+        try await fixture.spawnTerminal(named: "in-project", in: "/projects/game")
+        try await fixture.spawnTerminal(named: "desk", in: "/Users/me/Desktop")
+        try await fixture.spawnTerminal(named: "tmp-1", in: "/private/tmp")
+        try await fixture.spawnTerminal(named: "tmp-2", in: "/private/tmp")
+
+        let groups = shell.looseTerminalGroups
+
+        XCTAssertEqual(groups.map(\.path), ["/private/tmp", "/Users/me/Desktop"])
+        XCTAssertEqual(groups.first?.terminals.compactMap(\.task), ["tmp-1", "tmp-2"])
+    }
+
+    func testLooseTerminalGroupsAreEmptyWhenEveryTerminalBelongsToACheckout() async throws {
+        shell.navigation.openTab("/projects/game")
+        try await fixture.spawnTerminal(in: "/projects/game")
+
+        XCTAssertTrue(shell.looseTerminalGroups.isEmpty)
+    }
+
+    /// Other satırından ajan seçmek ev dizinini tab yapmaz (faz 2 kapısı).
+    func testFocusingLooseAgentShowsAllTerminalsWithoutOpeningATab() async throws {
+        shell.navigation.openTab("/projects/game")
+        let loose = try await fixture.spawnTerminal(in: "/Users/me")
+
+        shell.focusAgent(loose)
+
+        XCTAssertEqual(shell.navigation.activeRoute, AllTerminalsRoute.route)
+        XCTAssertEqual(shell.navigation.openTabs, ["/projects/game"])
+        XCTAssertEqual(shell.terminals.activeTerminalID, loose.id)
     }
 }

@@ -100,7 +100,7 @@ final class MentionInChatTests: XCTestCase {
         await viewer.presentView(repoPath: "/repo", filePath: "docs/readme.md")
         viewer.selectedLines = 1...1
         XCTAssertNil(viewer.mentionReference, "render'lı markdown satırları dosyaya eşlenmez")
-        viewer.rendersMarkdown = false
+        viewer.markdownDisplay = .raw
         XCTAssertEqual(viewer.mentionReference, "@docs/readme.md#L1 ")
 
         await viewer.presentDiff(repoPath: "/repo", filePath: "src/a.cs")

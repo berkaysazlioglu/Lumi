@@ -64,6 +64,9 @@ public struct UIState: Sendable, Equatable {
     /// terminallerin oturum kimlikleri (resume listesiyle aynı kimlik). Resume
     /// listesiyle birlikte checkpoint'te yazılır.
     public var allTerminalsOrder: [String]
+    /// Karar 108 (additive): serbest terminal açılan son konumlar — en yeni
+    /// başta, en fazla `LooseTerminalLocations.recentLimit`. Boşken yazılmaz.
+    public var recentLooseLocations: [String]
 
     public static let defaults = UIState(
         openTabs: [],
@@ -94,7 +97,8 @@ public struct UIState: Sendable, Equatable {
         orchestratorSessionID: String? = nil,
         orchestratorWatchedSessions: [String]? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
-        allTerminalsOrder: [String] = []
+        allTerminalsOrder: [String] = [],
+        recentLooseLocations: [String] = []
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -115,6 +119,7 @@ public struct UIState: Sendable, Equatable {
         self.orchestratorWatchedSessions = orchestratorWatchedSessions
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.allTerminalsOrder = allTerminalsOrder
+        self.recentLooseLocations = recentLooseLocations
     }
 }
 
@@ -150,8 +155,8 @@ public struct GridLayout: Sendable, Equatable {
     public var mode: Mode
     public var count: Int
     public var heightMode: HeightMode
-    /// Yalnız `scroll` modunda anlamlı: satır min yüksekliği = kolon genişliği ×
-    /// bu oran. Büyük oran → uzun terminaller → daha çok dikey kaydırma.
+    /// Yalnız `scroll` modunda anlamlı: satır yüksekliği = terminal alanının
+    /// (maximize yüksekliği) bu oranı (karar 106). Büyük oran → uzun terminaller.
     public var heightRatio: HeightRatio
 
     /// Kolon ekseni. `rows` EMEKLİ — yeni yazımda üretilmez, eski dosyada
@@ -168,10 +173,10 @@ public struct GridLayout: Sendable, Equatable {
         case scroll
     }
 
-    /// Scroll modunda satır min yüksekliğinin kolon genişliğine oranı.
+    /// Scroll modunda satır yüksekliğinin terminal alanı yüksekliğine oranı.
     /// Kullanıcıya dönük etiketi LumiUI'daki presenter verir (refactor 5.9).
     public enum HeightRatio: String, Sendable, CaseIterable {
-        case full   // %100 — yükseklik = genişlik
+        case full   // %100 — maximize yüksekliği
         case half   // %50
         case third  // %33
 

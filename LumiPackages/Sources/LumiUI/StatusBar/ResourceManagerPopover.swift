@@ -135,11 +135,11 @@ struct ResourceManagerPopover: View {
         )
     }
 
-    /// Oturumun repo'suna geçip terminali odaklar (minimize ise geri alır).
+    /// Oturumun yüzeyine geçip terminali odaklar (minimize ise geri alır);
+    /// serbest terminal repo tab'ı açmaz (karar 108).
     private func navigate(to id: TerminalID) {
         guard let meta = shell.terminals.meta(for: id) else { return }
-        shell.navigation.openTab(meta.repoPath)
-        shell.terminals.restoreAndFocus(id)
+        shell.focusAgent(meta)
     }
 
     // MARK: - Onay kartı
