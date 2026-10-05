@@ -138,7 +138,7 @@ public struct GridLayout: Sendable, Equatable {
     public var count: Int
     public var heightMode: HeightMode
     /// Yalnız `scroll` modunda anlamlı: satır yüksekliği = terminal alanının
-    /// (maximize yüksekliği) bu oranı (karar 104). Büyük oran → uzun terminaller.
+    /// (maximize yüksekliği) bu oranı (karar 106). Büyük oran → uzun terminaller.
     public var heightRatio: HeightRatio
 
     /// Kolon ekseni. `rows` EMEKLİ — yeni yazımda üretilmez, eski dosyada

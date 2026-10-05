@@ -110,7 +110,7 @@ final class GridLayoutMathTests: XCTestCase {
     }
 
     func testScrollHeightIsViewportHeightTimesRatioRegardlessOfCount() {
-        // Karar 104: scroll'da yükseklik viewport yüksekliğinin oranıdır — kolon
+        // Karar 106: scroll'da yükseklik viewport yüksekliğinin oranıdır — kolon
         // genişliğinden ve terminal sayısından bağımsız. Oran aralıklarla birlikte
         // uygulanır: (800 + 12) × r − 12.
         for (ratio, expected) in [(GridLayout.HeightRatio.full, 800.0),

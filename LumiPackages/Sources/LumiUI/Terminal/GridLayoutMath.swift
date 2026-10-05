@@ -49,7 +49,7 @@ public enum GridLayoutMath {
 
     /// Görünür kart frame'leri (yerleşim sırası soldan sağa, satır satır).
     /// `fit`: tüm satırlar viewport'a sığar (scroll yok; rowHeight = viewport/satır).
-    /// `scroll`: rowHeight = **viewport yüksekliğinin `heightRatio`'su** (karar 104 —
+    /// `scroll`: rowHeight = **viewport yüksekliğinin `heightRatio`'su** (karar 106 —
     /// terminal sayısından ve kolon genişliğinden bağımsız); içerik viewport'u
     /// aşınca dikey scroll. %100 = maximize edilmiş terminalin yüksekliği.
     public static func frames(

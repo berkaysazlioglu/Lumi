@@ -5,6 +5,7 @@ public struct AgentRowData: Sendable, Equatable, Identifiable {
     public let title: String
     public let provider: String?
     public let badge: Badge
+    public let activity: AgentActivity
     public let lastActivityAt: Double?
     public let needsAttention: Bool
 }
@@ -45,6 +46,7 @@ public func assembleProjectTree(snapshot: ProjectsSnapshot,
                     title: (s.title?.isEmpty == false ? s.title! : s.repoName),
                     provider: s.provider,
                     badge: s.badge,
+                    activity: s.activity,
                     lastActivityAt: s.lastActivityAt,
                     needsAttention: terminalNeedsAttention(status: s.status, isSelected: s.id == selectedId))
             }

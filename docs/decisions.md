@@ -1062,7 +1062,23 @@ Kullanıcı isteği: sol paneldeki Tasks/Remote bölümünde, tıklayınca tüm 
 - **İnceleme düzeltmeleri.** (1) Repo ⇄ All Terminals geçişi aktif kartı EKRANDAYKEN yeni route'un host'una taşıyan ilk yüzey→yüzey geçişidir; AppKit taşımada first responder'ı düşürüyor, kart seçili göründüğü hâlde tuşlar terminale gitmiyordu. `TerminalViewRegistry.attachView` artık odaklı view'ı taşırken odak isteğini yeniden kurar (yalnız gerçekten odaktaysa ve başka terminal için bekleyen istek yoksa — kullanıcının başka yere verdiği odak çalınmaz); grid ⇄ maximize taşıması da aynı yoldan faydalanır. (2) Yüzey öne alınırken toplu `.foreground` minimize kartları ayırmıyordu (repo'da da vardı; All Terminals'ta tüm projelerin minimize kartları 16 ms akışa geçiyordu); `setTerminalSurfaceVisible` kapsamdaki minimize kartlara `.minimized`'ı geri yazar.
 - Testler: `TerminalArrangementTests`, `AllTerminalsScopeTests`, `AllTerminalsUIStateCodecTests`, `AllTerminalsShellTests`, `ShellToolbarCompositionTests` (All Terminals bölümü).
 
-### 104. Grid `scroll` yüksekliği terminal alanına göre — %100 = maximize yüksekliği (2026-10-02)
+### 104. Kesilen turn telefonda kapanır; telefon Stop'u Esc gönderir (2026-10-02)
+
+Saha bulgusu: iOS'tan Stop'a basınca Claude duruyordu ama telefonda "Running" barı ve streaming balonu kalıyor, ardından mesaj gitmiyordu. Kök: telefonun turn-status'ü Mac'teki `TurnStatusReducer`'dan gelir ve yalnız `Stop`/`StopFailure` hook'unda kapanır; Claude Code Esc/Ctrl-C kesmesinde Stop hook'u göndermez. Terminal kesmeyi 0,5 sn'lik çıkarımla (karar 45) biliyordu ama remote katmanı bunu duymuyordu. Takılı bar yüzünden ikinci kez Stop'a basmak ikinci bir Ctrl-C demekti ve boştaki Claude'da bu çıkış isteğidir.
+
+- **Mac:** Tetik yeni additive `TerminalEvent.interruptInferred(TerminalID)` sinyalidir — `TerminalPipeline.settleInterrupt()` yalnız `AgentHookStatusReducer.inferInterrupt()` gerçekten etki ürettiğinde, aynı adımın status etkilerinden SONRA yayar (`TerminalSessionDelegate.sessionDidInferInterrupt` → `TerminalSessionManager` broadcaster; ephemeral, `TerminalMeta`'ya yazılmaz). `RemoteService` bu sinyalde `TurnStatusReducer.interrupt()` + `PromptJournal.cancelAllPending()` uygular; chat modundaki terminal için `chat_status working=false` ve iptal edilmiş `prompt` frame'leri yollanır. Genel bir non-working `statusChanged` bilinçli olarak tetik değildir: art arda gelen Stop→UserPromptSubmit'te Stop'un `waiting` olayı, canlı status henüz working'e dönmeden tüketilip yeni turn'ü düşürüyordu (normal bitişi zaten Stop hook'u kapatır). Terminalin CANLI status'ü working ise sinyal yok sayılır — derinlemesine savunma olarak kalır.
+- **Telefon (ek):** `chat_status` farklı `startedAtMs` ile working gelirse (araya idle girmeden yeni turn) "Stopping…" temizlenir; yerel düşüş zaten aynı turn'le sınırlıdır.
+- **Telefon:** Stop artık `0x03` değil `0x1B` (Esc) gönderir — Claude'un kesme tuşu, çıkış riski yok. Basınca bar "Stopping…" olur ve tekrar basılamaz; 5 sn içinde `working=false` gelmezse turn yerelde kapatılır (bekleyen kart düşer).
+- Protokol değişmez.
+
+### 105. Telefonda ajan durumu Mac'in durum dilini kullanır; `sessions`'a additive `awaitingDecision` (2026-10-02)
+
+Saha bulgusu: telefonda hangi ajanın çalıştığı, hangisinin beklediği belli değildi. Satırda yalnız 10pt'lik renkli bir nokta vardı ve tüm `waiting-*` durumları (bitmiş-görülmüş dahil) aynı turuncuydu; izin/soru bekleyen ajan bitmiş ajandan ayırt edilemiyordu, chat ekranında durum hiç yoktu.
+
+- **Protokol (additive):** `sessions` içindeki her `SessionMeta` artık `awaitingDecision: Bool` taşır. Kaynak `TerminalEvent.awaitingDecisionChanged`; `RemoteService` değişince `sessions`'ı yeniden yayınlar. Eski telefon alanı yok sayar, yeni telefon alan yoksa `false` kabul eder. Relay değişmez.
+- **Telefon:** YENİ `LumiMobileKit/AgentActivity` — Mac `AgentActivityState` eşlemesinin aynısı (çalışıyor → spinner, karar bekliyor → zil "Needs input", bitti → yeşil tik, hata → kırmızı çarpı, boşta → soluk nokta). Projects ajan satırı glif + çalışırken/karar beklerken kısa etiket gösterir; chat ekranının başlığı aynı glifi taşır. Dikkat vurgusu (karar 77) aynen kalır.
+
+### 106. Grid `scroll` yüksekliği terminal alanına göre — %100 = maximize yüksekliği (2026-10-02)
 
 Kullanıcı isteği: Height ▸ Scroll ▸ %100 seçiliyken terminal, ortadaki terminal alanının tamamı kadar (bir terminali maximize edince ulaştığı yükseklik) olmalı; pratikte alanın ~%40'ında kalıyordu.
 

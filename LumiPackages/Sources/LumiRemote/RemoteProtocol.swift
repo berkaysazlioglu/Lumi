@@ -15,11 +15,14 @@ struct SessionMeta {
     let kind: String?   // oturum türü (örn. "chat", "terminal"); Faz 2 — yoksa nil
     let provider: String?
     let lastActivityAt: Double?
+    /// Karar 105: telefon "karar bekliyor"u (izin/soru promptu) "bitti"den ayırır.
+    let awaitingDecision: Bool
 
     init(id: String, repoName: String, status: String,
          title: String? = nil, model: String? = nil,
          cols: Int, rows: Int, kind: String? = nil,
-         provider: String? = nil, lastActivityAt: Double? = nil) {
+         provider: String? = nil, lastActivityAt: Double? = nil,
+         awaitingDecision: Bool = false) {
         self.id = id
         self.repoName = repoName
         self.status = status
@@ -30,6 +33,7 @@ struct SessionMeta {
         self.kind = kind
         self.provider = provider
         self.lastActivityAt = lastActivityAt
+        self.awaitingDecision = awaitingDecision
     }
 
     func toDict() -> [String: Any] {
@@ -40,6 +44,7 @@ struct SessionMeta {
             "cols": cols,
             "rows": rows,
             "kind": kind.map { $0 as Any } ?? NSNull(),
+            "awaitingDecision": awaitingDecision,
         ]
         if let title { d["title"] = title }
         if let model { d["model"] = model }

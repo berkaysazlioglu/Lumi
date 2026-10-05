@@ -147,6 +147,11 @@ public enum TerminalEvent: Sendable, Equatable {
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)
+    /// Karar 104: Esc/Ctrl+C sonrası hook gelmedi ve terminal lider turn'ü kesilmiş
+    /// saydı (`AgentHookStatusReducer.inferInterrupt` etki üretti). Remote katmanı
+    /// telefondaki turn-status'ü ve bekleyen kartları bununla kapatır.
+    /// Ephemeral sinyal: `TerminalMeta` formatına YAZILMAZ (karar 9).
+    case interruptInferred(TerminalID)
     case bell(TerminalID)
     /// PTY'ye yazım kalıcı olarak başarısız (EPIPE/EIO — child öldü).
     /// Karar 5: sessiz yutma yok; store toast gösterir.

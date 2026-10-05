@@ -93,7 +93,7 @@ final class WorkspaceBootAssembly: FeatureAssembly {
         case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged:
             return true
         case .statusChanged, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
-             .writeFailed, .stalled, .viewFocused, .linkActivated:
+             .writeFailed, .stalled, .viewFocused, .linkActivated, .interruptInferred:
             return false
         }
     }

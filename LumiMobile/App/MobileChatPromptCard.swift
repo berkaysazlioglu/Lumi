@@ -5,17 +5,17 @@ import LumiWire
 /// Phase 3 / 3.1: interactive prompt card above the composer. Renders the latest pending item.
 /// approval: title+detail + Allow(blue)/Deny(/don't-ask). question: single-select tap; multiSelect
 /// toggle+Submit; allowOther free-text. Grouped multi-question (questions.count>1) = Phase 3.1 Task 8.
+/// Task 3: draft state lives in AppModel.promptDrafts so selections survive leaving the chat.
 struct MobileChatPromptCard: View {
     let prompt: ChatPrompt
     let maxHeight: CGFloat
+    let draft: PromptDraft
+    let onDraftChange: (PromptDraft) -> Void
     let onApproval: (String) -> Void                                   // optionId
     let onQuestion: ([(indices: [Int], other: String?)]) -> Void       // tek soru: [ (indices, other) ]
     @State private var sending = false
-    @State private var selected: [Int] = []
-    @State private var freeText = ""
-    // Grouped multi-question state (Component D)
-    @State private var groupSel: [Int: [Int]] = [:]
-    @State private var groupText: [Int: String] = [:]
+
+    private enum SelectionMark { case none, radio(Bool), checkbox(Bool) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,13 +65,16 @@ struct MobileChatPromptCard: View {
     // MARK: Question (single question)
 
     @ViewBuilder private var questionBody: some View {
+        let selected = draft.selections[0] ?? []
         ForEach(Array(prompt.options.enumerated()), id: \.element.id) { idx, opt in
-            optionButton(opt.label, description: opt.description,
-                         primary: false, checked: prompt.multiSelect ? selected.contains(idx) : nil) {
+            optionButton(opt.label, description: opt.description, primary: false,
+                         selection: prompt.multiSelect ? .checkbox(draft.isSelected(question: 0, option: idx))
+                                                        : .radio(draft.isSelected(question: 0, option: idx))) {
                 if prompt.multiSelect {
-                    if let at = selected.firstIndex(of: idx) { selected.remove(at: at) } else { selected.append(idx) }
+                    onDraftChange(draft.toggling(question: 0, option: idx, multiSelect: true))
                 } else {
                     guard !sending else { return }
+                    onDraftChange(draft.toggling(question: 0, option: idx, multiSelect: false))
                     sending = true
                     onQuestion([(indices: [idx], other: nil)])
                 }
@@ -81,7 +84,7 @@ struct MobileChatPromptCard: View {
             Button {
                 guard !sending, !selected.isEmpty else { return }
                 sending = true
-                onQuestion([(indices: selected.sorted(), other: trimmedOther)])
+                onQuestion([(indices: selected.sorted(), other: trimmedOther(for: 0))])
             } label: {
                 Text("Send\(selected.isEmpty ? "" : " (\(selected.count))")")
                     .font(.footnote.bold()).frame(maxWidth: .infinity)
@@ -103,24 +106,17 @@ struct MobileChatPromptCard: View {
                     .font(.footnote.bold())
                     .padding(.top, qi == 0 ? 0 : 4)
                 ForEach(Array(q.options.enumerated()), id: \.element.id) { oi, opt in
-                    let isChecked = groupSel[qi]?.contains(oi) ?? false
-                    optionButton(opt.label, description: opt.description,
-                                 primary: false, checked: q.multiSelect ? isChecked : nil) {
-                        if q.multiSelect {
-                            var sel = groupSel[qi] ?? []
-                            if let at = sel.firstIndex(of: oi) { sel.remove(at: at) } else { sel.append(oi) }
-                            groupSel[qi] = sel
-                        } else {
-                            // Single-select: clear the previous selection, write the new one.
-                            groupSel[qi] = [oi]
-                        }
+                    optionButton(opt.label, description: opt.description, primary: false,
+                                 selection: q.multiSelect ? .checkbox(draft.isSelected(question: qi, option: oi))
+                                                           : .radio(draft.isSelected(question: qi, option: oi))) {
+                        onDraftChange(draft.toggling(question: qi, option: oi, multiSelect: q.multiSelect))
                     }
                 }
                 if q.allowOther {
                     HStack(spacing: 6) {
                         TextField("Or type…", text: Binding(
-                            get: { groupText[qi] ?? "" },
-                            set: { groupText[qi] = $0 }
+                            get: { draft.texts[qi] ?? "" },
+                            set: { onDraftChange(draft.withText($0, question: qi)) }
                         ), axis: .vertical)
                             .textFieldStyle(.roundedBorder).lineLimit(1...3)
                     }
@@ -130,16 +126,14 @@ struct MobileChatPromptCard: View {
         // Single Send button — collects all questions in order.
         // groupedReady: every question must be answered (a selection OR non-empty free-text).
         let groupedReady = prompt.questions.indices.allSatisfy { qi in
-            !(groupSel[qi] ?? []).isEmpty
-                || !(groupText[qi] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !(draft.selections[qi] ?? []).isEmpty
+                || !(draft.texts[qi] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         Button {
             guard !sending else { return }
             sending = true
             let result = prompt.questions.indices.map { qi -> (indices: [Int], other: String?) in
-                let trimmed = groupText[qi]?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let other: String? = (trimmed?.isEmpty ?? true) ? nil : trimmed
-                return (indices: (groupSel[qi] ?? []).sorted(), other: other)
+                (indices: (draft.selections[qi] ?? []).sorted(), other: trimmedOther(for: qi))
             }
             onQuestion(result)
         } label: {
@@ -154,31 +148,47 @@ struct MobileChatPromptCard: View {
 
     private var freeTextRow: some View {
         HStack(spacing: 6) {
-            TextField("Or type…", text: $freeText, axis: .vertical)
+            TextField("Or type…", text: Binding(
+                get: { draft.texts[0] ?? "" },
+                set: { onDraftChange(draft.withText($0, question: 0)) }
+            ), axis: .vertical)
                 .textFieldStyle(.roundedBorder).lineLimit(1...3)
             Button {
-                guard !sending, !trimmedOtherIsEmpty else { return }
+                guard !sending, !trimmedOtherIsEmpty(for: 0) else { return }
                 sending = true
-                onQuestion([(indices: prompt.multiSelect ? selected.sorted() : [], other: trimmedOther)])
+                onQuestion([(indices: prompt.multiSelect ? (draft.selections[0] ?? []).sorted() : [],
+                            other: trimmedOther(for: 0))])
             } label: { Image(systemName: "arrow.up.circle.fill").font(.title3) }
-                .disabled(sending || trimmedOtherIsEmpty)
+                .disabled(sending || trimmedOtherIsEmpty(for: 0))
         }
     }
 
     // MARK: helpers
 
-    private var trimmedOther: String? {
-        let t = freeText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func trimmedOther(for question: Int) -> String? {
+        let t = (draft.texts[question] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
     }
-    private var trimmedOtherIsEmpty: Bool { trimmedOther == nil }
+    private func trimmedOtherIsEmpty(for question: Int) -> Bool { trimmedOther(for: question) == nil }
+
+    private func selectionIcon(_ selection: SelectionMark) -> (isSelected: Bool, iconName: String?) {
+        switch selection {
+        case .none: return (false, nil)
+        case .radio(let on): return (on, on ? "largecircle.fill.circle" : "circle")
+        case .checkbox(let on): return (on, on ? "checkmark.square.fill" : "square")
+        }
+    }
 
     @ViewBuilder
     private func optionButton(_ label: String, description: String?, primary: Bool,
-                              checked: Bool? = nil, action: @escaping () -> Void) -> some View {
+                              selection: SelectionMark = .none, action: @escaping () -> Void) -> some View {
+        let (isSelected, iconName) = selectionIcon(selection)
         Button(action: action) {
             HStack(spacing: 8) {
-                if let checked { Image(systemName: checked ? "checkmark.square.fill" : "square") }
+                if let iconName {
+                    Image(systemName: iconName)
+                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label).font(.footnote.bold())
                     if let d = description { Text(d).font(.caption).foregroundStyle(.secondary) }
@@ -187,8 +197,13 @@ struct MobileChatPromptCard: View {
             }
             .padding(.vertical, 8).padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(primary ? Color.accentColor.opacity(0.18) : Color(uiColor: .secondarySystemBackground),
+            .background(isSelected ? Color.accentColor.opacity(0.22)
+                                    : (primary ? Color.accentColor.opacity(0.18) : Color(uiColor: .secondarySystemBackground)),
                         in: RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+            )
         }
         .disabled(sending)
     }

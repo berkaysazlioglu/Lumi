@@ -209,7 +209,7 @@ struct ProjectsView: View {
             openSession = agent.id
         } label: {
             HStack(spacing: 10) {
-                Circle().fill(Color(badge: agent.badge)).frame(width: 10, height: 10)
+                AgentActivityGlyph(activity: agent.activity)
                 Image(systemName: providerSymbol(agent.provider))
                     .font(.callout).foregroundStyle(.secondary)
                 Text(agent.title)
@@ -217,6 +217,11 @@ struct ProjectsView: View {
                     .foregroundStyle(agent.needsAttention ? Color.orange : .primary)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer()
+                if agent.activity == .running || agent.activity == .awaitingDecision {
+                    Text(agent.activity.title)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.orange)
+                }
                 Text(PhoneRelativeTime.shortLabel(
                     agent.lastActivityAt,
                     now: Date().timeIntervalSince1970 * 1000
@@ -339,17 +344,6 @@ private struct AddProjectSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-        }
-    }
-}
-
-private extension Color {
-    init(badge: Badge) {
-        switch badge {
-        case .idle: self = .gray
-        case .working: self = .blue
-        case .waiting: self = .orange
-        case .error: self = .red
         }
     }
 }

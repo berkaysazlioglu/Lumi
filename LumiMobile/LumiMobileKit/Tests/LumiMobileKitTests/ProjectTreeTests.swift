@@ -21,6 +21,7 @@ final class ProjectTreeTests: XCTestCase {
         XCTAssertEqual(agents.map(\.id), ["t1", "t2"])   // agentIds order; "missing" skipped
         XCTAssertEqual(agents[0].provider, "claude")
         XCTAssertEqual(agents[0].badge, .working)
+        XCTAssertEqual(agents[0].activity, .running)
     }
 
     func testAttention() {

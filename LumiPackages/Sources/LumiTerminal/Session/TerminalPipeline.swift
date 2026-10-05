@@ -46,6 +46,9 @@ final class TerminalPipeline: @unchecked Sendable {
     var onFlushBatch: (@Sendable (Data) -> Void)?
     /// Feed akışı durdu / düzeldi (Ek A §A.2-10). UI "stalled" rozeti gösterir.
     var onStallChange: (@Sendable (Bool) -> Void)?
+    /// Karar 104: kesme çıkarımı GERÇEKTEN etki üretti (lider turn kesildi).
+    /// Aynı adımın status etkilerinden SONRA çağrılır.
+    var onInterruptInferred: (@Sendable () -> Void)?
 
     /// Scheduler'lar enjekte edilebilir (varsayılan = io queue üzerinde gerçek
     /// dispatch timer'ı): orkestrasyon testleri 16 ms / 3 sn beklemeden,
@@ -210,7 +213,10 @@ final class TerminalPipeline: @unchecked Sendable {
     /// Esc/Ctrl+C sonrası pencere doldu ve hook gelmedi → kesildi say.
     private func settleInterrupt() {
         guard statusMachine.status == .working else { return }
-        apply(hookReducer.inferInterrupt())
+        let effects = hookReducer.inferInterrupt()
+        guard !effects.isEmpty else { return }
+        apply(effects)
+        onInterruptInferred?()
     }
 
     private func reportProviderIfChanged() {
