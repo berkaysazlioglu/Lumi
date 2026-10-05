@@ -78,6 +78,7 @@ struct ShellComposition {
             appUpdate: appUpdate.appUpdate,
             viewProvider: registry.viewProvider,
             highlighter: registry.highlighter,
+            markdownParser: registry.markdownParser,
             actions: makeActions(registry: registry, shared: shared, repo: repo)
         )
         // Niyet → kabuk yürütmesi (sekme / FileViewer / Finder / tarayıcı).

@@ -101,6 +101,7 @@ public final class ShellContext {
 
     @ObservationIgnored public let viewProvider: any TerminalViewProviding
     @ObservationIgnored public let highlighter: any SyntaxHighlighting
+    @ObservationIgnored public let markdownParser: any MarkdownParsing
     @ObservationIgnored public let actions: ShellActions
 
     public init(
@@ -135,6 +136,7 @@ public final class ShellContext {
         appUpdate: AppUpdateStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
+        markdownParser: any MarkdownParsing,
         actions: ShellActions
     ) {
         self.navigation = navigation
@@ -168,6 +170,7 @@ public final class ShellContext {
         self.appUpdate = appUpdate
         self.viewProvider = viewProvider
         self.highlighter = highlighter
+        self.markdownParser = markdownParser
         self.actions = actions
     }
 

@@ -308,6 +308,7 @@ private struct ShellFixture {
             appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService()),
             viewProvider: FakeTerminalViewProvider(),
             highlighter: NoopHighlighter(),
+            markdownParser: FakeMarkdownParser(),
             actions: ShellActions(chooseFolder: { nil }, reveal: { _, _ in }, trash: { _, _ in })
         )
         return ShellFixture(context: context, shared: shared)

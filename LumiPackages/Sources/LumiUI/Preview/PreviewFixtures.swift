@@ -80,6 +80,7 @@ public extension ShellContext {
             appUpdate: .preview,
             viewProvider: viewProvider,
             highlighter: PreviewHighlighter(),
+            markdownParser: PreviewMarkdownParser(),
             actions: ShellActions(
                 chooseFolder: { repoPath },
                 reveal: { _, _ in },
@@ -594,6 +595,15 @@ private struct PreviewSystemService: SystemServicing {
     func trash(path: String) async throws {}
     func revealInFinder(path: String) {}
     @MainActor func chooseFolder() async -> String? { nil }
+}
+
+/// Preview'da gerçek ayrıştırıcı (LumiServices) yoktur: her satır paragraf.
+private struct PreviewMarkdownParser: MarkdownParsing {
+    func parse(_ text: String) -> MarkdownDocument {
+        MarkdownDocument(blocks: text
+            .split(separator: "\n")
+            .map { .paragraph([.text(String($0))]) })
+    }
 }
 
 private final class PreviewHighlighter: SyntaxHighlighting {

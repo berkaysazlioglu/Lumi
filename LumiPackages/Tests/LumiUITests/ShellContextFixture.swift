@@ -86,6 +86,7 @@ struct ShellContextFixture {
             appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService()),
             viewProvider: viewProvider,
             highlighter: StubHighlighter(),
+            markdownParser: FakeMarkdownParser(),
             actions: ShellActions(
                 chooseFolder: { nil },
                 reveal: { _, _ in },

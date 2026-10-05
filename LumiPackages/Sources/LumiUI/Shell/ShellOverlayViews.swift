@@ -26,7 +26,7 @@ public struct FileViewerOverlay: View {
     public init() {}
 
     public var body: some View {
-        FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter)
+        FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter, markdownParser: shell.markdownParser)
     }
 }
 

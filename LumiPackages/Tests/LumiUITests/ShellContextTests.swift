@@ -318,6 +318,7 @@ final class ShellContextTests: XCTestCase {
             appUpdate: context.appUpdate,
             viewProvider: context.viewProvider,
             highlighter: context.highlighter,
+            markdownParser: context.markdownParser,
             actions: ShellActions(
                 chooseFolder: { nil },
                 reveal: { repo, path in revealed.append(repo + "|" + path) },

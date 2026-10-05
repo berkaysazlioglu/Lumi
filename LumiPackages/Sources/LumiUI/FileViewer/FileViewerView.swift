@@ -12,6 +12,7 @@ import SwiftUI
 struct FileViewerView: View {
     let store: FileViewerStore
     let highlighter: any SyntaxHighlighting
+    let markdownParser: any MarkdownParsing
 
     @Shell private var shell
 
@@ -172,7 +173,12 @@ struct FileViewerView: View {
             ImagePreviewView(preview: preview, showsComparison: showsImageComparison)
         case .text(let text):
             if store.isRenderedMarkdown {
-                RenderedMarkdownDocumentView(text: text)
+                RenderedMarkdownDocumentView(
+                    text: text,
+                    parser: markdownParser,
+                    highlighter: highlighter,
+                    onOpenLink: openMarkdownLink
+                )
             } else {
                 HighlightedCodeView(
                     code: text,
@@ -189,6 +195,20 @@ struct FileViewerView: View {
             }
         case .unsupported(let reason):
             unsupportedState(reason)
+        }
+    }
+
+    /// Karar 109: göreli link aynı viewer'da açılır (GitHub paritesi), şemalı
+    /// link sisteme gider; `#bölüm` ve kökten taşan yol yutulur.
+    private func openMarkdownLink(_ url: URL) {
+        switch MarkdownLinkTarget.resolve(url, from: store.filePath) {
+        case .external(let url):
+            shell.actions.openURL(url)
+        case .file(let path):
+            let repoPath = store.repoPath
+            Task { await store.presentView(repoPath: repoPath, filePath: path) }
+        case .anchor, .invalid:
+            break
         }
     }
 
@@ -273,24 +293,27 @@ struct FileViewerView: View {
     }
 }
 
-/// Markdown dökümanı: model GeometryReader altında her body'de yeniden parse
-/// ediliyordu; içerik değişince BİR KEZ kurulur (HighlightedCodeView kalıbı).
+/// Markdown dökümanı (karar 109): cmark-gfm ağacı içerik değişince BİR KEZ
+/// kurulur (HighlightedCodeView kalıbı) ve GitHub düzeninde çizilir.
 private struct RenderedMarkdownDocumentView: View {
     let text: String
+    let parser: any MarkdownParsing
+    let highlighter: any SyntaxHighlighting
+    let onOpenLink: (URL) -> Void
 
-    @State private var model: MarkdownDiffBuilder.Model?
+    @State private var document: MarkdownDocument?
 
     var body: some View {
         Group {
-            if let model {
-                MarkdownDiffView(model: model)
+            if let document {
+                MarkdownDocumentView(document: document, highlighter: highlighter, onOpenLink: onOpenLink)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: text) {
-            model = MarkdownDiffBuilder.buildDocument(text)
+            document = parser.parse(text)
         }
     }
 }
@@ -347,7 +370,7 @@ private struct HighlightedCodeView: View {
 #if DEBUG
 #Preview("FileViewerView — view") {
     let shell = ShellContext.preview()
-    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter)
+    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter, markdownParser: shell.markdownParser)
         .frame(width: 900, height: 600)
         .background(Theme.bgDeep)
         .task {
@@ -360,7 +383,7 @@ private struct HighlightedCodeView: View {
 
 #Preview("FileViewerView — diff") {
     let shell = ShellContext.preview()
-    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter)
+    FileViewerView(store: shell.fileViewer, highlighter: shell.highlighter, markdownParser: shell.markdownParser)
         .frame(width: 900, height: 600)
         .background(Theme.bgDeep)
         .task {
