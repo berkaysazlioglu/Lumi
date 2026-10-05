@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// `ask_project` (karar 104 Faz 5): salt-okunur olduğu için onay istemez —
+/// `ask_project` (karar 114 Faz 5): salt-okunur olduğu için onay istemez —
 /// tek bedeli token'dır ve servis kendi bütçe tavanını taşır.
 extension OrchestratorToolbox {
     func askProject(_ args: [String: Any]) async -> OrchestratorToolResult {

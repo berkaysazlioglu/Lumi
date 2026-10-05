@@ -3,7 +3,7 @@ import LumiKit
 import LumiTestSupport
 @testable import LumiServices
 
-/// Karar 104 Faz 5: salt-okunur proje sorusu ajanı.
+/// Karar 114 Faz 5: salt-okunur proje sorusu ajanı.
 final class ClaudeProjectAskServiceTests: XCTestCase {
     private let claude = "/Users/me/.local/bin/claude"
 

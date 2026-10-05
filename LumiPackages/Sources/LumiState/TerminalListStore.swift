@@ -130,7 +130,7 @@ public final class TerminalListStore: StoreLifecycle {
     }
 
     /// Metni prompt'a yapıştırıp GÖNDERİR (bracketed paste + CR) — prompt
-    /// kuyruğunun enjeksiyonuyla aynı biçim (karar 104 `send_to_terminal`).
+    /// kuyruğunun enjeksiyonuyla aynı biçim (karar 114 `send_to_terminal`).
     @discardableResult
     public func submit(_ text: String, to id: TerminalID) -> Bool {
         toasts.reporting {
@@ -159,7 +159,7 @@ public final class TerminalListStore: StoreLifecycle {
     // MARK: - Intent'ler
 
     /// Açılan terminalin meta'sı döner (orchestrator kimliği bildirir —
-    /// karar 104); hata toast olur ve `nil` döner.
+    /// karar 114); hata toast olur ve `nil` döner.
     @discardableResult
     public func spawn(
         in repoPath: String,

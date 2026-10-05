@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Test için sahte MCP sunucusu (karar 104 Faz 2): ağ açmaz, verilen
+/// Test için sahte MCP sunucusu (karar 114 Faz 2): ağ açmaz, verilen
 /// handler'ı saklar ki testler araçları doğrudan çağırabilsin.
 public final class FakeOrchestratorControlServer: OrchestratorControlServing, @unchecked Sendable {
     private let lock = NSLock()

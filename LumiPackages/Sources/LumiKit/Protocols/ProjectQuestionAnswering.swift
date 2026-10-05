@@ -1,6 +1,6 @@
 import Foundation
 
-/// `ask_project` cevabı (karar 104 Faz 5).
+/// `ask_project` cevabı (karar 114 Faz 5).
 public struct ProjectAnswer: Sendable, Equatable {
     public let text: String
     public let costUSD: Double?

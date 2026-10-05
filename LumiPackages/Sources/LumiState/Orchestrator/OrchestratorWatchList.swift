@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Orchestrator'ın İZLEDİĞİ Claude terminalleri (karar 104): yalnız bunların
+/// Orchestrator'ın İZLEDİĞİ Claude terminalleri (karar 114): yalnız bunların
 /// bitiş / karar bekleme / hata anları özetlenip Activity'ye düşer.
 ///
 /// Bir terminal üç yoldan listeye girer: orchestrator onu açtı

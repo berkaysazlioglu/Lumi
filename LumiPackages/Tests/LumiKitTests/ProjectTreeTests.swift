@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import LumiKit
 
-/// Karar 91/103: Projects ağacının tek kaynağı (telefon + orchestrator).
+/// Karar 91/114: Projects ağacının tek kaynağı (telefon + orchestrator).
 @Suite struct ProjectTreeTests {
     private let api = Repo(name: "api", path: "/p/api", isGitRepo: true, source: .standalone)
     private let docs = Repo(name: "docs", path: "/p/docs", isGitRepo: false, source: .standalone)

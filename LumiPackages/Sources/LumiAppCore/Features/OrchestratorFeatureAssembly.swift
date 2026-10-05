@@ -5,7 +5,7 @@ import LumiState
 import LumiUI
 import SwiftUI
 
-/// Orchestrator (karar 104): tüm ajan terminallerini yöneten sohbet.
+/// Orchestrator (karar 114): tüm ajan terminallerini yöneten sohbet.
 ///
 /// Top bar butonu + %80'lik popup kabuğa buradan kaydedilir; araçlar (Faz 2)
 /// Lumi'nin loopback MCP sunucusundan `OrchestratorToolbox`'a düşer. Süreç

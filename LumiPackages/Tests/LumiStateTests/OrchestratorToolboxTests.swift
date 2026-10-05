@@ -4,7 +4,7 @@ import LumiTestSupport
 import XCTest
 @testable import LumiState
 
-/// Karar 104 Faz 2: orchestrator'ın okuma araçları canlı store durumunu okur.
+/// Karar 114 Faz 2: orchestrator'ın okuma araçları canlı store durumunu okur.
 @MainActor
 final class OrchestratorToolboxTests: XCTestCase {
     private var terminals: TerminalListStore!

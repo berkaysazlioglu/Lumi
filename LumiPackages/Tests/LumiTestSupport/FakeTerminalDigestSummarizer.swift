@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Test için sahte özetleyici (karar 104 Faz 4): sabit özet ya da hata döner,
+/// Test için sahte özetleyici (karar 114 Faz 4): sabit özet ya da hata döner,
 /// çağrıları kaydeder.
 public final class FakeTerminalDigestSummarizer: TerminalDigestSummarizing, @unchecked Sendable {
     private let lock = NSLock()

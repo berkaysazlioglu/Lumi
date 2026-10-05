@@ -1,6 +1,6 @@
 import Foundation
 
-/// Orchestrator'ın system prompt'u (karar 104).
+/// Orchestrator'ın system prompt'u (karar 114).
 ///
 /// `--system-prompt` Claude Code'un varsayılan prompt'unun YERİNE geçer;
 /// `--system-prompt-snapshot off` ile her açılışta yeniden gönderilir — prompt

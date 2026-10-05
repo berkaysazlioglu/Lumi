@@ -66,11 +66,11 @@ enum UIStateCodec {
         if let raw = dict["projectToolsTab"] as? String {
             state.projectToolsTab = raw
         }
-        // Karar 104 (additive): orchestrator konuşması. Yoksa nil → yeni kimlik.
+        // Karar 114 (additive): orchestrator konuşması. Yoksa nil → yeni kimlik.
         if let raw = dict["orchestratorSessionID"] as? String, !raw.isEmpty {
             state.orchestratorSessionID = raw
         }
-        // Karar 104 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
+        // Karar 114 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
         if let raw = dict["orchestratorWatchedSessions"] as? [Any] {
             state.orchestratorWatchedSessions = raw.compactMap { $0 as? String }.filter { !$0.isEmpty }
         }
@@ -140,7 +140,7 @@ enum UIStateCodec {
         if let tab = state.projectToolsTab {
             overlay["projectToolsTab"] = tab
         }
-        // Karar 104 (additive): yalnız DOLU iken yazılır (karar 9).
+        // Karar 114 (additive): yalnız DOLU iken yazılır (karar 9).
         if let sessionID = state.orchestratorSessionID {
             overlay["orchestratorSessionID"] = sessionID
         }

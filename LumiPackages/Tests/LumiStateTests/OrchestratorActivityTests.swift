@@ -4,7 +4,7 @@ import LumiTestSupport
 import XCTest
 @testable import LumiState
 
-/// Karar 104 Faz 4: Activity akışı, model bağlam notu ve özet koordinatörü.
+/// Karar 114 Faz 4: Activity akışı, model bağlam notu ve özet koordinatörü.
 @MainActor
 final class OrchestratorActivityFeedTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 10_000)

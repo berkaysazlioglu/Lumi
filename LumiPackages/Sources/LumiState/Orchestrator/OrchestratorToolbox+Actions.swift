@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Yazma araçları (karar 104 Faz 3). İkisi de önce popup'ta onay ister; onay
+/// Yazma araçları (karar 114 Faz 3). İkisi de önce popup'ta onay ister; onay
 /// gelene kadar hiçbir terminale dokunulmaz. Onaydan SONRA hedef yeniden
 /// çözülür — bekleme sırasında terminal kapanmış ya da durumu değişmiş olabilir.
 /// Başarılı her eylemin hedefi izlemeye alınır: cevabı Activity'ye düşer.

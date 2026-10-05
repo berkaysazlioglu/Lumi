@@ -1,6 +1,6 @@
 import Foundation
 
-/// Orchestrator'ın Lumi'ye uzanan eli (karar 104 Faz 2): Lumi'nin loopback MCP
+/// Orchestrator'ın Lumi'ye uzanan eli (karar 114 Faz 2): Lumi'nin loopback MCP
 /// sunucusu. Claude `--mcp-config` ile bu uca bağlanır; araç çağrıları
 /// `OrchestratorToolHandling`'e düşer.
 public struct OrchestratorControlEndpoint: Sendable, Equatable {

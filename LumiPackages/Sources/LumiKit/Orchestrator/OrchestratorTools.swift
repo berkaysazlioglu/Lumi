@@ -14,7 +14,7 @@ public struct OrchestratorToolSpec: Sendable, Equatable {
     }
 }
 
-/// Orchestrator araç sözleşmesinin tek kaynağı (karar 104): MCP sunucusu
+/// Orchestrator araç sözleşmesinin tek kaynağı (karar 114): MCP sunucusu
 /// `tools/list`'i buradan döner, yürütücü adları buradan eşler, Claude'a
 /// verilen izin kuralı (`--allowedTools`) sunucu adından türer.
 public enum OrchestratorTools {

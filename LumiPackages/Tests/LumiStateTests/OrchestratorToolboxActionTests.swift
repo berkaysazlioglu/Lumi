@@ -4,7 +4,7 @@ import LumiTestSupport
 import XCTest
 @testable import LumiState
 
-/// Karar 104 Faz 3: yazma araçları onaysız hiçbir şeye dokunmaz; onaydan
+/// Karar 114 Faz 3: yazma araçları onaysız hiçbir şeye dokunmaz; onaydan
 /// sonra hedefi yeniden çözer.
 @MainActor
 final class OrchestratorToolboxActionTests: XCTestCase {

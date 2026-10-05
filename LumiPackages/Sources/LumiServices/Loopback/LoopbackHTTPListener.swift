@@ -3,7 +3,7 @@ import LumiKit
 import Network
 
 /// `127.0.0.1:<rastgele port>` üzerinde dinleyen asgari HTTP sunucusu — hook
-/// sunucusu (karar 45) ve orchestrator'ın MCP sunucusu (karar 104) ortak
+/// sunucusu (karar 45) ve orchestrator'ın MCP sunucusu (karar 114) ortak
 /// kullanır. Her bağlantı tek isteklik: istek `HTTPRequestParser` ile çözülür,
 /// handler'a verilir, handler'ın `reply`'ı yanıtı yazıp bağlantıyı kapatır.
 ///

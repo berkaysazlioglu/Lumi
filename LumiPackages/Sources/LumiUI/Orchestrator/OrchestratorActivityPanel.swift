@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Popup'ın sağ sütunu (karar 104 Faz 4): üstte orchestrator'ın İZLEDİĞİ
+/// Popup'ın sağ sütunu (karar 114 Faz 4): üstte orchestrator'ın İZLEDİĞİ
 /// Claude terminalleri, altında onlardan gelen "bitti / soru soruyor / karar
 /// bekliyor / hata" kartları, en yeni üstte. Kartlar model turu açmaz;
 /// kullanıcının bir sonraki mesajına not olarak iliştirilir.

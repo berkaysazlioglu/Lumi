@@ -96,7 +96,7 @@ public final class ShellContext {
     public let resourceUsage: ResourceUsageStore
     /// Settings ▸ About'un sürüm kontrolü (karar 102).
     public let appUpdate: AppUpdateStore
-    /// Karar 104: orchestrator sohbeti.
+    /// Karar 114: orchestrator sohbeti.
     public let orchestrator: OrchestratorStore
 
     // MARK: - Köprüler

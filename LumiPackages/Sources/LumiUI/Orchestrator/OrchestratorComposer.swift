@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Orchestrator'ın mesaj alanı (karar 104): ↩ gönderir, ⌥↩ yeni satır.
+/// Orchestrator'ın mesaj alanı (karar 114): ↩ gönderir, ⌥↩ yeni satır.
 /// Cevap sürerken gönder butonu Stop'a döner — süreç kesilir, konuşma
 /// bir sonraki mesajda kaldığı yerden sürer.
 struct OrchestratorComposer: View {

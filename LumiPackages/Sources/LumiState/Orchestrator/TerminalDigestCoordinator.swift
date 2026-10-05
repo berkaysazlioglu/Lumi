@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 
 /// Ajan terminallerinin "bitti / karar bekliyor / hata" anlarını yakalayıp
-/// özetleyerek Activity paneline düşürür (karar 104 Faz 4).
+/// özetleyerek Activity paneline düşürür (karar 114 Faz 4).
 ///
 /// - **Kapsam:** yalnız orchestrator'ın İZLEDİĞİ Claude terminalleri
 ///   (`OrchestratorWatchList`) — orchestrator'ın açtığı, mesaj gönderdiği ya

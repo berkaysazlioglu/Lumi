@@ -51,7 +51,7 @@ public enum AppCommands {
             id: .openRepoSelector, title: "Go to Project…", menu: .shell, key: "o",
             separatorBefore: true, referenceTitle: "Go to Project", referenceOrder: 4
         ),
-        // Karar 104: tüm ajanları yöneten sohbet popup'ı — açar/kapatır.
+        // Karar 114: tüm ajanları yöneten sohbet popup'ı — açar/kapatır.
         AppCommand(
             id: .toggleOrchestrator, title: "Orchestrator", menu: .shell, key: "j",
             referenceTitle: "Orchestrator", referenceOrder: 16

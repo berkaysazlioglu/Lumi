@@ -105,7 +105,7 @@ public enum ActiveDialog: Equatable, Sendable {
     /// Favori dosya arama/yönetim modalı (karar 107).
     case favoriteFiles(FavoriteFilesDialogState)
     case settings
-    /// Karar 104: orchestrator sohbet popup'ı.
+    /// Karar 114: orchestrator sohbet popup'ı.
     case orchestrator
     case onboarding
     case closeTab(CloseTabDialogState)
@@ -209,7 +209,7 @@ public final class DialogRouter {
         set { setPresented(.settings, newValue) }
     }
 
-    /// Karar 104: orchestrator popup'ı (⌘J / top bar butonu).
+    /// Karar 114: orchestrator popup'ı (⌘J / top bar butonu).
     public var isOrchestratorOpen: Bool {
         get { isPresenting(.orchestrator) }
         set { setPresented(.orchestrator, newValue) }

@@ -347,7 +347,7 @@ public final class RemoteService: RemoteServicing {
         let cfg = await appConfig.config()
         let allRepos = await repos.repos()
         let managedPaths = Set(cfg.workspaces.map(\.path))
-        // Karar 104: ağaç orchestrator'ın `list_projects`'iyle ortak tek kaynaktan.
+        // Karar 114: ağaç orchestrator'ın `list_projects`'iyle ortak tek kaynaktan.
         let tree = ProjectTree.build(
             favoritePaths: cfg.sidebarProjectPaths,
             repos: allRepos,

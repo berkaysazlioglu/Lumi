@@ -39,7 +39,7 @@ public enum ShellToolbarItems {
         /// DeepSeek bakiyesi (karar 75) — sağlayıcı göstergelerinden sonra,
         /// focus mode'dan önce.
         public static let deepSeekBalance = 50
-        /// Orchestrator (karar 104) — global kontrollerin başında.
+        /// Orchestrator (karar 114) — global kontrollerin başında.
         public static let orchestrator = 90
         public static let focusMode = 100
         public static let panelToggleBottom = 105

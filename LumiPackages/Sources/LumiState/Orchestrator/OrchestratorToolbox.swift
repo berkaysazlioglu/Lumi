@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Orchestrator araçlarının yürütücüsü (karar 104 Faz 2) — MCP sunucusunun
+/// Orchestrator araçlarının yürütücüsü (karar 114 Faz 2) — MCP sunucusunun
 /// `tools/call` istekleri buraya düşer. Store'ların CANLI durumunu okur:
 /// Projects paneliyle aynı ağaç (`ProjectTree`), terminal listesiyle aynı
 /// durumlar. Yazma araçları (Faz 3, `OrchestratorToolbox+Actions`) kullanıcı

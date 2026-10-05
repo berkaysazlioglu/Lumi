@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Orchestrator'ın yazma eylemleri için onay isteği (karar 104 Faz 3):
+/// Orchestrator'ın yazma eylemleri için onay isteği (karar 114 Faz 3):
 /// popup'ta "şu terminale şu mesaj" kartı olarak görünür.
 public struct OrchestratorApprovalRequest: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable {

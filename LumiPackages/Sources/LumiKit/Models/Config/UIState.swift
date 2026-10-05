@@ -47,10 +47,10 @@ public struct UIState: Sendable, Equatable {
     /// dahil) sıfırlanıyordu. Ham `String`: `ProjectToolsTab` LumiState'te
     /// tanımlı, LumiKit onu göremez; bilinmeyen değer okumada varsayılana iner.
     public var projectToolsTab: String?
-    /// Karar 104 (additive): orchestrator'ın sürdürülen Claude konuşması.
+    /// Karar 114 (additive): orchestrator'ın sürdürülen Claude konuşması.
     /// nil = dosyada yok → ilk açılışta yeni kimlik üretilir.
     public var orchestratorSessionID: String?
-    /// Karar 104 (additive): orchestrator'ın izlediği Claude terminallerinin
+    /// Karar 114 (additive): orchestrator'ın izlediği Claude terminallerinin
     /// oturum kimlikleri — terminal kimliği yeniden açılışta değiştiği için
     /// oturum kimliğiyle tutulur. nil = orchestrator hiç izleme yapmadı (anahtar
     /// yazılmaz); izleme bir kez başladıysa boş liste de yazılır ki son

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Projects panelinin `Proje → Checkout → Ajan` ağacı — view'sız, tek kaynak
-/// (karar 91 / 103). Telefonun `projects` anlık görüntüsü ve orchestrator'ın
+/// (karar 91 / 114). Telefonun `projects` anlık görüntüsü ve orchestrator'ın
 /// `list_projects` aracı aynı ağaçtan beslenir ki iki yüzey ayrışmasın.
 public struct ProjectTreeNode: Sendable, Equatable {
     public let name: String

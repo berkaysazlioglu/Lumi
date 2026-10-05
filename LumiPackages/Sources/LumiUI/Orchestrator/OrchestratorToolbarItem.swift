@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Top bar'daki orchestrator butonu (karar 104) — popup'ı açar/kapatır (⌘J).
+/// Top bar'daki orchestrator butonu (karar 114) — popup'ı açar/kapatır (⌘J).
 /// Orchestrator bir cevap üzerinde çalışırken ikon accent'le yanar; bekleyen
 /// onay varsa köşede sarı, görülmemiş ajan olayı varsa mor nokta çıkar.
 public struct OrchestratorToolbarItem: View {

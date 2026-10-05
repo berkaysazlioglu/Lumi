@@ -53,7 +53,7 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 57). Kapalıyken düz tık terminale aittir (seçim/caret) ve link
     /// yalnız ⌘ / ⇧⌘ ile açılır. Additive (karar 9): yoksa açık.
     public var terminalLinkActionsEnabled: Bool
-    /// Karar 104 Faz 4: biten/soru soran ajan terminallerinin orchestrator
+    /// Karar 114 Faz 4: biten/soru soran ajan terminallerinin orchestrator
     /// Activity paneline özet olarak düşmesi (uzun mesajlar haiku ile
     /// özetlenir). Additive (karar 9): yoksa açık.
     public var orchestratorDigestsEnabled: Bool

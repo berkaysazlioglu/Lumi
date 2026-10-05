@@ -3,7 +3,7 @@ import LumiKit
 import XCTest
 @testable import LumiServices
 
-/// Karar 104: gerçek `claude` + gerçek loopback MCP sunucusu ile uçtan uca
+/// Karar 114: gerçek `claude` + gerçek loopback MCP sunucusu ile uçtan uca
 /// zincir. Token harcar ve ağ ister — yalnız `LUMI_LIVE_ORCHESTRATOR=1` ile koşar.
 final class OrchestratorLiveTests: XCTestCase {
     private struct FixedTerminals: OrchestratorToolHandling {

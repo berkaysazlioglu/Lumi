@@ -1,6 +1,6 @@
 import Foundation
 
-/// Bir ajanın son mesajının kısa özeti (karar 104 Faz 4).
+/// Bir ajanın son mesajının kısa özeti (karar 114 Faz 4).
 public struct TerminalDigest: Sendable, Equatable {
     /// 1–3 kısa satır.
     public let summary: String

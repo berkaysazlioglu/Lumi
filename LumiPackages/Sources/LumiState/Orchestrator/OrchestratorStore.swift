@@ -2,7 +2,7 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Orchestrator sohbetinin tek kaynağı (karar 104).
+/// Orchestrator sohbetinin tek kaynağı (karar 114).
 ///
 /// Süreç tembel başlar: popup ilk açıldığında (`activate`) ya da ilk mesajda.
 /// Popup kapanınca süreç YAŞAR — kapatmak yalnız gizler. Süreç ölürse

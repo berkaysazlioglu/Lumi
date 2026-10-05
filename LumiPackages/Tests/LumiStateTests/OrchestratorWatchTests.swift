@@ -4,7 +4,7 @@ import LumiTestSupport
 import XCTest
 @testable import LumiState
 
-/// Karar 104: yalnız izlenen terminaller raporlanır; sonradan izlemeye
+/// Karar 114: yalnız izlenen terminaller raporlanır; sonradan izlemeye
 /// alınanın oturumu bir ajana özetletilir ve liste oturum kimliğiyle kalıcıdır.
 @MainActor
 final class OrchestratorWatchTests: XCTestCase {

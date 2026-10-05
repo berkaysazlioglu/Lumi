@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// Test için sahte orchestrator (karar 104). Her `start` yeni bir akış açar;
+/// Test için sahte orchestrator (karar 114). Her `start` yeni bir akış açar;
 /// test `emit(_:)` ile journal durumu yayar, `finish()` ile süreç çıkışını
 /// taklit eder. Çağrılar biriktirilir.
 public final class FakeOrchestratorService: OrchestratorServicing, @unchecked Sendable {

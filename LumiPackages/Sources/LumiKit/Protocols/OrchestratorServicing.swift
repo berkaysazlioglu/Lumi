@@ -1,7 +1,7 @@
 import Foundation
 import LumiWire
 
-/// Orchestrator oturumunun açılışı (karar 104): hangi Claude konuşmasının
+/// Orchestrator oturumunun açılışı (karar 114): hangi Claude konuşmasının
 /// sürdürüleceği. Kimlik Lumi'de üretilir ve `ui-state`'e yazılır; ilk
 /// açılışta `--session-id`, sonrakilerde `--resume` ile aynı konuşma açılır.
 public struct OrchestratorLaunch: Sendable, Equatable {
@@ -31,7 +31,7 @@ public struct OrchestratorRun: Sendable {
 }
 
 /// Lumi'deki tüm ajan terminallerini yöneten orchestrator Claude'u (karar
-/// 103). PTY'siz bir `claude -p` stream-json child'ıdır; kendi system
+/// 114). PTY'siz bir `claude -p` stream-json child'ıdır; kendi system
 /// prompt'u vardır, kullanıcı/proje ayarlarını ve `CLAUDE.md`'leri yüklemez.
 public protocol OrchestratorServicing: Sendable {
     /// Süreci başlatır. Zaten çalışan bir süreç varsa önce durdurulur.

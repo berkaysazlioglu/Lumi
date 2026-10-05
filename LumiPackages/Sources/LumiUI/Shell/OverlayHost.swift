@@ -35,7 +35,7 @@ public extension OverlayID {
     static let removeCodexAccountDialog = OverlayID("removeCodexAccountDialog")
     /// Karar 57: terminalde tıklanan link/path için eylem popover'ı.
     static let terminalLinkActions = OverlayID("terminalLinkActions")
-    /// Karar 104: orchestrator sohbet popup'ı.
+    /// Karar 114: orchestrator sohbet popup'ı.
     static let orchestrator = OverlayID("orchestrator")
 }
 

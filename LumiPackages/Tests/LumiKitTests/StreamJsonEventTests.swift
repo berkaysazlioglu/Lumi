@@ -29,7 +29,7 @@ import LumiWire
         #expect(StreamJsonEvent.decode("yarım-json{") == .ignored)
         #expect(StreamJsonEvent.decode("") == .ignored)
     }
-    /// Karar 104: `--replay-user-messages` yankısı `message.id` taşımaz —
+    /// Karar 114: `--replay-user-messages` yankısı `message.id` taşımaz —
     /// kimlik üst seviye `uuid`'den gelir (rastgele kimlik upsert'i bozardı).
     @Test func replayedUserMessageUsesTopLevelUUID() {
         let line = #"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"selam"}]},"uuid":"u-42","isReplay":true}"#

@@ -4,7 +4,7 @@ import LumiTestSupport
 import XCTest
 @testable import LumiState
 
-/// Karar 104 Faz 5: `ask_project` doğrulaması ve sonucu.
+/// Karar 114 Faz 5: `ask_project` doğrulaması ve sonucu.
 @MainActor
 final class OrchestratorAskProjectTests: XCTestCase {
     private var asker: FakeProjectQuestionAnswerer!

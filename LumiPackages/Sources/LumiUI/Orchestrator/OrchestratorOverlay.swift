@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Orchestrator popup'ı (karar 104): pencerenin %80'ini kaplayan modal sohbet.
+/// Orchestrator popup'ı (karar 114): pencerenin %80'ini kaplayan modal sohbet.
 ///
 /// Kapatmak (Escape, dışarı tık, ✕, ⌘J) yalnız GİZLER — orchestrator süreci
 /// ve sohbet yaşamaya devam eder. Açılış süreci tembel başlatır. Sağ sütun

@@ -41,7 +41,7 @@ public struct TranscriptChatSource: ChatTranscriptSourcing {
         }
     }
 
-    /// Transkriptin o anki tamamı — tek okuma, tail yok (karar 104: resume
+    /// Transkriptin o anki tamamı — tek okuma, tail yok (karar 114: resume
     /// edilen orchestrator konuşmasının geçmişi). Dosya yoksa boş.
     public func messages(sessionID: String, repoPath: String) -> [ChatMessage] {
         let file = Self.transcriptURL(home: home, sessionID: sessionID, repoPath: repoPath)

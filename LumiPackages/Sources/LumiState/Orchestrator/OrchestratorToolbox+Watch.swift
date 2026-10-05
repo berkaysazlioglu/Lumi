@@ -1,7 +1,7 @@
 import Foundation
 import LumiKit
 
-/// `watch_terminal` / `unwatch_terminal` (karar 104): yalnız izlenen
+/// `watch_terminal` / `unwatch_terminal` (karar 114): yalnız izlenen
 /// terminallerin bitişleri özetlenir. Sonradan izlemeye alınan terminalin o
 /// ana kadarki oturumu bir haiku ajanına özetletilir — orchestrator'ın kendi
 /// bağlamı transkriptle dolmaz. Okuma olduğu için onay istemez.

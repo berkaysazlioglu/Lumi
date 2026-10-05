@@ -133,7 +133,7 @@ public final class SettingsStore: StoreLifecycle {
         apply { $0.agentHooksEnabled = enabled }
     }
 
-    /// Karar 104 Faz 4: orchestrator Activity özetleri.
+    /// Karar 114 Faz 4: orchestrator Activity özetleri.
     public func setOrchestratorDigestsEnabled(_ enabled: Bool) {
         apply { $0.orchestratorDigestsEnabled = enabled }
     }
