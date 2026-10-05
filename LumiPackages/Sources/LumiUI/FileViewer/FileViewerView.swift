@@ -26,6 +26,8 @@ struct FileViewerView: View {
         /// Başlık şeridinin iç kenar payları (ölçek dışı ara değerler).
         static var headerInsetH: CGFloat { Theme.scaled(14) }
         static var headerInsetV: CGFloat { Theme.scaled(10) }
+        /// `Raw | Preview` anahtarı — iki eşit bölme (karar 109).
+        static var markdownSwitchWidth: CGFloat { Theme.scaled(150) }
     }
 
     var body: some View {
@@ -91,29 +93,37 @@ struct FileViewerView: View {
         }
     }
 
-    /// Markdown'da render'lı ↔ ham geçişi (karar 21; oturumluk, persist edilmez).
+    /// Markdown'da ham ↔ render'lı geçişi (karar 21; oturumluk, persist
+    /// edilmez). Karar 109: küçük rozet yerine header'ın sağında belirgin
+    /// `Raw | Preview` anahtarı — iki seçenek de her an görünür.
     private var markdownToggle: some View {
-        let isRendered = store.rendersMarkdown
-        return Button {
-            store.rendersMarkdown.toggle()
-            store.selectedLines = nil
-        } label: {
-            HStack(spacing: Theme.Spacing.xs) {
-                Image(systemName: isRendered ? "textformat" : "chevron.left.slash.chevron.right")
-                    .accessibilityHidden(true)
-                Text(isRendered ? "Rendered" : "Raw")
-            }
-            .font(Theme.Typography.mono(.caption, weight: .semibold))
-            .foregroundStyle(isRendered ? Theme.accentPrimary : Theme.textSecondary)
-            .padding(.horizontal, Theme.Spacing.md)
-            // 3pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-            .padding(.vertical, Theme.scaled(3))
-            .background((isRendered ? Theme.accentPrimary : Theme.textMuted).opacity(0.18))
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help(isRendered ? "Show raw markdown diff" : "Show rendered markdown")
+        SegmentedModeSwitch(
+            options: [false, true],
+            selection: Binding(
+                get: { store.rendersMarkdown },
+                set: { rendersMarkdown in
+                    guard rendersMarkdown != store.rendersMarkdown else { return }
+                    store.rendersMarkdown = rendersMarkdown
+                    store.selectedLines = nil
+                }
+            ),
+            title: { $0 ? "Preview" : "Raw" },
+            help: { rendered in
+                switch (rendered, store.mode == .view) {
+                case (true, true): return "Show rendered markdown"
+                case (false, true): return "Show raw markdown source"
+                case (true, false): return "Show rendered markdown diff"
+                case (false, false): return "Show raw side-by-side diff"
+                }
+            },
+            accessibilityLabel: "Markdown display"
+        )
+        .frame(width: Metrics.markdownSwitchWidth)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.border, lineWidth: Theme.Stroke.hairline)
+                .allowsHitTesting(false)
+        )
     }
 
     private var headerTitle: String {
