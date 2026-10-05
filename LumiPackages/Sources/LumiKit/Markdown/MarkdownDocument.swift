@@ -10,9 +10,14 @@ import Foundation
 /// üstü-çizili, kod, link, görsel, yumuşak/sert satır sonu.
 public struct MarkdownDocument: Sendable, Equatable {
     public let blocks: [MarkdownBlock]
+    /// Karar 113: üst düzey her bloğun kaynakta başladığı 1 tabanlı satır
+    /// (`blocks` ile aynı sırada; bilinmiyorsa boş). Raw ↔ Preview kaydırma
+    /// senkronunun çapaları.
+    public let blockStartLines: [Int]
 
-    public init(blocks: [MarkdownBlock]) {
+    public init(blocks: [MarkdownBlock], blockStartLines: [Int] = []) {
         self.blocks = blocks
+        self.blockStartLines = blockStartLines.count == blocks.count ? blockStartLines : []
     }
 }
 

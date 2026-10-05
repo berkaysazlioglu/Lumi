@@ -100,4 +100,12 @@ final class SwiftMarkdownParserTests: XCTestCase {
     func testHardLineBreak() {
         XCTAssertEqual(blocks("a  \nb"), [.paragraph([.text("a"), .lineBreak, .text("b")])])
     }
+
+    /// Karar 113: kaydırma senkronunun çapaları.
+    func testTopLevelBlocksCarryTheirSourceStartLine() {
+        let text = "# Title\n\nfirst\nwrapped\n\n```swift\nlet a = 1\n```\n\n- item\n"
+        let document = parser.parse(text)
+        XCTAssertEqual(document.blocks.count, 4)
+        XCTAssertEqual(document.blockStartLines, [1, 3, 6, 10])
+    }
 }

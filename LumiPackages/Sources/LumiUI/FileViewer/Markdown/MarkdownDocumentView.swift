@@ -13,6 +13,10 @@ struct MarkdownDocumentView: View {
     let highlighter: any SyntaxHighlighting
     /// Tıklanan link (`MarkdownLinkTarget` çözer).
     let onOpenLink: (URL) -> Void
+    /// Karar 113: `Both`'ta editörle kaydırma senkronu.
+    var scrollSync: MarkdownScrollSync?
+
+    private static let contentSpace = "markdownScrollContent"
 
     /// Okunabilir satır uzunluğu: geniş modalda metin kenardan kenara akmaz
     /// (GitHub'ın makale genişliği paritesi).
@@ -22,13 +26,25 @@ struct MarkdownDocumentView: View {
         ScrollView(.vertical) {
             MarkdownBlocksView(
                 blocks: document.blocks,
-                context: MarkdownRenderContext(highlighter: highlighter)
+                context: MarkdownRenderContext(highlighter: highlighter),
+                offsetSpace: scrollSync == nil ? nil : Self.contentSpace
             )
             .frame(maxWidth: Self.readableWidth, alignment: .leading)
             .padding(.horizontal, Theme.Spacing.xxxl)
             .padding(.vertical, Theme.Spacing.xxl)
             .frame(maxWidth: .infinity, alignment: .center)
+            .coordinateSpace(name: Self.contentSpace)
+            .background {
+                if let scrollSync {
+                    EnclosingScrollViewReader { scrollSync.attachPreview($0) }
+                }
+            }
         }
+        .onPreferenceChange(MarkdownBlockOffsetsKey.self) { offsets in
+            MainActor.assumeIsolated { scrollSync?.blockOffsets = offsets }
+        }
+        .onAppear { scrollSync?.blockStartLines = document.blockStartLines }
+        .onChange(of: document.blockStartLines) { _, lines in scrollSync?.blockStartLines = lines }
         .background(Theme.bgSurface)
         .environment(\.openURL, OpenURLAction { url in
             onOpenLink(url)
@@ -55,11 +71,24 @@ struct MarkdownBlocksView: View {
     let blocks: [MarkdownBlock]
     let context: MarkdownRenderContext
     var spacing: CGFloat = Theme.Spacing.lg
+    /// Doluysa her blok üst kenarını bu koordinat uzayında bildirir (karar 113;
+    /// yalnız üst düzey).
+    var offsetSpace: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 MarkdownBlockView(block: block, context: context)
+                    .background {
+                        if let offsetSpace {
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: MarkdownBlockOffsetsKey.self,
+                                    value: [index: geometry.frame(in: .named(offsetSpace)).minY]
+                                )
+                            }
+                        }
+                    }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -198,13 +227,15 @@ private struct MarkdownCodeBlockView: View {
     let highlighter: any SyntaxHighlighting
     let size: Theme.Typography.Size
 
-    @State private var highlighted: AttributedString?
+    /// Vurgu hangi kod için üretildiyse onunla tutulur: Both'ta kod değişince
+    /// eski vurgu yeni metnin yerine bir an bile çizilmez (karar 113).
+    @State private var highlighted: (code: String, text: AttributedString)?
 
     var body: some View {
         ScrollView(.horizontal) {
             Group {
-                if let highlighted {
-                    Text(highlighted)
+                if let highlighted, highlighted.code == code {
+                    Text(highlighted.text)
                 } else {
                     Text(code)
                         .font(Theme.Typography.mono(size.stepped(-1)))
@@ -243,7 +274,8 @@ private struct MarkdownCodeBlockView: View {
             )
             // Vurgulayıcı boş dönerse (dil tanınmadı) düz metin kalır.
             guard result.length > 0 else { return }
-            highlighted = try? AttributedString(result, including: \.appKit)
+            guard let text = try? AttributedString(result, including: \.appKit) else { return }
+            highlighted = (code, text)
         }
     }
 }

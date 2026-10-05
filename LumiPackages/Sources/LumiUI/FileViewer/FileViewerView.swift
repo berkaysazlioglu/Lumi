@@ -213,13 +213,12 @@ struct FileViewerView: View {
                 // Karar 110: Preview kaydedilmemiş taslağı da gösterir.
                 markdownPreview(store.draft ?? text)
             } else if store.isSplitMarkdown {
-                // Karar 112: solda editör, sağda aynı taslağın canlı önizlemesi.
-                HStack(spacing: 0) {
-                    codeView(text)
-                        .frame(maxWidth: .infinity)
-                    Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
-                    markdownPreview(store.draft ?? text)
-                        .frame(maxWidth: .infinity)
+                // Karar 112: solda editör, sağda aynı taslağın canlı önizlemesi;
+                // karar 113: iki bölme birlikte kayar.
+                MarkdownSplitView { sync in
+                    codeView(text, scrollSync: sync)
+                } preview: { sync in
+                    markdownPreview(store.draft ?? text, scrollSync: sync)
                 }
             } else {
                 codeView(text)
@@ -235,16 +234,17 @@ struct FileViewerView: View {
         }
     }
 
-    private func markdownPreview(_ text: String) -> some View {
+    private func markdownPreview(_ text: String, scrollSync: MarkdownScrollSync? = nil) -> some View {
         RenderedMarkdownDocumentView(
             text: text,
             parser: markdownParser,
             highlighter: highlighter,
-            onOpenLink: openMarkdownLink
+            onOpenLink: openMarkdownLink,
+            scrollSync: scrollSync
         )
     }
 
-    private func codeView(_ text: String) -> some View {
+    private func codeView(_ text: String, scrollSync: MarkdownScrollSync? = nil) -> some View {
         HighlightedCodeView(
             code: store.draft ?? text,
             revision: store.editorRevision,
@@ -252,7 +252,8 @@ struct FileViewerView: View {
             highlighter: highlighter,
             onSelectLines: { store.selectedLines = $0 },
             onTextChange: store.isEditable ? { store.updateDraft($0) } : nil,
-            onCancel: store.close
+            onCancel: store.close,
+            scrollSync: scrollSync
         )
     }
 
@@ -358,13 +359,19 @@ private struct RenderedMarkdownDocumentView: View {
     let parser: any MarkdownParsing
     let highlighter: any SyntaxHighlighting
     let onOpenLink: (URL) -> Void
+    var scrollSync: MarkdownScrollSync?
 
     @State private var document: MarkdownDocument?
 
     var body: some View {
         Group {
             if let document {
-                MarkdownDocumentView(document: document, highlighter: highlighter, onOpenLink: onOpenLink)
+                MarkdownDocumentView(
+                    document: document,
+                    highlighter: highlighter,
+                    onOpenLink: onOpenLink,
+                    scrollSync: scrollSync
+                )
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -378,6 +385,24 @@ private struct RenderedMarkdownDocumentView: View {
                 guard !Task.isCancelled else { return }
             }
             document = parser.parse(text)
+        }
+    }
+}
+
+/// Karar 112/113: `Both` — eşit iki bölme; senkron nesnesi bölmeler kadar yaşar.
+private struct MarkdownSplitView<Editor: View, Preview: View>: View {
+    @ViewBuilder let editor: (MarkdownScrollSync) -> Editor
+    @ViewBuilder let preview: (MarkdownScrollSync) -> Preview
+
+    @State private var sync = MarkdownScrollSync()
+
+    var body: some View {
+        HStack(spacing: 0) {
+            editor(sync)
+                .frame(maxWidth: .infinity)
+            Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
+            preview(sync)
+                .frame(maxWidth: .infinity)
         }
     }
 }
@@ -417,6 +442,7 @@ private struct HighlightedCodeView: View {
     let onSelectLines: (ClosedRange<Int>?) -> Void
     let onTextChange: ((String) -> Void)?
     let onCancel: () -> Void
+    var scrollSync: MarkdownScrollSync?
 
     private struct Highlighted {
         let revision: Int
@@ -442,7 +468,8 @@ private struct HighlightedCodeView: View {
                     revision: highlighted.revision,
                     onSelectLines: onSelectLines,
                     onTextChange: onTextChange,
-                    onCancel: onCancel
+                    onCancel: onCancel,
+                    scrollSync: scrollSync
                 )
             } else {
                 ProgressView()

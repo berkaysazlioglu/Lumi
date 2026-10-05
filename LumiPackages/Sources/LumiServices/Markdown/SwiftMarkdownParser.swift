@@ -13,7 +13,14 @@ public struct SwiftMarkdownParser: MarkdownParsing {
 
     public func parse(_ text: String) -> MarkdownDocument {
         let document = Document(parsing: text)
-        return MarkdownDocument(blocks: Self.blocks(document.children))
+        var blocks: [MarkdownBlock] = []
+        var lines: [Int] = []
+        for child in document.children {
+            guard let block = Self.block(child) else { continue }
+            blocks.append(block)
+            lines.append(child.range?.lowerBound.line ?? lines.last ?? 1)
+        }
+        return MarkdownDocument(blocks: blocks, blockStartLines: lines)
     }
 
     // MARK: - Bloklar
