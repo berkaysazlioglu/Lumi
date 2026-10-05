@@ -195,27 +195,8 @@ struct CheckoutRow: View {
         .accessibilityLabel(isAgentListCollapsed ? "Show agents" : "Hide agents")
     }
 
-    /// Dikkat isteyenler önce, sonra çalışanlar, sonra bitenler; eşitlikte en
-    /// yeni etkinlik üstte (Orca `smart` sıralaması).
     private var agents: [AgentRow.Model] {
-        shell.terminals.terminals(in: checkout.path)
-            .map { meta in
-                let isAwaitingDecision = shell.terminals.awaitingDecisionIDs.contains(meta.id)
-                return AgentRow.Model(
-                    meta: meta,
-                    state: AgentActivityState(status: meta.status, isAwaitingDecision: isAwaitingDecision),
-                    needsAttention: TerminalAttention.isNeeded(
-                        status: meta.status,
-                        isAwaitingDecision: isAwaitingDecision,
-                        isSelected: shell.terminals.activeTerminalID == meta.id
-                    )
-                )
-            }
-            .sorted { lhs, rhs in
-                lhs.state.sortRank != rhs.state.sortRank
-                    ? lhs.state.sortRank < rhs.state.sortRank
-                    : lhs.meta.lastActivityAt > rhs.meta.lastActivityAt
-            }
+        AgentRow.Model.sorted(shell.terminals.terminals(in: checkout.path), terminals: shell.terminals)
     }
 
     // MARK: - Menü
@@ -294,6 +275,31 @@ struct AgentRow: View {
         let state: AgentActivityState
         /// Karar 77: seçili değilken turn'ü kapanmış / karar bekleyen ajan.
         var needsAttention = false
+
+        /// Dikkat isteyenler önce, sonra çalışanlar, sonra bitenler; eşitlikte
+        /// en yeni etkinlik üstte (Orca `smart` sıralaması). Checkout satırı ve
+        /// `Other` grubu (karar 108) aynı kuralı buradan alır.
+        @MainActor
+        static func sorted(_ metas: [TerminalMeta], terminals: TerminalListStore) -> [Model] {
+            metas
+                .map { meta in
+                    let isAwaitingDecision = terminals.awaitingDecisionIDs.contains(meta.id)
+                    return Model(
+                        meta: meta,
+                        state: AgentActivityState(status: meta.status, isAwaitingDecision: isAwaitingDecision),
+                        needsAttention: TerminalAttention.isNeeded(
+                            status: meta.status,
+                            isAwaitingDecision: isAwaitingDecision,
+                            isSelected: terminals.activeTerminalID == meta.id
+                        )
+                    )
+                }
+                .sorted { lhs, rhs in
+                    lhs.state.sortRank != rhs.state.sortRank
+                        ? lhs.state.sortRank < rhs.state.sortRank
+                        : lhs.meta.lastActivityAt > rhs.meta.lastActivityAt
+                }
+        }
     }
 
     let agent: Model

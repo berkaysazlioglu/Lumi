@@ -204,7 +204,32 @@ public final class ShellContext {
         if let workspace = workspaces.records.first(where: { $0.path == repoPath }) {
             return "\(projectName(at: workspace.projectPath)) / \(workspace.name)"
         }
+        if let repo = repos.repo(at: repoPath) { return repo.name }
+        // Karar 108: serbest terminalin "checkout"u bir proje değil, dizindir —
+        // klasör adı (`Desktop`) yerine kısa yol (`~/Desktop`).
+        if navigation.isLooseTerminalPath(repoPath) {
+            return LooseTerminalPath.displayLabel(repoPath)
+        }
         return projectName(at: repoPath)
+    }
+
+    /// Karar 108: Projects ▸ `Other` grubu — serbest terminaller dizinlerine
+    /// göre, etiket sırasıyla. Grup içi sıra panelin ajan sıralamasıdır
+    /// (`AgentRow.Model.sorted`), burada terminal listesinin sırası korunur.
+    public var looseTerminalGroups: [LooseTerminalGroup] {
+        let loose = terminals.terminals.filter { navigation.isLooseTerminalPath($0.repoPath) }
+        let paths = loose.reduce(into: [String]()) { paths, meta in
+            if !paths.contains(meta.repoPath) { paths.append(meta.repoPath) }
+        }
+        return paths
+            .map { path in
+                LooseTerminalGroup(
+                    path: path,
+                    label: LooseTerminalPath.displayLabel(path),
+                    terminals: loose.filter { $0.repoPath == path }
+                )
+            }
+            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
     private func projectName(at path: String) -> String {

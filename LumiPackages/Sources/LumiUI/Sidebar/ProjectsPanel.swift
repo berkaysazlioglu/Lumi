@@ -66,6 +66,9 @@ public struct ProjectsPanel: View {
                     }
                     .padding(.bottom, Theme.Spacing.xs)
                 }
+                // Karar 108: projesiz terminaller en altta; proje değildir,
+                // ⌃1–9 indekslemesine girmez.
+                OtherTerminalsSection(searchText: searchText)
             }
         }
     }

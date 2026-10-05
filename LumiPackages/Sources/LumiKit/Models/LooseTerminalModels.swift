@@ -120,3 +120,17 @@ public enum LooseTerminalLocations {
         return Array(unique.prefix(recentLimit))
     }
 }
+
+/// Projects ▸ `Other` grubunun tek dizini: o dizinde açık serbest terminaller.
+public struct LooseTerminalGroup: Sendable, Equatable, Identifiable {
+    public var id: String { path }
+    public let path: String
+    public let label: String
+    public let terminals: [TerminalMeta]
+
+    public init(path: String, label: String, terminals: [TerminalMeta]) {
+        self.path = path
+        self.label = label
+        self.terminals = terminals
+    }
+}
