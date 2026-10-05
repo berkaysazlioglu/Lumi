@@ -62,6 +62,8 @@ public final class ShellContext {
     public let workspaces: ProjectWorkspaceStore
     /// Proje hızlı komutları (karar 92).
     public let quickCommands: QuickCommandStore
+    /// Proje favori dosyaları (karar 107).
+    public let favoriteFiles: FavoriteFileStore
     public let agentHistory: AgentHistoryStore
     public let git: GitStore
     /// Plastic SCM panel store'u (karar 46).
@@ -107,6 +109,7 @@ public final class ShellContext {
         repos: RepoStore,
         workspaces: ProjectWorkspaceStore,
         quickCommands: QuickCommandStore,
+        favoriteFiles: FavoriteFileStore,
         git: GitStore,
         plastic: PlasticStore,
         commitAssistant: CommitMessageAssistant,
@@ -138,6 +141,7 @@ public final class ShellContext {
         self.repos = repos
         self.workspaces = workspaces
         self.quickCommands = quickCommands
+        self.favoriteFiles = favoriteFiles
         self.git = git
         self.plastic = plastic
         self.commitAssistant = commitAssistant
@@ -405,6 +409,21 @@ public final class ShellContext {
     public func presentFile(_ filePath: String) {
         guard let repoPath = activeRepoPath else { return }
         Task { await fileViewer.presentView(repoPath: repoPath, filePath: filePath) }
+    }
+
+    /// Karar 107: favori dosyayı checkout'ta Lumi viewer'ında açar ya da
+    /// Finder'da gösterir. Dosya tık anında yeniden doğrulanır — menü açıkken
+    /// silinen dosya boş viewer ya da sessiz Finder yerine uyarı verir.
+    public func openFavoriteFile(_ relativePath: String, in checkoutPath: String, revealInFinder: Bool) {
+        guard favoriteFiles.fileExists(relativePath, in: checkoutPath) else {
+            toasts.show(.error, title: "File not found", message: "\(relativePath) was moved or deleted.")
+            return
+        }
+        if revealInFinder {
+            actions.revealPath(FavoriteFilePath.absolute(relativePath, in: checkoutPath))
+        } else {
+            Task { await fileViewer.presentView(repoPath: checkoutPath, filePath: relativePath) }
+        }
     }
 
     public func presentDiff(_ filePath: String) {

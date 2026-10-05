@@ -67,6 +67,8 @@ public extension ToolbarItemID {
     static let gridSettings = ToolbarItemID("gridSettings")
     /// Aktif checkout'un Start App + Actions kontrolü (karar 96).
     static let quickCommands = ToolbarItemID("quickCommands")
+    /// Aktif checkout'un favori dosyaları (karar 107).
+    static let favoriteFiles = ToolbarItemID("favoriteFiles")
     static let newTerminal = ToolbarItemID("newTerminal")
     /// Terminal kartlarını elle sıralama modu (karar 97).
     static let arrangeTerminals = ToolbarItemID("arrangeTerminals")

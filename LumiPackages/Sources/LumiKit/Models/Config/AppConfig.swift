@@ -68,6 +68,8 @@ public struct AppConfig: Sendable, Equatable {
     public var workspaces: [ProjectWorkspace]
     /// Proje başına hızlı komutlar (karar 92). Additive (karar 9): yoksa boş.
     public var projectQuickCommands: [ProjectQuickCommand]
+    /// Proje başına favori dosyalar (karar 107). Additive (karar 9): yoksa boş.
+    public var projectFavoriteFiles: [ProjectFavoriteFile]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -104,7 +106,8 @@ public struct AppConfig: Sendable, Equatable {
         codexAccountSelection: .systemDefault,
         workspaces: [],
         sidebarProjectPaths: [],
-        projectQuickCommands: []
+        projectQuickCommands: [],
+        projectFavoriteFiles: []
     )
 
     public init(
@@ -131,7 +134,8 @@ public struct AppConfig: Sendable, Equatable {
         codexAccountSelection: CodexAccountSelection = .systemDefault,
         workspaces: [ProjectWorkspace] = [],
         sidebarProjectPaths: [String] = [],
-        projectQuickCommands: [ProjectQuickCommand] = []
+        projectQuickCommands: [ProjectQuickCommand] = [],
+        projectFavoriteFiles: [ProjectFavoriteFile] = []
     ) {
         self.projectsRoot = projectsRoot
         self.additionalPaths = additionalPaths
@@ -157,5 +161,6 @@ public struct AppConfig: Sendable, Equatable {
         self.codexAccountSelection = codexAccountSelection
         self.workspaces = workspaces
         self.projectQuickCommands = projectQuickCommands
+        self.projectFavoriteFiles = projectFavoriteFiles
     }
 }

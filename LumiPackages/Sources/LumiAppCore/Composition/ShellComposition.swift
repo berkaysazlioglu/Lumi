@@ -54,6 +54,7 @@ struct ShellComposition {
             repos: repo.repoStore,
             workspaces: repo.workspaceStore,
             quickCommands: repo.quickCommands,
+            favoriteFiles: repo.favoriteFiles,
             git: repo.gitStore,
             plastic: repo.plasticStore,
             commitAssistant: repo.commitAssistant,

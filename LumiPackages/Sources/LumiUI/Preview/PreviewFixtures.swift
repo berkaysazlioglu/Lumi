@@ -36,6 +36,7 @@ public extension ShellContext {
             workspaces: ProjectWorkspaceStore(service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts),
             quickCommands: QuickCommandStore(config: config, generator: PreviewQuickCommandGenerator(),
                 scripts: PreviewQuickCommandScripts(), launcher: PreviewQuickCommandLauncher(), toasts: shared.toasts),
+            favoriteFiles: FavoriteFileStore(config: config, toasts: shared.toasts),
             git: GitStore(git: git, toasts: shared.toasts),
             plastic: PlasticStore(service: PreviewPlasticService(), toasts: shared.toasts),
             commitAssistant: CommitMessageAssistant(generator: PreviewCommitMessageGenerator(), toasts: shared.toasts),

@@ -151,6 +151,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "unseenEnabled" : false,
         "unseenIntervalMinutes" : 7
       },
+      "projectFavoriteFiles" : [
+
+      ],
       "projectQuickCommands" : [
 
       ],

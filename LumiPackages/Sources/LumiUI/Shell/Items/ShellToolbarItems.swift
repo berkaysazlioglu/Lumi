@@ -22,6 +22,8 @@ public enum ShellToolbarItems {
         /// Hızlı komutlar (karar 96) — üretim grubunun en solunda, grid ve
         /// birincil CTA'dan önce (Orca'da Run, `+`'nın yanında durur).
         public static let quickCommands = -10
+        /// Favori dosyalar (karar 107) — hızlı komutların hemen solunda.
+        public static let favoriteFiles = -15
         /// Edit (karar 97) — hızlı komutlarla grid ayarı arasında; grid'in
         /// düzeniyle ilgili iki kontrol yan yana durur.
         public static let arrangeTerminals = -5

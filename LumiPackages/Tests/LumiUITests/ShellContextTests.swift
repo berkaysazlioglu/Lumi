@@ -294,6 +294,7 @@ final class ShellContextTests: XCTestCase {
             repos: context.repos,
             workspaces: context.workspaces,
             quickCommands: context.quickCommands,
+            favoriteFiles: context.favoriteFiles,
             git: context.git,
             plastic: context.plastic,
             commitAssistant: context.commitAssistant,
