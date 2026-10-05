@@ -28,6 +28,8 @@ struct FileViewerView: View {
         static var headerInsetV: CGFloat { Theme.scaled(10) }
         /// `Raw | Preview` anahtarı — iki eşit bölme (karar 109).
         static var markdownSwitchWidth: CGFloat { Theme.scaled(150) }
+        /// `Raw | Both | Preview` — üç eşit bölme (karar 112).
+        static var markdownSwitchWideWidth: CGFloat { Theme.scaled(216) }
         /// Kaydedilmemiş değişiklik noktası (karar 110).
         static var unsavedDotSide: CGFloat { Theme.scaled(7) }
     }
@@ -109,31 +111,41 @@ struct FileViewerView: View {
     }
 
     /// Markdown'da ham ↔ render'lı geçişi (karar 21; oturumluk, persist
-    /// edilmez). Karar 109: küçük rozet yerine header'ın sağında belirgin
-    /// `Raw | Preview` anahtarı — iki seçenek de her an görünür.
+    /// edilmez). Karar 109: header'ın sağında hep görünen anahtar. Karar 112:
+    /// view modunda üçüncü seçenek `Both` — solda düzenlenebilir ham metin,
+    /// sağda canlı önizleme; diff'te yan yana zaten iki taraf olduğu için yok.
     private var markdownToggle: some View {
-        SegmentedModeSwitch(
-            options: [false, true],
+        let isView = store.mode == .view
+        let options: [MarkdownDisplay] = isView ? [.raw, .both, .preview] : [.raw, .preview]
+        return SegmentedModeSwitch(
+            options: options,
             selection: Binding(
-                get: { store.rendersMarkdown },
-                set: { rendersMarkdown in
-                    guard rendersMarkdown != store.rendersMarkdown else { return }
-                    store.rendersMarkdown = rendersMarkdown
+                get: { store.effectiveMarkdownDisplay },
+                set: { display in
+                    guard display != store.effectiveMarkdownDisplay else { return }
+                    store.markdownDisplay = display
                     store.selectedLines = nil
                 }
             ),
-            title: { $0 ? "Preview" : "Raw" },
-            help: { rendered in
-                switch (rendered, store.mode == .view) {
-                case (true, true): return "Show rendered markdown"
-                case (false, true): return "Show raw markdown source"
-                case (true, false): return "Show rendered markdown diff"
-                case (false, false): return "Show raw side-by-side diff"
+            title: { display in
+                switch display {
+                case .raw: return "Raw"
+                case .both: return "Both"
+                case .preview: return "Preview"
+                }
+            },
+            help: { display in
+                switch (display, isView) {
+                case (.preview, true): return "Show rendered markdown"
+                case (.raw, true): return "Show raw markdown source"
+                case (.both, _): return "Edit the source with a live preview beside it"
+                case (.preview, false): return "Show rendered markdown diff"
+                case (.raw, false): return "Show raw side-by-side diff"
                 }
             },
             accessibilityLabel: "Markdown display"
         )
-        .frame(width: Metrics.markdownSwitchWidth)
+        .frame(width: isView ? Metrics.markdownSwitchWideWidth : Metrics.markdownSwitchWidth)
         .overlay(
             RoundedRectangle(cornerRadius: Theme.Radius.md)
                 .strokeBorder(Theme.border, lineWidth: Theme.Stroke.hairline)
@@ -199,22 +211,18 @@ struct FileViewerView: View {
         case .text(let text):
             if store.isRenderedMarkdown {
                 // Karar 110: Preview kaydedilmemiş taslağı da gösterir.
-                RenderedMarkdownDocumentView(
-                    text: store.draft ?? text,
-                    parser: markdownParser,
-                    highlighter: highlighter,
-                    onOpenLink: openMarkdownLink
-                )
+                markdownPreview(store.draft ?? text)
+            } else if store.isSplitMarkdown {
+                // Karar 112: solda editör, sağda aynı taslağın canlı önizlemesi.
+                HStack(spacing: 0) {
+                    codeView(text)
+                        .frame(maxWidth: .infinity)
+                    Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
+                    markdownPreview(store.draft ?? text)
+                        .frame(maxWidth: .infinity)
+                }
             } else {
-                HighlightedCodeView(
-                    code: store.draft ?? text,
-                    revision: store.editorRevision,
-                    fileName: store.filePath,
-                    highlighter: highlighter,
-                    onSelectLines: { store.selectedLines = $0 },
-                    onTextChange: store.isEditable ? { store.updateDraft($0) } : nil,
-                    onCancel: store.close
-                )
+                codeView(text)
             }
         case .diff(let diff):
             if store.isRenderedMarkdown {
@@ -225,6 +233,27 @@ struct FileViewerView: View {
         case .unsupported(let reason):
             unsupportedState(reason)
         }
+    }
+
+    private func markdownPreview(_ text: String) -> some View {
+        RenderedMarkdownDocumentView(
+            text: text,
+            parser: markdownParser,
+            highlighter: highlighter,
+            onOpenLink: openMarkdownLink
+        )
+    }
+
+    private func codeView(_ text: String) -> some View {
+        HighlightedCodeView(
+            code: store.draft ?? text,
+            revision: store.editorRevision,
+            fileName: store.filePath,
+            highlighter: highlighter,
+            onSelectLines: { store.selectedLines = $0 },
+            onTextChange: store.isEditable ? { store.updateDraft($0) } : nil,
+            onCancel: store.close
+        )
     }
 
     /// Karar 109: göreli link aynı viewer'da açılır (GitHub paritesi), şemalı
@@ -342,6 +371,12 @@ private struct RenderedMarkdownDocumentView: View {
             }
         }
         .task(id: text) {
+            // Karar 112: Both'ta her tuşta yeniden ayrıştırma — yazarken kısa
+            // sükûnet beklenir; ilk açılış beklemez.
+            if document != nil {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+            }
             document = parser.parse(text)
         }
     }

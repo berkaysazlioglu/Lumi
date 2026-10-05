@@ -13,6 +13,13 @@ public enum ViewerContent: Equatable, Sendable {
     case unsupported(reason: String)
 }
 
+/// Markdown dosyasının sunumu (karar 112: `both` — solda ham, sağda render).
+public enum MarkdownDisplay: Equatable, Sendable, CaseIterable {
+    case raw
+    case both
+    case preview
+}
+
 /// Seçili commit'in kimliği + dosya listesi (karar 6: diff lazy yüklenir).
 public struct CommitContext: Equatable, Sendable {
     public let sha: String
@@ -123,9 +130,9 @@ public final class FileViewerStore {
     /// katmanı NSTextView seçiminden yazar. Persist edilmez.
     public var selectedLines: ClosedRange<Int>?
 
-    /// Markdown dosyalarında render'lı sunum (kapatılınca ham metin/diff).
-    /// Oturumluk — persist edilmez (design/03 §6 Rendered ⇄ Raw rozeti).
-    public var rendersMarkdown = true
+    /// Markdown dosyalarında sunum tercihi (karar 21/109/112): ham metin,
+    /// render ya da ikisi yan yana. Oturumluk — persist edilmez.
+    public var markdownDisplay: MarkdownDisplay = .preview
 
     /// ISP (refactor 3.8): fırlatan içerik okumaları + sessiz `commitFiles`/
     /// `imagePreview`. Commit YAZIMI (`GitWriting`) bu store'un yüzeyinde yok.
@@ -189,8 +196,20 @@ public final class FileViewerStore {
     /// Aktif dosyanın sunum sınıfı (uzantıdan türetilir).
     public var previewKind: FilePreviewKind { FilePreviewKind.of(path: filePath) }
 
-    /// Markdown render'ı fiilen açık mı: uzantı + oturumluk tercih.
-    public var isRenderedMarkdown: Bool { previewKind == .markdown && rendersMarkdown }
+    /// Fiilen uygulanan markdown sunumu: markdown olmayan dosyada hep `.raw`;
+    /// diff/commit'te yan yana görünüm yoktur (iki taraf zaten diff'tir) —
+    /// `.both` orada `.preview` sayılır (karar 112).
+    public var effectiveMarkdownDisplay: MarkdownDisplay {
+        guard previewKind == .markdown else { return .raw }
+        if markdownDisplay == .both, mode != .view { return .preview }
+        return markdownDisplay
+    }
+
+    /// Yalnız render'lı tam sunum (Preview) açık mı.
+    public var isRenderedMarkdown: Bool { effectiveMarkdownDisplay == .preview }
+
+    /// Solda ham editör, sağda canlı önizleme (karar 112).
+    public var isSplitMarkdown: Bool { effectiveMarkdownDisplay == .both }
 
     /// "Mention in Chat" ile ajana yapıştırılacak referans (karar 100).
     /// Yalnız çalışma kopyasının ham metin görünümünde vardır: diff ve

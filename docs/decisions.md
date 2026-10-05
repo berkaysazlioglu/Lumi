@@ -1150,3 +1150,12 @@ Kullanıcı isteği: sık kullanılan diller için viewer yazılsın, viewer'ı 
 - **Sınır.** Gömülü alt dilli ağır gramerler (JS/TS/XML/PHP) 400 KB'tan sonra düz metin (1 MB TSX ~6 sn sürüyordu); diğerleri 1 MB.
 - **Bilinen sınırlar.** Vue/Svelte xml grameriyle (`<script>`/`<style>` vurgulanır, `{{ }}` düz); TOML `ini` ile (satır içi tablolar düz); ShaderLab bloğu ilk `ENDHLSL`'de biter (yorum içinde olsa da — Unity'nin kendi ayrıştırıcısı gibi); HLSL'de kullanıcı tipleri yalnız dönüş tipi konumunda renklenir; `.gitignore`/`.pbxproj` düz kalır. Zig ve WGSL için `rust` yaklaşık eşlemedir.
 - **Sınırlar (kod).** LumiServices: `HighlightJSEngine` (`SyntaxHighlighting`), `HighlightHTMLRenderer`, `HighlightStyle` (eski `HighlightrStyle`; tema adı alanı kalktı, `scopes` tablosu geldi), `HighlightLanguage`, kaynaklar `highlight.min.js` + `highlight.js-LICENSE` + `grammars/{hlsl,shaderlab,hcl}.js`. Composition: `LiveServiceRegistry` tek satır. Testler: `HighlightJSEngineTests`, `SyntaxHighlightingLanguageTests`.
+
+### 112. Markdown'da üçüncü sunum: `Both` — solda ham editör, sağda canlı önizleme (2026-10-05)
+
+Kullanıcı isteği: md'ler için Raw ve Preview dışında Both seçeneği; sol taraf raw, sağ taraf preview.
+
+- **Anahtar.** View modunda `Raw | Both | Preview` (ortadaki Both). Diff ve commit-diff'te `Raw | Preview` kalır — orada iki taraf zaten diff'in iki yüzüdür; Both tercihi diff'te Preview olarak uygulanır, view'a dönünce geri gelir. Tercih oturumluktur, persist edilmez (karar 21); varsayılan Preview.
+- **Davranış.** Sol bölme Raw'daki editörün aynısıdır (karar 110: düzenleme, Save/⌘S, Mention in Chat — satırlar dosyaya eşlenir). Sağ bölme aynı taslağı render eder; yazarken 150 ms sükûnetten sonra yeniden ayrıştırılır, ilk açılış beklemez. Bölmeler eşit genişliktedir.
+- **Kapsam dışı.** Bölmeler arası kaydırma senkronu, bölme genişliğinin sürüklenmesi.
+- **Sınırlar.** LumiState: `FileViewerStore.rendersMarkdown: Bool` → `markdownDisplay: MarkdownDisplay` (`raw/both/preview`), türevler `effectiveMarkdownDisplay`, `isRenderedMarkdown` (yalnız Preview), `isSplitMarkdown`. LumiUI: `FileViewerView.markdownToggle` (mod başına seçenek listesi, `Metrics.markdownSwitchWideWidth`), `codeView`/`markdownPreview` yardımcıları. Testler: `FileViewerEditingTests` (Both bölümü).

@@ -140,7 +140,7 @@ final class FileViewerEditingTests: XCTestCase {
         await store.presentView(repoPath: "/repo", filePath: "README.md")
         XCTAssertFalse(store.isEditable, "Preview'da düzenleme yok")
 
-        store.rendersMarkdown = false
+        store.markdownDisplay = .raw
         XCTAssertTrue(store.isEditable)
     }
 
@@ -163,5 +163,34 @@ final class FileViewerEditingTests: XCTestCase {
 
         store.updateDraft("a\nb\nc\n")
         XCTAssertNil(store.mentionReference, "ajan diski okur, satırlar kaymış olabilir")
+    }
+
+    // MARK: - Both (karar 112)
+
+    func testBothIsEditableAndKeepsMention() async {
+        let (store, _, _) = await makeStore(content: "# Title\nbody\n")
+        await store.presentView(repoPath: "/repo", filePath: "README.md")
+        store.markdownDisplay = .both
+
+        XCTAssertTrue(store.isSplitMarkdown)
+        XCTAssertFalse(store.isRenderedMarkdown)
+        XCTAssertTrue(store.isEditable, "sol taraf ham editördür")
+        store.selectedLines = 2...2
+        XCTAssertEqual(store.mentionReference, "@README.md#L2 ")
+    }
+
+    func testBothFallsBackToPreviewInDiffAndToRawForNonMarkdown() async {
+        let (store, _, _) = await makeStore()
+        store.markdownDisplay = .both
+
+        await store.presentDiff(repoPath: "/repo", filePath: "README.md")
+        XCTAssertEqual(store.effectiveMarkdownDisplay, .preview, "diff'te yan yana görünüm yok")
+
+        await store.presentView(repoPath: "/repo", filePath: "a.swift")
+        XCTAssertEqual(store.effectiveMarkdownDisplay, .raw)
+        XCTAssertFalse(store.isSplitMarkdown)
+
+        await store.presentView(repoPath: "/repo", filePath: "README.md")
+        XCTAssertTrue(store.isSplitMarkdown, "tercih oturum boyunca sürer")
     }
 }
