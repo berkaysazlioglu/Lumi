@@ -38,4 +38,22 @@ final class AllTerminalsUIStateCodecTests: XCTestCase {
         XCTAssertNil(decoded.allTerminalsGridLayout)
         XCTAssertTrue(decoded.allTerminalsOrder.isEmpty)
     }
+
+    // MARK: - Karar 108: recentLooseLocations
+
+    func testRecentLooseLocationsAreWrittenOnlyWhenPopulated() {
+        XCTAssertNil(ConfigCodec.uiStateOverlay(.defaults)["recentLooseLocations"])
+
+        var state = UIState.defaults
+        state.recentLooseLocations = ["/Users/me", "/src"]
+        XCTAssertEqual(ConfigCodec.uiStateOverlay(state)["recentLooseLocations"] as? [String], ["/Users/me", "/src"])
+    }
+
+    func testRecentLooseLocationsDropMalformedEntriesAndAreCapped() {
+        let decoded = UIStateCodec.decode([
+            "recentLooseLocations": ["/a", 1, NSNull(), "/b", "/c", "/d", "/e", "/f"],
+        ])
+        XCTAssertEqual(decoded.recentLooseLocations, ["/a", "/b", "/c", "/d", "/e"])
+        XCTAssertTrue(UIStateCodec.decode([:]).recentLooseLocations.isEmpty)
+    }
 }

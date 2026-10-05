@@ -241,7 +241,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
         projectToolsTab: "agentHistory",
         allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
-        allTerminalsOrder: ["s-1", "s-2"]
+        allTerminalsOrder: ["s-1", "s-2"],
+        recentLooseLocations: ["/Users/me", "/Users/me/Desktop"]
     )
 }
 

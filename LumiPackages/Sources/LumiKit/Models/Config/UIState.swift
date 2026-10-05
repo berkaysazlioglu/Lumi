@@ -55,6 +55,9 @@ public struct UIState: Sendable, Equatable {
     /// terminallerin oturum kimlikleri (resume listesiyle aynı kimlik). Resume
     /// listesiyle birlikte checkpoint'te yazılır.
     public var allTerminalsOrder: [String]
+    /// Karar 108 (additive): serbest terminal açılan son konumlar — en yeni
+    /// başta, en fazla `LooseTerminalLocations.recentLimit`. Boşken yazılmaz.
+    public var recentLooseLocations: [String]
 
     public static let defaults = UIState(
         openTabs: [],
@@ -83,7 +86,8 @@ public struct UIState: Sendable, Equatable {
         lastCheckouts: [String: String] = [:],
         projectToolsTab: String? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
-        allTerminalsOrder: [String] = []
+        allTerminalsOrder: [String] = [],
+        recentLooseLocations: [String] = []
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -102,6 +106,7 @@ public struct UIState: Sendable, Equatable {
         self.projectToolsTab = projectToolsTab
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.allTerminalsOrder = allTerminalsOrder
+        self.recentLooseLocations = recentLooseLocations
     }
 }
 
