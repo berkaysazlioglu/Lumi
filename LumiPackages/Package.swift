@@ -24,6 +24,9 @@ let package = Package(
             revision: "24a68bcadc479d945c7ca32f21ac0a8ab895c690"
         ),
         .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
+        // GFM ayrıştırması (cmark-gfm) — yalnız LumiServices'te, `MarkdownParsing`
+        // dikişinin arkasında (karar 109).
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.9.0"),
     ],
     targets: [
         .target(name: "LumiWire"),
@@ -43,6 +46,7 @@ let package = Package(
             dependencies: [
                 "LumiKit",
                 .product(name: "Highlightr", package: "Highlightr"),
+                .product(name: "Markdown", package: "swift-markdown"),
             ]
         ),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
