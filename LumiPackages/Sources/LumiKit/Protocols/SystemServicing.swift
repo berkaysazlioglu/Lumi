@@ -43,5 +43,8 @@ public protocol SystemServicing: Sendable {
     /// Karar 57: bilinen kökün dışındaki dosyayı sistemin varsayılan
     /// uygulamasında açar (aynı path guard'ı geçerlidir).
     func openWithDefaultApp(path: String)
+    /// Karar 116: dosyayı (terminaldeki `.html` linki) sistemin varsayılan
+    /// tarayıcısında açar; tarayıcı bulunamazsa varsayılan uygulamaya düşer.
+    func openInBrowser(path: String)
     @MainActor func chooseFolder() async -> String?
 }

@@ -64,7 +64,8 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertFalse(descriptor?.isPresented(fixture.context) ?? true)
 
         await fixture.context.terminalLinks.handle(TerminalLinkActivation(
-            terminalID: TerminalID(), link: "/tmp/logs",
+            // Diskte var olmalı: olmayan yol popover açmaz (karar 116).
+            terminalID: TerminalID(), link: "/tmp",
             gesture: .actions, anchor: CGPoint(x: 4, y: 4)
         ))
 

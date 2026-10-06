@@ -102,6 +102,12 @@ public final class SystemService: SystemServicing {
         Task { await operations.openWithDefaultApp(path: path) }
     }
 
+    /// Karar 116: terminal linkinden `.html` dosyasını tarayıcıda açma.
+    public func openInBrowser(path: String) {
+        let operations = fileOperations
+        Task { await operations.openInBrowser(path: path) }
+    }
+
     @MainActor
     public func chooseFolder() async -> String? {
         await folderChooser.choose()

@@ -13,6 +13,9 @@ public enum TerminalLinkIntent: Sendable, Equatable {
     /// Bilinen bir kökün dışındaki dosya: FileViewer repo-göreli çalıştığı için
     /// sistemin varsayılan uygulamasına devredilir.
     case openWithDefaultApp(path: String)
+    /// `.html`/`.htm` dosyası sistemin varsayılan TARAYICISINDA (karar 116) —
+    /// varsayılan uygulama bir editör olabilir.
+    case openInBrowser(path: String)
     case revealInFinder(path: String)
 }
 
@@ -180,7 +183,10 @@ public final class TerminalLinkActionStore {
         ) else { return nil }
 
         let kind = await pathKind(of: candidate)
-        let target = TerminalLinkResolver.classify(candidate, knownRoots: roots, kind: kind)
+        // Diskte olmayan yol hedef üretmez (karar 116): popover açılmaz.
+        guard let target = TerminalLinkResolver.classify(candidate, knownRoots: roots, kind: kind) else {
+            return nil
+        }
         let actions = Self.actions(for: target, knownRoots: roots)
         return TerminalLinkRequest(
             terminalID: activation.terminalID,
@@ -192,8 +198,9 @@ public final class TerminalLinkActionStore {
         )
     }
 
-    /// Arka planda sorar ve `pathKindTimeout` içinde dönmezse `.missing` sayar —
-    /// asılı bir mount tıkı süresiz askıda bırakmasın.
+    /// Arka planda sorar ve `pathKindTimeout` içinde dönmezse `.file` sayar —
+    /// asılı bir mount tıkı süresiz askıda bırakmasın. Cevapsızlık "yok"
+    /// demek değildir: hedef düşürülmez, hata eylem çalışınca görünür.
     private func pathKind(of candidate: TerminalLinkCandidate) async -> TerminalLinkPathKind {
         guard case let .path(path) = candidate else { return .missing }
         let probe = pathKind
@@ -205,7 +212,7 @@ public final class TerminalLinkActionStore {
             }
             let first = await group.next() ?? nil
             group.cancelAll()
-            return first ?? .missing
+            return first ?? .file
         }
     }
 
@@ -228,6 +235,8 @@ public final class TerminalLinkActionStore {
                 nil,
                 nil
             )
+        case .file(let path) where isHTML(path):
+            return htmlActions(path: path, knownRoots: knownRoots)
         case .file(let path):
             let finder = TerminalLinkAction(
                 slot: .alternate, title: "Open in Finder", intent: .revealInFinder(path: path)
@@ -255,6 +264,33 @@ public final class TerminalLinkActionStore {
             }
             return (defaultApp, finder, nil)
         }
+    }
+
+    /// HTML (karar 116, Orca'nın "⇧⌘+click for default browser" ipucu): kök
+    /// içinde birincil yine Lumi'nin görüntüleyicisi, ⇧⌘ tarayıcı; kök dışında
+    /// tarayıcı birincildir. Finder her iki durumda da bir satır aşağıdadır.
+    private static func htmlActions(
+        path: String, knownRoots: [String]
+    ) -> (primary: TerminalLinkAction, alternate: TerminalLinkAction?, extra: TerminalLinkAction?) {
+        if let root = TerminalLinkResolver.enclosingRoot(of: path, in: knownRoots),
+           let relative = TerminalLinkResolver.relativePath(of: path, in: root) {
+            return (
+                .init(slot: .primary, title: "Open in Lumi", intent: .openFile(repoPath: root, filePath: relative)),
+                .init(slot: .alternate, title: "Open in Browser", intent: .openInBrowser(path: path)),
+                .init(slot: .extra, title: "Open in Finder", intent: .revealInFinder(path: path))
+            )
+        }
+        return (
+            .init(slot: .primary, title: "Open in Browser", intent: .openInBrowser(path: path)),
+            .init(slot: .alternate, title: "Open in Finder", intent: .revealInFinder(path: path)),
+            nil
+        )
+    }
+
+    private static let htmlExtensions: Set<String> = ["html", "htm"]
+
+    private static func isHTML(_ path: String) -> Bool {
+        htmlExtensions.contains((path as NSString).pathExtension.lowercased())
     }
 
     /// Çalıştırılabilir türlerde (`.command`, `.scpt`, `.pkg`, `.app`…) "varsayılan

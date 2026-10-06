@@ -17,6 +17,7 @@ public struct FileSystemOperations: Sendable {
     private let trashItem: @Sendable (URL) throws -> Void
     private let reveal: @Sendable (URL) -> Void
     private let openFile: @Sendable (URL) -> Void
+    private let openInDefaultBrowser: @Sendable (URL) -> Void
 
     public init(
         allowedRoots: @escaping @Sendable () async -> [String] = { [NSHomeDirectory()] },
@@ -27,13 +28,15 @@ public struct FileSystemOperations: Sendable {
         reveal: @escaping @Sendable (URL) -> Void = {
             NSWorkspace.shared.activateFileViewerSelecting([$0])
         },
-        openFile: @escaping @Sendable (URL) -> Void = { NSWorkspace.shared.open($0) }
+        openFile: @escaping @Sendable (URL) -> Void = { NSWorkspace.shared.open($0) },
+        openInDefaultBrowser: @escaping @Sendable (URL) -> Void = FileSystemOperations.openWithBrowserApp
     ) {
         self.allowedRoots = allowedRoots
         self.guardian = pathGuard
         self.trashItem = trashItem
         self.reveal = reveal
         self.openFile = openFile
+        self.openInDefaultBrowser = openInDefaultBrowser
     }
 
     public func trash(path: String) async throws {
@@ -58,6 +61,25 @@ public struct FileSystemOperations: Sendable {
     public func openWithDefaultApp(path: String) async {
         guard !path.isEmpty else { return }
         openFile(URL(fileURLWithPath: path))
+    }
+
+    /// Karar 116: guard'sız (`openWithDefaultApp` ile aynı sözleşme).
+    public func openInBrowser(path: String) async {
+        guard !path.isEmpty else { return }
+        openInDefaultBrowser(URL(fileURLWithPath: path))
+    }
+
+    /// `https` adresini açan uygulama sistemin varsayılan tarayıcısıdır; `.html`
+    /// dosyasının varsayılan uygulaması ise bir editör olabilir. Tarayıcı
+    /// çözülemezse sistemin dosya için seçtiği uygulamaya düşülür.
+    public static func openWithBrowserApp(_ fileURL: URL) {
+        let workspace = NSWorkspace.shared
+        guard let probe = URL(string: "https://example.com"),
+              let browser = workspace.urlForApplication(toOpen: probe) else {
+            workspace.open(fileURL)
+            return
+        }
+        workspace.open([fileURL], withApplicationAt: browser, configuration: NSWorkspace.OpenConfiguration())
     }
 
     private func verify(_ path: String) async throws {

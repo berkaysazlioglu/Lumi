@@ -100,6 +100,18 @@ public final class FakeSystemService: SystemServicing, @unchecked Sendable {
         lock.withLock { _openedPaths.append(path) }
     }
 
+    /// Karar 116: tarayıcıda açılan yollar.
+    public private(set) var browserOpenedPaths: [String] {
+        get { lock.withLock { _browserOpenedPaths } }
+        set { lock.withLock { _browserOpenedPaths = newValue } }
+    }
+
+    private var _browserOpenedPaths: [String] = []
+
+    public func openInBrowser(path: String) {
+        lock.withLock { _browserOpenedPaths.append(path) }
+    }
+
     @MainActor
     public func chooseFolder() async -> String? {
         lock.withLock {

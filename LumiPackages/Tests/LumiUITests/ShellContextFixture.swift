@@ -15,6 +15,7 @@ import LumiTestSupport
 final class ShellActionRecorder {
     var revealedPaths: [String] = []
     var openedPaths: [String] = []
+    var browserOpenedPaths: [String] = []
     var openedURLs: [URL] = []
 }
 
@@ -94,7 +95,8 @@ struct ShellContextFixture {
                 trash: { _, _ in },
                 revealPath: { recorder.revealedPaths.append($0) },
                 openURL: { recorder.openedURLs.append($0) },
-                openPath: { recorder.openedPaths.append($0) }
+                openPath: { recorder.openedPaths.append($0) },
+                openInBrowser: { recorder.browserOpenedPaths.append($0) }
             )
         )
         await shared.terminals.start()

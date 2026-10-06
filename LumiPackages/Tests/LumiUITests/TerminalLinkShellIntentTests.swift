@@ -38,6 +38,14 @@ final class TerminalLinkShellIntentTests: XCTestCase {
         XCTAssertEqual(fixture.recorder.openedPaths, ["/tmp/report.pdf"])
     }
 
+    /// Karar 116: `.html` dosyası varsayılan uygulamaya değil tarayıcıya gider.
+    func testOpenInBrowserGoesThroughShellActions() {
+        context.performTerminalLinkIntent(.openInBrowser(path: "/tmp/index.html"))
+
+        XCTAssertEqual(fixture.recorder.browserOpenedPaths, ["/tmp/index.html"])
+        XCTAssertTrue(fixture.recorder.openedPaths.isEmpty)
+    }
+
     /// Lumi içine tarayıcı konmadı: URL sistemin varsayılan tarayıcısına gider.
     func testOpenURLGoesToTheSystemBrowser() {
         let url = URL(string: "https://lumi.dev")!

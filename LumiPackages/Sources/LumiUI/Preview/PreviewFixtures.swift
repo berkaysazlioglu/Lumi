@@ -594,6 +594,7 @@ private struct PreviewSystemService: SystemServicing {
     func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] { [] }
     func fixProcessPath() async {}
     func openWithDefaultApp(path: String) {}
+    func openInBrowser(path: String) {}
     func openExternal(_ url: URL) throws {}
     func trash(path: String) async throws {}
     func revealInFinder(path: String) {}

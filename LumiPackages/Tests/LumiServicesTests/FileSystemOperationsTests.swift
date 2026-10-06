@@ -109,6 +109,20 @@ final class FileSystemOperationsTests: XCTestCase {
         XCTAssertEqual(revealed.captured.count, 2)
     }
 
+    /// Karar 116: tarayıcıda açma da guard'ın dışındadır ve dosya URL'si taşır.
+    func testOpenInBrowserPassesFileURLOutsideKnownRoots() async {
+        let browsed = Recorder()
+        let operations = FileSystemOperations(
+            allowedRoots: { ["/tmp/lumi-roots"] },
+            openInDefaultBrowser: { browsed.record($0) }
+        )
+
+        await operations.openInBrowser(path: "/private/tmp/report.html")
+        await operations.openInBrowser(path: "")
+
+        XCTAssertEqual(browsed.captured, [URL(fileURLWithPath: "/private/tmp/report.html")])
+    }
+
     func testEmptyRootListFallsBackToHomeDirectory() async throws {
         let trashed = Recorder()
         let operations = makeOperations(roots: [], trashed: trashed)

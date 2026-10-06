@@ -9,8 +9,7 @@ public enum TerminalLinkTarget: Sendable, Equatable {
     /// Bilinen bir proje/workspace kökü → sekmeye geçilebilir.
     case workspace(path: String)
     case directory(path: String)
-    /// Dosya. Diskte olmadığı durumda da bu vakadır: hata, eylem çalıştığında
-    /// görünür biçimde raporlanır (karar 5 — sessiz yutma yok).
+    /// Diskte var olan dosya (olmayan yol hedef üretmez — karar 116).
     case file(path: String)
 
     /// Popover başlığında gösterilen metin.
@@ -46,6 +45,9 @@ public enum TerminalLinkResolver {
     private static let trimmedEdges = CharacterSet(charactersIn: "\"'`<>()[]{},;")
 
     /// 1. adım — diske dokunmadan: web adresi mi, hangi mutlak yol mu?
+    ///
+    /// `file://` URI'leri (düz metin ya da OSC 8 payload'ı) yerel yola çevrilir;
+    /// diğer şemalar (`ssh:`, `mailto:`…) eylem üretmez.
     public static func candidate(
         link: String,
         basePath: String,
@@ -56,31 +58,54 @@ public enum TerminalLinkResolver {
             .trimmingCharacters(in: trimmedEdges)
         guard !cleaned.isEmpty else { return nil }
 
-        if let scheme = scheme(of: cleaned) {
-            guard scheme == "http" || scheme == "https" else { return nil }
-            guard let url = URL(string: cleaned) else { return nil }
-            return .url(url)
+        if cleaned.contains("://") {
+            switch scheme(of: cleaned) {
+            case "http", "https":
+                return URL(string: cleaned).map { .url($0) }
+            case "file":
+                return localFilePath(fromURI: cleaned).map { .path(standardized(stripLineSuffix($0))) }
+            default:
+                return nil
+            }
         }
+        // `:satır` eki şemadan ÖNCE ayıklanır — yoksa `Makefile:12` bir
+        // `makefile:` şeması sanılırdı.
+        let pathText = stripLineSuffix(cleaned)
+        if scheme(of: pathText) != nil { return nil }
+        return absolutePath(for: pathText, basePath: basePath, homeDirectory: homeDirectory).map { .path($0) }
+    }
 
-        guard let path = absolutePath(
-            for: stripLineSuffix(cleaned), basePath: basePath, homeDirectory: homeDirectory
-        ) else { return nil }
-        return .path(path)
+    /// Yerel `file://` URI'sinin yolu (yüzde kodları çözülmüş, `#L12` gibi
+    /// fragment'sız). Host'lu (`file://sunucu/...`) URI yerel değildir → `nil`.
+    public static func localFilePath(fromURI uri: String) -> String? {
+        guard let url = URL(string: uri), url.scheme?.lowercased() == "file" else { return nil }
+        let host = url.host(percentEncoded: false) ?? ""
+        guard host.isEmpty || host.lowercased() == "localhost" else { return nil }
+        let path = url.path(percentEncoded: false)
+        return path.hasPrefix("/") ? path : nil
     }
 
     /// 2. adım — diskin cevabı elde: hedefi sınıflandır.
+    ///
+    /// Diskte OLMAYAN yol link değildir (`nil`; Orca paritesi) — tek istisna
+    /// bilinen proje/workspace kökleridir: dışarıda silinmiş ya da asılı bir
+    /// mount'taki kök de sekmeye geçirebilsin.
     public static func classify(
         _ candidate: TerminalLinkCandidate,
         knownRoots: [String],
         kind: TerminalLinkPathKind
-    ) -> TerminalLinkTarget {
+    ) -> TerminalLinkTarget? {
         switch candidate {
         case .url(let url):
             return .url(url)
         case .path(let path):
             let roots = Set(knownRoots.map(standardized))
             if roots.contains(path) { return .workspace(path: path) }
-            return kind == .directory ? .directory(path: path) : .file(path: path)
+            switch kind {
+            case .missing: return nil
+            case .directory: return .directory(path: path)
+            case .file: return .file(path: path)
+            }
         }
     }
 

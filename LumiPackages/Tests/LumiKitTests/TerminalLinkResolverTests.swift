@@ -76,9 +76,29 @@ final class TerminalLinkResolverTests: XCTestCase {
         )
     }
 
-    /// Diskte olmayan yol yine dosyadır: hata eylem çalışınca görünür (karar 5).
-    func testMissingPathStaysAFile() {
-        XCTAssertEqual(resolve("build/out.o"), .file(path: "/Users/dev/proj/build/out.o"))
+    /// Karar 116: diskte olmayan yol hedef üretmez (Orca paritesi).
+    func testMissingPathIsNotALink() {
+        XCTAssertNil(resolve("build/out.o"))
+    }
+
+    /// Dışarıda silinmiş bilinen kök yine sekmeye geçirebilir.
+    func testMissingKnownRootStaysWorkspace() {
+        XCTAssertEqual(resolve("/Users/dev/work/site"), .workspace(path: "/Users/dev/work/site"))
+    }
+
+    func testBareFilenameResolvesAgainstTerminalDirectory() {
+        XCTAssertEqual(
+            resolve("Makefile:12", files: ["/Users/dev/proj/Makefile"]),
+            .file(path: "/Users/dev/proj/Makefile")
+        )
+    }
+
+    /// `file://` URI'si (düz metin ya da OSC 8) yerel yola çevrilir.
+    func testLocalFileURIBecomesPath() {
+        let path = "/Users/dev/My Docs/report.html"
+        XCTAssertEqual(resolve("file:///Users/dev/My%20Docs/report.html#L12", files: [path]), .file(path: path))
+        XCTAssertEqual(resolve("file://localhost/tmp/a.txt:3", files: ["/tmp/a.txt"]), .file(path: "/tmp/a.txt"))
+        XCTAssertNil(resolve("file://server/share/a.txt", files: ["/share/a.txt"]))
     }
 
     func testSurroundingPunctuationIsTrimmed() {

@@ -19,6 +19,8 @@ public struct ShellActions {
     public let openURL: @MainActor (URL) -> Void
     /// Dosyayı sistemin varsayılan uygulamasında aç (karar 57).
     public let openPath: @MainActor (String) -> Void
+    /// Dosyayı sistemin varsayılan tarayıcısında aç (karar 116).
+    public let openInBrowser: @MainActor (String) -> Void
 
     public init(
         chooseFolder: @escaping @MainActor () async -> String?,
@@ -26,7 +28,8 @@ public struct ShellActions {
         trash: @escaping @MainActor (String, String) -> Void,
         revealPath: @escaping @MainActor (String) -> Void = { _ in },
         openURL: @escaping @MainActor (URL) -> Void = { _ in },
-        openPath: @escaping @MainActor (String) -> Void = { _ in }
+        openPath: @escaping @MainActor (String) -> Void = { _ in },
+        openInBrowser: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.chooseFolder = chooseFolder
         self.reveal = reveal
@@ -34,6 +37,7 @@ public struct ShellActions {
         self.revealPath = revealPath
         self.openURL = openURL
         self.openPath = openPath
+        self.openInBrowser = openInBrowser
     }
 }
 
@@ -520,6 +524,8 @@ public final class ShellContext {
             Task { await fileViewer.presentView(repoPath: repoPath, filePath: filePath) }
         case .openWithDefaultApp(let path):
             actions.openPath(path)
+        case .openInBrowser(let path):
+            actions.openInBrowser(path)
         case .revealInFinder(let path):
             actions.revealPath(path)
         }

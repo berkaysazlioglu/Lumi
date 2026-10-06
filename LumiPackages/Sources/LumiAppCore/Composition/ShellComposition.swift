@@ -210,7 +210,8 @@ struct ShellComposition {
                     shared.toasts.reporting { try registry.system.openExternal(url) }
                 }
             },
-            openPath: { path in registry.system.openWithDefaultApp(path: path) }
+            openPath: { path in registry.system.openWithDefaultApp(path: path) },
+            openInBrowser: { path in registry.system.openInBrowser(path: path) }
         )
     }
 }

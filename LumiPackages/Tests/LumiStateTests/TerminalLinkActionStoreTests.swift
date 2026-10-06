@@ -160,6 +160,42 @@ final class TerminalLinkActionStoreTests: XCTestCase {
         XCTAssertEqual(store.request?.actions.map(\.title), ["Open in Lumi", "Open in Finder"])
     }
 
+    // MARK: - Karar 116
+
+    /// HTML kök içinde: Lumi birincil, ⇧⌘ sistem tarayıcısı, Finder üçüncü satır.
+    func testHTMLInsideRootOffersBrowserAsAlternate() async {
+        await activate("dist/index.html", .actions)
+
+        XCTAssertEqual(store.request?.actions.map(\.title), ["Open in Lumi", "Open in Browser", "Open in Finder"])
+        XCTAssertEqual(store.request?.alternate?.intent, .openInBrowser(path: "/projects/game/dist/index.html"))
+    }
+
+    func testHTMLOutsideRootOpensInBrowserFirst() async {
+        await activate("file:///tmp/report.HTM", .primary)
+
+        XCTAssertEqual(intents, [.openInBrowser(path: "/tmp/report.HTM")])
+    }
+
+    /// Diskte olmayan yol popover açmaz, eylem de çalıştırmaz.
+    func testMissingPathOpensNothing() async {
+        let strict = TerminalLinkActionStore(
+            terminals: terminals, repos: repos, workspaces: workspaces,
+            homeDirectory: "/Users/dev", pathKind: { _ in .missing }
+        )
+        var seen: [TerminalLinkIntent] = []
+        strict.onIntent = { seen.append($0) }
+
+        await strict.handle(TerminalLinkActivation(
+            terminalID: terminalID, link: "build/out.o", gesture: .actions, anchor: .zero
+        ))
+        await strict.handle(TerminalLinkActivation(
+            terminalID: terminalID, link: "build/out.o", gesture: .primary, anchor: .zero
+        ))
+
+        XCTAssertNil(strict.request)
+        XCTAssertTrue(seen.isEmpty)
+    }
+
     /// Diskin cevabı gelmezse (asılı ağ mount'u) tık süresiz beklemez.
     func testHangingPathProbeFallsBackInsteadOfBlocking() async {
         let slow = TerminalLinkActionStore(
