@@ -178,6 +178,48 @@ final class TerminalLinkHoverTests: XCTestCase {
         XCTAssertEqual(view.linkUnderline.spans.map(\.row), [0, 1])
     }
 
+    /// Claude yolu KENDİSİ kırar: üst satır son sütuna dayanmaz, devamı girintiyle
+    /// başlar (`● Read(/private/…-2` + `  c536…/sheet_00.png)`).
+    func testHardWrappedPathWithIndentedContinuationIsOneLink() {
+        let path = "/private/tmp/claude-502/-Users-dev-word-puzzle/927918e2-72af-44ec-a5c9-2c53666a2c38/scratchpad/sheet_00.png"
+        let split = path.index(path.startIndex, offsetBy: 70)
+        useDisk([path])
+        show("Did the thing\r\n  ● Read(\(path[..<split])\r\n    \(path[split...]))\r\n      ⎿  Read image (1.6MB)")
+
+        hover(at: point(column: 12, row: 1))
+        XCTAssertEqual(view.underlinedLinkText, path)
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [1, 2])
+
+        view.clearLinkHover()
+        hover(at: point(column: 8, row: 2))
+        XCTAssertEqual(view.underlinedLinkText, path, "devam satırından da aynı link")
+    }
+
+    /// Ortadaki satırı baştan sona yol olan üç satırlık kırılma; üstteki düzyazı
+    /// satırı ("Saved to") yola yapışmaz.
+    func testHardWrappedPathAcrossThreeRows() {
+        let path = "/Users/dev/" + String(repeating: "x", count: 60) + "/" + String(repeating: "y", count: 60) + "/out.png"
+        let parts = [path.prefix(40), path.dropFirst(40).prefix(60), path.dropFirst(100)]
+        useDisk([path])
+        show("Saved to\r\n  \(parts[0])\r\n  \(parts[1])\r\n  \(parts[2])")
+
+        hover(at: point(column: 5, row: 3))
+
+        XCTAssertEqual(view.underlinedLinkText, path)
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [1, 2, 3])
+    }
+
+    /// Elle sarmada URL diske sorulamaz: üst satır sağ kenara yakın bitmiyorsa
+    /// alt satırla birleşmez ("Next" URL'ye yapışmasın).
+    func testHardWrappedURLJoinsOnlyNearTheRightEdge() {
+        useDisk([])
+        show("see https://lumi.dev/docs\r\nNext step")
+
+        hover(at: point(column: 8))
+
+        XCTAssertEqual(view.underlinedLinkText, "https://lumi.dev/docs")
+    }
+
     // MARK: - İmleç
 
     func testCursorTurnsIntoHandOnlyOverALink() {

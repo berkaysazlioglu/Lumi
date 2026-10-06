@@ -27,6 +27,50 @@ struct TerminalRowText: Equatable {
         return !TerminalLinkLocator.isBlank(first)
     }
 
+    /// Elle sarma sezgisi (Claude gibi TUI'ler uzun yolu kendileri alt satıra
+    /// kırar ve devamını girintiyle başlatır): satırın içeriği bir yol
+    /// karakteriyle bitiyor / başlıyor mu.
+    var endsWithPathFragment: Bool {
+        guard let last = lastContentIndex else { return false }
+        return TerminalLinkLocator.isPathFragment(Array(text.utf16)[last])
+    }
+
+    var startsWithPathFragment: Bool {
+        guard let first = firstContentIndex else { return false }
+        return TerminalLinkLocator.isPathFragment(Array(text.utf16)[first])
+    }
+
+    /// İçeriğin tamamı yol karakteri mi (elle sarılmış yolun ortadaki satırı).
+    var isWhollyPathFragment: Bool {
+        guard let first = firstContentIndex, let last = lastContentIndex else { return false }
+        let units = Array(text.utf16)
+        return units[first ... last].allSatisfy(TerminalLinkLocator.isPathFragment)
+    }
+
+    /// `col` hücresindeki yol parçası satır içeriğinin başına / sonuna dayanıyor mu.
+    func pathFragmentTouchesBounds(at col: Int) -> (start: Bool, end: Bool) {
+        let units = Array(text.utf16)
+        guard let index = cells.firstIndex(where: { $0.col <= col && col < $0.col + $0.width }),
+              TerminalLinkLocator.isPathFragment(units[index]),
+              let first = firstContentIndex, let last = lastContentIndex else { return (false, false) }
+        var start = index
+        while start > first, TerminalLinkLocator.isPathFragment(units[start - 1]) { start -= 1 }
+        var end = index
+        while end < last, TerminalLinkLocator.isPathFragment(units[end + 1]) { end += 1 }
+        return (start == first, end == last)
+    }
+
+    /// İçeriğin bittiği sütun (sondaki boşluk dolgusu hariç).
+    var contentEndColumn: Int {
+        guard let last = lastContentIndex else { return 0 }
+        return cells[last].col + cells[last].width
+    }
+
+    var firstContentIndex: Int? {
+        let units = Array(text.utf16)
+        return units.indices.first { !TerminalLinkLocator.isBlank(units[$0]) }
+    }
+
     private var lastContentIndex: Int? {
         let units = Array(text.utf16)
         return units.indices.last { !TerminalLinkLocator.isBlank(units[$0]) }
@@ -60,14 +104,26 @@ struct TerminalLinkHit: Equatable {
 enum TerminalLinkLocator {
     /// Bir link'in yukarı/aşağı en fazla kaç satıra taşabileceği.
     static let maxJoinedRows = 32
+    /// Elle sarmada yukarı/aşağı bakılan satır sayısı — her başlangıç/bitiş
+    /// çifti ayrı aday olduğu için yumuşak sarmadan dar tutulur.
+    static let maxHardWrappedRows = 6
+
+    /// Orca `HARD_WRAPPED_PATH_FRAGMENT_PATTERN`: `[A-Za-z0-9._~@%+=:,/\\-]`.
+    private static let pathFragmentUnits: Set<UInt16> = Set("._~@%+=:,/\\-".utf16)
 
     static func isBlank(_ unit: UInt16) -> Bool {
         unit == 0x20 || unit == 0x09 || unit == 0
     }
 
-    /// `row` satırındaki `col` hücresini kapsayan adaylar. Önce birleşik
-    /// (sarılmış) mantıksal satırın adayları, sonra yalnız o satırınkiler —
-    /// sezgi yanlış birleştirdiyse kısa aday diskte yine bulunur.
+    static func isPathFragment(_ unit: UInt16) -> Bool {
+        (0x30 ... 0x39).contains(unit) || (0x41 ... 0x5A).contains(unit)
+            || (0x61 ... 0x7A).contains(unit) || pathFragmentUnits.contains(unit)
+    }
+
+    /// `row` satırındaki `col` hücresini kapsayan adaylar, denenme sırasıyla:
+    /// yumuşak sarılmış (son sütuna dayanan) mantıksal satır, elle sarılmış
+    /// (Claude'un girintili devam satırları) birleşimler, son olarak yalnız o
+    /// satır — sezgi yanlış birleştirdiyse kısa aday diskte yine bulunur.
     static func hits(
         rowCount: Int,
         row target: Int,
@@ -82,12 +138,11 @@ enum TerminalLinkLocator {
             memo[row] = line
             return line
         }
-        guard let targetRow = rowText(target) else { return [] }
+        guard rowText(target) != nil else { return [] }
         let (first, last) = joinedBounds(of: target, rowCount: rowCount, rowText: rowText)
-        var hits = hitsInLine(rows: first ... last, target: target, col: col, rowText: rowText)
-        if first != last {
-            hits += hitsInLine(rows: target ... target, target: target, col: col, rowText: { $0 == target ? targetRow : nil })
-        }
+        var hits = first != last ? hitsInLine(rows: first ... last, target: target, col: col, rowText: rowText) : []
+        hits += hardWrappedHits(rowCount: rowCount, target: target, col: col, rowText: rowText)
+        hits += hitsInLine(rows: target ... target, target: target, col: col, rowText: rowText)
         var seen: [[TerminalLinkSpan]] = []
         return hits.filter { hit in
             guard !seen.contains(hit.spans) else { return false }
@@ -114,17 +169,64 @@ enum TerminalLinkLocator {
         return (first, last)
     }
 
+    /// Elle sarılmış yol adayları: hedef satırdan yukarı/aşağı, sınırı yol
+    /// karakterleriyle buluşan satırlar girintileri atılarak birleştirilir. Her
+    /// (başlangıç, bitiş) çifti bir adaydır — üstteki düzyazı satırı ya da alttaki
+    /// "Done" da yol karakteriyle bitip başlayabilir. Yalnız diske sorulan
+    /// adaylar kalır; URL ise yalnız üst satırlar sağ kenara yakın bittiyse
+    /// (SwiftTerm'in eski Ghostty sezgisi: son `max(2, cols/5)` sütun).
+    private static func hardWrappedHits(
+        rowCount: Int, target: Int, col: Int, rowText: (Int) -> TerminalRowText?
+    ) -> [TerminalLinkHit] {
+        // Hover her hücre değişiminde koşar: imlecin altındaki parça satır
+        // sınırına dayanmıyorsa birleştirmenin değiştireceği bir şey yoktur.
+        guard let touches = rowText(target)?.pathFragmentTouchesBounds(at: col) else { return [] }
+        var first = target
+        while touches.start, first > 0, target - first < maxHardWrappedRows,
+              first == target || rowText(first)?.isWhollyPathFragment == true,
+              rowText(first - 1)?.endsWithPathFragment == true,
+              rowText(first)?.startsWithPathFragment == true {
+            first -= 1
+        }
+        var last = target
+        while touches.end, last < rowCount - 1, last - target < maxHardWrappedRows,
+              last == target || rowText(last)?.isWhollyPathFragment == true,
+              rowText(last)?.endsWithPathFragment == true,
+              rowText(last + 1)?.startsWithPathFragment == true {
+            last += 1
+        }
+        guard first != last else { return [] }
+        var hits: [TerminalLinkHit] = []
+        for start in first ... target {
+            for end in (target ... last).reversed() where start != end {
+                hits += hitsInLine(rows: start ... end, target: target, col: col, trimsIndent: true, rowText: rowText)
+                    .filter { $0.requiresExistence || reachesNearEdge($0, rowText: rowText) }
+            }
+        }
+        return hits.sorted { $0.spans.count > $1.spans.count }
+    }
+
+    private static func reachesNearEdge(_ hit: TerminalLinkHit, rowText: (Int) -> TerminalRowText?) -> Bool {
+        hit.spans.dropLast().allSatisfy { span in
+            guard let line = rowText(span.row) else { return false }
+            return line.contentEndColumn >= line.cols - max(2, line.cols / 5)
+        }
+    }
+
     private static func hitsInLine(
-        rows: ClosedRange<Int>, target: Int, col: Int, rowText: (Int) -> TerminalRowText?
+        rows: ClosedRange<Int>, target: Int, col: Int, trimsIndent: Bool = false,
+        rowText: (Int) -> TerminalRowText?
     ) -> [TerminalLinkHit] {
         var text = ""
         var cells: [(row: Int, cell: TerminalRowText.Cell)] = []
         for row in rows {
             guard let line = rowText(row) else { continue }
-            // Birleştirilen satırın sonundaki boşluk dolgusu metne girmez.
-            let units = row == rows.upperBound ? line.text.utf16.count : contentLength(line)
-            text += (line.text as NSString).substring(to: units)
-            cells += line.cells.prefix(units).map { (row, $0) }
+            // Birleştirilen satırın sonundaki boşluk dolgusu metne girmez; elle
+            // sarmada devam satırının girintisi de girmez.
+            let end = row == rows.upperBound ? line.text.utf16.count : contentLength(line)
+            let start = trimsIndent && row != rows.lowerBound ? min(end, line.firstContentIndex ?? end) : 0
+            text += (line.text as NSString).substring(with: NSRange(location: start, length: end - start))
+            cells += line.cells[start ..< end].map { (row, $0) }
         }
         guard let offset = cells.firstIndex(where: { $0.row == target && $0.cell.col <= col && col < $0.cell.col + $0.cell.width }),
               !isBlank(Array(text.utf16)[offset]) else { return [] }
