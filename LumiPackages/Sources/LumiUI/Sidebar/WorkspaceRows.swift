@@ -234,7 +234,8 @@ struct CheckoutRow: View {
                 .action("Reveal in Finder", icon: "folder", isEnabled: !isMissing) { shell.actions.revealPath(workspace.path) },
                 .action("Copy Path", icon: "doc.on.doc") { Pasteboard.copy(workspace.path) },
                 .divider,
-                isMissing
+                // Karar 115: yönetilen kök dışındaki worktree'yi Lumi silmez.
+                isMissing || shell.workspaces.isExternal(workspace)
                     ? .action("Remove from List", icon: "minus.circle") { Task { await shell.forgetWorkspace(workspace) } }
                     : .action(
                         "Delete Workspace…", icon: "trash", isDestructive: true,

@@ -14,6 +14,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var system: any SystemServicing
     public var repo: any RepoServicing
     public var workspaces: any WorkspaceServicing = FakeWorkspaceService()
+    public var worktrees: any WorktreeDiscovering = FakeWorktreeDiscovery()
     public var agentHistory: any AgentHistoryServicing = FakeAgentHistoryService()
     public var agentSessionTransfer: any AgentSessionTransferring = FakeAgentSessionTransferService()
     public var deepSeek: any DeepSeekEnvironmentServicing = FakeDeepSeekEnvironmentService()

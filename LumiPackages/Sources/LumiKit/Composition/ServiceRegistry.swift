@@ -16,6 +16,8 @@ public protocol ServiceRegistry: AnyObject {
     var system: any SystemServicing { get }
     var repo: any RepoServicing { get }
     var workspaces: any WorkspaceServicing { get }
+    /// Karar 115: Git worktree'lerinin canlı keşfi + dizin izleyicileri.
+    var worktrees: any WorktreeDiscovering { get }
     var git: any GitServicing { get }
     /// Plastic SCM yüzeyi (karar 46): okuma + checkin/undo.
     var plastic: any PlasticServicing { get }

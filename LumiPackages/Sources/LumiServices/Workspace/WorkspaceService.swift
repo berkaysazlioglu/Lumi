@@ -3,6 +3,8 @@ import LumiKit
 
 public actor WorkspaceService: WorkspaceServicing {
     public static let commandTimeout: TimeInterval = 600
+    /// Yönetilen workspace kökü (karar 48); keşif servisi de aynı kökü kullanır.
+    public static let defaultRoot = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("lumi/workspaces")
     private let runner: any ProcessRunning
     private let locator: any BinaryLocating
     private let workspaceRoot: URL
@@ -22,7 +24,7 @@ public actor WorkspaceService: WorkspaceServicing {
     public init(
         runner: any ProcessRunning = SystemProcessRunner(),
         locator: any BinaryLocating = SystemBinaryLocator(),
-        workspaceRoot: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("lumi/workspaces")
+        workspaceRoot: URL = WorkspaceService.defaultRoot
     ) {
         self.runner = runner
         self.locator = locator
@@ -403,9 +405,7 @@ public actor WorkspaceService: WorkspaceServicing {
     private static func projectOwner(_ directory: URL) -> String? {
         try? String(contentsOf: directory.appendingPathComponent(".lumi-project"), encoding: .utf8)
     }
-    private static func canonical(_ path: String) -> String {
-        URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL.resolvingSymlinksInPath().path
-    }
+    private static func canonical(_ path: String) -> String { CanonicalPath.of(path) }
     private static func contains(_ path: String, in root: String) -> Bool { path == root || path.hasPrefix(root + "/") }
     private static func entryExists(_ path: String) -> Bool { (try? FileManager.default.attributesOfItem(atPath: path)) != nil }
     private static func isDirectory(_ path: String) -> Bool {

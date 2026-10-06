@@ -17,6 +17,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
 
     private(set) var repoStore: RepoStore!
     private(set) var workspaceStore: ProjectWorkspaceStore!
+    private(set) var workspaceSync: WorkspaceSyncCoordinator!
     private(set) var quickCommands: QuickCommandStore!
     private(set) var favoriteFiles: FavoriteFileStore!
     private(set) var gitStore: GitStore!
@@ -31,6 +32,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     /// Kök güncellemeleri sıralı kalmalı: iki hızlı config değişimi
     /// `setRoots`'u ters sırada uygulamamalı.
     private var rootsTask: Task<Void, Never>?
+    /// Karar 115: uygulama öne gelince worktree listesi yeniden okunur
+    /// (Orca'da pencere görünür olunca tam tarama).
+    private var activationObserver: NSObjectProtocol?
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
         self.services = services
@@ -39,6 +43,10 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         workspaceStore = ProjectWorkspaceStore(
             service: services.workspaces, config: services.config,
             repos: repoStore, toasts: shared.toasts
+        )
+        workspaceSync = WorkspaceSyncCoordinator(
+            discovery: services.worktrees, workspaces: workspaceStore,
+            liveCheckoutPaths: { [terminals = shared.terminals] in Set(terminals.terminals.map(\.repoPath)) }
         )
         quickCommands = QuickCommandStore(
             config: services.config, generator: services.quickCommandGenerator,
@@ -145,11 +153,13 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         wireActiveRepo()
         wireTabClosed()
         startFileTreeBridge()
+        startWorkspaceSync()
     }
 
     func configDidChange(old: AppConfig, new: AppConfig) {
         if old.sidebarProjectPaths != new.sidebarProjectPaths {
             workspaceStore.updateSidebarProjects(new.sidebarProjectPaths)
+            workspaceSync.requestSync()
         }
         if old.workspaces != new.workspaces {
             workspaceStore.updateRecords(new.workspaces)
@@ -175,6 +185,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func shutdown() async {
+        workspaceSync.stop()
+        if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+        activationObserver = nil
         fileTreeBridge?.cancel()
         fileTreeBridge = nil
         rootsTask?.cancel()
@@ -255,6 +268,38 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             agentHistory.evict(repoPath)
             repoStore.evict(repoPath)
             shared.layout.evict(repoPath)
+        }
+    }
+
+    // MARK: - Worktree senkronu (karar 115)
+
+    private func startWorkspaceSync() {
+        workspaceStore.onWorkspacesDropped = { [weak self] paths in
+            guard let self else { return }
+            for path in paths where shared.navigation.openTabs.contains(path) {
+                shared.navigation.closeTab(path)
+            }
+        }
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.workspaceSync.requestSync() }
+        }
+        observeTerminalPaths()
+        workspaceSync.start()
+    }
+
+    /// Yalnız terminal YOLLARI izlenir (durum değişimleri değil): canlı
+    /// terminal yüzünden tutulan `Missing` kayıt, son terminal kapanınca düşer.
+    private func observeTerminalPaths() {
+        withObservationTracking {
+            _ = shared.terminals.terminals.map(\.repoPath)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.activationObserver != nil else { return }
+                self.workspaceSync.terminalsChanged()
+                self.observeTerminalPaths()
+            }
         }
     }
 

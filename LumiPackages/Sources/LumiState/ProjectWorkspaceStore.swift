@@ -1,10 +1,12 @@
 import Foundation
 import LumiKit
 import Observation
+import os
 
 @Observable
 @MainActor
 public final class ProjectWorkspaceStore {
+    private static let logger = LumiLog.logger("workspaces")
     public var name = ""
     public var branchName = ""
     public var agent: WorkspaceAgent = .claude
@@ -28,6 +30,12 @@ public final class ProjectWorkspaceStore {
     public private(set) var records: [ProjectWorkspace] = []
     public private(set) var sidebarProjectPaths: [String] = []
     public private(set) var missingWorkspacePaths = Set<String>()
+    /// Karar 115: son başarılı `git worktree list` sonuçları (proje yolu →
+    /// girdiler). Gizli dış worktree'ler buradan türetilir.
+    public private(set) var worktreeListings: [String: [GitWorktreeEntry]] = [:]
+    /// Karar 115: senkronun kendiliğinden düşürdüğü kayıtlar — kabuk açık
+    /// sekmelerini kapatır.
+    @ObservationIgnored public var onWorkspacesDropped: (([String]) -> Void)?
     /// Silme akışı (karar 51): sürmekte olan silmenin yolu ve son hatası.
     public private(set) var deletingPath: String?
     public private(set) var deleteError: String?
@@ -346,6 +354,77 @@ public final class ProjectWorkspaceStore {
     }
 
     public func isMissing(_ record: ProjectWorkspace) -> Bool { missingWorkspacePaths.contains(record.path) }
+
+    /// Lumi'nin yönetilen kökü dışında, git'in bildirdiği ama gösterilmeyen
+    /// worktree'ler (karar 115: dış worktree'ler opt-in'dir).
+    public func hiddenWorktrees(for projectPath: String) -> [GitWorktreeEntry] {
+        guard let entries = worktreeListings[projectPath] else { return [] }
+        let shown = Set(records.map(\.path)).union(sidebarProjectPaths)
+        return entries.filter { $0.isListable && !$0.isInsideManagedRoot && !shown.contains($0.path) }
+    }
+
+    /// Yönetilen kök dışındaki kayıt Lumi'nin silemeyeceği bir worktree'dir;
+    /// menüsü `Delete Workspace…` yerine `Remove from List` sunar.
+    public func isExternal(_ record: ProjectWorkspace) -> Bool {
+        worktreeListings[record.projectPath]?.contains { $0.path == record.path && !$0.isInsideManagedRoot } ?? false
+    }
+
+    /// Gizli dış worktree'leri kalıcı olarak listeye alır.
+    public func showHiddenWorktrees(for projectPath: String) async {
+        let additions = hiddenWorktrees(for: projectPath).map {
+            ProjectWorkspace(projectPath: projectPath, path: $0.path, name: $0.folderName, branch: $0.branch ?? "", scm: .git)
+        }
+        guard !additions.isEmpty else { return }
+        var plan = WorktreeSyncPlan()
+        plan.additions = additions
+        await writeSync(plan)
+    }
+
+    /// Senkronun bu turda dokunmaması gereken kayıtlar.
+    var syncProtectedPaths: Set<String> {
+        var paths = Set(pendingRecords.keys)
+        if let deletingPath { paths.insert(deletingPath) }
+        if isCreating, let lastCreated { paths.insert(lastCreated.path) }
+        return paths
+    }
+
+    /// Karar 115: bir senkron turunu uygular. Kayıt değişiklikleri tek
+    /// `updateConfig` içinde ve config'in O ANKİ hâline göre yapılır —
+    /// plan hesaplanırken araya giren oluşturma/silme ezilmez.
+    public func applySync(_ plan: WorktreeSyncPlan, listings: [String: [GitWorktreeEntry]]) async {
+        let projects = Set(sidebarProjectPaths)
+        var merged = worktreeListings.filter { projects.contains($0.key) }
+        for (project, entries) in listings { merged[project] = entries }
+        if merged != worktreeListings { worktreeListings = merged }
+        var effective = plan
+        effective.removals.removeAll { syncProtectedPaths.contains($0) }
+        if missingWorkspacePaths != plan.missingPaths, !plan.changesRecords { missingWorkspacePaths = plan.missingPaths }
+        guard effective.changesRecords else { return }
+        await writeSync(effective)
+        if !effective.removals.isEmpty { onWorkspacesDropped?(effective.removals) }
+    }
+
+    private func writeSync(_ plan: WorktreeSyncPlan) async {
+        do {
+            try await config.updateConfig { config in
+                let removed = Set(plan.removals)
+                config.workspaces.removeAll { removed.contains($0.path) }
+                for (path, branch) in plan.branchUpdates {
+                    guard let index = config.workspaces.firstIndex(where: { $0.path == path }) else { continue }
+                    let old = config.workspaces[index]
+                    config.workspaces[index] = ProjectWorkspace(
+                        projectPath: old.projectPath, path: old.path, name: old.name, branch: branch, scm: old.scm
+                    )
+                }
+                for addition in plan.additions where !config.workspaces.contains(where: { $0.path == addition.path }) {
+                    config.workspaces.append(addition)
+                }
+            }
+            updateRecords(await config.config().workspaces)
+        } catch {
+            Self.logger.error("worktree sync could not be saved: \(error.localizedDescription, privacy: .public)")
+        }
+    }
 
     private func refreshMissingPaths() {
         catalogGeneration += 1

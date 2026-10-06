@@ -17,6 +17,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let system: any SystemServicing
     let repo: any RepoServicing
     let workspaces: any WorkspaceServicing
+    let worktrees: any WorktreeDiscovering
     let agentHistory: any AgentHistoryServicing
     let agentSessionTransfer: any AgentSessionTransferring
     let deepSeek: any DeepSeekEnvironmentServicing
@@ -79,6 +80,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         )
         repo = RepoService()
         workspaces = WorkspaceService()
+        worktrees = WorktreeDiscoveryService()
         git = GitService()
         plastic = PlasticService()
         commitMessages = ClaudeCommitMessageService()

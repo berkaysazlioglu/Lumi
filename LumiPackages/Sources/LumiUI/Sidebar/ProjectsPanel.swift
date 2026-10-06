@@ -62,6 +62,7 @@ public struct ProjectsPanel: View {
                                 }
                             }
                             if operationBelongs(to: project) { WorkspaceOperationRow() }
+                            HiddenWorktreesRow(projectPath: project.path)
                         }
                     }
                     .padding(.bottom, Theme.Spacing.xs)
