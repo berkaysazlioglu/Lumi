@@ -117,6 +117,9 @@ final class TerminalSession {
             self?.write(ShellQuoting.joinedPaths(paths))
         }
         (view as? DropAwareTerminalView).map { linkView in
+            // Karar 116: hover'da göreli yollar terminalin açıldığı dizine göre
+            // diske sorulur (store'un çözümüyle aynı taban).
+            linkView.linkBaseDirectory = repoPath
             // Karar 57: link jestleri oturuma akar — düz tıkın fare raporu
             // popover'a dönüşürse PTY'ye hiç gitmez.
             linkView.onLinkGestureBegan = { [weak self] in self?.beginDeferringMouseReports() }
@@ -187,6 +190,7 @@ final class TerminalSession {
         guard !isTerminated else { return }
         launchGate?.noteOutput()
         pipeline.watchdog.measureFeed { presentation.feed(batch) }
+        (terminalView as? DropAwareTerminalView)?.noteLinkContentChanged()
         remoteOutputBroadcaster.send(batch)
         if pipeline.flow.noteConsumed(batch.count) {
             pty.resumeReading()

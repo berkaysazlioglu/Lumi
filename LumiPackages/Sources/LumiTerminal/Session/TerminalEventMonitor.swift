@@ -22,9 +22,9 @@ import AppKit
 @MainActor
 public final class TerminalEventMonitor {
     /// Klavye (doğal düzenleme eşlemesi), sol tık (kart odağı), tekerlek + hover
-    /// (alt-buffer scroll köprüsü).
+    /// (alt-buffer scroll köprüsü), modifier değişimi (⌘'ye bağlı link vurgusu).
     private static let eventMask: NSEvent.EventTypeMask = [
-        .keyDown, .leftMouseDown, .scrollWheel, .mouseMoved,
+        .keyDown, .leftMouseDown, .scrollWheel, .mouseMoved, .flagsChanged,
     ]
 
     /// AppKit monitörü kurulduğunda tutar; yalnız `removeMonitor` bırakır.
@@ -74,6 +74,10 @@ public final class TerminalEventMonitor {
             return routeKeyDown(event)
         case .leftMouseDown:
             noteFocusClick(in: event.window)
+            return false
+        case .flagsChanged:
+            // Yutulmaz: SwiftTerm'in kendi modifier takibi (kitty) sürsün.
+            hoveredView?.noteModifierFlags(event.modifierFlags)
             return false
         case .scrollWheel, .mouseMoved:
             let isScroll = event.type == .scrollWheel
