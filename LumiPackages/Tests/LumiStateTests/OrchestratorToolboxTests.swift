@@ -134,6 +134,34 @@ final class OrchestratorToolboxTests: XCTestCase {
         XCTAssertEqual(agents.first?["id"] as? String, agent.id.description)
     }
 
+    /// Karar 108/114: projesiz terminal panelin `Other` grubundadır — klasör
+    /// adıyla sahte bir proje gibi görünmez.
+    func testLooseTerminalsAreListedUnderOther() async throws {
+        let desktop = NSHomeDirectory() + "/Desktop"
+        let loose = terminal("notes", repo: desktop)
+        terminal("zsh", repo: desktop, provider: nil)
+
+        let result = await call(OrchestratorTools.listProjects)
+        let other = try jsonList(result, key: "other")
+        XCTAssertEqual(other.map { $0["location"] as? String }, ["~/Desktop"])
+        XCTAssertEqual(other.first?["path"] as? String, desktop)
+        let agents = try XCTUnwrap(other.first?["terminals"] as? [[String: Any]])
+        XCTAssertEqual(agents.map { $0["id"] as? String }, [loose.id.description], "yalnız Claude")
+
+        let rows = try jsonList(await call(OrchestratorTools.listTerminals), key: "terminals")
+        XCTAssertEqual(rows.first?["project"] as? String, ProjectTree.otherTitle)
+        XCTAssertEqual(rows.first?["checkout"] as? String, "~/Desktop")
+        XCTAssertEqual(rows.first?["loose"] as? Bool, true)
+        XCTAssertEqual(toolbox.location(of: loose), "Other · ~/Desktop")
+    }
+
+    func testOtherIsOmittedWithoutLooseClaudeTerminals() async throws {
+        terminal("zsh", repo: "/tmp/scratch", provider: nil)
+        let text = await call(OrchestratorTools.listProjects).text
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        XCTAssertNil(object["other"])
+    }
+
     // MARK: - read_terminal
 
     func testReadClaudeTerminalReturnsTranscriptTail() async {

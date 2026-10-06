@@ -348,7 +348,7 @@ public final class RemoteService: RemoteServicing {
         let allRepos = await repos.repos()
         let managedPaths = Set(cfg.workspaces.map(\.path))
         // Karar 114: ağaç orchestrator'ın `list_projects`'iyle ortak tek kaynaktan.
-        let tree = ProjectTree.build(
+        let snapshot = ProjectTree.snapshot(
             favoritePaths: cfg.sidebarProjectPaths,
             repos: allRepos,
             workspaces: cfg.workspaces,
@@ -357,7 +357,7 @@ public final class RemoteService: RemoteServicing {
         // Döngü (map değil): `[String: Any]` Sendable değildir ve closure'dan
         // dönen değer bölge analizinde aktör sınırını geçemiyor.
         var projects: [[String: Any]] = []
-        for project in tree {
+        for project in snapshot.projects {
             var checkouts: [[String: Any]] = []
             for checkout in project.checkouts {
                 var dict: [String: Any] = [
@@ -370,13 +370,21 @@ public final class RemoteService: RemoteServicing {
             }
             projects.append(["name": project.name, "path": project.path, "checkouts": checkouts])
         }
+        // Karar 108/114: Projects ▸ Other — serbest terminaller dizinlerine göre.
+        var others: [[String: Any]] = []
+        for group in snapshot.others {
+            others.append([
+                "path": group.path, "label": group.label,
+                "agentIds": ProjectTree.byRecentActivity(group.terminals).map(\.description),
+            ])
+        }
 
         let favorited = Set(cfg.sidebarProjectPaths)
         let addable = allRepos
             .filter { !favorited.contains($0.path) && !managedPaths.contains($0.path) }
             .map { ["name": $0.name, "path": $0.path] }
 
-        await connection.send(type: "projects", payload: RemoteProtocol.projectsPayload(projects: projects, addable: addable))
+        await connection.send(type: "projects", payload: RemoteProtocol.projectsPayload(projects: projects, others: others, addable: addable))
     }
 
     // MARK: - Subscribe / Unsubscribe

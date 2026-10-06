@@ -220,23 +220,12 @@ public final class ShellContext {
         return projectName(at: repoPath)
     }
 
-    /// Karar 108: Projects ▸ `Other` grubu — serbest terminaller dizinlerine
-    /// göre, etiket sırasıyla. Grup içi sıra panelin ajan sıralamasıdır
-    /// (`AgentRow.Model.sorted`), burada terminal listesinin sırası korunur.
+    /// Karar 108: Projects ▸ `Other` grubu — kural ve gruplama `ProjectTree`'de
+    /// (telefon ve orchestrator ile ortak); sahiplik açık tab'ları da sayar.
+    /// Grup içi sıra panelin ajan sıralamasıdır (`AgentRow.Model.sorted`),
+    /// burada terminal listesinin sırası korunur.
     public var looseTerminalGroups: [LooseTerminalGroup] {
-        let loose = terminals.terminals.filter { navigation.isLooseTerminalPath($0.repoPath) }
-        let paths = loose.reduce(into: [String]()) { paths, meta in
-            if !paths.contains(meta.repoPath) { paths.append(meta.repoPath) }
-        }
-        return paths
-            .map { path in
-                LooseTerminalGroup(
-                    path: path,
-                    label: LooseTerminalPath.displayLabel(path),
-                    terminals: loose.filter { $0.repoPath == path }
-                )
-            }
-            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+        ProjectTree.looseGroups(terminals: terminals.terminals, ownedPaths: navigation.terminalOwnerPaths)
     }
 
     private func projectName(at path: String) -> String {

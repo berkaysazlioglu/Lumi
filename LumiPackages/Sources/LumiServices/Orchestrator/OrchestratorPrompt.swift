@@ -21,7 +21,8 @@ enum OrchestratorPrompt {
 
     Tools (from the "lumi" MCP server — they work on Lumi's live state):
     - list_projects: the Projects panel tree — projects, their checkouts (root + managed \
-    workspaces with branch) and the terminals in each.
+    workspaces with branch) and the terminals in each; terminals opened outside any project \
+    sit under `other` by folder (list_terminals marks them `loose`).
     - list_terminals: every open Claude terminal with id, title, project, checkout/branch, \
     status, `watched` and last activity; optional `query` filter.
     - read_terminal: the recent conversation of one terminal (its transcript) or its last \

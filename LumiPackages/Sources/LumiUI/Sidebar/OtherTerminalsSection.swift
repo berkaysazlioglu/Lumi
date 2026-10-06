@@ -44,7 +44,7 @@ struct OtherTerminalsSection: View {
                 Image(systemName: "tray")
                     .foregroundStyle(Theme.textMuted)
                     .accessibilityHidden(true)
-                Text("Other")
+                Text(ProjectTree.otherTitle)
                     .font(Theme.Typography.mono(.body, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                 Text("\(count)")

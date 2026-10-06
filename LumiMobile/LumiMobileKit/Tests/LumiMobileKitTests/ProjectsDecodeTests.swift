@@ -22,6 +22,27 @@ final class ProjectsDecodeTests: XCTestCase {
         XCTAssertEqual(snap.addable.map(\.path), ["/p/orca"])
     }
 
+    /// Mac decision 108/114: additive `others` — loose terminals by folder.
+    func testProjectsDecodesOtherGroupsAndToleratesTheirAbsence() {
+        let frame = """
+        {"v":1,"type":"projects","payload":{"projects":[],
+          "others":[{"path":"/Users/me/Desktop","label":"~/Desktop","agentIds":["t9"]},{"path":"/tmp"}]
+        }}
+        """
+        guard case .projects(let snap)? = PhoneProtocol.decodeServerMessage(frame) else {
+            return XCTFail("expected .projects")
+        }
+        XCTAssertEqual(snap.others.map(\.label), ["~/Desktop", "/tmp"], "label falls back to path")
+        XCTAssertEqual(snap.others[0].agentIds, ["t9"])
+        XCTAssertEqual(snap.others[1].agentIds, [])
+
+        let old = #"{"v":1,"type":"projects","payload":{"projects":[]}}"#
+        guard case .projects(let oldSnap)? = PhoneProtocol.decodeServerMessage(old) else {
+            return XCTFail("expected .projects")
+        }
+        XCTAssertTrue(oldSnap.others.isEmpty, "older Mac omits others")
+    }
+
     func testProjectsToleratesMissingAddableAndUnknownEnums() {
         let frame = """
         {"v":1,"type":"projects","payload":{"projects":[

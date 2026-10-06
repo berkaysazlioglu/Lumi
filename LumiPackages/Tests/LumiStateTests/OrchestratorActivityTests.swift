@@ -222,6 +222,30 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         XCTAssertEqual(feed.events.map(\.summary), ["Bitti."])
     }
 
+    /// Main'in `interruptInferred` sinyali status etkilerinden SONRA gelir:
+    /// bekleyen "bitti" "kesildi"ye döner, yarım mesaj özetlenmez.
+    func testInterruptedTurnIsReportedAsInterruptedNotFinished() async {
+        let meta = agent()
+        reply("Yarım kalan uzun bir cevap " + String(repeating: "x", count: 400))
+
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        coordinator.apply(.interruptInferred(meta.id))
+        await settle()
+
+        XCTAssertEqual(feed.events.map(\.kind), [.interrupted])
+        XCTAssertEqual(feed.events.first?.needsUser, false)
+        XCTAssertTrue(summarizer.requests.isEmpty, "kesilen turn LLM'e gitmez")
+        XCTAssertTrue(OrchestratorActivityNote.make(feed.events, now: Date()).contains("[interrupted]"))
+    }
+
+    /// Bekleyen bir bitiş yokken gelen bayat sinyal olay üretmez.
+    func testInterruptWithoutPendingFinishProducesNothing() async {
+        let meta = agent()
+        coordinator.apply(.interruptInferred(meta.id))
+        await settle()
+        XCTAssertTrue(feed.events.isEmpty)
+    }
+
     func testUnwatchedBouncesNonClaudeAndDisabledGateProduceNothing() async {
         let unwatched = agent(watched: false)
         coordinator.apply(.statusChanged(unwatched.id, .waitingUnseen))

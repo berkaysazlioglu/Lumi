@@ -42,8 +42,9 @@ public enum OrchestratorTools {
             description: """
             List the user's projects as shown in Lumi's Projects panel: each project, its checkouts \
             (the project root plus managed workspaces/worktrees with their branch) and the Claude Code \
-            terminals running in each checkout with their status and whether you watch them. Use this \
-            to understand where things are.
+            terminals running in each checkout with their status and whether you watch them. Terminals \
+            opened outside any project are listed under `other`, grouped by folder. Use this to \
+            understand where things are.
             """,
             inputSchema: #"{"type":"object","properties":{},"additionalProperties":false}"#
         ),

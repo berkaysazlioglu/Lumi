@@ -103,8 +103,10 @@ import LumiKit
     @Test func projectsPayloadShape() {
         let payload = RemoteProtocol.projectsPayload(
             projects: [["name": "p", "path": "/p", "checkouts": []]],
+            others: [["path": "/tmp", "label": "/tmp", "agentIds": ["t1"]]],
             addable: [["name": "orca", "path": "/p/orca"]])
         #expect((payload["projects"] as? [[String: Any]])?.count == 1)
+        #expect((payload["others"] as? [[String: Any]])?.first?["agentIds"] as? [String] == ["t1"])
         #expect((payload["addable"] as? [[String: String]])?.first?["path"] == "/p/orca")
     }
 }

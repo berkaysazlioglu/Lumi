@@ -226,20 +226,48 @@ public struct ProjectNode: Decodable, Sendable, Equatable, Identifiable {
     }
 }
 
-public struct ProjectsSnapshot: Decodable, Sendable, Equatable {
-    public let projects: [ProjectNode]
-    public let addable: [Repo]
+/// Projects ▸ Other (Mac decision 108/114): terminals opened outside any
+/// project, grouped by folder. `label` is the Mac's short path (`~/Desktop`).
+public struct OtherGroupNode: Decodable, Sendable, Equatable, Identifiable {
+    public let path: String
+    public let label: String
+    public let agentIds: [String]
+    public var id: String { path }
 
-    public init(projects: [ProjectNode], addable: [Repo]) {
-        self.projects = projects; self.addable = addable
+    public init(path: String, label: String, agentIds: [String]) {
+        self.path = path; self.label = label; self.agentIds = agentIds
     }
 
-    private enum CodingKeys: String, CodingKey { case projects, addable }
+    private enum CodingKeys: String, CodingKey { case path, label, agentIds }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let path = try c.decode(String.self, forKey: .path)
+        self.init(
+            path: path,
+            label: try c.decodeIfPresent(String.self, forKey: .label) ?? path,
+            agentIds: try c.decodeIfPresent([String].self, forKey: .agentIds) ?? []
+        )
+    }
+}
+
+public struct ProjectsSnapshot: Decodable, Sendable, Equatable {
+    public let projects: [ProjectNode]
+    /// Additive: an older Mac omits it → empty.
+    public let others: [OtherGroupNode]
+    public let addable: [Repo]
+
+    public init(projects: [ProjectNode], others: [OtherGroupNode] = [], addable: [Repo]) {
+        self.projects = projects; self.others = others; self.addable = addable
+    }
+
+    private enum CodingKeys: String, CodingKey { case projects, others, addable }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             projects: try c.decodeIfPresent([ProjectNode].self, forKey: .projects) ?? [],
+            others: try c.decodeIfPresent([OtherGroupNode].self, forKey: .others) ?? [],
             addable: try c.decodeIfPresent([Repo].self, forKey: .addable) ?? []
         )
     }
@@ -276,19 +304,22 @@ public struct Welcome: Decodable, Sendable, Equatable {
     public let projects: [ProjectNode]?
     /// Addable repos (additive; nil if omitted by an older Mac).
     public let addable: [Repo]?
+    /// Projects ▸ Other groups (additive; nil if omitted by an older Mac/relay).
+    public let others: [OtherGroupNode]?
 
     public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil,
-                projects: [ProjectNode]? = nil, addable: [Repo]? = nil) {
+                projects: [ProjectNode]? = nil, addable: [Repo]? = nil, others: [OtherGroupNode]? = nil) {
         self.macOnline = macOnline
         self.lastSeenAt = lastSeenAt
         self.sessions = sessions
         self.repos = repos
         self.projects = projects
         self.addable = addable
+        self.others = others
     }
 
     private enum CodingKeys: String, CodingKey {
-        case macOnline, lastSeenAt, sessions, repos, projects, addable
+        case macOnline, lastSeenAt, sessions, repos, projects, addable, others
     }
 
     public init(from decoder: Decoder) throws {
@@ -299,6 +330,7 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.repos = try c.decodeIfPresent([Repo].self, forKey: .repos)
         self.projects = try c.decodeIfPresent([ProjectNode].self, forKey: .projects)
         self.addable = try c.decodeIfPresent([Repo].self, forKey: .addable)
+        self.others = try c.decodeIfPresent([OtherGroupNode].self, forKey: .others)
     }
 }
 

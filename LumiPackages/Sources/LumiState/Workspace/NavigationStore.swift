@@ -157,14 +157,16 @@ public final class NavigationStore {
 
     // MARK: - Serbest terminaller (karar 108)
 
-    /// Yol hiçbir projenin checkout'u (kök + yönetilen workspace'ler) ya da
-    /// açık bir tab değilse serbesttir. Proje köprüsü enjekte edilmemişse
-    /// yalnız `openTabs` sahiplik sayılır.
+    /// Terminal sahipliği sayılan yollar: projelerin checkout'ları (kök +
+    /// yönetilen workspace'ler) ve açık tab'lar. Proje köprüsü enjekte
+    /// edilmemişse yalnız `openTabs`.
+    public var terminalOwnerPaths: [String] {
+        (projectOrder?() ?? []).flatMap { projectCheckouts?($0) ?? [$0] } + openTabs
+    }
+
+    /// Yol `terminalOwnerPaths`'ten hiçbirine ait değilse serbesttir.
     public func isLooseTerminalPath(_ path: String) -> Bool {
-        let checkouts = (projectOrder?() ?? []).flatMap { projectCheckouts?($0) ?? [$0] }
-        return LooseTerminalRule.isLoose(
-            path: path, projectPaths: checkouts, workspacePaths: [], openTabs: openTabs
-        )
+        LooseTerminalRule.isLoose(path: path, projectPaths: terminalOwnerPaths, workspacePaths: [], openTabs: [])
     }
 
     /// Terminale gitmenin TEK kapısı: serbest terminal hiçbir zaman repo tab'ı

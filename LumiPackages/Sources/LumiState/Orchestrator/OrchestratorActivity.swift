@@ -12,6 +12,9 @@ public struct OrchestratorEvent: Identifiable, Equatable, Sendable {
         case needsDecision
         /// Çalışırken hata durumuna düştü.
         case failed
+        /// Turn bitmeden kesildi (Esc/Ctrl+C ya da telefondan Stop) — main'in
+        /// `TerminalEvent.interruptInferred` sinyali.
+        case interrupted
     }
 
     public let id: UUID
@@ -100,6 +103,7 @@ public enum OrchestratorActivityNote {
             case .finished: tag = event.needsUser ? "finished, asks the user" : "finished"
             case .needsDecision: tag = "awaiting decision"
             case .failed: tag = "error"
+            case .interrupted: tag = "interrupted"
             }
             let summary = event.summary.split(whereSeparator: \.isNewline).joined(separator: " ")
             return "- [\(tag)] \"\(event.terminalTitle)\" (\(event.location), id \(event.terminalID)), "

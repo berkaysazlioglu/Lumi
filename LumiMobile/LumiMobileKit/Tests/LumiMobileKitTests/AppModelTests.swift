@@ -245,6 +245,14 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.repos.map(\.path), ["/a/lumi", "/a/beta"])
     }
 
+    func testWelcomeAppliesOtherGroups() {
+        let (model, _, _) = makeModel()
+        model.handle(.welcome(Welcome(macOnline: true, lastSeenAt: nil, sessions: [],
+                                      projects: [], addable: [],
+                                      others: [OtherGroupNode(path: "/tmp", label: "/tmp", agentIds: ["t1"])])))
+        XCTAssertEqual(model.projectsSnapshot.others.map(\.path), ["/tmp"])
+    }
+
     func testReposMessageUpdatesListAndMarksMacOnline() {
         let (model, _, _) = makeModel()
         model.handle(.repos([Repo(name: "lumi", path: "/a/lumi")]))

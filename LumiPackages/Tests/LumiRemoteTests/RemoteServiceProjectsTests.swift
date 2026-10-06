@@ -30,6 +30,18 @@ extension FakeRelayConnection {
         return list.compactMap { $0["path"] }
     }
 
+    /// `projects` frame'indeki `others` grupları (path → agentIds).
+    func otherGroups() -> [String: [String]] {
+        guard let payload = sent.first(where: { $0.type == "projects" })?.payload,
+              let list = payload["others"] as? [[String: Any]] else { return [:] }
+        var groups: [String: [String]] = [:]
+        for group in list {
+            guard let path = group["path"] as? String else { continue }
+            groups[path] = group["agentIds"] as? [String] ?? []
+        }
+        return groups
+    }
+
     /// `projects` frame sayısı.
     func projectsCount() -> Int { sent.filter { $0.type == "projects" }.count }
 
@@ -85,6 +97,49 @@ extension FakeRelayConnection {
         // Assert: projects frame içeriği
         #expect(await conn.projectPaths() == ["/p/unco"])
         #expect(await conn.firstCheckoutKind() == "original")
+
+        svc.stop()
+    }
+
+    // MARK: - Karar 108/114: Other
+
+    /// Hiçbir checkout'a ait olmayan terminal `others`'ta dizinine göre gelir;
+    /// checkout terminali orada görünmez.
+    @Test func looseTerminalsArriveUnderOthers() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let base = Date(timeIntervalSince1970: 0)
+        let inProject = TerminalMeta(id: TerminalID(), name: "a", repoPath: "/p/unco", createdAt: base)
+        let older = TerminalMeta(id: TerminalID(), name: "b", repoPath: "/tmp/scratch", createdAt: base)
+        let newer = TerminalMeta(id: TerminalID(), name: "c", repoPath: "/tmp/scratch", createdAt: base.addingTimeInterval(9))
+        term.metas = [inProject, older, newer]
+        let repos = FakeRepoService(repos: [
+            Repo(name: "unco", path: "/p/unco", isGitRepo: true, source: .standalone)
+        ])
+        let cfg = FakeConfigService()
+        await cfg.seed(AppConfig(
+            projectsRoot: "",
+            additionalPaths: [],
+            aiProvider: .claude,
+            theme: "dark",
+            terminalFontSize: 13,
+            terminalFontFamily: "",
+            terminalCursorStyle: "block",
+            terminalCursorBlink: true,
+            notifications: .defaults,
+            sidebarProjectPaths: ["/p/unco"]
+        ))
+
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: repos,
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } }, config: cfg
+        )
+        await svc.start()
+        await conn.injectInbound(type: "welcome", payload: [:])
+        try await conn.waitForSent(types: ["projects"])
+
+        #expect(await conn.otherGroups() == ["/tmp/scratch": [newer.id.description, older.id.description]])
 
         svc.stop()
     }

@@ -118,7 +118,7 @@ extension OrchestratorToolbox {
 
     /// proje · checkout · dal (Activity kartı ve bağlam notu — Faz 4).
     func location(of meta: TerminalMeta) -> String {
-        let location = checkoutLocations()[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
+        let location = terminalLocations()[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
         return [location.project, location.checkout, location.branch].compactMap { $0 }.joined(separator: " · ")
     }
 

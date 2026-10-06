@@ -1,8 +1,9 @@
 import Foundation
 
 /// Projects panelinin `Proje → Checkout → Ajan` ağacı — view'sız, tek kaynak
-/// (karar 91 / 114). Telefonun `projects` anlık görüntüsü ve orchestrator'ın
-/// `list_projects` aracı aynı ağaçtan beslenir ki iki yüzey ayrışmasın.
+/// (karar 91 / 114). Telefonun `projects` anlık görüntüsü, orchestrator'ın
+/// `list_projects` aracı ve panelin `Other` grubu (karar 108) aynı ağaçtan
+/// beslenir ki yüzeyler ayrışmasın.
 public struct ProjectTreeNode: Sendable, Equatable {
     public let name: String
     public let path: String
@@ -43,12 +44,28 @@ public struct ProjectCheckoutNode: Sendable, Equatable {
     }
 }
 
+/// Ağaç + ağaçtaki hiçbir checkout'a ait olmayan terminallerin `Other`
+/// grupları (karar 108) — telefonun ve orchestrator'ın tek okuması.
+public struct ProjectTreeSnapshot: Sendable, Equatable {
+    public let projects: [ProjectTreeNode]
+    public let others: [LooseTerminalGroup]
+
+    public init(projects: [ProjectTreeNode], others: [LooseTerminalGroup]) {
+        self.projects = projects
+        self.others = others
+    }
+}
+
 public enum ProjectTree {
     /// Kökün checkout başlığı (Projects paneliyle aynı).
     public static let originalTitle = "main"
+    /// Serbest terminal grubunun başlığı (karar 108).
+    public static let otherTitle = "Other"
 
     /// Favori projeler (sıra korunur) → kökü + workspace'leri → terminaller.
-    /// Repo listesinde olmayan favori atlanır.
+    /// Repo listesinde olmayan favori ve kendisi yönetilen bir workspace olan
+    /// favori atlanır — o, kendi projesinin altında durur (Projects paneli
+    /// `ProjectWorkspaceStore.addedProjects` paritesi).
     public static func build(
         favoritePaths: [String],
         repos: [Repo],
@@ -56,16 +73,14 @@ public enum ProjectTree {
         terminals: [TerminalMeta]
     ) -> [ProjectTreeNode] {
         let repoByPath = Dictionary(repos.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        let managedPaths = Set(workspaces.map(\.path))
 
         func terminalIDs(at path: String) -> [TerminalID] {
-            terminals
-                .filter { $0.repoPath == path }
-                .sorted { $0.lastActivityAt > $1.lastActivityAt }
-                .map(\.id)
+            byRecentActivity(terminals.filter { $0.repoPath == path })
         }
 
         return favoritePaths.compactMap { favoritePath in
-            guard let repo = repoByPath[favoritePath] else { return nil }
+            guard !managedPaths.contains(favoritePath), let repo = repoByPath[favoritePath] else { return nil }
             let original = ProjectCheckoutNode(
                 kind: .original, title: originalTitle, branch: nil,
                 scm: (repo.isGitRepo ? WorkspaceSCM.git : WorkspaceSCM.none).rawValue,
@@ -82,5 +97,54 @@ public enum ProjectTree {
                 }
             return ProjectTreeNode(name: repo.name, path: repo.path, checkouts: [original] + managed)
         }
+    }
+
+    /// Ağaç + `Other` grupları. Sahiplik ağacın checkout yollarıdır; Mac
+    /// panelinde açık repo tab'ı da sahiplik sayılır (`NavigationStore`), uzak
+    /// yüzeylerin tab'ı yoktur.
+    public static func snapshot(
+        favoritePaths: [String],
+        repos: [Repo],
+        workspaces: [ProjectWorkspace],
+        terminals: [TerminalMeta],
+        home: String = NSHomeDirectory()
+    ) -> ProjectTreeSnapshot {
+        let projects = build(favoritePaths: favoritePaths, repos: repos, workspaces: workspaces, terminals: terminals)
+        let owned = projects.flatMap { $0.checkouts.map(\.path) }
+        return ProjectTreeSnapshot(
+            projects: projects,
+            others: looseGroups(terminals: terminals, ownedPaths: owned, home: home)
+        )
+    }
+
+    /// Projects ▸ `Other` (karar 108): `ownedPaths`'e girmeyen terminaller
+    /// dizinlerine göre, etiket sırasıyla. Grup içi sıra girdinin sırasıdır —
+    /// Mac paneli kendi ajan sıralamasını uygular, uzak yüzeyler
+    /// `byRecentActivity` kullanır.
+    public static func looseGroups(
+        terminals: [TerminalMeta],
+        ownedPaths: [String],
+        home: String = NSHomeDirectory()
+    ) -> [LooseTerminalGroup] {
+        let loose = terminals.filter {
+            LooseTerminalRule.isLoose(path: $0.repoPath, projectPaths: ownedPaths, workspacePaths: [], openTabs: [], home: home)
+        }
+        let paths = loose.reduce(into: [String]()) { paths, meta in
+            if !paths.contains(meta.repoPath) { paths.append(meta.repoPath) }
+        }
+        return paths
+            .map { path in
+                LooseTerminalGroup(
+                    path: path,
+                    label: LooseTerminalPath.displayLabel(path, home: home),
+                    terminals: loose.filter { $0.repoPath == path }
+                )
+            }
+            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+    }
+
+    /// Uzak yüzeylerin ajan sırası: en yeni aktivite önce.
+    public static func byRecentActivity(_ terminals: [TerminalMeta]) -> [TerminalID] {
+        terminals.sorted { $0.lastActivityAt > $1.lastActivityAt }.map(\.id)
     }
 }

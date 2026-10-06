@@ -22,12 +22,14 @@ export class Bridge {
       ? this.registry.attachMac(hello.token, client)
       : this.registry.attachPhone(hello.token, client)
     if (hello.role === 'phone') {
-      const proj = (room.projects as { projects?: unknown; addable?: unknown } | null) ?? null
+      const proj = (room.projects as { projects?: unknown; others?: unknown; addable?: unknown } | null) ?? null
       client.send(envelope('welcome', {
         sessions: room.sessions ?? [],
         repos: room.repos ?? [],
         projects: proj?.projects ?? [],
         addable: proj?.addable ?? [],
+        // Projects ▸ Other (Mac karar 108/114) — additive; eski Mac'te boş.
+        others: proj?.others ?? [],
         macOnline: room.mac !== null,
         lastSeenAt: room.lastSeenAt,
       }))

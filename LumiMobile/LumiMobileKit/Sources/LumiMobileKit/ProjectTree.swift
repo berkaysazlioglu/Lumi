@@ -22,6 +22,12 @@ public struct ProjectRowData: Sendable, Equatable, Identifiable {
     public var id: String { node.path }
 }
 
+public struct OtherGroupRowData: Sendable, Equatable, Identifiable {
+    public let node: OtherGroupNode
+    public let agents: [AgentRowData]
+    public var id: String { node.path }
+}
+
 /// Attention rule (Mac `TerminalAttention` parity, decision 77): an unselected
 /// terminal whose turn closed unseen / is awaiting a decision. `waiting-seen`
 /// is NOT re-highlighted.
@@ -36,22 +42,47 @@ public func terminalNeedsAttention(status: String, isSelected: Bool) -> Bool {
 public func assembleProjectTree(snapshot: ProjectsSnapshot,
                                 sessions: [SessionMeta],
                                 selectedId: String?) -> [ProjectRowData] {
-    let byId = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let join = AgentJoin(sessions: sessions, selectedId: selectedId)
     return snapshot.projects.map { project in
         ProjectRowData(node: project, checkouts: project.checkouts.map { checkout in
-            let agents = checkout.agentIds.compactMap { id -> AgentRowData? in
-                guard let s = byId[id] else { return nil }
-                return AgentRowData(
-                    id: s.id,
-                    title: (s.title?.isEmpty == false ? s.title! : s.repoName),
-                    provider: s.provider,
-                    badge: s.badge,
-                    activity: s.activity,
-                    lastActivityAt: s.lastActivityAt,
-                    needsAttention: terminalNeedsAttention(status: s.status, isSelected: s.id == selectedId))
-            }
-            return CheckoutRowData(node: checkout, agents: agents)
+            CheckoutRowData(node: checkout, agents: join.rows(checkout.agentIds))
         })
+    }
+}
+
+/// Projects ▸ Other, joined against `sessions` the same way. Groups whose
+/// agents are not in `sessions` yet are dropped (nothing to show).
+public func assembleOtherGroups(snapshot: ProjectsSnapshot,
+                                sessions: [SessionMeta],
+                                selectedId: String?) -> [OtherGroupRowData] {
+    let join = AgentJoin(sessions: sessions, selectedId: selectedId)
+    return snapshot.others.compactMap { group in
+        let agents = join.rows(group.agentIds)
+        return agents.isEmpty ? nil : OtherGroupRowData(node: group, agents: agents)
+    }
+}
+
+private struct AgentJoin {
+    let byId: [String: SessionMeta]
+    let selectedId: String?
+
+    init(sessions: [SessionMeta], selectedId: String?) {
+        byId = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        self.selectedId = selectedId
+    }
+
+    func rows(_ ids: [String]) -> [AgentRowData] {
+        ids.compactMap { id -> AgentRowData? in
+            guard let s = byId[id] else { return nil }
+            return AgentRowData(
+                id: s.id,
+                title: (s.title?.isEmpty == false ? s.title! : s.repoName),
+                provider: s.provider,
+                badge: s.badge,
+                activity: s.activity,
+                lastActivityAt: s.lastActivityAt,
+                needsAttention: terminalNeedsAttention(status: s.status, isSelected: s.id == selectedId))
+        }
     }
 }
 

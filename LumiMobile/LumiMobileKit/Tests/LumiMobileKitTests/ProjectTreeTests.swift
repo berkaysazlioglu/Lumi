@@ -24,6 +24,20 @@ final class ProjectTreeTests: XCTestCase {
         XCTAssertEqual(agents[0].activity, .running)
     }
 
+    func testOtherGroupsJoinSessionsAndDropEmptyGroups() {
+        let snapshot = ProjectsSnapshot(projects: [], others: [
+            OtherGroupNode(path: "/tmp", label: "/tmp", agentIds: ["t1", "missing"]),
+            OtherGroupNode(path: "/gone", label: "/gone", agentIds: ["missing"]),
+        ], addable: [])
+        let sessions = [SessionMeta(id: "t1", repoName: "tmp", status: "waiting-unseen", cols: 80, rows: 24)]
+
+        let groups = assembleOtherGroups(snapshot: snapshot, sessions: sessions, selectedId: nil)
+
+        XCTAssertEqual(groups.map(\.id), ["/tmp"])
+        XCTAssertEqual(groups[0].agents.map(\.id), ["t1"])
+        XCTAssertTrue(groups[0].agents[0].needsAttention)
+    }
+
     func testAttention() {
         XCTAssertTrue(terminalNeedsAttention(status: "waiting-unseen", isSelected: false))
         XCTAssertFalse(terminalNeedsAttention(status: "waiting-unseen", isSelected: true))

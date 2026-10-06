@@ -186,6 +186,8 @@ struct OrchestratorActivityCard: View {
             return ("hand.raised.fill", Theme.warning, "awaiting decision")
         case .failed:
             return ("exclamationmark.triangle.fill", Theme.error, "error")
+        case .interrupted:
+            return ("stop.circle.fill", Theme.textSecondary, "interrupted")
         }
     }
 }

@@ -25,12 +25,14 @@ struct ProjectsView: View {
         NavigationStack {
             List {
                 if !model.macOnline { offlineBanner }
-                if model.projectTree.isEmpty {
+                let others = model.otherGroups
+                if model.projectTree.isEmpty && others.isEmpty {
                     emptyState
                 } else {
                     ForEach(model.projectTree) { project in
                         projectSection(project)
                     }
+                    if !others.isEmpty { otherSection(others) }
                 }
             }
             .listStyle(.plain)
@@ -145,6 +147,50 @@ struct ProjectsView: View {
             .textCase(nil)
         }
     }
+
+    /// Projects ▸ Other (Mac decision 108): terminals opened outside any project,
+    /// grouped by folder. No `+` — the phone starts agents only in checkouts.
+    @ViewBuilder
+    private func otherSection(_ groups: [OtherGroupRowData]) -> some View {
+        let collapsed = collapsedProjects.contains(Self.otherSectionID)
+        Section {
+            if !collapsed {
+                ForEach(groups) { group in
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(group.node.label).font(.subheadline.weight(.medium))
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                    }
+                    .listRowSeparator(.hidden)
+                    ForEach(group.agents) { agent in
+                        agentRow(agent)
+                    }
+                }
+            }
+        } header: {
+            Button {
+                if !collapsedProjects.insert(Self.otherSectionID).inserted {
+                    collapsedProjects.remove(Self.otherSectionID)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "tray").foregroundStyle(.secondary)
+                    Text("Other").font(.headline).foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .textCase(nil)
+        }
+    }
+
+    /// Collapse key for the Other section; NUL keeps it apart from project paths.
+    private static let otherSectionID = "\u{0}other"
 
     @ViewBuilder
     private func checkoutHeader(_ checkout: CheckoutRowData, in project: ProjectRowData) -> some View {

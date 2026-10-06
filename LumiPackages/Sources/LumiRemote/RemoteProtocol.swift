@@ -92,8 +92,11 @@ enum RemoteProtocol {
     }
 
     /// `projects` payload: favorites tree + addable pool (Mac → phone).
-    static func projectsPayload(projects: [[String: Any]], addable: [[String: String]]) -> [String: Any] {
-        ["projects": projects, "addable": addable]
+    /// `others` (additive, karar 114): Projects ▸ Other — `{path,label,agentIds}`.
+    static func projectsPayload(
+        projects: [[String: Any]], others: [[String: Any]] = [], addable: [[String: String]]
+    ) -> [String: Any] {
+        ["projects": projects, "others": others, "addable": addable]
     }
 
     /// `scrollback` payload: ilk bağlantıda terminal geçmişini gönderir.

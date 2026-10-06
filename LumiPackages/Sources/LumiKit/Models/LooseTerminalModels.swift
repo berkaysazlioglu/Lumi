@@ -11,11 +11,12 @@ public enum LooseTerminalRule {
         path: String,
         projectPaths: some Sequence<String>,
         workspacePaths: some Sequence<String>,
-        openTabs: some Sequence<String>
+        openTabs: some Sequence<String>,
+        home: String = NSHomeDirectory()
     ) -> Bool {
-        let target = LooseTerminalPath.normalized(path)
+        let target = LooseTerminalPath.normalized(path, home: home)
         let owned = Array(projectPaths) + Array(workspacePaths) + Array(openTabs)
-        return !owned.contains { LooseTerminalPath.normalized($0) == target }
+        return !owned.contains { LooseTerminalPath.normalized($0, home: home) == target }
     }
 }
 

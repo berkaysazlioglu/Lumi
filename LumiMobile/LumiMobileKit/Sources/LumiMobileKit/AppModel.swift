@@ -210,7 +210,9 @@ public final class AppModel {
             if let metas = welcome.sessions { applySessions(metas) }
             if let repos = welcome.repos { self.repos = repos }
             if let projects = welcome.projects {
-                projectsSnapshot = ProjectsSnapshot(projects: projects, addable: welcome.addable ?? [])
+                projectsSnapshot = ProjectsSnapshot(
+                    projects: projects, others: welcome.others ?? [], addable: welcome.addable ?? []
+                )
             }
 
         case .sessions(let metas):
@@ -603,6 +605,11 @@ public final class AppModel {
     /// View-ready tree: joins the snapshot's agent ids against live `sessions`.
     public var projectTree: [ProjectRowData] {
         assembleProjectTree(snapshot: projectsSnapshot, sessions: sessions, selectedId: activeSessionId)
+    }
+
+    /// Projects ▸ Other: loose terminals by folder, joined like `projectTree`.
+    public var otherGroups: [OtherGroupRowData] {
+        assembleOtherGroups(snapshot: projectsSnapshot, sessions: sessions, selectedId: activeSessionId)
     }
 
     /// `waiting` first (design §4.3), then error/working/idle; within a group sorted by repo name.

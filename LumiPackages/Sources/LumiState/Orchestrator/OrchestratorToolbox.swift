@@ -84,11 +84,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     // MARK: - list_projects
 
     private func listProjects() -> OrchestratorToolResult {
-        let tree = projectTree()
-        guard !tree.isEmpty else {
-            return OrchestratorToolResult(text: "No projects in Lumi's Projects panel yet.")
-        }
-        let projects: [[String: Any]] = tree.map { project in
+        let snapshot = projectSnapshot()
+        let projects: [[String: Any]] = snapshot.projects.map { project in
             [
                 "name": project.name,
                 "path": project.path,
@@ -97,21 +94,35 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
                         "title": checkout.title,
                         "kind": checkout.kind.rawValue,
                         "path": checkout.path,
-                        "terminals": checkout.terminalIDs.compactMap(terminals.meta(for:))
-                            .filter(Self.isClaude).map(terminalSummary),
+                        "terminals": claudeSummaries(checkout.terminalIDs.compactMap(terminals.meta(for:))),
                     ]
                     if let branch = checkout.branch { dict["branch"] = branch }
                     return dict
                 },
             ]
         }
-        return OrchestratorToolResult(text: OrchestratorToolFormat.json(["projects": projects]))
+        // Karar 108: projesiz terminaller panelin `Other` grubunda, dizinlerine göre.
+        let others: [[String: Any]] = snapshot.others.compactMap { group in
+            let summaries = claudeSummaries(group.terminals.sorted { $0.lastActivityAt > $1.lastActivityAt })
+            guard !summaries.isEmpty else { return nil }
+            return ["location": group.label, "path": group.path, "terminals": summaries]
+        }
+        guard !projects.isEmpty || !others.isEmpty else {
+            return OrchestratorToolResult(text: "No projects in Lumi's Projects panel yet.")
+        }
+        var payload: [String: Any] = ["projects": projects]
+        if !others.isEmpty { payload["other"] = others }
+        return OrchestratorToolResult(text: OrchestratorToolFormat.json(payload))
+    }
+
+    private func claudeSummaries(_ metas: [TerminalMeta]) -> [[String: Any]] {
+        metas.filter(Self.isClaude).map(terminalSummary)
     }
 
     // MARK: - list_terminals
 
     private func listTerminals(query: String?) -> OrchestratorToolResult {
-        let locations = checkoutLocations()
+        let locations = terminalLocations()
         let filter = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let rows: [[String: Any]] = terminals.terminals
             .filter(Self.isClaude)
@@ -202,10 +213,12 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         let project: String
         let checkout: String?
         let branch: String?
+        /// Projesiz terminal (Projects ▸ Other, karar 108): `checkout` dizinin etiketidir.
+        var isLoose = false
     }
 
-    func projectTree() -> [ProjectTreeNode] {
-        ProjectTree.build(
+    func projectSnapshot() -> ProjectTreeSnapshot {
+        ProjectTree.snapshot(
             favoritePaths: workspaces.sidebarProjectPaths,
             repos: repos.repos,
             workspaces: workspaces.records,
@@ -214,11 +227,25 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     }
 
     func checkoutLocations() -> [String: Location] {
+        Self.checkoutLocations(of: projectSnapshot().projects)
+    }
+
+    private static func checkoutLocations(of projects: [ProjectTreeNode]) -> [String: Location] {
         var locations: [String: Location] = [:]
-        for project in projectTree() {
+        for project in projects {
             for checkout in project.checkouts {
                 locations[checkout.path] = Location(project: project.name, checkout: checkout.title, branch: checkout.branch)
             }
+        }
+        return locations
+    }
+
+    /// Terminal yolu → Projects'teki yeri: checkout ya da `Other` dizini.
+    func terminalLocations() -> [String: Location] {
+        let snapshot = projectSnapshot()
+        var locations = Self.checkoutLocations(of: snapshot.projects)
+        for group in snapshot.others {
+            locations[group.path] = Location(project: ProjectTree.otherTitle, checkout: group.label, branch: nil, isLoose: true)
         }
         return locations
     }
@@ -229,7 +256,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         checkoutLocations()[path] ?? repos.repo(at: path).map { _ in fallbackLocation(for: path) }
     }
 
-    /// Projects panelinde olmayan bir yolda koşan terminal (ör. favoriden çıkarılmış proje).
+    /// Ağaçta da `Other`'da da olmayan yol — `resolveCheckout`'un bilinen
+    /// repo kökü (ör. favoriden çıkarılmış proje).
     func fallbackLocation(for path: String) -> Location {
         Location(project: repos.repo(at: path)?.name ?? (path as NSString).lastPathComponent, checkout: nil, branch: nil)
     }
@@ -254,6 +282,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         row["path"] = meta.repoPath
         if let checkout = location.checkout { row["checkout"] = checkout }
         if let branch = location.branch { row["branch"] = branch }
+        if location.isLoose { row["loose"] = true }
         if terminals.isMinimized(meta.id) { row["minimized"] = true }
         if terminals.activeTerminalID == meta.id { row["focused"] = true }
         return row

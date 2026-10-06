@@ -264,6 +264,19 @@ test('telefon hello → welcome içinde projects ve addable gelir (mac önce cac
   expect(phone.last().type).toBe('welcome')
   expect(phone.last().payload.projects).toEqual([{ name: 'p', path: '/p', checkouts: [] }])
   expect(phone.last().payload.addable).toEqual([])
+  expect(phone.last().payload.others).toEqual([])
+})
+
+test('telefon hello → welcome Other gruplarını (others) da taşır', () => {
+  const { bridge } = setup()
+  const mac = new FakeClient()
+  const macSession = bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+  const others = [{ path: '/tmp', label: '/tmp', agentIds: ['t1'] }]
+  macSession.room.projects = { projects: [], others, addable: [] }
+
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  expect(phone.last().payload.others).toEqual(others)
 })
 
 test('telefon command add_project → mac\'e forward edilir', () => {

@@ -13,6 +13,9 @@ import LumiKit
 /// - **Oturma süresi:** Claude alt ajan/compaction sırasında kısa süre
 ///   `waiting`'e düşüp geri dönebilir; olay `settleDelay` boyunca durum
 ///   değişmezse üretilir.
+/// - **Kesme:** `interruptInferred` aynı adımın status etkilerinden SONRA
+///   gelir; bekleyen "bitti" olayı "kesildi"ye döner — yarım mesaj bitmiş iş
+///   gibi özetlenmez, LLM'e gidilmez.
 /// - **Özet:** son asistan mesajı deterministik okunur; kısaysa olduğu gibi,
 ///   uzunsa haiku ile özetlenir (başarısızsa kırpılmış metin). Karar beklemede
 ///   LLM'e gidilmez.
@@ -98,7 +101,9 @@ public final class TerminalDigestCoordinator {
         case .claudeSessionIDChanged(let id, let session):
             if let meta = terminals.meta(for: id) { watchList.adopt(meta) }
             watchList.sessionChanged(id, to: session)
-        case .titleChanged, .providerChanged, .codexSessionIDChanged, .interruptInferred, .bell, .writeFailed, .viewFocused,
+        case .interruptInferred(let id):
+            if settleTasks[id] != nil { schedule(id, .interrupted) }
+        case .titleChanged, .providerChanged, .codexSessionIDChanged, .bell, .writeFailed, .viewFocused,
              .stalled, .linkActivated:
             break
         }
@@ -123,7 +128,7 @@ public final class TerminalDigestCoordinator {
     /// Oturma süresi sonunda olay hâlâ geçerli mi?
     private func isStillCurrent(_ id: TerminalID, _ kind: OrchestratorEvent.Kind) -> Bool {
         switch kind {
-        case .finished: return statuses[id]?.isWaiting == true
+        case .finished, .interrupted: return statuses[id]?.isWaiting == true
         case .failed: return statuses[id] == .error
         case .needsDecision: return terminals.awaitingDecisionIDs.contains(id)
         }
@@ -146,6 +151,9 @@ public final class TerminalDigestCoordinator {
     func digest(for meta: TerminalMeta, kind: OrchestratorEvent.Kind) async -> TerminalDigest {
         if kind == .needsDecision {
             return TerminalDigest(summary: "Waiting for a permission or an answer — open the terminal to respond.", needsUser: true)
+        }
+        if kind == .interrupted {
+            return TerminalDigest(summary: "The turn was interrupted before it finished.", needsUser: false)
         }
         guard let message = await toolbox.lastAgentMessage(of: meta) else {
             return TerminalDigest(summary: kind == .failed ? "Stopped with an error." : "Finished its turn.", needsUser: false)
