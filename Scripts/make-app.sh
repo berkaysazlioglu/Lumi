@@ -52,6 +52,14 @@ if [ -f "$LOCAL_OVERRIDES" ]; then
   source "$LOCAL_OVERRIDES"
 fi
 
+# --install (notarize'sız): bundle geçici dizinde üretilir, yalnız /Applications'a
+# kurulur — dist/ dokunulmaz. --notarize ile dağıtım paketleri için dist/ kullanılır.
+if [ "$INSTALL" -eq 1 ] && [ "$NOTARIZE" -eq 0 ]; then
+  DIST="$(mktemp -d -t lumi-build)"
+  trap 'rm -rf "$DIST"' EXIT
+fi
+APP="$DIST/Lumi.app"
+
 echo "▸ Release build…"
 # NEDEN xcodebuild (swift build DEĞİL): `swift build`'in ürettiği Bundle.module
 # accessor'ı bundle'ı yalnız app kökünde ve build makinesindeki mutlak .build
