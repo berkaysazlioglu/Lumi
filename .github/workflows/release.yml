@@ -24,15 +24,10 @@ jobs:
             exit 1
           fi
 
+  # Yalnız Apple Silicon (arm64) — Intel build'i kaldırıldı (karar 118).
   build:
     needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest      # arm64
-          - os: macos-15-intel    # x86_64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Import macOS signing certificate
@@ -63,7 +58,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.os }}
+          name: release-arm64
           path: |
             dist/*.zip
             dist/*.dmg
