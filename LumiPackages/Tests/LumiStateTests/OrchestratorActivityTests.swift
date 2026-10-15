@@ -144,7 +144,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         reply("Testler yeşil. Commit atayım mı?")
 
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 1)
 
         XCTAssertEqual(feed.events.count, 1)
         let event = feed.events.first
@@ -162,14 +162,14 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         summarizer.stub(.success(TerminalDigest(summary: "Özet", needsUser: false)))
 
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 1)
         XCTAssertEqual(feed.events.first?.summary, "Özet")
         XCTAssertEqual(summarizer.requests.count, 1)
 
         summarizer.stub(.failure(.digestFailed(detail: "x")))
         coordinator.apply(.statusChanged(meta.id, .working))
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 2)
         let fallback = feed.events.first?.summary ?? ""
         XCTAssertTrue(fallback.hasSuffix("(truncated)"), fallback)
     }
@@ -199,7 +199,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         summarizer.stub(.success(TerminalDigest(summary: "2 karar gerekli: … mi olsun?", needsUser: true)))
 
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 1)
         XCTAssertEqual(feed.events.first?.needsUser, true, "soru eki de sorudur")
     }
 
@@ -210,7 +210,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         summarizer.stub(.success(TerminalDigest(summary: "Özet", needsUser: false)))
 
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 1)
         XCTAssertEqual(feed.events.first?.needsUser, true)
     }
 
@@ -241,7 +241,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
 
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
         coordinator.apply(.interruptInferred(meta.id))
-        await settle()
+        await settle(untilEvents: 1)
 
         XCTAssertEqual(feed.events.map(\.kind), [.interrupted])
         XCTAssertEqual(feed.events.first?.needsUser, false)
@@ -285,7 +285,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         coordinator.apply(.awaitingDecisionChanged(blocked.id, true))
         let broken = agent(session: nil)
         coordinator.apply(.statusChanged(broken.id, .error))
-        await settle()
+        await settle(untilEvents: 2)
 
         let kinds = Dictionary(uniqueKeysWithValues: feed.events.map { ($0.terminalID, $0) })
         XCTAssertEqual(kinds[blocked.id]?.kind, .needsDecision)
