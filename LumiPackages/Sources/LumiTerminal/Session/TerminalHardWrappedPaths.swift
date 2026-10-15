@@ -65,7 +65,11 @@ enum TerminalHardWrappedPaths {
     ) -> [[TerminalRowSegment]] {
         let canStartWholeRow = canStart(start.text)
         let startSuffix = start.suffix()
+        // Ayırıcısız son parça da yolun başı olabilir (`Read(Sour` + `ces/a.swift)`);
+        // birleşim yine ayırıcı içermeli ve diske sorulur.
+        let startsHeadless = startSuffix.map { isHeadless($0.text) } ?? false
         let canStartBoundary = startSuffix.map { canStart($0.text) || isIncompleteStart($0.text) } ?? false
+            || startsHeadless
         // Hover her harekette çağırır; yol başlatamayan satırın devamı okunmaz.
         guard canStartWholeRow || canStartBoundary else { return [] }
 
@@ -109,7 +113,7 @@ enum TerminalHardWrappedPaths {
             break
         }
         let boundaryText = boundary.map(\.text).joined()
-        if !reachedMixedContinuation, isIncompleteStart(startSuffix.text), boundary.count >= 2,
+        if !reachedMixedContinuation, isIncompleteStart(startSuffix.text) || startsHeadless, boundary.count >= 2,
            let last = boundary.last, last.row >= target,
            canStart(boundaryText), lastWholeText != boundaryText {
             result.append(boundary.map(\.segment))
@@ -132,6 +136,11 @@ enum TerminalHardWrappedPaths {
     /// Satır, bir kökten ya da göreli önekten hemen sonra bitmiş olabilir.
     static func isIncompleteStart(_ text: String) -> Bool {
         isMatch(incompleteStart, text)
+    }
+
+    /// Ayırıcısı henüz görünmemiş yol başı (`Sour` → `Sources/…`).
+    static func isHeadless(_ text: String) -> Bool {
+        isFragment(text) && !text.contains("/") && !text.contains("\\")
     }
 
     static func isContinuation(_ text: String) -> Bool {

@@ -258,6 +258,39 @@ final class TerminalLinkHoverTests: XCTestCase {
         XCTAssertEqual(view.linkUnderline.spans.map(\.row), [1, 2, 3])
     }
 
+    /// Göreli yol ilk ayırıcısından önce kırılabilir: üst satırdaki `Sour` da yolun başıdır.
+    func testPathSplitBeforeItsFirstSeparatorIsOneLink() {
+        useDisk(["/repo/Sources/LumiKit/Detection/LinkText.swift"])
+        show("⏺ Read(Sour\r\n      ces/LumiKit/Detection/LinkText.swift)")
+
+        hover(at: point(column: 10, row: 1))
+        XCTAssertEqual(view.underlinedLinkText, "Sources/LumiKit/Detection/LinkText.swift")
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [0, 1])
+
+        view.clearLinkHover()
+        hover(at: point(column: 8))
+        XCTAssertEqual(view.underlinedLinkText, "Sources/LumiKit/Detection/LinkText.swift", "üst satırdan da aynı link")
+    }
+
+    func testPathSplitBeforeItsFirstSeparatorWithoutClosingRow() {
+        useDisk(["/repo/src/app/main.swift"])
+        show("Open s\r\n  rc/app/main.swift")
+
+        hover(at: point(column: 4, row: 1))
+
+        XCTAssertEqual(view.underlinedLinkText, "src/app/main.swift")
+    }
+
+    /// Satır sonundaki düzyazı kelimesi alttaki yola yapışmaz — birleşim diskte yok.
+    func testProseWordDoesNotGlueToThePathBelow() {
+        useDisk(["/repo/src/a.swift"])
+        show("see the file\r\n  src/a.swift")
+
+        hover(at: point(column: 4, row: 1))
+
+        XCTAssertEqual(view.underlinedLinkText, "src/a.swift")
+    }
+
     /// TUI'nin sağ kenara yakın kırdığı URL birleşir — kısa satırdaki URL
     /// (`testURLIsNotJoinedWithTheRowBelow`) birleşmez.
     func testHardWrappedURLJoinsNearTheRightEdge() {
