@@ -128,6 +128,17 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(120))
     }
 
+    /// Akışa en az `count` olay EKLENENE dek bekler (üst sınır 5 sn). Sabit
+    /// bekleme yavaş CI runner'ında üretime yetişmiyordu. Ölçüt `unreadCount`'tur:
+    /// feed aynı terminalin kartını yenisiyle değiştirdiği için `events.count`
+    /// ikinci olayda artmaz.
+    private func settle(untilEvents count: Int) async {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while feed.unreadCount < count, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     func testUnseenFinishWithShortReplyIsShownVerbatim() async {
         let meta = agent()
         reply("Testler yeşil. Commit atayım mı?")
@@ -169,13 +180,13 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         summarizer.stub(.success(TerminalDigest(summary: "Özet", needsUser: true)))
 
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 1)
         XCTAssertEqual(feed.events.first?.needsUser, false, "uyarı soru değildir")
 
         reply(String(repeating: "uzun rapor ", count: 40) + "Commit atayım mı?")
         coordinator.apply(.statusChanged(meta.id, .working))
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        await settle()
+        await settle(untilEvents: 2)
         XCTAssertEqual(feed.events.first?.needsUser, true)
     }
 
@@ -218,7 +229,7 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         let meta = agent()
         reply("Bitti.")
         coordinator.apply(.statusChanged(meta.id, .waitingFocused))
-        await settle()
+        await settle(untilEvents: 1)
         XCTAssertEqual(feed.events.map(\.summary), ["Bitti."])
     }
 

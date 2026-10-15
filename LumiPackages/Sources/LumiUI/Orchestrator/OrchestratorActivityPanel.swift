@@ -50,6 +50,9 @@ struct OrchestratorActivityPanel: View {
     }
 }
 
+// `@MainActor`: SwiftUI view init'leri main actor'a bağlıdır; eski Swift
+// (CI'ın Intel runner'ı) serbest fonksiyonda bunu hata sayar.
+@MainActor
 private func sectionTitle(_ title: String) -> some View {
     HStack {
         Text(title)
