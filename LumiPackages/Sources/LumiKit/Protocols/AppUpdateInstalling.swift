@@ -19,4 +19,7 @@ public protocol AppUpdateInstalling: Sendable {
     /// Önceki kurulum denemesi başarısız olduysa nedenini döndürür ve kaydı
     /// siler (bir kez gösterilir).
     func consumeInstallFailure() async -> String?
+
+    /// Sahnelenmiş sürümü siler (release geri çekildiğinde).
+    func discardStaged() async
 }

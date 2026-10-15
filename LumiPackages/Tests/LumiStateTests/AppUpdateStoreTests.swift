@@ -238,4 +238,35 @@ final class AppUpdateStoreTests: XCTestCase {
         let again = await installer.consumeInstallFailure()
         XCTAssertNil(again)
     }
+
+    /// Release geri çekilip `latest` mevcut sürüme ya da altına düşerse hazır
+    /// sürüm, kart ve `Install on Quit` gider.
+    func testWithdrawnReleaseDropsStagedUpdate() async {
+        let installer = FakeAppUpdateInstaller()
+        let (store, service) = makeStore(installer: installer)
+        await store.check()
+        store.installOnQuit()
+        await service.setOutcome(.success(.fake(version: "0.8.0")))
+        await store.check()
+        XCTAssertEqual(store.status, .upToDate(.fake(version: "0.8.0")))
+        XCTAssertNil(store.stagedUpdate)
+        XCTAssertNil(store.installTiming)
+        XCTAssertFalse(store.isCardVisible)
+        let installed = await store.installIfScheduled()
+        XCTAssertFalse(installed)
+        let discards = await installer.discardCount
+        XCTAssertEqual(discards, 1)
+    }
+
+    /// Hazırdan küçük ama mevcuttan büyük latest: geri çekilen atılır, latest indirilir.
+    func testWithdrawnReleaseFallsBackToOlderNewerRelease() async {
+        let installer = FakeAppUpdateInstaller()
+        let (store, service) = makeStore(latest: "0.9.1", installer: installer)
+        await store.check()
+        await service.setOutcome(.success(.fake(version: "0.9.0")))
+        await store.check()
+        XCTAssertEqual(store.stagedUpdate?.release.version.description, "0.9.0")
+        let prepared = await installer.preparedVersions
+        XCTAssertEqual(prepared, ["0.9.1", "0.9.0"])
+    }
 }

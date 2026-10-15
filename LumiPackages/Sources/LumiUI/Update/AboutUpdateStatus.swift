@@ -81,7 +81,7 @@ struct AboutUpdateStatus: View {
         case .downloading:
             ProgressView().controlSize(.small)
         case .readyToInstall:
-            LumiBrowseButton(icon: "arrow.clockwise.circle", label: "Restart to Update") {
+            LumiBrowseButton(icon: "arrow.clockwise.circle", label: "Restart") {
                 requestInstall()
             }
         case .downloadFailed:

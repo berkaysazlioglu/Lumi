@@ -281,6 +281,10 @@ public actor AppUpdateInstaller: AppUpdateInstalling {
         }
     }
 
+    public func discardStaged() async {
+        try? FileManager.default.removeItem(at: stagingDir)
+    }
+
     public func consumeInstallFailure() async -> String? {
         guard let data = try? Data(contentsOf: failureURL) else { return nil }
         try? FileManager.default.removeItem(at: failureURL)

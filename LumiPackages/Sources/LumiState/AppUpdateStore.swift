@@ -145,6 +145,14 @@ public final class AppUpdateStore {
             status = .developmentBuild(latest)
             return
         }
+        // Release geri çekildiyse (silindi; `latest` hazır sürümden küçük) hazır
+        // sürüm de gider — kart, segment ve quit'te kurulum artık önerilmez.
+        if let staged = stagedUpdate, latest.version < staged.release.version {
+            guard installTiming != .restartNow else { return } // kapanış başladı
+            installTiming = nil
+            status = .idle
+            await installer.discardStaged()
+        }
         guard latest.version > current else {
             status = .upToDate(latest)
             return

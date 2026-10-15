@@ -6,7 +6,7 @@ import SwiftUI
 ///
 /// Toast yığınının EN ALTINDA durur (`ToastOverlayHost`): geçici toast'lar
 /// kartın üstüne dizilir, kartı örtmez. İki hâli vardır:
-/// - **Hazır:** sürüm indirilip doğrulandı → `Restart to Update` onay
+/// - **Hazır:** sürüm indirilip doğrulandı → `Restart` onay
 ///   dialogunu açar (kurulum kendiliğinden asla yapılmaz).
 /// - **Elle indirme:** bu kopya bulunduğu yerden kendini güncelleyemiyor →
 ///   `Download` release sayfasını açar.
@@ -115,7 +115,7 @@ public struct AppUpdateCard: View {
             ))
             Spacer(minLength: Theme.Spacing.md)
             if isReady {
-                LumiActionButton(title: "Restart to Update", kind: .primary) {
+                LumiActionButton(title: "Restart", kind: .primary) {
                     shell.requestInstallUpdate()
                 }
             } else {

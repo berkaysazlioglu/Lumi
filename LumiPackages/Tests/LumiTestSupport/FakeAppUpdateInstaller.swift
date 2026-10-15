@@ -41,6 +41,12 @@ public actor FakeAppUpdateInstaller: AppUpdateInstalling {
         scheduled.append((update.release.version.description, relaunch))
     }
 
+    public private(set) var discardCount = 0
+
+    public func discardStaged() async {
+        discardCount += 1
+    }
+
     public func consumeInstallFailure() async -> String? {
         defer { pendingFailure = nil }
         return pendingFailure
