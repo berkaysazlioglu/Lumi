@@ -10,8 +10,9 @@ import SwiftUI
 /// Karar 103: aynı görünüm hem repo route'unu hem All Terminals'ı çizer —
 /// fark yalnız `TerminalScope`'tadır. Grid, maximize, minimize, kapatma ve
 /// Edit modu kapsamın intent'lerine gider; All Terminals'ta kartlar checkout
-/// etiketini taşır. Boş durumdaki spawn düğmesi All Terminals'ta serbest
-/// terminali seçili konumda (varsayılan `~`) açar (karar 108).
+/// etiketini taşır. All Terminals boşken iki kare buton durur (karar 119):
+/// `Add Project Root` ve seçili konumda (varsayılan `~`) serbest Claude
+/// terminali açan `New Claude` (karar 108).
 public struct TerminalsRouteView: View {
     private let scope: TerminalScope?
 
@@ -102,13 +103,37 @@ public struct TerminalsRouteView: View {
 
     @ViewBuilder
     private func emptyState(_ scope: TerminalScope) -> some View {
-        // Topbar ile aynı split-button (DRY): chevron dropdown'u açar.
-        EmptyStatePlaceholder(
-            scope == .all ? "No terminals yet" : "No terminals in this repo",
-            density: .full
-        ) {
-            ScopedNewTerminalButton(scope: scope)
+        if scope == .all {
+            EmptyStatePlaceholder("No terminals yet", density: .full) {
+                allTerminalsStartTiles
+            }
+        } else {
+            // Topbar ile aynı split-button (DRY): chevron dropdown'u açar.
+            EmptyStatePlaceholder("No terminals in this repo", density: .full) {
+                ScopedNewTerminalButton(scope: scope)
+            }
         }
+    }
+
+    /// Karar 119: projeler kökü onboarding'den kalktı — projesiz kullanıcının
+    /// iki başlangıç kapısı.
+    private var allTerminalsStartTiles: some View {
+        HStack(spacing: Theme.Spacing.lg) {
+            TileButton("Add Project Root", action: { Task { await shell.addProjectRoot() } }) {
+                Image(systemName: "folder.badge.plus")
+                    .font(Theme.Typography.ui(.display))
+            }
+            TileButton(
+                "New Claude",
+                subtitle: NewTerminalMenu.locationLabel(shell: shell, scope: .all).map { "in \($0)" },
+                action: {
+                    shell.spawnTerminal(in: .all, command: AgentProvider.claude.launchCommand)
+                }
+            ) {
+                ProviderIcon(provider: .claude, size: .display)
+            }
+        }
+        .padding(.top, Theme.Spacing.md)
     }
 
     /// Yalnız All Terminals etiket taşır — repo görünümünde her kart aynı

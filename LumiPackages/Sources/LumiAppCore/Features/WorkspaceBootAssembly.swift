@@ -37,7 +37,11 @@ final class WorkspaceBootAssembly: FeatureAssembly {
             system: services.system,
             settings: shared.settings,
             toasts: shared.toasts,
-            onComplete: { [weak shared] in shared?.dialogs.isOnboardingActive = false }
+            onComplete: { [weak shared] in
+                shared?.dialogs.isOnboardingActive = false
+                // Karar 119: ilk açılış projesiz başlar — All Terminals'ta.
+                shared?.navigation.setRoute(.content(.allTerminals))
+            }
         )
     }
 

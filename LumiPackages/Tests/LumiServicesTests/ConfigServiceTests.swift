@@ -341,11 +341,38 @@ final class ConfigServiceTests: XCTestCase {
 
         try writeFixture(#"{"projectsRoot": ""}"#, to: paths.configFile)
         let emptyRoot = await service.isFirstRun()
-        XCTAssertTrue(emptyRoot, "projectsRoot boşken first-run olmalı")
+        XCTAssertTrue(emptyRoot, "anahtarsız legacy config'te boş kök = onboarding geçilmemiş")
 
         try writeFixture(realConfigFixture, to: paths.configFile)
         let configured = await service.isFirstRun()
-        XCTAssertFalse(configured)
+        XCTAssertFalse(configured, "anahtarsız legacy config'te dolu kök = onboarding geçilmiş")
+    }
+
+    /// Karar 119: kök taşındıktan sonra boşalır — onboarding'i artık açık
+    /// `onboardingCompleted` anahtarı belirler.
+    func testIsFirstRunFollowsOnboardingCompletedKey() async throws {
+        let service = makeService()
+        try writeFixture(#"{"projectsRoot": "", "onboardingCompleted": true}"#, to: paths.configFile)
+        let completed = await service.isFirstRun()
+        XCTAssertFalse(completed)
+
+        try writeFixture(#"{"projectsRoot": "/p", "onboardingCompleted": false}"#, to: paths.configFile)
+        let explicitFalse = await service.isFirstRun()
+        XCTAssertTrue(explicitFalse, "açık anahtar legacy çıkarımı ezer")
+    }
+
+    func testLegacyRootMigrationKeepsOnboardingCompletedOnDisk() async throws {
+        try writeFixture(#"{"projectsRoot": "/Users/dev/code"}"#, to: paths.configFile)
+        let service = makeService()
+
+        try await service.updateConfig(LegacyProjectsRootMigration.migrate)
+
+        let firstRun = await service.isFirstRun()
+        XCTAssertFalse(firstRun, "taşıma onboarding'i yeniden açmaz")
+        let config = await service.config()
+        XCTAssertEqual(config.projectsRoot, "")
+        XCTAssertEqual(config.additionalPaths.map(\.path), ["/Users/dev/code"])
+        XCTAssertEqual(config.additionalPaths.first?.type, .root)
     }
 
     // MARK: - Config yazma / event

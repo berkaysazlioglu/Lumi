@@ -38,7 +38,7 @@ struct LumiField<Content: View>: View {
 #if DEBUG
 #Preview("LumiField") {
     VStack(alignment: .leading, spacing: 0) {
-        LumiField(title: "Projects Root", hint: "First-level subdirectories are listed as repos") {
+        LumiField(title: "Project Paths", hint: "root: subdirectories are scanned · repo: added on its own") {
             LumiTextInput(text: .constant("/Users/me/Projects"))
         }
         LumiField(title: "AI Provider", hint: nil, isLast: true) {

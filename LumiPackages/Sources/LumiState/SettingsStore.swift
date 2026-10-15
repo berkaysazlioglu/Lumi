@@ -93,10 +93,6 @@ public final class SettingsStore: StoreLifecycle {
 
     // MARK: - Alan bazlı kolaylıklar
 
-    public func setProjectsRoot(_ path: String) {
-        apply { $0.projectsRoot = path }
-    }
-
     public func setProvider(_ provider: AgentProvider) {
         apply { $0.aiProvider = provider }
     }
@@ -162,8 +158,8 @@ public final class SettingsStore: StoreLifecycle {
     }
 
     public func addAdditionalPath(_ path: String, type: AdditionalPath.PathType) {
-        let entry = AdditionalPath(id: UUID().uuidString, path: path, type: type)
-        apply { $0.additionalPaths.append(entry) }
+        let id = UUID().uuidString
+        apply { $0.additionalPaths = AdditionalPath.adding(path, type: type, to: $0.additionalPaths, id: id) }
     }
 
     public func removeAdditionalPath(id: String) {

@@ -5,6 +5,8 @@ import SwiftUI
 struct LumiBrowseButton: View {
     let icon: String
     let label: String
+    /// Kabın genişliğini doldurur (karar 119: Projects panelinin başlangıç butonu).
+    var isFullWidth = false
     let action: () -> Void
 
     var body: some View {
@@ -17,6 +19,7 @@ struct LumiBrowseButton: View {
                     Text(label)
                         .font(Theme.Typography.bodyMono)
                 }
+                .frame(maxWidth: isFullWidth ? .infinity : nil)
                 .foregroundStyle(isHovering ? Theme.textPrimary : Theme.textSecondary)
                 .padding(.horizontal, Theme.Spacing.lg)
                 .padding(.vertical, Theme.Spacing.md)

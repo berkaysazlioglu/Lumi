@@ -12,6 +12,8 @@ enum AppConfigCodec {
         if let value = dict["projectsRoot"] as? String {
             config.projectsRoot = value
         }
+        config.onboardingCompleted = JSONValue.bool(dict["onboardingCompleted"])
+            ?? LegacyProjectsRootMigration.hasRoot(config.projectsRoot)
         config.additionalPaths = AdditionalPathCodec.decodeList(dict["additionalPaths"])
         config.sidebarProjectPaths = decodeAbsoluteUniquePaths(dict["sidebarProjectPaths"])
         if let raw = dict["aiProvider"] as? String,
@@ -70,6 +72,7 @@ enum AppConfigCodec {
     static func overlay(_ config: AppConfig) -> [String: Any] {
         var overlay: [String: Any] = [
             "projectsRoot": config.projectsRoot,
+            "onboardingCompleted": config.onboardingCompleted,
             "additionalPaths": AdditionalPathCodec.overlayList(config.additionalPaths),
             "sidebarProjectPaths": config.sidebarProjectPaths,
             "aiProvider": config.aiProvider.rawValue,

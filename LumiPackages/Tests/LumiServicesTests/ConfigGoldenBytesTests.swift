@@ -153,6 +153,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
         "unseenEnabled" : false,
         "unseenIntervalMinutes" : 7
       },
+      "onboardingCompleted" : true,
       "orchestratorDigestsEnabled" : false,
       "projectFavoriteFiles" : [
 

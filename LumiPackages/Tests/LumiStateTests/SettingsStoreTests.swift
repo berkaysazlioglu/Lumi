@@ -88,11 +88,11 @@ final class SettingsStoreTests: XCTestCase {
     func testApplyRevertsOptimisticValueWhenWriteFails() async throws {
         await config.setUpdateConfigError(.configIOFailed(file: "config.json", detail: "disk"))
 
-        store.setProjectsRoot("/tmp/new-root")
-        XCTAssertEqual(store.current.projectsRoot, "/tmp/new-root", "optimistik değer anında görünür")
+        store.setProvider(.codex)
+        XCTAssertEqual(store.current.aiProvider, .codex, "optimistik değer anında görünür")
 
         try await waitUntil("diskteki değere dönüldü") {
-            self.store.current.projectsRoot == AppConfig.defaults.projectsRoot
+            self.store.current.aiProvider == AppConfig.defaults.aiProvider
         }
         XCTAssertEqual(toasts.toasts.count, 1, "karar 5: yazım hatası görünür")
     }
@@ -213,6 +213,20 @@ final class SettingsStoreTests: XCTestCase {
     }
 
     // MARK: - additionalPaths intent'leri
+
+    /// Karar 119: aynı klasör ikinci kez eklenmez; optimistik değer ile disk
+    /// aynı id'yi taşır (closure iki kez koşar — id içeride üretilseydi
+    /// ayrışır, silme diske inmezdi).
+    func testAddAdditionalPathDedupesAndKeepsIDInSyncWithDisk() async throws {
+        store.addAdditionalPath("/tmp/extra", type: .root)
+        store.addAdditionalPath("/tmp/extra/", type: .repo)
+
+        XCTAssertEqual(store.current.additionalPaths.count, 1)
+        let id = try XCTUnwrap(store.current.additionalPaths.first?.id)
+        try await waitUntil("disk aynı id'yi taşır") {
+            await self.config.config().additionalPaths.map(\.id) == [id]
+        }
+    }
 
     func testAddAndRemoveAdditionalPath() async throws {
         store.addAdditionalPath("/tmp/extra", type: .root)

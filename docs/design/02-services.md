@@ -88,7 +88,7 @@ public enum ConfigEvent: Sendable, Equatable {
 - Defaults infill, `additionalPaths` array coercion'ı, `aiProvider` doğrulaması (`claude|codex`, default claude) birebir.
 - **Bozuk dosya (Faz 1.13):** parse edilemeyen dosya defaults'la EZİLMEDEN önce `<ad>.bak-<yyyyMMdd-HHmmss>` olarak yanına kopyalanır (aynı dosya için tek yedek), stderr'e iz düşer ve `ConfigEvent.loadFailed` yayınlanır — merge yalnız parse edilebilen ham sözlük üzerinden çalıştığı için, yedek alınmasa bilinmeyen anahtarlar ilk yazımda kaybolurdu. Debounce'lu ui-state yazımı diske inemezse `ConfigEvent.writeFailed`. `updateConfig` yazma hatasında `LumiError.configIOFailed` fırlatır. `SettingsStore` iki event'i de tüketir ve `ToastStore` üzerinden hata toast'ı gösterir (karar 5).
 - `updateUIState` in-memory state'e anında uygular, **500 ms debounce'lu atomik yazım** planlar; `flushPendingWrites()` quit yolunda bunu hemen indirir.
-- `isFirstRun()` = config.json yok VEYA `projectsRoot` boş.
+- `isFirstRun()` = config.json yok VEYA `onboardingCompleted` false (anahtar yoksa legacy çıkarım: `projectsRoot` boş — karar 119).
 
 **Yan etki propagasyonu — `ConfigSideEffectCoordinator` (LumiAppCore):** `ConfigEvent.configChanged(old:new:)` tüketir ve `(old, new)` çiftini kayıtlı `ConfigChangeObserving` gözlemcilerine kayıt sırasında dağıtır. Refactor 3.3'ten sonra koordinatör **hangi alanın ne yaptığını bilmez**; diff'i her gözlemci (yani her `FeatureAssembly`) kendi alanları için yapar ve karşılaştırma **eşitlikle** olur (Electron'un truthiness bug'ı yapısal olarak imkânsız — `0`/boş string de propagate olur, karar 11):
 

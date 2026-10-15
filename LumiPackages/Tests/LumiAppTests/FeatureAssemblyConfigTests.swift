@@ -58,6 +58,24 @@ final class FeatureAssemblyConfigTests: XCTestCase {
         XCTAssertEqual(calls.first?.projectsRoot, "/tmp/projects")
     }
 
+    /// Karar 119: legacy kök, repo servisine ilk kökler verilmeden ÖNCE
+    /// additionalPaths'e taşınır — ilk tarama yeni düzeni görür.
+    func testStartMigratesLegacyRootBeforeFirstSetRoots() async {
+        var seeded = AppConfig.defaults
+        seeded.projectsRoot = "/tmp/legacy-root"
+        await registry.fakeConfig.seed(seeded)
+        let assembly = build(RepoFeatureAssembly())
+
+        await assembly.start()
+
+        let first = await registry.fakeRepo.setRootsCalls.first
+        XCTAssertEqual(first?.projectsRoot, "")
+        XCTAssertEqual(first?.additionalPaths.map(\.path), ["/tmp/legacy-root"])
+        let persisted = await registry.fakeConfig.config()
+        XCTAssertEqual(persisted.projectsRoot, "")
+        XCTAssertTrue(persisted.onboardingCompleted)
+    }
+
     /// Karar 11: projectsRoot BOŞ STRING'e düşse de yan etki atlanmaz.
     func testEmptyProjectsRootStillPropagates() async {
         let assembly = build(RepoFeatureAssembly())

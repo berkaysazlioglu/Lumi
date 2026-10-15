@@ -129,7 +129,7 @@ Garantiyi `EventConsumer` taşır: stream Task'tan **önce** senkron alınır (b
 }
 ```
 
-**Bootstrap UI zinciri** (native'e indirgenmiş): loading ekranı → `isFirstRun` → onboarding (4 adım: Welcome/SystemChecks/ProjectsRoot/Ready; fail bloklar, warn bloklamaz) **veya** `repos + additionalPaths` paralel yükle → `uiState` yükle (migration repo listesini okur) → ana UI. `syncFromMain` adımı yoktur.
+**Bootstrap UI zinciri** (native'e indirgenmiş): loading ekranı → `isFirstRun` → onboarding (3 adım: Welcome/SystemChecks/Ready; fail bloklar, warn bloklamaz; tamamlanınca All Terminals — karar 119) **veya** `repos + additionalPaths` paralel yükle → `uiState` yükle (migration repo listesini okur) → ana UI. `syncFromMain` adımı yoktur.
 
 
 ### 4.1 Prompt kuyruğu (`PromptQueueStore`)

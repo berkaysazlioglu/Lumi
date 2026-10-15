@@ -164,6 +164,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
 
     private static let nonDefaultConfig = AppConfig(
         projectsRoot: "/tmp/projects",
+        onboardingCompleted: true,
         additionalPaths: [
             AdditionalPath(id: "id-1", path: "/tmp/extra", type: .root, label: "Extra"),
             AdditionalPath(id: "id-2", path: "/tmp/solo", type: .repo),

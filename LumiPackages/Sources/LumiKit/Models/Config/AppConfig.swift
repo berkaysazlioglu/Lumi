@@ -9,7 +9,13 @@ import Foundation
 /// "encode edilebilir" yanılsaması yaratır ve karar 9'u sessizce ihlal eden bir
 /// yazım yolunun kapısını açar.
 public struct AppConfig: Sendable, Equatable {
+    /// Legacy projeler kökü. Arayüzde yoktur; açılışta `additionalPaths`'e
+    /// `root` olarak taşınıp boşaltılır (`LegacyProjectsRootMigration`).
+    /// Format değişmesin diye bu sürümde hâlâ okunur/yazılır (karar 9).
     public var projectsRoot: String
+    /// Onboarding tamamlandı mı. Additive (karar 9): yoksa legacy kuraldan
+    /// türer — `projectsRoot` doluysa kullanıcı onboarding'i geçmiştir.
+    public var onboardingCompleted: Bool
     public var additionalPaths: [AdditionalPath]
     /// Independently selected projects shown in the sidebar. Additive (karar
     /// 9): yoksa boş; `additionalPaths` ile migration yapılmaz.
@@ -88,6 +94,7 @@ public struct AppConfig: Sendable, Equatable {
 
     public static let defaults = AppConfig(
         projectsRoot: "",
+        onboardingCompleted: false,
         additionalPaths: [],
         aiProvider: .claude,
         theme: "dark",
@@ -117,6 +124,7 @@ public struct AppConfig: Sendable, Equatable {
 
     public init(
         projectsRoot: String,
+        onboardingCompleted: Bool = false,
         additionalPaths: [AdditionalPath],
         aiProvider: AgentProvider,
         theme: String,
@@ -144,6 +152,7 @@ public struct AppConfig: Sendable, Equatable {
         projectFavoriteFiles: [ProjectFavoriteFile] = []
     ) {
         self.projectsRoot = projectsRoot
+        self.onboardingCompleted = onboardingCompleted
         self.additionalPaths = additionalPaths
         self.sidebarProjectPaths = sidebarProjectPaths
         self.aiProvider = aiProvider

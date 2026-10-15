@@ -131,6 +131,11 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func start() async {
+        // Karar 119: legacy projeler kökü additionalPaths'e taşınır — repo
+        // taraması ilk okumadan itibaren yeni düzeni görür.
+        await shared.toasts.reporting {
+            try await services.config.updateConfig(LegacyProjectsRootMigration.migrate)
+        }
         let config = await services.config.config()
         // SIRA: additionalPaths start()'tan önce (aksi halde ilk reload eksik grup üretir)
         repoStore.setAdditionalPaths(config.additionalPaths)

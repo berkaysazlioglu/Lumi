@@ -77,20 +77,14 @@ final class OnboardingStoreTests: XCTestCase {
 
         await store.runChecks() // pass'lerle kapı açılır
         store.advance()
-        XCTAssertEqual(store.step, .projectsRoot)
-
-        fixture.system.setFolderToChoose("/Users/me/code")
-        await store.chooseProjectsRoot()
-        store.advance()
-        XCTAssertEqual(store.step, .done)
+        XCTAssertEqual(store.step, .done, "karar 119: projeler kökü adımı yok")
         XCTAssertTrue(store.isLastStep)
     }
 
     func testAdvanceOnLastStepDoesNotOverflow() async {
         let fixture = makeFixture()
         let store = fixture.store
-        fixture.system.setFolderToChoose("/Users/me/code")
-        await store.chooseProjectsRoot()
+        await store.runChecks()
 
         for _ in 0..<10 { store.advance() }
 
@@ -105,16 +99,6 @@ final class OnboardingStoreTests: XCTestCase {
         XCTAssertEqual(store.step, .welcome)
         store.back()
         XCTAssertEqual(store.step, .welcome, "ilk adımın gerisine gidilmez")
-    }
-
-    func testAdvanceIsBlockedWhenStepCannotAdvance() {
-        let fixture = makeFixture()
-        let store = fixture.store
-        store.advance() // .checks
-        store.advance() // .projectsRoot
-        XCTAssertEqual(store.step, .projectsRoot)
-        store.advance()
-        XCTAssertEqual(store.step, .projectsRoot, "klasör seçilmeden ilerlenmez")
     }
 
     // MARK: - fail bloklar, warn bloklamaz (design/03 §4)
@@ -208,40 +192,17 @@ final class OnboardingStoreTests: XCTestCase {
         XCTAssertEqual(fixture.toasts.toasts.first?.kind, .error)
     }
 
-    // MARK: - Projects root
-
-    func testChooseProjectsRootStoresPickedFolder() async {
-        let fixture = makeFixture()
-        fixture.system.setFolderToChoose("/Users/me/code")
-
-        await fixture.store.chooseProjectsRoot()
-
-        XCTAssertEqual(fixture.store.projectsRoot, "/Users/me/code")
-    }
-
-    func testCancelledFolderPickerKeepsPreviousValue() async {
-        let fixture = makeFixture()
-        fixture.system.setFolderToChoose("/Users/me/code")
-        await fixture.store.chooseProjectsRoot()
-
-        fixture.system.setFolderToChoose(nil)
-        await fixture.store.chooseProjectsRoot()
-
-        XCTAssertEqual(fixture.store.projectsRoot, "/Users/me/code")
-    }
-
     // MARK: - Tamamlama
 
-    func testCompleteWritesProviderAndRootThenFiresCallback() async {
+    func testCompleteWritesProviderAndOnboardingFlagThenFiresCallback() async {
         let fixture = makeFixture()
         fixture.store.provider = .codex
-        fixture.system.setFolderToChoose("/Users/me/code")
-        await fixture.store.chooseProjectsRoot()
 
         fixture.store.complete()
 
         XCTAssertEqual(fixture.settings.current.aiProvider, .codex)
-        XCTAssertEqual(fixture.settings.current.projectsRoot, "/Users/me/code")
+        XCTAssertTrue(fixture.settings.current.onboardingCompleted)
+        XCTAssertEqual(fixture.settings.current.projectsRoot, "", "karar 119: kök sorulmaz")
         XCTAssertEqual(fixture.completions.count, 1)
     }
 }

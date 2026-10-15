@@ -2,9 +2,9 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// 4 adımlı onboarding sihirbazı: Welcome → System Checks →
-/// Projects Root → Ready. fail bloklar, warn bloklamaz; tamamlanınca config
-/// yazılır ve yan etkiler koordinatörden akar (repo taraması anında başlar).
+/// 3 adımlı onboarding sihirbazı: Welcome → System Checks → Ready. fail
+/// bloklar, warn bloklamaz; tamamlanınca config yazılır ve Lumi All
+/// Terminals'ta açılır (karar 119 — projeler kökü artık sorulmaz).
 ///
 /// Akış/kural/check yürütme `OnboardingStore`'dadır (refactor 5.8); bu view
 /// saf render + intent'tir.
@@ -28,7 +28,6 @@ struct OnboardingView: View {
         switch store.step {
         case .welcome: welcomeStep
         case .checks: checksStep
-        case .projectsRoot: projectsRootStep
         case .done: readyStep
         }
     }
@@ -107,32 +106,6 @@ struct OnboardingView: View {
         .padding(.vertical, Theme.Spacing.xs)
     }
 
-    private var projectsRootStep: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-            Text("Projects Root")
-                .font(Theme.Typography.mono(.headline, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-            Text("The folder where your repos live — first-level subdirectories are listed")
-                .font(Theme.Typography.mono(.label))
-                .foregroundStyle(Theme.textSecondary)
-            HStack(spacing: Theme.Spacing.md) {
-                Text(store.projectsRoot.isEmpty ? "(not selected)" : store.projectsRoot)
-                    .font(Theme.Typography.mono(.body))
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Theme.Spacing.md)
-                    .background(Theme.bgElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-                Button("Browse…") {
-                    Task { await store.chooseProjectsRoot() }
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-    }
-
     private var readyStep: some View {
         VStack(spacing: Theme.scaled(14)) {
             Image(systemName: "checkmark.circle.fill")
@@ -141,7 +114,7 @@ struct OnboardingView: View {
             Text("You're ready")
                 .font(Theme.Typography.mono(.headline, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-            Text("Open a repo, start a terminal, watch your agents")
+            Text("Start a terminal, add projects, watch your agents")
                 .font(Theme.Typography.mono(.body))
                 .foregroundStyle(Theme.textMuted)
         }

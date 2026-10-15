@@ -69,6 +69,18 @@ final class WorkspaceBootResumeTests: XCTestCase {
         return (registry, shared, assembly)
     }
 
+    /// Karar 119: projeler kökü sorulmadığı için ilk açılış All Terminals'tadır.
+    func testOnboardingCompletionOpensAllTerminals() async {
+        let (_, shared, assembly) = await makeHarness()
+        shared.dialogs.isOnboardingActive = true
+
+        assembly.onboarding.complete()
+
+        XCTAssertFalse(shared.dialogs.isOnboardingActive)
+        XCTAssertEqual(shared.navigation.activeRoute, .content(.allTerminals))
+        XCTAssertTrue(shared.settings.current.onboardingCompleted)
+    }
+
     /// Config fake'i actor: koşul yerine "beklenen listeye ulaştı mı" yoklanır.
     private func resumeSessions(
         of registry: FakeServiceRegistry,

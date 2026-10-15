@@ -47,7 +47,7 @@ public actor ConfigService: ConfigServicing {
 
     public func isFirstRun() -> Bool {
         guard let raw = readJSONObject(at: paths.configFile) else { return true }
-        return ConfigCodec.decodeConfig(from: raw).projectsRoot.isEmpty
+        return !ConfigCodec.decodeConfig(from: raw).onboardingCompleted
     }
 
     // MARK: - UI State

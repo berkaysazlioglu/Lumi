@@ -8,7 +8,6 @@ import Observation
 public enum OnboardingStep: Int, CaseIterable, Sendable, Equatable {
     case welcome
     case checks
-    case projectsRoot
     case done
 }
 
@@ -24,13 +23,12 @@ public final class OnboardingStore {
     public private(set) var isRunningChecks = false
     /// Welcome adımındaki sağlayıcı seçimi; `complete()` config'e yazar.
     public var provider: AgentProvider = .claude
-    /// Projects root adımında seçilen klasör (boşken ilerlenemez).
-    public private(set) var projectsRoot = ""
 
     @ObservationIgnored private let system: any SystemServicing
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let toasts: ToastStore
-    /// Sihirbaz kapanınca `WorkspaceStore.isOnboardingActive`'i düşüren kanca.
+    /// Sihirbaz kapanınca `WorkspaceStore.isOnboardingActive`'i düşüren ve
+    /// All Terminals'ı açan kanca (karar 119).
     @ObservationIgnored private let onComplete: @MainActor () -> Void
 
     public init(
@@ -52,13 +50,10 @@ public final class OnboardingStore {
 
     /// Sonraki adıma geçiş (ya da son adımda tamamlama) mümkün mü?
     /// - `.checks`: kontroller koşarken ve bir `fail` varken bloke; `warn` serbest.
-    /// - `.projectsRoot`: klasör seçilmeden bloke.
     public var canAdvance: Bool {
         switch step {
         case .checks:
             return !isRunningChecks && !checks.contains { $0.status == .fail }
-        case .projectsRoot:
-            return !projectsRoot.isEmpty
         case .welcome, .done:
             return true
         }
@@ -101,23 +96,16 @@ public final class OnboardingStore {
         }
     }
 
-    // MARK: - Projects root
-
-    public func chooseProjectsRoot() async {
-        guard let path = await system.chooseFolder() else { return }
-        projectsRoot = path
-    }
-
     // MARK: - Tamamlama
 
     /// Anlık-uygulama modeli (karar 3) sayesinde tek config yazımı yeterli:
-    /// koordinatör repo taramasını ve diğer yan etkileri kendisi tetikler.
+    /// koordinatör yan etkileri kendisi tetikler. Projeler kökü sorulmaz
+    /// (karar 119): kullanıcı All Terminals'tan projesiz başlar.
     public func complete() {
         let selectedProvider = provider
-        let selectedRoot = projectsRoot
         settings.apply {
             $0.aiProvider = selectedProvider
-            $0.projectsRoot = selectedRoot
+            $0.onboardingCompleted = true
         }
         onComplete()
     }

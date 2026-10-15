@@ -208,6 +208,30 @@ public final class ShellContext {
         terminals.spawn(in: directory, command: command, task: task)
     }
 
+    /// Karar 119: klasör seçtirip `additionalPaths`'e `root` olarak ekler
+    /// (alt klasörleri repo olarak taranır).
+    public func addProjectRoot() async {
+        await addProjectPath(type: .root)
+    }
+
+    /// Klasör seçtirip `additionalPaths`'e ekler; sonuç toast'la söylenir —
+    /// All Terminals'tan eklenen kök orta alanda iz bırakmaz, aynı klasörün
+    /// ikinci kez seçilmesi de sessizce yok sayılırdı.
+    public func addProjectPath(type: AdditionalPath.PathType) async {
+        guard let path = await actions.chooseFolder() else { return }
+        let name = (path as NSString).lastPathComponent
+        if settings.current.additionalPaths.contains(where: { AdditionalPath.isSameFolder($0.path, path) }) {
+            toasts.show(.info, title: "\(name) is already added")
+            return
+        }
+        settings.addAdditionalPath(path, type: type)
+        toasts.show(
+            .success,
+            title: "Added \(name)",
+            message: type == .root ? "Add its projects from the Projects panel" : ""
+        )
+    }
+
     /// Checkout'un kullanıcıya görünen adı: proje kökü için proje adı,
     /// yönetilen workspace için `proje / workspace` (Projects panelindeki
     /// hiyerarşinin tek satırlık hâli).

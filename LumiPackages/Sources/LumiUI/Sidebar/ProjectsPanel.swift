@@ -17,6 +17,11 @@ public struct ProjectsPanel: View {
     @FocusState private var focusedProjectAction: String?
     /// Sağ tık menüsü açık olan projenin yolu (karar 53 deseni).
     @State private var menuProjectPath: String?
+    /// Proje seçici popover'ının hangi butona tutunduğu: ikisi aynı dialog
+    /// durumunu paylaşır, aynı anda iki popover açılmasın.
+    @State private var selectorAnchor = SelectorAnchor.header
+
+    private enum SelectorAnchor { case header, startButton }
 
     public init() {}
 
@@ -35,6 +40,7 @@ public struct ProjectsPanel: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                     .padding(.bottom, Theme.Spacing.sm)
             }
+            startButton
             projectList
         }
         .padding(Theme.Spacing.lg)
@@ -48,7 +54,7 @@ public struct ProjectsPanel: View {
     private var projectList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                if filteredProjects.isEmpty {
+                if filteredProjects.isEmpty, !searchText.isEmpty {
                     emptyState
                 }
                 ForEach(filteredProjects) { project in
@@ -88,22 +94,64 @@ public struct ProjectsPanel: View {
 
     private var addProjectButton: some View {
         IconButton(systemName: "plus", label: "Add project") {
-            shell.dialogs.setPresented(.sidebarProjectSelector, !shell.dialogs.isPresenting(.sidebarProjectSelector))
+            toggleProjectSelector(from: .header)
         }
-        .popover(isPresented: Binding(
-            get: { shell.dialogs.isPresenting(.sidebarProjectSelector) },
-            set: { shell.dialogs.setPresented(.sidebarProjectSelector, $0) }
-        )) {
-            RepoSelectorView(
-                groups: shell.repos.groupedRepos,
-                excludedRepoPaths: Set(shell.workspaces.sidebarProjectPaths + shell.workspaces.records.map(\.path)),
-                collapsedGroups: Binding(
-                    get: { shell.dialogs.collapsedRepoGroups },
-                    set: { shell.dialogs.collapsedRepoGroups = $0 }
-                )
-            ) { repo in
-                Task { await shell.addSidebarProject(repo) }
+        .popover(isPresented: selectorBinding(for: .header)) {
+            projectSelector
+        }
+    }
+
+    /// Karar 119: listenin başındaki başlangıç butonu — yalnız Projects
+    /// boşken. Settings'te hiç kök/repo yolu yoksa ilk kökü ekler; yol varsa
+    /// proje seçiciyi açar.
+    @ViewBuilder
+    private var startButton: some View {
+        if shell.workspaces.addedProjects.isEmpty {
+            if shell.settings.current.additionalPaths.isEmpty {
+                LumiBrowseButton(icon: "folder.badge.plus", label: "Add Project Root", isFullWidth: true) {
+                    Task { await shell.addProjectRoot() }
+                }
+                .padding(.bottom, Theme.Spacing.sm)
+            } else {
+                LumiBrowseButton(icon: "plus", label: "Add Project", isFullWidth: true) {
+                    toggleProjectSelector(from: .startButton)
+                }
+                .popover(isPresented: selectorBinding(for: .startButton)) {
+                    projectSelector
+                }
+                // Proje dışarıdan (⌘O, telefon) eklenince buton açık popover'ıyla
+                // birlikte gider ama binding `false` yazılmaz — dialog `active`
+                // kalır, girdi bloklu sayılır ve başlıktaki `+` ilk tıkta kapatır.
+                .onDisappear {
+                    if selectorAnchor == .startButton { shell.dialogs.dismiss(.sidebarProjectSelector) }
+                }
+                .padding(.bottom, Theme.Spacing.sm)
             }
+        }
+    }
+
+    private func toggleProjectSelector(from anchor: SelectorAnchor) {
+        selectorAnchor = anchor
+        shell.dialogs.setPresented(.sidebarProjectSelector, !shell.dialogs.isPresenting(.sidebarProjectSelector))
+    }
+
+    private func selectorBinding(for anchor: SelectorAnchor) -> Binding<Bool> {
+        Binding(
+            get: { selectorAnchor == anchor && shell.dialogs.isPresenting(.sidebarProjectSelector) },
+            set: { shell.dialogs.setPresented(.sidebarProjectSelector, $0) }
+        )
+    }
+
+    private var projectSelector: some View {
+        RepoSelectorView(
+            groups: shell.repos.groupedRepos,
+            excludedRepoPaths: Set(shell.workspaces.sidebarProjectPaths + shell.workspaces.records.map(\.path)),
+            collapsedGroups: Binding(
+                get: { shell.dialogs.collapsedRepoGroups },
+                set: { shell.dialogs.collapsedRepoGroups = $0 }
+            )
+        ) { repo in
+            Task { await shell.addSidebarProject(repo) }
         }
     }
 
@@ -121,18 +169,14 @@ public struct ProjectsPanel: View {
     }
 
     private var emptyState: some View {
+        // Arama dışındaki boş hâli `startButton` karşılar (karar 119).
         VStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: searchText.isEmpty ? "folder.badge.plus" : "magnifyingglass")
+            Image(systemName: "magnifyingglass")
                 .font(Theme.Typography.title)
                 .foregroundStyle(Theme.textMuted)
-            Text(searchText.isEmpty ? "No projects yet" : "No matching projects")
+            Text("No matching projects")
                 .font(Theme.Typography.labelMono)
                 .foregroundStyle(Theme.textSecondary)
-            if searchText.isEmpty {
-                Text("Use + to add a project")
-                    .font(Theme.Typography.captionMono)
-                    .foregroundStyle(Theme.textMuted)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Spacing.xxl)

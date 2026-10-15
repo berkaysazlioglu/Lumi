@@ -568,7 +568,7 @@ public extension RepoStore.RepoGroup {
         [
             RepoStore.RepoGroup(
                 id: "__projects_root__",
-                label: "Projects Root",
+                label: "Projects",
                 repos: [
                     Repo(name: "lumi", path: "/Users/preview/Projects/lumi", isGitRepo: true, source: .projectsRoot),
                     Repo(name: "orca", path: "/Users/preview/Projects/orca", isGitRepo: true, source: .projectsRoot),

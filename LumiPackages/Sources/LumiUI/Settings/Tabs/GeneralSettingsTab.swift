@@ -16,13 +16,7 @@ struct GeneralSettingsTab: SettingsTabContent {
                 description: "Repo discovery and default AI provider."
             )
             LumiField(
-                title: "Projects Root",
-                hint: "First-level subdirectories are listed as repos"
-            ) {
-                projectsRootField
-            }
-            LumiField(
-                title: "Additional Paths",
+                title: "Project Paths",
                 hint: "root: subdirectories are scanned · repo: added on its own"
             ) {
                 additionalPathsField
@@ -42,29 +36,6 @@ struct GeneralSettingsTab: SettingsTabContent {
                         set: { shell.settings.setProvider($0) }
                     )
                 )
-            }
-        }
-    }
-
-    private var projectsRootField: some View {
-        HStack(spacing: Theme.Spacing.md) {
-            Text(shell.settings.current.projectsRoot.isEmpty
-                ? "(not set)" : shell.settings.current.projectsRoot)
-                .font(Theme.Typography.bodyMono)
-                .foregroundStyle(Theme.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Theme.Spacing.lg)
-                .padding(.vertical, Theme.Spacing.md)
-                .background(Theme.bgDeep)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-            LumiBrowseButton(icon: "folder", label: "Browse") {
-                Task { @MainActor in
-                    if let path = await shell.actions.chooseFolder() {
-                        shell.settings.setProjectsRoot(path)
-                    }
-                }
             }
         }
     }
@@ -119,11 +90,7 @@ struct GeneralSettingsTab: SettingsTabContent {
     }
 
     private func addPath(type: AdditionalPath.PathType) {
-        Task { @MainActor in
-            if let path = await shell.actions.chooseFolder() {
-                shell.settings.addAdditionalPath(path, type: type)
-            }
-        }
+        Task { await shell.addProjectPath(type: type) }
     }
 }
 
