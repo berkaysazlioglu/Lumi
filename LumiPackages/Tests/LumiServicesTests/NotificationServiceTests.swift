@@ -71,6 +71,26 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertTrue(scheduler.activeIDs.isEmpty)
     }
 
+    func testFocusedWorkingAndIdleRemoveOnlyThatTerminalsNotification() {
+        let otherID = TerminalID()
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
+        service.handleStatusChange(id: otherID, repoName: "other", status: .waitingUnseen)
+
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingFocused)
+        XCTAssertEqual(presenter.removed, [terminalID.description], "yalnız hedef terminalin bildirimi silinir")
+
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .working)
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .idle)
+        XCTAssertEqual(presenter.removed, Array(repeating: terminalID.description, count: 3))
+    }
+
+    func testWaitingAndErrorKeepDeliveredNotification() {
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingSeen)
+        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .error)
+        XCTAssertTrue(presenter.removed.isEmpty)
+    }
+
     func testErrorIsOneShot() {
         service.handleStatusChange(id: terminalID, repoName: "lumi", status: .error)
         XCTAssertEqual(presenter.presented.count, 1)

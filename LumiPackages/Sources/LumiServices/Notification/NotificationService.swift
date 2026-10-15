@@ -8,7 +8,7 @@ import LumiKit
 /// | waiting-unseen   | anında "waiting for input"| unseenIntervalMinutes   |
 /// | waiting-seen     | yok                       | seenIntervalMinutes     |
 /// | error            | tek seferlik              | yok                     |
-/// | diğerleri        | yok                       | interval temizlenir     |
+/// | diğerleri        | teslim edilen silinir     | interval temizlenir     |
 ///
 /// Her geçiş önce mevcut interval'i temizler (terminal başına en fazla bir).
 /// Focus guard: native OS bildirimi yalnız pencere odaklı DEĞİLKEN.
@@ -80,7 +80,9 @@ public final class NotificationService: NotificationServicing {
             deliver(id: id, title: repoName, body: Self.errorBody)
 
         case .working, .idle, .waitingFocused:
-            break // yalnız interval temizliği
+            // Terminal artık görülmemiş durumda değil — eski bildirim kalırsa
+            // sonraki turn'ün "bitti" bildirimi sanılır.
+            presenter.removeDelivered(id: id.description)
         }
     }
 
