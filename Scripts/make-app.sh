@@ -39,7 +39,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
 DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
 APP="$DIST/Lumi.app"
-VERSION="${VERSION:-0.9.0}"
+VERSION="${VERSION:-0.9.1}"
 GIT_COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 # Kişisel, commit'lenmeyen ayarlar: varsa burada source edilir (.gitignore'da).
