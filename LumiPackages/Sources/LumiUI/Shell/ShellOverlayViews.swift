@@ -70,23 +70,8 @@ public struct SettingsOverlay: View {
 
 public struct ToastOverlayHost: View {
     @Shell private var shell
-    /// Karar 118: kartın sağ paneli örtmemesi için yuvanın gerçekten çizilip
-    /// çizilmediği (öğeleri çözülüyor mu) buradan okunur. `weak`: kayıt
-    /// defteri bu view'ı üreten closure'ı tutar.
-    private weak var registries: ShellRegistries?
 
-    public init(registries: ShellRegistries? = nil) {
-        self.registries = registries
-    }
-
-    /// Sağ yuva açıksa kart onun soluna oturur — kalıcı bir kart Source
-    /// Control'ün Commit butonunu örtmesin. Geçici toast'lar köşede kalır.
-    private var cardTrailingInset: CGFloat {
-        guard let registries, shell.layout.isSlotVisible(.right),
-              !registries.panels.resolved(slot: .right, layout: shell.layout.panelLayout, context: shell).isEmpty
-        else { return 0 }
-        return CGFloat(shell.layout.width(for: .right))
-    }
+    public init() {}
 
     public var body: some View {
         // Karar 118: güncelleme kartı yığının EN ALTINDA — geçici toast'lar
@@ -95,10 +80,12 @@ public struct ToastOverlayHost: View {
             ToastOverlay(store: shell.toasts) { terminalID in
                 shell.terminals.restoreAndFocus(terminalID)
             }
-            if shell.appUpdate.isCardVisible {
+            // Modal açıkken kart scrim'in üstünde kalmasın (onay dialogu dahil).
+            if shell.appUpdate.isCardVisible, !shell.dialogs.isInputBlockingOverlayOpen {
+                // Karar 118: pencerenin sağ alt köşesine sabit — hiçbir panele
+                // bağlı değil (sağ yuva açılıp kapanınca yer değiştirmez).
                 AppUpdateCard()
                     .padding([.horizontal, .bottom], Theme.Spacing.xl)
-                    .padding(.trailing, cardTrailingInset)
             }
         }
         .animation(Theme.Motion.standardOut, value: shell.appUpdate.isCardVisible)
@@ -144,39 +131,39 @@ public struct CloseTabDialogOverlay: View {
     }
 }
 
-/// Quit onayı (`.terminateLater` akışı — design/03 §2).
+/// Quit onayı (`.terminateLater` akışı — design/03 §2). Karar 118: native
+/// `confirmationDialog` yerine Lumi'nin kendi dialogu.
 public struct QuitDialogOverlay: View {
     @Shell private var shell
 
     public init() {}
 
     public var body: some View {
-        DialogAnchor()
-            .confirmationDialog(
-                "Quit Lumi?",
-                isPresented: Binding(
-                    get: { shell.dialogs.quitDialogTerminalCount != nil },
-                    set: { isPresented in
-                        if !isPresented, shell.dialogs.quitDialogTerminalCount != nil {
-                            shell.dialogs.resolveQuit(false)
-                        }
-                    }
-                )
-            ) {
-                Button("Quit", role: .destructive) { shell.dialogs.resolveQuit(true) }
-                Button("Cancel", role: .cancel) { shell.dialogs.resolveQuit(false) }
-            } message: {
-                Text(message)
-            }
+        if let count = shell.dialogs.quitDialogTerminalCount {
+            ConfirmDialog(
+                icon: "power",
+                iconColor: Theme.error,
+                title: "Quit Lumi?",
+                message: Self.message(terminalCount: count),
+                note: updateNote,
+                cancel: .init(title: "Cancel") { shell.dialogs.resolveQuit(false) },
+                actions: [.init(title: "Quit", kind: .destructive) { shell.dialogs.resolveQuit(true) }]
+            )
+        }
+    }
+
+    static func message(terminalCount: Int) -> String {
+        let noun = terminalCount == 1 ? "terminal" : "terminals"
+        return "Your \(terminalCount) open \(noun) will be closed and anything running in them will be stopped. "
+            + "Claude and Codex sessions are resumed the next time you open Lumi."
     }
 
     /// Karar 118: `Install on Quit` seçiliyse quit'in ardından kurulacağı söylenir.
-    private var message: String {
-        let terminals = "\(shell.dialogs.quitDialogTerminalCount ?? 0) open terminal(s) will be closed."
+    private var updateNote: String? {
         guard shell.appUpdate.installTiming == .onQuit,
               let staged = shell.appUpdate.stagedUpdate
-        else { return terminals }
-        return terminals + " Lumi \(staged.release.version.description) will be installed after quitting."
+        else { return nil }
+        return "Lumi \(staged.release.version.description) will be installed after quitting."
     }
 }
 
@@ -192,41 +179,36 @@ public struct InstallUpdateDialogOverlay: View {
 
     public init() {}
 
-    private var state: InstallUpdateDialogState? { shell.dialogs.installUpdateDialog }
-
     public var body: some View {
-        DialogAnchor()
-            .confirmationDialog(
-                "Restart Lumi to install \(state?.version ?? "")?",
-                isPresented: Binding(
-                    get: { state != nil },
-                    set: { if !$0 { shell.resolveInstallUpdate(.cancel) } }
-                )
-            ) {
-                Button(
-                    "Restart Now",
-                    role: (state?.terminalCount ?? 0) > 0 ? .destructive : nil
-                ) { shell.resolveInstallUpdate(.restartNow) }
-                Button(state?.isScheduledOnQuit == true ? "Don't Install on Quit" : "Install on Quit") {
-                    shell.resolveInstallUpdate(.toggleInstallOnQuit)
-                }
-                Button("Cancel", role: .cancel) { shell.resolveInstallUpdate(.cancel) }
-            } message: {
-                Text(Self.message(terminalCount: state?.terminalCount ?? 0))
-            }
+        if let state = shell.dialogs.installUpdateDialog {
+            ConfirmDialog(
+                icon: "arrow.down.circle",
+                title: "Restart Lumi to install \(state.version)?",
+                message: Self.message(terminalCount: state.terminalCount),
+                note: state.isScheduledOnQuit
+                    ? "The update is set to install the next time you quit Lumi."
+                    : "Choose Install on Quit to keep working — the update is installed the next time you quit Lumi.",
+                cancel: .init(title: "Cancel") { shell.resolveInstallUpdate(.cancel) },
+                actions: [
+                    .init(title: state.isScheduledOnQuit ? "Don't Install on Quit" : "Install on Quit") {
+                        shell.resolveInstallUpdate(.toggleInstallOnQuit)
+                    },
+                    .init(title: "Restart Now", kind: state.terminalCount > 0 ? .destructive : .primary) {
+                        shell.resolveInstallUpdate(.restartNow)
+                    },
+                ]
+            )
+        }
     }
 
     static func message(terminalCount: Int) -> String {
-        var lines = ["Lumi will quit, install the update and reopen."]
+        var text = "Lumi will quit, install the update and reopen."
         if terminalCount > 0 {
             let noun = terminalCount == 1 ? "terminal" : "terminals"
-            lines.append(
-                "Your \(terminalCount) open \(noun) will be closed and anything running in them "
-                    + "will be stopped. Claude and Codex sessions are resumed after the restart."
-            )
+            text += " Your \(terminalCount) open \(noun) will be closed and anything running in them "
+                + "will be stopped. Claude and Codex sessions are resumed after the restart."
         }
-        lines.append("Choose Install on Quit to keep working — the update is installed the next time you quit Lumi.")
-        return lines.joined(separator: "\n\n")
+        return text
     }
 }
 

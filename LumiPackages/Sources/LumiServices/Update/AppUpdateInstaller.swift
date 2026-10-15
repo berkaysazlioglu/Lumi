@@ -30,8 +30,17 @@ public actor AppUpdateInstaller: AppUpdateInstalling {
     private let session: URLSession
     private let runner: any ProcessRunning
     private let signatures: any CodeSignatureVerifying
-    /// Çalışan kopyanın Developer ID takımı; `nil` → güncelleyici kapalı.
+    /// Güvenilen takım: çalışan kopyanın Developer ID takımı, değilse
+    /// geliştirici anahtarı (`trustedTeamDefaultsKey`); `nil` → güncelleyici kapalı.
     private let team: String?
+
+    /// Geliştirici anahtarı: Developer ID sertifikası olmayan makinede yerel
+    /// (ad-hoc) build'in güncelleyiciyi denemesi için —
+    /// `defaults write com.lumi.app LumiUpdaterTrustedTeam <TEAM_ID>`.
+    /// Güveni GEVŞETMEZ: indirilen build yine bu takımın Developer ID imzasını
+    /// taşımak zorundadır; yalnız imzasız yerel kopyanın release'le
+    /// değiştirilmesine izin verir.
+    public static let trustedTeamDefaultsKey = "LumiUpdaterTrustedTeam"
 
     public init(
         root: URL,
@@ -42,7 +51,8 @@ public actor AppUpdateInstaller: AppUpdateInstalling {
         userID: uid_t = getuid(),
         session: URLSession = .shared,
         runner: any ProcessRunning = SystemProcessRunner(),
-        signatures: any CodeSignatureVerifying = CodeSignatureVerifier()
+        signatures: any CodeSignatureVerifying = CodeSignatureVerifier(),
+        trustedTeamOverride: String? = UserDefaults.standard.string(forKey: AppUpdateInstaller.trustedTeamDefaultsKey)
     ) {
         self.root = root
         self.bundleURL = bundleURL
@@ -53,7 +63,16 @@ public actor AppUpdateInstaller: AppUpdateInstalling {
         self.session = session
         self.runner = runner
         self.signatures = signatures
-        self.team = signatures.runningDeveloperIDTeam()
+        self.team = signatures.runningDeveloperIDTeam() ?? Self.validTeam(trustedTeamOverride)
+    }
+
+    /// Apple takım kimliği: 10 büyük harf/rakam. Bozuk bir değer gereksinim
+    /// dizgesine girmesin diye yok sayılır.
+    static func validTeam(_ raw: String?) -> String? {
+        guard let raw, raw.count == 10,
+              raw.allSatisfy({ $0.isASCII && ($0.isUppercase || $0.isNumber) })
+        else { return nil }
+        return raw
     }
 
     /// Release asset adlarındaki mimari (`make-app.sh`: `uname -m`).

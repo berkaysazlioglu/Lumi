@@ -29,7 +29,13 @@ final class AppUpdateFeatureAssembly: FeatureAssembly, ShellContributing {
         let dialogs = shared.dialogs
         appUpdate.onRestartRequested = {
             dialogs.preconfirmQuit()
-            NSApp.terminate(nil)
+            // `terminate` bir main-actor işinin İÇİNDEN çağrılamaz: `.terminateLater`
+            // AppKit'i `terminate`'in içinde iç içe bir run loop'a sokar, dışarıdaki
+            // iş hiç bitmediği için main actor kilitlenir — `shutdownAndReply` ve
+            // terminal girdisi sonsuza dek sırada kalıyordu (Lumi kapanmıyor,
+            // terminaller yazı almıyordu). Run loop'un kendi zamanlayıcısından
+            // çağrılınca main queue serbest kalır (⌘Q'nun menü olayıyla aynı konum).
+            NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
         }
     }
 

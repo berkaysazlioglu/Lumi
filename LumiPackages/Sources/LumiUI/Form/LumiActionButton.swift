@@ -7,7 +7,11 @@ import SwiftUI
 /// ile aynı dili konuşur: `.primary` dolu accent, `.secondary` elevated zemin +
 /// hairline kenarlık, ikisi de `Theme.Radius.md`.
 struct LumiActionButton: View {
-    enum Kind { case primary, secondary }
+    enum Kind {
+        case primary, secondary
+        /// Geri alınamaz eylem (karar 118: terminalleri kapatan Restart/Quit).
+        case destructive
+    }
 
     let title: String
     var kind: Kind = .secondary
@@ -38,10 +42,12 @@ struct LumiActionButton: View {
     }
 
     private static var minWidth: CGFloat { Theme.scaled(88) }
+    private static let destructiveOpacity = 0.75
+    private static let destructiveHoverOpacity = 0.95
 
     private var foreground: Color {
         switch kind {
-        case .primary: Theme.textPrimary
+        case .primary, .destructive: Theme.textPrimary
         case .secondary: Theme.textSecondary
         }
     }
@@ -50,6 +56,7 @@ struct LumiActionButton: View {
         switch kind {
         case .primary: Theme.accentVivid
         case .secondary: Theme.border
+        case .destructive: Theme.error
         }
     }
 
@@ -57,6 +64,7 @@ struct LumiActionButton: View {
         switch kind {
         case .primary: isHovering ? Theme.accentPrimary : Theme.accentVivid
         case .secondary: isHovering ? Theme.bgDeep : Theme.bgElevated
+        case .destructive: Theme.error.opacity(isHovering ? Self.destructiveHoverOpacity : Self.destructiveOpacity)
         }
     }
 }

@@ -83,6 +83,11 @@ final class InstallUpdateDialogTests: XCTestCase {
         XCTAssertTrue(InstallUpdateDialogOverlay.message(terminalCount: 3).contains("Your 3 open terminals will be closed"))
     }
 
+    func testQuitMessageNamesTerminalCount() {
+        XCTAssertTrue(QuitDialogOverlay.message(terminalCount: 1).hasPrefix("Your 1 open terminal will be closed"))
+        XCTAssertTrue(QuitDialogOverlay.message(terminalCount: 4).hasPrefix("Your 4 open terminals will be closed"))
+    }
+
     func testQuitPreconfirmationIsConsumedOnce() {
         shell.dialogs.preconfirmQuit()
         XCTAssertTrue(shell.dialogs.consumeQuitPreconfirmation())

@@ -48,13 +48,27 @@ final class AppUpdateInstallerTests: XCTestCase {
     func testUnsignedBuildCannotUpdateItself() async throws {
         let installer = AppUpdateInstaller(
             root: dir, bundleURL: dir.appendingPathComponent("Lumi.app"),
-            signatures: StubSignatures(team: nil)
+            signatures: StubSignatures(team: nil), trustedTeamOverride: nil
         )
         XCTAssertEqual(installer.installSupport(), .unsignedBuild)
         do {
             _ = try await installer.prepare(.init(version: AppVersion("9.0.0")!, pageURL: dir, publishedAt: nil))
             XCTFail("imzasız kopya hazırlık yapmamalı")
         } catch {}
+    }
+
+    /// Geliştirici anahtarı imzasız yerel build'de güncelleyiciyi açar; bozuk değer yok sayılır.
+    func testTrustedTeamOverrideEnablesUnsignedLocalBuild() throws {
+        let app = dir.appendingPathComponent("Lumi.app")
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        let overridden = AppUpdateInstaller(
+            root: dir, bundleURL: app, signatures: StubSignatures(team: nil), trustedTeamOverride: "S5P38S66SM"
+        )
+        XCTAssertEqual(overridden.installSupport(), .supported)
+        let garbage = AppUpdateInstaller(
+            root: dir, bundleURL: app, signatures: StubSignatures(team: nil), trustedTeamOverride: "x\" or true"
+        )
+        XCTAssertEqual(garbage.installSupport(), .unsignedBuild)
     }
 
     func testTranslocatedOrReadOnlyBundleIsReported() throws {
