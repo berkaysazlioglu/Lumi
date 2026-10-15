@@ -15,6 +15,7 @@ import XCTest
 final class AppMenuCommandsTests: XCTestCase {
     private var dispatcher: MenuActionDispatcher!
     private var closeProjectCount = 0
+    private var spawnRequests: [(scope: TerminalScope, command: String?)] = []
     private var shared: SharedStores!
     private var terminalService: FakeTerminalService!
 
@@ -28,12 +29,16 @@ final class AppMenuCommandsTests: XCTestCase {
         )
         dispatcher = MenuActionDispatcher()
         closeProjectCount = 0
+        spawnRequests = []
         AppMenuCommands.register(
             in: dispatcher,
             shared: shared,
             openSettings: {},
             openAbout: {},
-            closeActiveProject: { [weak self] in self?.closeProjectCount += 1 }
+            closeActiveProject: { [weak self] in self?.closeProjectCount += 1 },
+            spawnTerminal: { [weak self] scope, command in
+                self?.spawnRequests.append((scope, command))
+            }
         )
         // Terminal listesi servis stream'inden akar: lifecycle başlamadan
         // spawn edilen terminal store'a düşmez.
@@ -165,5 +170,31 @@ final class AppMenuCommandsTests: XCTestCase {
         dispatcher.perform(.closeTerminal, index: nil)
 
         XCTAssertEqual(closeProjectCount, 0)
+    }
+
+    // MARK: - ⌘T aktif terminal yüzeyinde açar
+
+    func testNewTerminalSpawnsInTheActiveCheckout() {
+        shared.navigation.openTab("/r/alpha")
+
+        dispatcher.perform(.newTerminal, index: nil)
+
+        XCTAssertEqual(spawnRequests.map(\.scope), [.repo("/r/alpha")])
+        XCTAssertEqual(spawnRequests.first?.command, shared.settings.current.aiProvider.launchCommand)
+    }
+
+    /// All Terminals'ta repo yoktur — ⌘T yine de (serbest) terminal ister.
+    func testNewTerminalSpawnsOnAllTerminalsSurface() {
+        shared.navigation.setRoute(.content(.allTerminals))
+
+        dispatcher.perform(.newTerminal, index: nil)
+
+        XCTAssertEqual(spawnRequests.map(\.scope), [.all])
+    }
+
+    func testNewTerminalIsANoOpOffTerminalSurfaces() {
+        dispatcher.perform(.newTerminal, index: nil)
+
+        XCTAssertTrue(spawnRequests.isEmpty)
     }
 }

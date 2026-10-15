@@ -15,15 +15,17 @@ enum AppMenuCommands {
         shared: SharedStores,
         openSettings: @escaping () -> Void,
         openAbout: @escaping () -> Void,
-        closeActiveProject: @escaping () -> Void
+        closeActiveProject: @escaping () -> Void,
+        spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void
     ) {
+        // Karar 103/108: ⌘T aktif terminal YÜZEYİNE vurur — repo route'unda o
+        // checkout, All Terminals'ta geçerli konumda serbest terminal. Konum
+        // çözümü `ShellContext.spawnTerminal(in:)`'in (top bar butonuyla aynı
+        // kapı); `openSettings` deseniyle dışarıdan enjekte edilir.
         dispatcher.register(.newTerminal) {
-            guard let active = shared.navigation.activeRepoPath else { return }
+            guard let scope = shared.navigation.activeRoute.terminalScope else { return }
             // Provider terminali = shell + launch komutu
-            shared.terminals.spawn(
-                in: active,
-                command: shared.settings.current.aiProvider.launchCommand
-            )
+            spawnTerminal(scope, shared.settings.current.aiProvider.launchCommand)
         }
         // Electron paritesi: aktif terminal yoksa ⌘W repo TAB'ını kapatır
         // (karar 59). Tab kapanışı `requestCloseTab` guard'ından geçer —

@@ -60,6 +60,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openAbout: { [weak self] in self?.openSettings(tab: .about) },
             closeActiveProject: { [weak self] in
                 self?.composition.shell.context.requestCloseActiveProject()
+            },
+            spawnTerminal: { [weak self] scope, command in
+                self?.composition.shell.context.spawnTerminal(in: scope, command: command)
             }
         )
         // Config henüz diskten okunmadığı için menü varsayılan düzende kurulur;
