@@ -64,6 +64,7 @@ struct AboutUpdateStatus: View {
         case .downloading:
             return "Downloading…"
         case .readyToInstall:
+            if store.isDownloadingNewer { return "Downloading a newer version…" }
             if store.installTiming == .onQuit { return "Will be installed when you quit Lumi." }
             return "Downloaded and ready to install."
         case .downloadFailed(_, let message):

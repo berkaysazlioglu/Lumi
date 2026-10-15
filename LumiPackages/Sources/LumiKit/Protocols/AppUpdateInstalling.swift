@@ -20,6 +20,7 @@ public protocol AppUpdateInstalling: Sendable {
     /// siler (bir kez gösterilir).
     func consumeInstallFailure() async -> String?
 
-    /// Sahnelenmiş sürümü siler (release geri çekildiğinde).
-    func discardStaged() async
+    /// `keep` dışındaki sahnelenmiş sürümleri siler (`nil` → hepsini): yeni
+    /// sürüm hazır olunca eskisi, release geri çekilince hepsi.
+    func discardStaged(except keep: StagedAppUpdate?) async
 }

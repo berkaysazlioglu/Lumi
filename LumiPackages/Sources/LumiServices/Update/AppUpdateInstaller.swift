@@ -150,16 +150,18 @@ public actor AppUpdateInstaller: AppUpdateInstalling {
             try? FileManager.default.removeItem(at: versionDir)
             throw Self.failure("the downloaded app is not a Lumi \(release.version) build signed by this developer")
         }
-        removeStagedVersions(except: versionDir)
+        // Diğer sürümlerin sahnesi burada silinmez: store eskisini ancak yenisi
+        // yerine geçince (ve kurulum kaydedilmemişse) `discardStaged` ile atar.
         return StagedAppUpdate(release: release, appPath: app.path)
     }
 
     /// Yalnız tek sürüm sahnede kalır (eski indirmeler yer kaplamasın).
-    private func removeStagedVersions(except keep: URL) {
+    public func discardStaged(except keep: StagedAppUpdate?) async {
+        let keepDir = keep.map { URL(fileURLWithPath: $0.appPath).deletingLastPathComponent().standardizedFileURL.path }
         let siblings = (try? FileManager.default.contentsOfDirectory(
             at: stagingDir, includingPropertiesForKeys: nil
         )) ?? []
-        for sibling in siblings where sibling.standardizedFileURL != keep.standardizedFileURL {
+        for sibling in siblings where sibling.standardizedFileURL.path != keepDir {
             try? FileManager.default.removeItem(at: sibling)
         }
     }
@@ -279,10 +281,6 @@ public actor AppUpdateInstaller: AppUpdateInstalling {
             let detail = output?.stderr.trimmingCharacters(in: .whitespacesAndNewlines) ?? "timed out"
             throw Self.failure("could not register the installer (launchctl: \(detail))")
         }
-    }
-
-    public func discardStaged() async {
-        try? FileManager.default.removeItem(at: stagingDir)
     }
 
     public func consumeInstallFailure() async -> String? {

@@ -659,7 +659,7 @@ private struct PreviewAppUpdateInstaller: AppUpdateInstalling {
     }
     func scheduleInstall(_ update: StagedAppUpdate, relaunch: Bool) async throws {}
     func consumeInstallFailure() async -> String? { nil }
-    func discardStaged() async {}
+    func discardStaged(except keep: StagedAppUpdate?) async {}
 }
 
 /// Süreçsiz sahte orchestrator (karar 114): sabit bir geçmiş döner.

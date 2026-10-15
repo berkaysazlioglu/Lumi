@@ -82,6 +82,25 @@ final class AppUpdateInstallerTests: XCTestCase {
         XCTAssertEqual(writable.installSupport(), .supported)
     }
 
+    /// Yalnız tutulan sürümün klasörü kalır; `nil` hepsini siler.
+    func testDiscardStagedKeepsOnlyTheGivenVersion() async throws {
+        let staged = dir.appendingPathComponent("staged")
+        for version in ["0.9.0", "0.9.1"] {
+            try FileManager.default.createDirectory(
+                at: staged.appendingPathComponent("\(version)/Lumi.app"), withIntermediateDirectories: true
+            )
+        }
+        let installer = AppUpdateInstaller(root: dir, signatures: StubSignatures(team: nil), trustedTeamOverride: nil)
+        let keep = StagedAppUpdate(
+            release: AppRelease(version: AppVersion("0.9.1")!, pageURL: dir, publishedAt: nil),
+            appPath: staged.appendingPathComponent("0.9.1/Lumi.app").path
+        )
+        await installer.discardStaged(except: keep)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: staged.path), ["0.9.1"])
+        await installer.discardStaged(except: nil)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: staged.path), [])
+    }
+
     // MARK: - Script
 
     func testScriptReplacesAppAndCleansUp() throws {

@@ -41,10 +41,11 @@ public actor FakeAppUpdateInstaller: AppUpdateInstalling {
         scheduled.append((update.release.version.description, relaunch))
     }
 
-    public private(set) var discardCount = 0
+    /// Her `discardStaged` çağrısında tutulan sürüm (`nil` → hepsi silindi).
+    public private(set) var discards: [String?] = []
 
-    public func discardStaged() async {
-        discardCount += 1
+    public func discardStaged(except keep: StagedAppUpdate?) async {
+        discards.append(keep?.release.version.description)
     }
 
     public func consumeInstallFailure() async -> String? {

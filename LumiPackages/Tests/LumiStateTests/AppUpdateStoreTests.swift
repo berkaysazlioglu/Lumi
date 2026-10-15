@@ -107,15 +107,46 @@ final class AppUpdateStoreTests: XCTestCase {
 
     /// Hazır sürüm oturum boyunca sabittir: uçuştaki bir kontrol kullanıcının
     /// seçtiği/seçeceği sahneyi silemez. Daha yenisini bir sonraki açılış alır.
-    func testStagedUpdateIsKeptForTheSession() async {
+    /// Saha hatası: 0.9.0 hazırken 0.9.1 çıktı, Check for Updates onu hiç
+    /// bulmuyordu. Daha yenisi indirilir, hazır olanın yerine geçer; eskisi
+    /// ancak o zaman silinir.
+    func testNewerReleaseReplacesStagedOne() async {
         let installer = FakeAppUpdateInstaller()
         let (store, service) = makeStore(installer: installer)
         await store.check()
         await service.setOutcome(.success(.fake(version: "0.9.1")))
         await store.check()
+        XCTAssertEqual(store.stagedUpdate?.release.version.description, "0.9.1")
+        XCTAssertFalse(store.isDownloadingNewer)
+        let prepared = await installer.preparedVersions
+        XCTAssertEqual(prepared, ["0.9.0", "0.9.1"])
+        let discards = await installer.discards
+        XCTAssertEqual(discards, ["0.9.0", "0.9.1"], "her hazır sürüm diğerlerini temizler")
+    }
+
+    /// Kurulum kaydedildiyse (Restart Now) kayıtlı sahne değiştirilmez.
+    func testCommittedInstallIsNeverReplaced() async {
+        let installer = FakeAppUpdateInstaller()
+        let (store, service) = makeStore(installer: installer)
+        await store.check()
+        await store.restartNow()
+        await service.setOutcome(.success(.fake(version: "0.9.1")))
+        await store.check()
         XCTAssertEqual(store.stagedUpdate?.release.version.description, "0.9.0")
         let prepared = await installer.preparedVersions
         XCTAssertEqual(prepared, ["0.9.0"])
+    }
+
+    /// Daha yeninin indirmesi başarısızsa hazır olan kalır.
+    func testFailedNewerDownloadKeepsReadyUpdate() async {
+        let installer = FakeAppUpdateInstaller()
+        let (store, service) = makeStore(installer: installer)
+        await store.check()
+        await installer.setPrepareError(.updateInstallFailed(detail: "offline"))
+        await service.setOutcome(.success(.fake(version: "0.9.1")))
+        await store.check()
+        XCTAssertEqual(store.stagedUpdate?.release.version.description, "0.9.0")
+        XCTAssertTrue(store.isCardVisible)
     }
 
     func testCheckFailureKeepsReadyUpdate() async {
@@ -135,6 +166,10 @@ final class AppUpdateStoreTests: XCTestCase {
 
         await store.check()
         XCTAssertFalse(store.isCardVisible, "periyodik kontrol kapatılan kartı geri getirmez")
+
+        await service.setOutcome(.success(.fake(version: "0.9.1")))
+        await store.check()
+        XCTAssertTrue(store.isCardVisible, "daha yeni sürüm kartı geri getirir")
     }
 
     // MARK: - Kurulum zamanı
@@ -147,18 +182,16 @@ final class AppUpdateStoreTests: XCTestCase {
         XCTAssertEqual(store.installTiming, .onQuit)
         XCTAssertFalse(store.isCardVisible)
 
-        // Planlanmış kurulum varken kontrol sahneyi değiştirmez (ama koşar).
+        // Seçim henüz kaydedilmedi: daha yenisi gelirse quit'te o kurulur.
         await service.setOutcome(.success(.fake(version: "0.9.1")))
-        let before = store.lastCheckedAt
         await store.check()
-        XCTAssertEqual(store.stagedUpdate?.release.version.description, "0.9.0")
-        XCTAssertNotEqual(store.lastCheckedAt, before)
+        XCTAssertEqual(store.stagedUpdate?.release.version.description, "0.9.1")
         XCTAssertEqual(store.installTiming, .onQuit)
 
         let scheduled = await store.installIfScheduled()
         XCTAssertTrue(scheduled)
         let calls = await installer.scheduled
-        XCTAssertEqual(calls.map(\.version), ["0.9.0"])
+        XCTAssertEqual(calls.map(\.version), ["0.9.1"])
         XCTAssertEqual(calls.map(\.relaunch), [false])
     }
 
@@ -254,8 +287,8 @@ final class AppUpdateStoreTests: XCTestCase {
         XCTAssertFalse(store.isCardVisible)
         let installed = await store.installIfScheduled()
         XCTAssertFalse(installed)
-        let discards = await installer.discardCount
-        XCTAssertEqual(discards, 1)
+        let discards = await installer.discards
+        XCTAssertEqual(discards, ["0.9.0", nil], "hazır olunca diğerleri, geri çekilince hepsi")
     }
 
     /// Hazırdan küçük ama mevcuttan büyük latest: geri çekilen atılır, latest indirilir.

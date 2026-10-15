@@ -12,10 +12,11 @@ import Observation
 /// yoluna bırakır (`installIfScheduled`). Kendiliğinden hiçbir zaman kapatmaz
 /// ya da kurmaz.
 ///
-/// **Hazır sürüm oturum boyunca sabittir.** Daha yeni bir sürüm çıksa da
-/// hazır olanın yerine bu oturumda indirilmez — bir sonraki açılış alır.
-/// Böylece kullanıcının seçtiği (ya da seçmek üzere olduğu) sahne, uçuştaki
-/// bir kontrolün altından silinemez.
+/// **Daha yeni sürüm hazır olanın yerini alır.** Hazır bir sürüm varken daha
+/// yenisi çıkarsa arka planda indirilir; hazır olan bu sırada görünmeye
+/// devam eder, yenisi doğrulanınca yerine geçer ve eskisi diskten ancak O
+/// ZAMAN silinir. Kurulum kaydedildiyse (`isInstallCommitted`: Restart Now ya
+/// da kapanış) değiştirme yapılmaz — kaydedilen sahne altından silinemez.
 ///
 /// Hata toast olmaz (ağsız açılış kullanıcıyı rahatsız etmemeli), About'ta
 /// satır içi görünür. `dev` build `.developmentBuild` olur, "güncelle" denmez.
@@ -54,6 +55,10 @@ public final class AppUpdateStore {
     public private(set) var lastInstallFailure: String?
     /// `Restart Now` kurulumu kaydederken (çift tıklamaya karşı).
     public private(set) var isSchedulingRestart = false
+    /// Hazır sürüm dururken daha yenisi arka planda indiriliyor.
+    public private(set) var isDownloadingNewer = false
+    /// Kurulum agent'a kaydedildi ya da kaydediliyor — sahne artık değişmez.
+    @ObservationIgnored private var isInstallCommitted = false
 
     /// `Restart Now` — kapanışı başlatan kabuk köprüsü (AppKit LumiState'te yok).
     @ObservationIgnored public var onRestartRequested: (@MainActor () -> Void)?
@@ -111,10 +116,9 @@ public final class AppUpdateStore {
     // MARK: - Kontrol
 
     /// Açılışta ve `checkInterval`'da bir koşar; About'taki buton ve menü de
-    /// buradan geçer. İndirme sürerken no-op; hazır bir sürüm varken yalnız
-    /// kontrol zamanını tazeler (sahneye dokunmaz).
+    /// buradan geçer. İndirme sürerken no-op.
     public func check() async {
-        guard !isChecking else { return }
+        guard !isChecking, !isDownloadingNewer else { return }
         if case .downloading = status { return }
         isChecking = true
         defer { isChecking = false }
@@ -148,17 +152,19 @@ public final class AppUpdateStore {
         // Release geri çekildiyse (silindi; `latest` hazır sürümden küçük) hazır
         // sürüm de gider — kart, segment ve quit'te kurulum artık önerilmez.
         if let staged = stagedUpdate, latest.version < staged.release.version {
-            guard installTiming != .restartNow else { return } // kapanış başladı
+            guard !isInstallCommitted else { return } // kapanış başladı
             installTiming = nil
             status = .idle
-            await installer.discardStaged()
+            await installer.discardStaged(except: nil)
         }
         guard latest.version > current else {
             status = .upToDate(latest)
             return
         }
-        // Oturum boyunca sabit (bkz. tip yorumu) — `await`'ten sonra da geçerli.
-        if stagedUpdate != nil { return }
+        if let staged = stagedUpdate {
+            if latest.version > staged.release.version { await replaceStaged(with: latest) }
+            return
+        }
         guard installSupport.isSupported else {
             status = .available(latest)
             return
@@ -169,10 +175,28 @@ public final class AppUpdateStore {
     private func download(_ release: AppRelease) async {
         status = .downloading(release)
         do {
-            status = .readyToInstall(try await installer.prepare(release))
+            let staged = try await installer.prepare(release)
+            status = .readyToInstall(staged)
+            await installer.discardStaged(except: staged)
         } catch {
             status = .downloadFailed(release, message: error.localizedDescription)
         }
+    }
+
+    /// Hazır sürüm görünmeye devam ederken daha yenisini indirir; yenisi
+    /// hazır olunca yerine geçer (seçilmiş `Install on Quit` yenisine uygulanır,
+    /// kart yeni sürüm için yeniden çıkar). Hata olursa hazır olan kalır, bir
+    /// sonraki kontrol yeniden dener.
+    private func replaceStaged(with release: AppRelease) async {
+        guard !isInstallCommitted, installSupport.isSupported else { return }
+        isDownloadingNewer = true
+        defer { isDownloadingNewer = false }
+        guard let newer = try? await installer.prepare(release) else { return }
+        // İndirme sürerken kurulum kaydedildiyse kayıtlı sahneye dokunulmaz;
+        // yeni dosyalar bir sonraki temizlikte gider.
+        guard !isInstallCommitted, stagedUpdate != nil else { return }
+        status = .readyToInstall(newer)
+        await installer.discardStaged(except: newer)
     }
 
     // MARK: - Kurulum seçimi
@@ -198,10 +222,12 @@ public final class AppUpdateStore {
     public func restartNow() async {
         guard let staged = stagedUpdate, !isSchedulingRestart else { return }
         isSchedulingRestart = true
+        isInstallCommitted = true
         defer { isSchedulingRestart = false }
         do {
             try await installer.scheduleInstall(staged, relaunch: true)
         } catch {
+            isInstallCommitted = false
             lastInstallFailure = error.localizedDescription
             return
         }
@@ -217,6 +243,7 @@ public final class AppUpdateStore {
     @discardableResult
     public func installIfScheduled() async -> Bool {
         guard installTiming == .onQuit, let staged = stagedUpdate else { return false }
+        isInstallCommitted = true
         do {
             try await installer.scheduleInstall(staged, relaunch: false)
             return true
