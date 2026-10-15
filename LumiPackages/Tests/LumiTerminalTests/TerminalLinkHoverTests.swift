@@ -229,6 +229,50 @@ final class TerminalLinkHoverTests: XCTestCase {
         XCTAssertEqual(view.underlinedLinkText, "https://lumi.dev/pull/82")
     }
 
+    /// Gerçek Claude çıktısı: üstte düzyazı, altta `⎿` satırı yola yapışmaz.
+    func testClaudeReadPathBetweenProseAndResultRows() {
+        let path = "/private/tmp/claude-502/-Users-dev-word-puzzle/927918e2-72af-44ec-a5c9-2c53666a2c38/scratchpad/sheet_00.png"
+        let split = path.index(path.startIndex, offsetBy: 70)
+        useDisk([path])
+        show("Did the thing\r\n  ● Read(\(path[..<split])\r\n    \(path[split...]))\r\n      ⎿  Read image (1.6MB)")
+
+        hover(at: point(column: 12, row: 1))
+        XCTAssertEqual(view.underlinedLinkText, path)
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [1, 2])
+
+        view.clearLinkHover()
+        hover(at: point(column: 8, row: 2))
+        XCTAssertEqual(view.underlinedLinkText, path, "devam satırından da aynı link")
+    }
+
+    /// Üç satırlık kırılmanın üstündeki düzyazı satırı ("Saved to") yola yapışmaz.
+    func testHardWrappedPathBelowProseRow() {
+        let path = "/Users/dev/" + String(repeating: "x", count: 60) + "/" + String(repeating: "y", count: 60) + "/out.png"
+        let parts = [path.prefix(40), path.dropFirst(40).prefix(60), path.dropFirst(100)]
+        useDisk([path])
+        show("Saved to\r\n  \(parts[0])\r\n  \(parts[1])\r\n  \(parts[2])")
+
+        hover(at: point(column: 5, row: 3))
+
+        XCTAssertEqual(view.underlinedLinkText, path)
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [1, 2, 3])
+    }
+
+    /// TUI'nin sağ kenara yakın kırdığı URL birleşir — kısa satırdaki URL
+    /// (`testURLIsNotJoinedWithTheRowBelow`) birleşmez.
+    func testHardWrappedURLJoinsNearTheRightEdge() {
+        useDisk([])
+        let cols = view.getTerminal().cols
+        let head = "  https://lumi.dev/" + String(repeating: "a", count: cols - 21)
+        let url = head.dropFirst(2) + "bcd/pull/82"
+        show("\(head)\r\n  bcd/pull/82")
+
+        hover(at: point(column: 10))
+
+        XCTAssertEqual(view.underlinedLinkText, String(url))
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [0, 1])
+    }
+
     // MARK: - İmleç
 
     func testCursorTurnsIntoHandOnlyOverALink() {

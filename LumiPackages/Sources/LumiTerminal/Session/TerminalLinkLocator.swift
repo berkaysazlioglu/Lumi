@@ -22,6 +22,13 @@ struct TerminalRowText: Equatable {
         return cells[last].col + cells[last].width >= cols - 1
     }
 
+    /// TUI'nin kendisinin kırdığı satır sağ kenara yakın biter: içerik son
+    /// `max(2, cols/5)` sütunda bitiyor mu (SwiftTerm'in eski Ghostty sezgisi).
+    var endsNearEdge: Bool {
+        guard let last = lastContentIndex else { return false }
+        return cells[last].col + cells[last].width >= cols - max(2, cols / 5)
+    }
+
     var startsWithContent: Bool {
         guard let first = text.utf16.first else { return false }
         return !TerminalLinkLocator.isBlank(first)
@@ -92,10 +99,13 @@ enum TerminalLinkLocator {
             return TerminalRowSegment(row: row, range: 0 ..< units)
         }
         // Kırılmış yol birleşimi tahmindir: URL diske sorulmadan link sayıldığı
-        // için oradan çıkan URL adayı alınmaz (`…/pull/82` + alttaki `README.md`).
+        // için oradan çıkan URL adayı ancak kırılan satırlar sağ kenara yakın
+        // bittiyse alınır (`…/pull/82` + alttaki `README.md` birleşmesin).
         let hardWrapped = TerminalHardWrappedPaths.candidates(target: target, rowCount: rowCount, rowText: rowText)
             .flatMap { hitsInLine($0, target: target, col: col, rowText: rowText) }
-            .filter(\.requiresExistence)
+            .filter { hit in
+                hit.requiresExistence || hit.spans.dropLast().allSatisfy { rowText($0.row)?.endsNearEdge == true }
+            }
         let plain = [softWrapped, [TerminalRowSegment(row: target, range: 0 ..< targetRow.text.utf16.count)]]
             .flatMap { hitsInLine($0, target: target, col: col, rowText: rowText) }
         var seen: [[TerminalLinkSpan]] = []
