@@ -169,8 +169,9 @@ struct ShellComposition {
         registries.overlays.register(OverlayDescriptor(
             id: .toasts,
             alignment: .bottomTrailing,
-            isPresented: { !$0.toasts.toasts.isEmpty },
-            makeView: { AnyView(ToastOverlayHost()) }
+            // Karar 118: güncelleme kartı toast yığınının en altında yaşar.
+            isPresented: { !$0.toasts.toasts.isEmpty || $0.appUpdate.isCardVisible },
+            makeView: { [weak registries] in AnyView(ToastOverlayHost(registries: registries)) }
         ))
         registries.overlays.register(OverlayDescriptor(
             id: .closeTabDialog,

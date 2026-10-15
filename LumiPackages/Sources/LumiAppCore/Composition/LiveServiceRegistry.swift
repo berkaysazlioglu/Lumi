@@ -23,6 +23,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let deepSeek: any DeepSeekEnvironmentServicing
     let deepSeekBalance: any DeepSeekBalanceServicing
     let appReleases: any AppReleaseChecking
+    let appUpdateInstaller: any AppUpdateInstalling
     let claudeAccounts: any ClaudeAccountServicing
     let codexAccounts: any CodexAccountServicing
     let git: any GitServicing
@@ -94,6 +95,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
         deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
         appReleases = GitHubReleaseService()
+        appUpdateInstaller = AppUpdateInstaller(root: paths.configDir.appendingPathComponent("updates"))
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
         let codexAccountService = CodexAccountService(config: configService, paths: paths)
         codexAccounts = codexAccountService

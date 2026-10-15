@@ -50,6 +50,8 @@ public enum ShellToolbarItems {
         public static let statusSettings = 0
         public static let keepAwake = 0
         public static let resourceManager = 10
+        /// Karar 118: güncelleme segmenti sağ grubun en solunda (Orca paritesi).
+        public static let appUpdate = -10
     }
 
     /// Bir panel yuvasının top bar'daki temsili.

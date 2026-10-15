@@ -5,9 +5,10 @@ import LumiKit
 /// `GET api.github.com/repos/<owner>/<repo>/releases/latest`.
 ///
 /// Repo public olduğu için anahtar gerekmez. `latest` uç noktası draft ve
-/// pre-release'leri zaten döndürmez: CI'ın açtığı draft yayınlanana kadar
-/// "yeni sürüm" görünmez. Yetkisiz istek sınırı saatte 60'tır; uygulama
-/// açılışta bir kez + kullanıcı istedikçe sorar.
+/// pre-release'leri döndürmez — ama `release.yml` release'i draft olarak
+/// AÇMIYOR, yani tag atıldığı an yayın görünür (karar 118). Yetkisiz istek
+/// sınırı saatte 60'tır; uygulama açılışta + 4 saatte bir + kullanıcı
+/// istedikçe sorar.
 public actor GitHubReleaseService: AppReleaseChecking {
     public static let latestReleaseURL = URL(
         string: "https://api.github.com/repos/berkaysazlioglu/Lumi/releases/latest"
@@ -64,6 +65,24 @@ enum GitHubReleaseParser {
         else { return nil }
         let publishedAt = (object["published_at"] as? String)
             .flatMap { ISO8601DateFormatter().date(from: $0) }
-        return AppRelease(version: version, pageURL: page, publishedAt: publishedAt)
+        return AppRelease(
+            version: version,
+            pageURL: page,
+            publishedAt: publishedAt,
+            assets: assets(object["assets"]),
+            tag: tag
+        )
+    }
+
+    /// Karar 118: kurulum zip'i ve `SHA256SUMS` buradan seçilir. Bozuk tek bir
+    /// kayıt diğerlerini düşürmez.
+    private static func assets(_ raw: Any?) -> [AppReleaseAsset] {
+        guard let list = raw as? [[String: Any]] else { return [] }
+        return list.compactMap { entry in
+            guard let name = entry["name"] as? String,
+                  let url = (entry["browser_download_url"] as? String).flatMap(URL.init(string:))
+            else { return nil }
+            return AppReleaseAsset(name: name, downloadURL: url)
+        }
     }
 }

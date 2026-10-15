@@ -58,6 +58,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             shared: shared,
             openSettings: { [weak self] in self?.openSettings(tab: .general) },
             openAbout: { [weak self] in self?.openSettings(tab: .about) },
+            // Karar 118: sonuç About'ta görünür (hazırsa kart da çıkar).
+            checkForUpdates: { [weak self] in
+                guard let self else { return }
+                openSettings(tab: .about)
+                let updates = composition.shell.context.appUpdate
+                Task { @MainActor in await updates.check() }
+            },
             closeActiveProject: { [weak self] in
                 self?.composition.shell.context.requestCloseActiveProject()
             },
@@ -260,6 +267,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.logger.log("applicationShouldTerminate live=\(liveCount) shutdownComplete=\(self.isShutdownComplete)")
         if isShutdownComplete {
             return .terminateNow
+        }
+        // Karar 118: `Restart Now` kendi dialogunda onaylandı — terminallerin
+        // kapanacağı orada söylendi, ikinci kez sorulmaz.
+        if shared.dialogs.consumeQuitPreconfirmation() {
+            Task { @MainActor in await self.shutdownAndReply() }
+            return .terminateLater
         }
         if liveCount == 0 {
             Task { @MainActor in await self.shutdownAndReply() }

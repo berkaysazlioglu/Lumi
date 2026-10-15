@@ -631,7 +631,11 @@ public extension AppUpdateStore {
     /// Yeni sürüm bulunmuş hâl (karar 102 preview'ları).
     @MainActor
     static var preview: AppUpdateStore {
-        let store = AppUpdateStore(currentVersion: "0.8.0", service: PreviewAppReleaseService())
+        let store = AppUpdateStore(
+            currentVersion: "0.8.0",
+            service: PreviewAppReleaseService(),
+            installer: PreviewAppUpdateInstaller()
+        )
         Task { await store.check() }
         return store
     }
@@ -647,6 +651,16 @@ private struct PreviewAppReleaseService: AppReleaseChecking {
         )
     }
 }
+/// Ağsız, disksiz sahte kurucu (karar 118): sürüm anında "hazır" olur.
+private struct PreviewAppUpdateInstaller: AppUpdateInstalling {
+    func installSupport() -> AppUpdateInstallSupport { .supported }
+    func prepare(_ release: AppRelease) async throws -> StagedAppUpdate {
+        StagedAppUpdate(release: release, appPath: "/tmp/Lumi.app")
+    }
+    func scheduleInstall(_ update: StagedAppUpdate, relaunch: Bool) async throws {}
+    func consumeInstallFailure() async -> String? { nil }
+}
+
 /// Süreçsiz sahte orchestrator (karar 114): sabit bir geçmiş döner.
 struct PreviewOrchestratorService: OrchestratorServicing {
     func start(_ launch: OrchestratorLaunch) async throws -> OrchestratorRun {

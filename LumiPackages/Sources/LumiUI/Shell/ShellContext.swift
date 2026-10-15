@@ -377,6 +377,43 @@ public final class ShellContext {
         terminals.focus(id)
     }
 
+    // MARK: - Güncelleme (karar 118)
+
+    /// Kart ve alt bar segmentinin `Restart to Update`'i: kapanınca ölecek
+    /// terminal sayısını dialog açıldığı an sabitler.
+    public func requestInstallUpdate() {
+        guard let staged = appUpdate.stagedUpdate else { return }
+        dialogs.present(.installUpdate(InstallUpdateDialogState(
+            version: staged.release.version.description,
+            terminalCount: terminals.totalCount,
+            isScheduledOnQuit: appUpdate.installTiming == .onQuit
+        )))
+    }
+
+    public enum InstallUpdateChoice {
+        case cancel
+        /// `Install on Quit` — ya da zaten seçiliyse geri alma.
+        case toggleInstallOnQuit
+        case restartNow
+    }
+
+    public func resolveInstallUpdate(_ choice: InstallUpdateChoice) {
+        guard let state = dialogs.installUpdateDialog else { return }
+        dialogs.dismiss(.installUpdate(state))
+        switch choice {
+        case .cancel:
+            break
+        case .toggleInstallOnQuit:
+            if state.isScheduledOnQuit {
+                appUpdate.cancelScheduledInstall()
+            } else {
+                appUpdate.installOnQuit()
+            }
+        case .restartNow:
+            Task { await appUpdate.restartNow() }
+        }
+    }
+
     /// Silme onayı: canlı oturum sayısı dialogda gösterilir; store'un önceki
     /// hata/force durumu sıfırlanır.
     public func requestDeleteWorkspace(_ workspace: ProjectWorkspace) {

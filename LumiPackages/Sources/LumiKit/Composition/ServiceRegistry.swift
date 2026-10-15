@@ -38,6 +38,8 @@ public protocol ServiceRegistry: AnyObject {
     var deepSeekBalance: any DeepSeekBalanceServicing { get }
     /// GitHub Releases'ten son sürüm kontrolü (karar 102).
     var appReleases: any AppReleaseChecking { get }
+    /// Yeni sürümü indirip Lumi kapanınca kuran servis (karar 118).
+    var appUpdateInstaller: any AppUpdateInstalling { get }
     /// Claude hesap yönetimi (karar 56).
     var claudeAccounts: any ClaudeAccountServicing { get }
     /// Codex accounts stored as isolated CODEX_HOME directories.

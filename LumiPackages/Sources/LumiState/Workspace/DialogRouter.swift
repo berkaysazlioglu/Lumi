@@ -70,6 +70,21 @@ public struct RemoveCodexAccountDialogState: Equatable, Sendable {
     }
 }
 
+/// Güncelleme onayının sunum verisi (karar 118): kapanınca ölecek terminal
+/// sayısı dialog açıldığı an sabitlenir.
+public struct InstallUpdateDialogState: Equatable, Sendable {
+    public let version: String
+    public let terminalCount: Int
+    /// `Install on Quit` zaten seçili — ikinci buton geri almaya döner.
+    public let isScheduledOnQuit: Bool
+
+    public init(version: String, terminalCount: Int, isScheduledOnQuit: Bool) {
+        self.version = version
+        self.terminalCount = terminalCount
+        self.isScheduledOnQuit = isScheduledOnQuit
+    }
+}
+
 /// Favori dosya modalının bağlamı (karar 107): arama `checkoutPath`'in
 /// ağacında yapılır, kayıt `projectPath`'e yazılır. `relinkID` doluysa modal
 /// kayıp bir favoriyi yeni yerine bağlamak için açılmıştır.
@@ -114,6 +129,8 @@ public enum ActiveDialog: Equatable, Sendable {
     case removeClaudeAccount(RemoveClaudeAccountDialogState)
     case removeCodexAccount(RemoveCodexAccountDialogState)
     case quit(terminalCount: Int)
+    /// Karar 118: `Restart to Update` onayı.
+    case installUpdate(InstallUpdateDialogState)
 
     public var isPresented: Bool { self != .none }
 
@@ -125,7 +142,7 @@ public enum ActiveDialog: Equatable, Sendable {
         case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .favoriteFiles, .settings,
              .orchestrator, .onboarding, .closeTab,
              .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .removeCodexAccount,
-             .quit: true
+             .quit, .installUpdate: true
         }
     }
 }
@@ -171,6 +188,11 @@ public final class DialogRouter {
 
     public var removeCodexAccountDialog: RemoveCodexAccountDialogState? {
         guard case .removeCodexAccount(let state) = active else { return nil }
+        return state
+    }
+
+    public var installUpdateDialog: InstallUpdateDialogState? {
+        guard case .installUpdate(let state) = active else { return nil }
         return state
     }
 
@@ -247,6 +269,20 @@ public final class DialogRouter {
     }
 
     // MARK: - Quit akışı
+
+    /// Karar 118: `Restart Now` kullanıcının onayıyla başlar; aynı kapanışta
+    /// quit dialogu ikinci kez sorulmaz. Bayrak bir sonraki
+    /// `applicationShouldTerminate`'te tüketilir (`terminate` onu senkron çağırır).
+    @ObservationIgnored public private(set) var isQuitPreconfirmed = false
+
+    public func preconfirmQuit() {
+        isQuitPreconfirmed = true
+    }
+
+    public func consumeQuitPreconfirmation() -> Bool {
+        defer { isQuitPreconfirmed = false }
+        return isQuitPreconfirmed
+    }
 
     public func presentQuitDialog(terminalCount: Int) {
         active = .quit(terminalCount: terminalCount)

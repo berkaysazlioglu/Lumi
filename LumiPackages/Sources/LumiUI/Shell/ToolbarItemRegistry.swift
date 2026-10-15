@@ -79,6 +79,8 @@ public extension ToolbarItemID {
     /// Alt bar segmentleri (karar 43).
     static let keepAwake = ToolbarItemID("keepAwake")
     static let resourceManager = ToolbarItemID("resourceManager")
+    /// Karar 118: kurulmaya hazır güncelleme (kart kapatılınca da görünür kalır).
+    static let appUpdate = ToolbarItemID("appUpdate")
 }
 
 /// Top bar'daki bir öğenin tanımı (K33, Faz 6.4).

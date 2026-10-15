@@ -84,7 +84,7 @@ struct ShellContextFixture {
             resourceUsage: ResourceUsageStore(
                 terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()
             ),
-            appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService()),
+            appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService(outcome: .success(.fake(version: "0.9.0"))), installer: FakeAppUpdateInstaller()),
             orchestrator: OrchestratorStore(service: FakeOrchestratorService(), config: config),
             viewProvider: viewProvider,
             highlighter: StubHighlighter(),

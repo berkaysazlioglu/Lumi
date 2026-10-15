@@ -20,6 +20,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var deepSeek: any DeepSeekEnvironmentServicing = FakeDeepSeekEnvironmentService()
     public var deepSeekBalance: any DeepSeekBalanceServicing = FakeDeepSeekBalanceService()
     public var appReleases: any AppReleaseChecking = FakeAppReleaseService()
+    public var appUpdateInstaller: any AppUpdateInstalling = FakeAppUpdateInstaller()
     public var claudeAccounts: any ClaudeAccountServicing = FakeClaudeAccountService()
     public var codexAccounts: any CodexAccountServicing = FakeCodexAccountService()
     public var git: any GitServicing

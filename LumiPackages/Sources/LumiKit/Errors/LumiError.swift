@@ -28,6 +28,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case deepSeekBalanceUnavailable(detail: String)
     /// GitHub'dan son sürüm okunamadı (karar 102).
     case updateCheckFailed(detail: String)
+    /// Yeni sürüm indirilemedi, doğrulanamadı ya da kurulum planlanamadı (karar 118).
+    case updateInstallFailed(detail: String)
     case sessionStartFailed(detail: String)
     /// Agent History oturumu dışa/içe aktarımı (karar 52) başarısız.
     case sessionTransferFailed(detail: String)
@@ -72,6 +74,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Could not read DeepSeek balance: \(detail)"
         case .updateCheckFailed(let detail):
             return "Could not check for updates: \(detail)"
+        case .updateInstallFailed(let detail):
+            return "Update failed: \(detail)"
         case .sessionStartFailed(let detail):
             return "Could not start session: \(detail)"
         case .sessionTransferFailed(let detail):

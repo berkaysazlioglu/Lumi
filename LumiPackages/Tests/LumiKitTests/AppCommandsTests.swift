@@ -13,7 +13,7 @@ final class AppCommandsTests: XCTestCase {
     /// komut menüde sessizce kaybolurdu.
     func testEveryCommandCarriesAShortcut() {
         // Karar 102: About platform geleneği gereği kısayolsuzdur — istisna açık.
-        let shortcutless: Set<CommandID> = [.openAbout]
+        let shortcutless: Set<CommandID> = [.openAbout, .checkForUpdates]
         for command in AppCommands.all() where !shortcutless.contains(command.id) {
             XCTAssertTrue(
                 command.key != nil || command.indexRange != nil,

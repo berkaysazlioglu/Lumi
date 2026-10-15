@@ -86,7 +86,7 @@ struct AppComposition {
             orchestrator: orchestrator,
             contributors: [
                 tasks, terminal, repo, usage, statusBar, claudeAccounts, codexAccounts, terminalLinks,
-                orchestrator,
+                appUpdate, orchestrator,
             ]
         )
         return AppComposition(

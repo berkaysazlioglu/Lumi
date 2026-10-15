@@ -7,11 +7,56 @@ public struct AppRelease: Sendable, Equatable {
     /// Release sayfası — kullanıcı indirmeyi buradan yapar.
     public let pageURL: URL
     public let publishedAt: Date?
+    /// Release'e yüklenmiş dosyalar (karar 118: zip + `SHA256SUMS`).
+    public let assets: [AppReleaseAsset]
+    /// Asset adlarındaki sürüm: tag'in `v`'siz hâli, EKİYLE birlikte
+    /// (`0.9.0-rc1`). `version` eki attığı için adları ondan kurmak `-rc`
+    /// tag'lerinde zip'i hiç bulamazdı (CI adı `VERSION`'dan, yani tag'den kurar).
+    public let assetVersion: String
 
-    public init(version: AppVersion, pageURL: URL, publishedAt: Date?) {
+    public init(
+        version: AppVersion,
+        pageURL: URL,
+        publishedAt: Date?,
+        assets: [AppReleaseAsset] = [],
+        tag: String? = nil
+    ) {
         self.version = version
         self.pageURL = pageURL
         self.publishedAt = publishedAt
+        self.assets = assets
+        self.assetVersion = tag.map(Self.strippingPrefix) ?? version.description
+    }
+
+    private static func strippingPrefix(_ tag: String) -> String {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first, first == "v" || first == "V" else { return trimmed }
+        return String(trimmed.dropFirst())
+    }
+
+    /// CI'ın mimari başına ürettiği notarize edilmiş zip (`make-app.sh --notarize`).
+    public func packageAsset(architecture: String) -> AppReleaseAsset? {
+        asset(named: "Lumi-\(assetVersion)-\(architecture)-mac.zip")
+    }
+
+    /// Release'in `SHA256SUMS-<sürüm>.txt` dosyası.
+    public var checksumsAsset: AppReleaseAsset? {
+        asset(named: "SHA256SUMS-\(assetVersion).txt")
+    }
+
+    private func asset(named name: String) -> AppReleaseAsset? {
+        assets.first { $0.name == name }
+    }
+}
+
+/// Release'e yüklenmiş tek bir dosya.
+public struct AppReleaseAsset: Sendable, Equatable {
+    public let name: String
+    public let downloadURL: URL
+
+    public init(name: String, downloadURL: URL) {
+        self.name = name
+        self.downloadURL = downloadURL
     }
 }
 

@@ -13,6 +13,7 @@ public struct CommandID: RawRepresentable, Hashable, Sendable, ExpressibleByStri
 public extension CommandID {
     static let openSettings: CommandID = "openSettings"
     static let openAbout: CommandID = "openAbout"
+    static let checkForUpdates: CommandID = "checkForUpdates"
     static let quit: CommandID = "quit"
     static let newTerminal: CommandID = "newTerminal"
     static let closeTerminal: CommandID = "closeTerminal"

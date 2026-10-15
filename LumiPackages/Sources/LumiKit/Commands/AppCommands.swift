@@ -17,6 +17,8 @@ public enum AppCommands {
         // Karar 102: macOS'un standart About paneli yerine Settings ▸ About.
         // Kısayolu yoktur (platform geleneği) — Shortcuts tablosunda görünmez.
         AppCommand(id: .openAbout, title: "About Lumi", menu: .app, key: nil),
+        // Karar 118: platform geleneği — About'un altında, kısayolsuz.
+        AppCommand(id: .checkForUpdates, title: "Check for Updates…", menu: .app, key: nil),
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
             separatorBefore: true, referenceTitle: "Settings", referenceOrder: 17

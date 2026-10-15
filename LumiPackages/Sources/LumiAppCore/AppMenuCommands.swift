@@ -15,6 +15,7 @@ enum AppMenuCommands {
         shared: SharedStores,
         openSettings: @escaping () -> Void,
         openAbout: @escaping () -> Void,
+        checkForUpdates: @escaping () -> Void,
         closeActiveProject: @escaping () -> Void,
         spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void
     ) {
@@ -87,5 +88,6 @@ enum AppMenuCommands {
         dispatcher.register(.resetZoom) { shared.layout.resetZoom() }
         dispatcher.register(.openSettings, openSettings)
         dispatcher.register(.openAbout, openAbout)
+        dispatcher.register(.checkForUpdates, checkForUpdates)
     }
 }

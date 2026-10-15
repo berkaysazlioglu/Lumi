@@ -25,7 +25,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
         registries = ShellComposition.makeRegistries(
             contributors: [
                 TasksFeatureAssembly(), TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(),
-                StatusBarFeatureAssembly(), TerminalLinkActionsAssembly(),
+                StatusBarFeatureAssembly(), TerminalLinkActionsAssembly(), AppUpdateFeatureAssembly(),
             ]
         )
     }
@@ -70,6 +70,20 @@ final class ShellToolbarCompositionTests: XCTestCase {
         ))
 
         XCTAssertTrue(descriptor?.isPresented(fixture.context) ?? false)
+    }
+
+    /// Karar 118: güncelleme dialogu ve alt bar segmenti `AppUpdateFeatureAssembly`'nin
+    /// katkısıdır — katkıcı listesinden düşerse kart görünür ama dialog hiç çizilmez
+    /// (girdi bloklanır). Segment yalnız hazır bir güncelleme varken görünür.
+    func testAppUpdateDialogAndStatusItemAreRegistered() {
+        let dialog = registries.overlays.all.first { $0.id == .installUpdateDialog }
+        XCTAssertNotNil(dialog, "installUpdateDialog overlay'i kayıtlı değil")
+        XCTAssertFalse(dialog?.isPresented(fixture.context) ?? true)
+        fixture.context.dialogs.present(.installUpdate(
+            InstallUpdateDialogState(version: "0.9.0", terminalCount: 0, isScheduledOnQuit: false)
+        ))
+        XCTAssertTrue(dialog?.isPresented(fixture.context) ?? false)
+        XCTAssertFalse(ids(.statusTrailing).contains(.appUpdate), "hazır güncelleme yokken segment yok")
     }
 
     /// Karar 73: kenar hover'ı overlay'i AÇIK BİR REPO İSTEMEZ. Sabit paneller
@@ -306,7 +320,7 @@ private struct ShellFixture {
             resourceUsage: ResourceUsageStore(
                 terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()
             ),
-            appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService()),
+            appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService(), installer: FakeAppUpdateInstaller()),
             orchestrator: OrchestratorStore(service: FakeOrchestratorService(), config: FakeConfigService()),
             viewProvider: FakeTerminalViewProvider(),
             highlighter: NoopHighlighter(),
