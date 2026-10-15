@@ -1,11 +1,11 @@
 import Foundation
 
-/// Terminal link adaylarının diskte olup olmadığı (karar 116, Orca
-/// `terminal-path-exists-cache` paritesi): olmayan yolun altı çizilmez.
+/// Terminal link adaylarının diskte olup olmadığı (karar 116): olmayan yolun
+/// altı çizilmez.
 ///
 /// Sorgu ana thread'de ve cooperative pool'da KOŞMAZ (karar 86): asılı bir ağ
 /// mount'undaki `fileExists` ayrı bir GCD kuyruğunda bekler; aynı yol için
-/// ikinci bir sorgu açılmaz. Orca'dan fark: cevaplar süresizdir değil — kısa bir
+/// ikinci bir sorgu açılmaz. Cevaplar süresiz değil, kısa bir
 /// ömürle tutulur ki az önce oluşturulan dosya hover'da link olabilsin.
 @MainActor
 final class TerminalLinkPathCache {

@@ -205,8 +205,8 @@ final class DropAwareTerminalView: TerminalView {
         onLinkActivation?(link, resolved.gesture, shellAnchor(for: event))
     }
 
-    /// Düz sol tık her terminalde link yoluna girer (Orca paritesi, kullanıcı
-    /// düzeltmesi: "orcada sol tık yetiyormuş"). Fare raporlayan bir TUI
+    /// Düz sol tık her terminalde link yoluna girer (kullanıcı düzeltmesi:
+    /// ⌘ gerekmez). Fare raporlayan bir TUI
     /// çalışıyorsa tıkın raporu bekletilir; linke denk gelmediyse olduğu gibi
     /// akar, yani link DIŞINDAKİ metinde caret koyma bozulmaz.
     private func isAllowed(_ gesture: TerminalLinkGesture) -> Bool {

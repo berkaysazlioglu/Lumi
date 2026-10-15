@@ -26,13 +26,12 @@ public struct DetectedTerminalLink: Sendable, Equatable {
         self.range = range
     }
 
-    /// Yol türündeki adaylar ancak diskte varsa link olur (Orca paritesi:
-    /// olmayan yolun altı çizilmez, tıkı popover açmaz).
+    /// Yol türündeki adaylar ancak diskte varsa link olur: olmayan yolun
+    /// altı çizilmez, tıkı popover açmaz.
     public var requiresExistence: Bool { kind != .url }
 }
 
-/// Terminal satırındaki link adaylarının tek kaynağı (Orca `terminal-links` +
-/// `terminal-http-url-extraction` port'u; kod kopyalanmadı, kurallar taşındı).
+/// Terminal satırındaki link adaylarının tek kaynağı (karar 116).
 ///
 /// Saftır: diske hiç dokunmaz. Yol adaylarından hangisinin gerçek link olduğuna
 /// çağıran katman diskin cevabıyla karar verir — `candidates(in:at:)` sırası

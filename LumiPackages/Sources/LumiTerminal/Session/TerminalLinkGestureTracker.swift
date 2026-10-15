@@ -5,8 +5,7 @@ import LumiKit
 ///
 /// Tık, basıldığı anda değil BIRAKILDIĞINDA karara bağlanır: arada fare
 /// sürüklendiyse kullanıcı metin seçiyordur, tıkta zaten bir seçim varsa
-/// tık o seçimi temizlemek içindir — ikisinde de link yolu iptal edilir
-/// (Orca `terminal-link-pointer-gesture` paritesi).
+/// tık o seçimi temizlemek içindir — ikisinde de link yolu iptal edilir.
 struct TerminalLinkGestureTracker {
     /// Bu eşiğin üstünde hareket = sürükleme (piksel).
     static let dragThreshold: CGFloat = 4

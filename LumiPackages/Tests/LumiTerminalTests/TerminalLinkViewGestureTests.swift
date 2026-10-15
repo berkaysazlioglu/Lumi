@@ -81,7 +81,7 @@ final class TerminalLinkViewGestureTests: XCTestCase {
         XCTAssertEqual(activations.first?.gesture, .actions)
     }
 
-    /// Orca paritesi (kullanıcı düzeltmesi): fare raporlayan bir TUI çalışırken
+    /// Kullanıcı düzeltmesi: fare raporlayan bir TUI çalışırken
     /// de düz sol tık yeter — ⌘ gerekmez.
     func testPlainClickAlsoWorksWhileMouseReportingIsOn() {
         enableMouseReporting()

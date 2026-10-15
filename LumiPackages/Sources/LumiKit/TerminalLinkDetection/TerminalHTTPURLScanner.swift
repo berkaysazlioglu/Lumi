@@ -1,6 +1,6 @@
 import Foundation
 
-/// Satırdaki http/https adresleri (Orca `terminal-http-url-extraction` paritesi).
+/// Satırdaki http/https adresleri.
 ///
 /// Regex değil, doğrusal bir tarayıcıdır: şema öneki `indexOf` ile bulunur,
 /// gövde ilk sonlandırıcıda biter, sondaki noktalama kırpılır. Önekten önce bir

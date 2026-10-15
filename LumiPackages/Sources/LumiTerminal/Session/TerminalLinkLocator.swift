@@ -65,16 +65,17 @@ enum TerminalLinkLocator {
         unit == 0x20 || unit == 0x09 || unit == 0
     }
 
-    /// `row` satırındaki `col` hücresini kapsayan adaylar. Önce birleşik
-    /// (sarılmış) mantıksal satırın adayları, sonra yalnız o satırınkiler —
-    /// sezgi yanlış birleştirdiyse kısa aday diskte yine bulunur.
+    /// `row` satırındaki `col` hücresini kapsayan adaylar, denenme sırasıyla:
+    /// TUI'nin kendisinin kırdığı yollar (`TerminalHardWrappedPaths`), birleşik
+    /// (yumuşak sarılmış) mantıksal satır, en son yalnız o satır — sezgi yanlış
+    /// birleştirdiyse kısa aday diskte yine bulunur.
     static func hits(
         rowCount: Int,
         row target: Int,
         col: Int,
         rowText read: (Int) -> TerminalRowText?
     ) -> [TerminalLinkHit] {
-        // Satır sınırları birkaç kez sorulur; SwiftTerm okuması bir kez yapılsın.
+        // Satırlar birkaç kez sorulur; SwiftTerm okuması bir kez yapılsın.
         var memo: [Int: TerminalRowText?] = [:]
         func rowText(_ row: Int) -> TerminalRowText? {
             if let cached = memo[row] { return cached }
@@ -84,16 +85,26 @@ enum TerminalLinkLocator {
         }
         guard let targetRow = rowText(target) else { return [] }
         let (first, last) = joinedBounds(of: target, rowCount: rowCount, rowText: rowText)
-        var hits = hitsInLine(rows: first ... last, target: target, col: col, rowText: rowText)
-        if first != last {
-            hits += hitsInLine(rows: target ... target, target: target, col: col, rowText: { $0 == target ? targetRow : nil })
+        let softWrapped = (first ... last).compactMap { row -> TerminalRowSegment? in
+            guard let line = rowText(row) else { return nil }
+            // Birleştirilen satırın sonundaki boşluk dolgusu metne girmez.
+            let units = row == last ? line.text.utf16.count : contentLength(line)
+            return TerminalRowSegment(row: row, range: 0 ..< units)
         }
+        // Kırılmış yol birleşimi tahmindir: URL diske sorulmadan link sayıldığı
+        // için oradan çıkan URL adayı alınmaz (`…/pull/82` + alttaki `README.md`).
+        let hardWrapped = TerminalHardWrappedPaths.candidates(target: target, rowCount: rowCount, rowText: rowText)
+            .flatMap { hitsInLine($0, target: target, col: col, rowText: rowText) }
+            .filter(\.requiresExistence)
+        let plain = [softWrapped, [TerminalRowSegment(row: target, range: 0 ..< targetRow.text.utf16.count)]]
+            .flatMap { hitsInLine($0, target: target, col: col, rowText: rowText) }
         var seen: [[TerminalLinkSpan]] = []
-        return hits.filter { hit in
-            guard !seen.contains(hit.spans) else { return false }
-            seen.append(hit.spans)
-            return true
-        }
+        return (hardWrapped + plain)
+            .filter { hit in
+                guard !seen.contains(hit.spans) else { return false }
+                seen.append(hit.spans)
+                return true
+            }
     }
 
     private static func joinedBounds(
@@ -115,16 +126,14 @@ enum TerminalLinkLocator {
     }
 
     private static func hitsInLine(
-        rows: ClosedRange<Int>, target: Int, col: Int, rowText: (Int) -> TerminalRowText?
+        _ segments: [TerminalRowSegment], target: Int, col: Int, rowText: (Int) -> TerminalRowText?
     ) -> [TerminalLinkHit] {
         var text = ""
         var cells: [(row: Int, cell: TerminalRowText.Cell)] = []
-        for row in rows {
-            guard let line = rowText(row) else { continue }
-            // Birleştirilen satırın sonundaki boşluk dolgusu metne girmez.
-            let units = row == rows.upperBound ? line.text.utf16.count : contentLength(line)
-            text += (line.text as NSString).substring(to: units)
-            cells += line.cells.prefix(units).map { (row, $0) }
+        for segment in segments {
+            guard let line = rowText(segment.row), segment.range.upperBound <= line.cells.count else { continue }
+            text += (line.text as NSString).substring(with: NSRange(segment.range))
+            cells += line.cells[segment.range].map { (segment.row, $0) }
         }
         guard let offset = cells.firstIndex(where: { $0.row == target && $0.cell.col <= col && col < $0.cell.col + $0.cell.width }),
               !isBlank(Array(text.utf16)[offset]) else { return [] }

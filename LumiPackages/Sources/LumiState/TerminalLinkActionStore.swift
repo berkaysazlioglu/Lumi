@@ -66,7 +66,7 @@ public struct TerminalLinkRequest: Identifiable, Equatable, Sendable {
 
     public var destination: String { target.displayText }
 
-    /// Kopyala butonu yalnız URL'lerde çıkar (Orca paritesi).
+    /// Kopyala butonu yalnız URL'lerde çıkar.
     public var isCopyable: Bool {
         if case .url = target { return true }
         return false
@@ -266,7 +266,7 @@ public final class TerminalLinkActionStore {
         }
     }
 
-    /// HTML (karar 116, Orca'nın "⇧⌘+click for default browser" ipucu): kök
+    /// HTML (karar 116): kök
     /// içinde birincil yine Lumi'nin görüntüleyicisi, ⇧⌘ tarayıcı; kök dışında
     /// tarayıcı birincildir. Finder her iki durumda da bir satır aşağıdadır.
     private static func htmlActions(

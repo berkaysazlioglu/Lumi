@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import LumiKit
 
-/// Karar 116: terminal satırındaki link adayları (Orca `terminal-links.test` vakaları).
+/// Karar 116: terminal satırındaki link adayları.
 final class TerminalLinkDetectorTests: XCTestCase {
     private func texts(_ line: String) -> [String] {
         TerminalLinkDetector.links(in: line).map(\.text)
@@ -28,7 +28,7 @@ final class TerminalLinkDetectorTests: XCTestCase {
 
     /// URL host'u yerel yol ya da çıplak dosya adı sayılmaz.
     func testURLHostIsNotAFilePath() {
-        let links = TerminalLinkDetector.links(in: "PR opened: https://github.com/stablyai/orca/pull/82")
+        let links = TerminalLinkDetector.links(in: "PR opened: https://github.com/example/lumi/pull/82")
         XCTAssertEqual(links.map(\.kind), [.url])
     }
 
@@ -53,6 +53,15 @@ final class TerminalLinkDetectorTests: XCTestCase {
         XCTAssertEqual(texts("\"Sources/A.swift\","), ["Sources/A.swift"])
     }
 
+    /// Claude'un araç satırları: yol parantezin içindedir.
+    func testPathInsideToolCallParentheses() {
+        XCTAssertEqual(texts("⏺ Read(/Users/dev/lumi/Sources/App.swift)"), ["/Users/dev/lumi/Sources/App.swift"])
+        XCTAssertEqual(texts("⏺ Update(Sources/App.swift:12)"), ["Sources/App.swift:12"])
+        XCTAssertEqual(texts("⏺ Write(~/notes/todo.md)"), ["~/notes/todo.md"])
+        XCTAssertEqual(texts("(README.md)"), ["README.md"])
+        XCTAssertEqual(texts("Edit(app/(shop)/[id]/page.tsx)"), ["app/(shop)/[id]/page.tsx"])
+    }
+
     func testSpacedAbsolutePathStopsBeforeProse() {
         let line = "Open /Users/Path/FolderName with Space/content.js for details"
         XCTAssertEqual(
@@ -68,7 +77,7 @@ final class TerminalLinkDetectorTests: XCTestCase {
         )
     }
 
-    /// Orca'dan bilinçli fark: boşluklu aday diskte yoksa düz yol yine denenir.
+    /// Boşluklu aday diskte yoksa düz yol yine denenir.
     func testPlainPathStaysCandidateUnderSpacedOne() {
         let line = "src/foo is great"
         let offset = 1
@@ -122,8 +131,8 @@ final class TerminalLinkDetectorTests: XCTestCase {
     // MARK: - file://
 
     func testFileURIIsOneLinkWithoutBarePathDuplicate() {
-        let links = TerminalLinkDetector.links(in: "open file:///Users/dev/orca/report.html now")
-        XCTAssertEqual(links.map(\.text), ["file:///Users/dev/orca/report.html"])
+        let links = TerminalLinkDetector.links(in: "open file:///Users/dev/lumi/report.html now")
+        XCTAssertEqual(links.map(\.text), ["file:///Users/dev/lumi/report.html"])
         XCTAssertEqual(links.first?.kind, .fileURI)
     }
 

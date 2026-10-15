@@ -87,7 +87,7 @@ public enum TerminalLinkResolver {
 
     /// 2. adım — diskin cevabı elde: hedefi sınıflandır.
     ///
-    /// Diskte OLMAYAN yol link değildir (`nil`; Orca paritesi) — tek istisna
+    /// Diskte OLMAYAN yol link değildir (`nil`) — tek istisna
     /// bilinen proje/workspace kökleridir: dışarıda silinmiş ya da asılı bir
     /// mount'taki kök de sekmeye geçirebilsin.
     public static func classify(

@@ -15,8 +15,8 @@ struct TerminalLinkTextRange: Equatable {
     }
 }
 
-/// Algılama geçişlerinin ortak yardımcıları (Orca `terminal-file-link-detection-ranges`
-/// + `explicit-file-link-target` + `file-link-location` karşılıkları).
+/// Algılama geçişlerinin ortak yardımcıları: aralık kırpma, hedef doğrulama
+/// ve `yol:satır:sütun` ayrıştırması.
 enum TerminalLinkText {
     /// Eşleşmenin başına/sonuna yapışan cümle noktalaması — `(src/a.ts)`,
     /// `"README.md",` gibi. Kök içi `()`/`[]` segmentleri (`app/(shop)/[id]`)
@@ -97,7 +97,7 @@ enum TerminalLinkText {
         return (path, line, column)
     }
 
-    /// Link olabilecek bir dosya hedefi mi (Orca `parseExplicitFileLinkTarget`):
+    /// Link olabilecek bir dosya hedefi mi:
     /// `/ foo` gibi ayırıcı+boşluk başlangıcı ve sonu ayırıcıyla biten göreli ya
     /// da çıplak kök yollar (`/`, `~/`) link değildir; satır ekli dizin de değildir.
     static func isLinkableFileTarget(_ value: String) -> Bool {

@@ -1,7 +1,7 @@
 import Foundation
 
-/// En az bir ayırıcı (`/` ya da `\`) taşıyan yollar — Orca `terminal-links`
-/// (VSCode `terminalLocalLinkDetector` port'u) paritesi.
+/// En az bir ayırıcı (`/` ya da `\`) taşıyan yollar (VSCode
+/// `terminalLocalLinkDetector` kuralları).
 ///
 /// İki geçiş vardır: önce **boşluklu** yollar (`/Users/A/Foo Bar/file.ts` tek
 /// link olsun, `Foo` ile `Bar/file.ts`'ye bölünmesin), sonra **düz** yollar.
@@ -39,8 +39,7 @@ enum TerminalPathLinkScanner {
     }
 
     /// Satırdaki yol adayları: önce boşluklular (uzun önce), sonra düzler.
-    /// Düz bir eşleşme boşluklu bir adayla çakışsa da LİSTEDE KALIR — Orca onu
-    /// atar; Lumi'de seçim "diskte var olan en uzun aday" olduğu için boşluklu
+    /// Düz bir eşleşme boşluklu bir adayla çakışsa da LİSTEDE KALIR — seçim "diskte var olan en uzun aday" olduğu için boşluklu
     /// aday diskte yoksa düz yol (`src/foo is great` → `src/foo`) yine link olur.
     static func links(in line: NSString) -> [TerminalLinkTextRange] {
         guard line.range(of: "/").location != NSNotFound || line.range(of: "\\").location != NSNotFound else {

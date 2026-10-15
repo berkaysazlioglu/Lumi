@@ -1,8 +1,7 @@
 import Foundation
 
 /// Ayırıcısız dosya adları (`README.md`, `Package.swift:12`, `Makefile`) —
-/// Orca `terminal-bare-file-link-detection` (VSCode `terminalWordLinkDetector`)
-/// paritesi. Düzyazıyı stat'a gitmeden eler; kalan aday ancak terminalin
+/// VSCode `terminalWordLinkDetector` kuralları. Düzyazıyı stat'a gitmeden eler; kalan aday ancak terminalin
 /// dizininde GERÇEKTEN varsa link olur.
 enum TerminalBareFilenameScanner {
     private static let token = TerminalLinkText.regex(#"[^\s()\[\]{}'",;<>|`]+"#)
@@ -37,7 +36,7 @@ enum TerminalBareFilenameScanner {
     }
 }
 
-/// Düz metindeki `file://` URI'leri (Orca `terminal-file-uri-link` paritesi).
+/// Düz metindeki `file://` URI'leri.
 /// Yalnız yerel (host'suz ya da `localhost`) URI'ler aday olur; yol çözümü
 /// `TerminalLinkResolver`'dadır (OSC 8 `file:` payload'ı da aynı yoldan geçer).
 enum TerminalFileURIScanner {

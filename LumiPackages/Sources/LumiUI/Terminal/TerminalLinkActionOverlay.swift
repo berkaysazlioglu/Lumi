@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Popover'ın kabuk içindeki yerleşimi (karar 57) — saf hesap.
 ///
-/// Varsayılan yer tık noktasının ÜSTÜDÜR (Orca paritesi): terminalde yeni
+/// Varsayılan yer tık noktasının ÜSTÜDÜR: terminalde yeni
 /// çıktı aşağıdan geldiği için tıklanan satırın altındaki bağlamı kapatmak
 /// daha rahatsız ediciydi. Üste sığmazsa alta iner, sağa taşarsa sola çekilir.
 enum TerminalLinkPopoverPlacement {
@@ -94,7 +94,7 @@ public struct TerminalLinkActionOverlay: View {
 
     /// Klavye odağı popover'a hiç gitmez ama kapanışta terminali açıkça
     /// odaklamak, kullanıcının yazmaya devam etmek için tekrar tıklamasını
-    /// önler (Orca `focusTerminal` paritesi).
+    /// önler.
     private func focusTerminal(_ request: TerminalLinkRequest) {
         shell.terminals.focus(request.terminalID)
     }

@@ -76,7 +76,7 @@ final class TerminalLinkResolverTests: XCTestCase {
         )
     }
 
-    /// Karar 116: diskte olmayan yol hedef üretmez (Orca paritesi).
+    /// Karar 116: diskte olmayan yol hedef üretmez.
     func testMissingPathIsNotALink() {
         XCTAssertNil(resolve("build/out.o"))
     }

@@ -3,7 +3,7 @@ import LumiState
 import SwiftUI
 
 /// Terminaldeki bir link/path'e tıklayınca tık noktasında açılan eylem
-/// popover'ı (karar 57 — Orca paritesi).
+/// popover'ı (karar 57).
 ///
 /// Başlıkta hedefin kendisi (mono, iki satıra kadar), sağında URL'ler için
 /// kopyala ve her hedefte Settings ▸ Terminal kısayolu; altında birincil ve
@@ -14,8 +14,7 @@ struct TerminalLinkActionPopover: View {
     let onCopy: () -> Void
     let onOpenSettings: () -> Void
 
-    /// Orca'nın `min-w-52 / max-w-21rem` aralığının karşılığı; sabit genişlik
-    /// yerleşim hesabını da tek değere bağlar.
+    /// Sabit genişlik yerleşim hesabını tek değere bağlar.
     static var width: CGFloat { Theme.scaled(288) }
 
     /// Ölçüm gelmeden önceki ilk kare için kaba yükseklik (başlık + ayraç +

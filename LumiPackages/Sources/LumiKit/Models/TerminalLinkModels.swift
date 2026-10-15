@@ -1,7 +1,6 @@
 import Foundation
 
-/// Terminaldeki bir link/path'e yapılan tıklamanın anlamı (karar 57 — Orca
-/// paritesi). Üç jest dışındaki her tık terminale aittir (seçim, ctrl-tık
+/// Terminaldeki bir link/path'e yapılan tıklamanın anlamı (karar 57). Üç jest dışındaki her tık terminale aittir (seçim, ctrl-tık
 /// bağlam menüsü, option'lı blok seçimi) ve buraya hiç uğramaz.
 public enum TerminalLinkGesture: String, Sendable, Equatable, CaseIterable {
     /// Düz sol tık → eylem popover'ı açılır.
@@ -71,7 +70,7 @@ public enum TerminalLinkAnchor {
 
 /// xterm fare raporu tanıyıcısı: düz tıkta rapor PTY'ye GİTMEDEN bekletilir;
 /// tık bir eylem popover'ına dönüşürse düşürülür, dönüşmezse olduğu gibi akar
-/// (Orca'nın `terminal-link-pty-mouse-suppression` deseni). Yalnız fare
+/// Yalnız fare
 /// raporları bekletilir — klavye girdisi asla gecikmez.
 public enum TerminalMouseReport {
     private static let escape: UInt8 = 0x1B

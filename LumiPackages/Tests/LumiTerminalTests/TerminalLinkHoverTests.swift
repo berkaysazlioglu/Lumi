@@ -178,6 +178,57 @@ final class TerminalLinkHoverTests: XCTestCase {
         XCTAssertEqual(view.linkUnderline.spans.map(\.row), [0, 1])
     }
 
+    /// Karar 117: Claude yolu kendisi kırar — devam satırı girintili, sağ kenar boş.
+    func testIndentedHardWrappedPathIsJoinedFromEitherRow() {
+        let path = "/tmp/lumi/Sources/LumiKit/Detection/LinkText.swift"
+        useDisk([path])
+        show("⏺ Read(/tmp/lumi/Sources/Lu\r\n      miKit/Detection/LinkText.swift)")
+
+        hover(at: point(column: 10, row: 1))
+        XCTAssertEqual(view.underlinedLinkText, path)
+        XCTAssertEqual(view.linkUnderline.spans, [
+            TerminalLinkSpan(row: 0, columns: 7 ..< 27),
+            TerminalLinkSpan(row: 1, columns: 6 ..< 36),
+        ])
+
+        hover(at: point(column: 12))
+        XCTAssertEqual(view.underlinedLinkText, path)
+    }
+
+    func testHardWrappedPathAcrossThreeRows() {
+        let path = "/tmp/lumi/a/very/long/path/to/file.txt"
+        useDisk([path])
+        show("  /tmp/lumi/a/ve\r\n  ry/long/path/\r\n  to/file.txt")
+
+        hover(at: point(column: 4, row: 1))
+
+        XCTAssertEqual(view.underlinedLinkText, path)
+        XCTAssertEqual(view.linkUnderline.spans.map(\.row), [0, 1, 2])
+    }
+
+    /// Alt satırdaki ayrı dosya adı birleşik aday diskte yoksa yolu bozmaz.
+    func testSiblingRowDoesNotSwallowACompletePath() {
+        let path = "/tmp/lumi/a.txt"
+        useDisk([path, "/repo/notes.txt"])
+        show("/tmp/lumi/a.txt\r\nnotes.txt")
+
+        hover(at: point(column: 3))
+        XCTAssertEqual(view.underlinedLinkText, path)
+
+        hover(at: point(column: 2, row: 1))
+        XCTAssertEqual(view.underlinedLinkText, "notes.txt")
+    }
+
+    /// Kırılmış birleşim URL üretmez — URL diske sorulmadan link sayılırdı.
+    func testURLIsNotJoinedWithTheRowBelow() {
+        useDisk([])
+        show("https://lumi.dev/pull/82\r\nREADME.md")
+
+        hover(at: point(column: 10))
+
+        XCTAssertEqual(view.underlinedLinkText, "https://lumi.dev/pull/82")
+    }
+
     // MARK: - İmleç
 
     func testCursorTurnsIntoHandOnlyOverALink() {
