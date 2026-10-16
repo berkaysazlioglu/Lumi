@@ -36,6 +36,10 @@ struct IconButton: View {
     var showsHoverBackground = true
     let action: () -> Void
 
+    /// Karar 120: renk atanmış projenin kart header'ı bu tonu ortamdan verir;
+    /// `nil` = Lumi'nin mor-gri tonları. Yıkıcı hover kırmızısı korunur.
+    @Environment(\.iconButtonTint) private var tint
+
     var body: some View {
         HoverReader { isHovering in
             Button(action: action) {
@@ -56,12 +60,12 @@ struct IconButton: View {
     private func foreground(isHovering: Bool) -> Color {
         switch role {
         case .standard:
-            return isHovering ? Theme.textPrimary : Theme.textMuted
+            return isHovering ? (tint?.hover ?? Theme.textPrimary) : (tint?.rest ?? Theme.textMuted)
         case .destructive:
-            return isHovering ? Theme.error : Theme.textMuted
+            return isHovering ? Theme.error : (tint?.rest ?? Theme.textMuted)
         case .toggle:
-            if isActive { return Theme.accentPrimary }
-            return isHovering ? Theme.textPrimary : Theme.textSecondary
+            if isActive { return tint?.hover ?? Theme.accentPrimary }
+            return isHovering ? (tint?.hover ?? Theme.textPrimary) : (tint?.rest ?? Theme.textSecondary)
         }
     }
 
@@ -69,11 +73,11 @@ struct IconButton: View {
         guard showsHoverBackground else { return .clear }
         switch role {
         case .standard:
-            return isHovering ? Theme.bgElevated : .clear
+            return isHovering ? (tint?.hoverBackground ?? Theme.bgElevated) : .clear
         case .destructive:
             return isHovering ? Theme.error.opacity(0.2) : .clear
         case .toggle:
-            return isActive || isHovering ? Theme.bgElevated : .clear
+            return isActive || isHovering ? (tint?.hoverBackground ?? Theme.bgElevated) : .clear
         }
     }
 }

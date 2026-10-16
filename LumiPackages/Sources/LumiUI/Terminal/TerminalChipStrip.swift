@@ -21,6 +21,8 @@ struct TerminalChipStrip: View {
 
     /// Karar 103: All Terminals'ta chip de checkout adını taşır.
     @Environment(\.terminalCheckoutLabels) private var checkoutLabels
+    /// Karar 120: chip kenarı ve checkout etiketi projenin rengini taşır.
+    @Environment(\.terminalProjectColors) private var projectColors
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -39,7 +41,9 @@ struct TerminalChipStrip: View {
     }
 
     private func chip(_ meta: TerminalMeta) -> some View {
-        Button {
+        let projectColor = projectColors[meta.id]
+        let projectTint = projectColor.map(Theme.projectColor)
+        return Button {
             onSelect(meta.id)
         } label: {
             // 5/3pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
@@ -57,7 +61,7 @@ struct TerminalChipStrip: View {
                 if let checkout = checkoutLabels[meta.repoPath] {
                     Text(checkout)
                         .font(Theme.Typography.mono(.label))
-                        .foregroundStyle(Theme.textMuted)
+                        .foregroundStyle(projectTint ?? Theme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: Self.titleMaxWidth, alignment: .leading)
@@ -69,12 +73,17 @@ struct TerminalChipStrip: View {
             .background(Theme.bgSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                    .stroke(Theme.border, lineWidth: Theme.Stroke.hairline)
+                    .stroke(
+                        projectTint?.opacity(Theme.ProjectTint.borderOpacity) ?? Theme.border,
+                        lineWidth: Theme.Stroke.hairline
+                    )
             )
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(Theme.textSecondary)
+        // Chip'in seçili hâli yoktur (minimize şeridi / maximize switcher'ı
+        // aktif kartı içermez); başlık kart başlığının pasif tonunu alır.
+        .foregroundStyle(projectColor.map { Theme.ProjectTint.titleColor($0, isActive: false) } ?? Theme.textSecondary)
         .accessibilityLabel(checkoutLabels[meta.repoPath].map { "\(meta.displayTitle) in \($0)" } ?? meta.displayTitle)
     }
 }

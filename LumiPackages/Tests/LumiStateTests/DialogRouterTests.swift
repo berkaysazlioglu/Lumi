@@ -42,6 +42,7 @@ final class DialogRouterTests: XCTestCase {
             .createWorkspace(projectPath: "/r"),
             .quickCommands(projectPath: "/r"),
             .favoriteFiles(FavoriteFilesDialogState(projectPath: "/r", checkoutPath: "/r")),
+            .projectAppearance(ProjectAppearanceDialogState(projectPath: "/r")),
             .settings,
             .onboarding,
             .closeTab(CloseTabDialogState(repoPath: "/r", repoName: "r", minimizedCount: 1)),
@@ -129,5 +130,27 @@ final class DialogRouterTests: XCTestCase {
         router.openSettings()
 
         XCTAssertNil(router.consumeRequestedSettingsTab())
+    }
+
+    // MARK: - Karar 120: proje görünümü
+
+    func testProjectAppearanceOpensOnTheRightClickedProjectAndSwitchesInPlace() {
+        router.present(.projectAppearance(ProjectAppearanceDialogState(projectPath: "/p/game")))
+        XCTAssertEqual(router.projectAppearanceDialog?.projectPath, "/p/game")
+
+        router.selectProjectAppearance("/p/tool")
+        XCTAssertEqual(router.projectAppearanceDialog?.projectPath, "/p/tool")
+
+        router.dismiss(.projectAppearance(ProjectAppearanceDialogState(projectPath: "/p/tool")))
+        XCTAssertNil(router.projectAppearanceDialog)
+    }
+
+    func testSelectingProjectAppearanceNeverOpensTheModalFromOutside() {
+        router.present(.settings)
+        router.selectProjectAppearance("/p/tool")
+        XCTAssertEqual(router.active, .settings)
+        router.dismiss()
+        router.selectProjectAppearance("/p/tool")
+        XCTAssertEqual(router.active, .none)
     }
 }

@@ -250,6 +250,37 @@ final class SettingsStoreTests: XCTestCase {
         store.removeAdditionalPath(id: "does-not-exist")
         XCTAssertEqual(store.current.additionalPaths.count, 1)
     }
+
+    // MARK: - Karar 120: proje görünümü
+
+    func testProjectAppearanceFieldsMergeAndPersist() async throws {
+        store.setProjectColor(.teal, for: "/projects/game")
+        store.setProjectIcon(.emoji("🚀"), for: "/projects/game")
+        store.setProjectRootTitle("  dev  ", for: "/projects/game")
+        store.setProjectColor(.pink, for: "/projects/tool")
+
+        let expected: [String: ProjectAppearance] = [
+            "/projects/game": ProjectAppearance(color: .teal, icon: .emoji("🚀"), rootTitle: "dev"),
+            "/projects/tool": ProjectAppearance(color: .pink),
+        ]
+        XCTAssertEqual(store.current.projectAppearance, expected, "alanlar birbirini ezmez, başlık kırpılır")
+        try await waitUntil("diske indi") { await self.config.config().projectAppearance == expected }
+    }
+
+    func testClearingEveryFieldOrResetDropsTheEntry() async throws {
+        store.setProjectColor(.teal, for: "/projects/game")
+        store.setProjectIcon(.symbol("star"), for: "/projects/game")
+        store.setProjectColor(nil, for: "/projects/game")
+        store.setProjectIcon(.default, for: "/projects/game")
+        store.setProjectRootTitle("main", for: "/projects/game")
+        XCTAssertNil(store.current.projectAppearance["/projects/game"], "boş görünüm tutulmaz")
+
+        store.setProjectColor(.orange, for: "/projects/tool")
+        store.setProjectRootTitle("dev", for: "/projects/tool")
+        store.resetProjectAppearance(for: "/projects/tool")
+        XCTAssertEqual(store.current.projectAppearance, [:])
+        try await waitUntil("diskte de boş") { await self.config.config().projectAppearance.isEmpty }
+    }
 }
 
 // MARK: - 1.13 bozuk/yazılamayan config kullanıcıya görünür (karar 5)

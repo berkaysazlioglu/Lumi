@@ -81,6 +81,11 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.terminalLinkActionsEnabled = false
             // Karar 114 Faz 4 additive anahtar.
             config.orchestratorDigestsEnabled = false
+            // Karar 120 additive anahtar: proje yolu → görünüm (boş alan yazılmaz).
+            config.projectAppearance = [
+                "/Users/dev/selected": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
+                "/Users/dev/another": ProjectAppearance(color: .pink),
+            ]
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -155,6 +160,16 @@ final class ConfigGoldenBytesTests: XCTestCase {
       },
       "onboardingCompleted" : true,
       "orchestratorDigestsEnabled" : false,
+      "projectAppearance" : {
+        "/Users/dev/another" : {
+          "color" : "pink"
+        },
+        "/Users/dev/selected" : {
+          "color" : "teal",
+          "icon" : "sf:star",
+          "title" : "dev"
+        }
+      },
       "projectFavoriteFiles" : [
 
       ],

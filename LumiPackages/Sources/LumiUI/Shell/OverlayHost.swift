@@ -28,6 +28,8 @@ public extension OverlayID {
     static let quickCommands = OverlayID("quickCommands")
     /// Karar 107: favori dosya arama/yönetim modalı.
     static let favoriteFiles = OverlayID("favoriteFiles")
+    /// Karar 120: proje görünümü (renk + kök checkout ikonu/başlığı).
+    static let projectAppearance = OverlayID("projectAppearance")
     /// Karar 53: Agent History oturum silme onayı.
     static let deleteAgentSessionDialog = OverlayID("deleteAgentSessionDialog")
     /// Karar 56: Claude hesabı silme onayı (geri alınamaz).

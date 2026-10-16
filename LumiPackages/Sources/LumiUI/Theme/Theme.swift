@@ -6,11 +6,11 @@ import SwiftUI
 /// Tam ölçek (tipografi, motion, component stilleri) Faz 6'da tamamlanır.
 public enum Theme {
     public static let bgDeep = Color(red: 0x0A / 255, green: 0x0A / 255, blue: 0x12 / 255)
-    public static let bgSurface = Color(red: 0x12 / 255, green: 0x12 / 255, blue: 0x1F / 255)
-    public static let bgElevated = Color(red: 0x1A / 255, green: 0x1A / 255, blue: 0x2E / 255)
+    public static let bgSurface = Color(hex: Hex.bgSurface)
+    public static let bgElevated = Color(hex: Hex.bgElevated)
 
-    public static let textPrimary = Color(red: 0xE2 / 255, green: 0xE2 / 255, blue: 0xF0 / 255)
-    public static let textSecondary = Color(red: 0x88 / 255, green: 0x88 / 255, blue: 0xA8 / 255)
+    public static let textPrimary = Color(hex: Hex.textPrimary)
+    public static let textSecondary = Color(hex: Hex.textSecondary)
     public static let textMuted = Color(red: 0x4A / 255, green: 0x4A / 255, blue: 0x6A / 255)
 
     public static let accentPrimary = Color(red: 0xA7 / 255, green: 0x8B / 255, blue: 0xFA / 255)
@@ -27,6 +27,12 @@ public enum Theme {
         public static let error: UInt32 = 0xF87171
         /// Tempo rampasının soğuk ucu (karar 85).
         public static let ice: UInt32 = 0x38BDF8
+        /// Zemin ve metin tonları — proje rengi ara tonları (karar 120) ve
+        /// kontrast testleri bileşen ister.
+        public static let bgSurface: UInt32 = 0x12121F
+        public static let bgElevated: UInt32 = 0x1A1A2E
+        public static let textPrimary: UInt32 = 0xE2E2F0
+        public static let textSecondary: UInt32 = 0x8888A8
     }
 
     public static let success = Color(hex: Hex.success)

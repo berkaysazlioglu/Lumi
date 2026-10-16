@@ -248,6 +248,26 @@ public final class ShellContext {
         return projectName(at: repoPath)
     }
 
+    /// Karar 120: checkout'un ait olduğu projenin kimlik rengi. Sahiplik
+    /// navigasyonun proje köprüsünden gelir (kök + yönetilen workspace'ler +
+    /// worktree'ler); serbest terminal (karar 108) ve rengi olmayan proje `nil`.
+    public func projectColor(forCheckout repoPath: String) -> ProjectColor? {
+        ProjectColorResolver.color(
+            forCheckout: repoPath,
+            colors: settings.current.projectColors,
+            owningProject: { navigation.projectPath(containing: $0) }
+        )
+    }
+
+    /// Karar 120: tüm terminallerin rengi — terminal yüzeyinin ortamı.
+    public var terminalProjectColors: [TerminalID: ProjectColor] {
+        ProjectColorResolver.colors(
+            for: terminals.terminals,
+            colors: settings.current.projectColors,
+            owningProject: { navigation.projectPath(containing: $0) }
+        )
+    }
+
     /// Karar 108: Projects ▸ `Other` grubu — kural ve gruplama `ProjectTree`'de
     /// (telefon ve orchestrator ile ortak); sahiplik açık tab'ları da sayar.
     /// Grup içi sıra panelin ajan sıralamasıdır (`AgentRow.Model.sorted`),

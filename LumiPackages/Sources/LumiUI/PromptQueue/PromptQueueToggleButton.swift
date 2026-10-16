@@ -8,6 +8,8 @@ struct PromptQueueToggleButton: View {
     let count: Int
     let isPaused: Bool
     @Binding var isOpen: Bool
+    /// Karar 120: renkli projenin kart header'ında ikon + sayaç proje renginde.
+    @Environment(\.iconButtonTint) private var tint
 
     /// İkon kutusu ve sayaç baloncuğunun geometrisi — ölçek dışı sabitler.
     private enum Metrics {
@@ -37,7 +39,7 @@ struct PromptQueueToggleButton: View {
             .font(Theme.Typography.ui(.caption, weight: .bold))
             .foregroundStyle(iconColor(isHovering: isHovering))
             .frame(width: Metrics.side, height: Metrics.side)
-            .background(isHovering || isOpen ? Theme.bgSurface : .clear)
+            .background(isHovering || isOpen ? (tint?.hoverBackground ?? Theme.bgSurface) : .clear)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             .contentShape(Rectangle())
     }
@@ -49,17 +51,19 @@ struct PromptQueueToggleButton: View {
     private var countBubble: some View {
         Text("\(count)")
             .font(Theme.Typography.rounded(.micro, weight: .bold))
-            .foregroundStyle(.white)
+            // Proje renkleri açık tonlar: beyaz yerine koyu metin okunur kalır.
+            .foregroundStyle(tint == nil ? Color.white : Theme.bgDeep)
             .padding(.horizontal, Metrics.bubblePadding)
             .frame(minWidth: Metrics.bubbleSide, minHeight: Metrics.bubbleSide)
-            .background(isPaused ? Theme.warning : Theme.accentVivid)
+            .background(isPaused ? Theme.warning : (tint?.fill ?? Theme.accentVivid))
             .clipShape(Capsule())
             .offset(x: Metrics.bubbleOffsetX, y: Metrics.bubbleOffsetY)
             .accessibilityHidden(true)
     }
 
     private func iconColor(isHovering: Bool) -> Color {
-        if isOpen || isHovering { return Theme.textPrimary }
+        if isOpen || isHovering { return tint?.hover ?? Theme.textPrimary }
+        if let tint { return count > 0 ? tint.hover : tint.rest }
         return count > 0 ? Theme.accentPrimary : Theme.textMuted
     }
 

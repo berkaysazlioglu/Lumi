@@ -95,6 +95,11 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             makeView: { AnyView(FavoriteFilesOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
+            id: .projectAppearance,
+            isPresented: { $0.dialogs.projectAppearanceDialog != nil },
+            makeView: { AnyView(ProjectAppearanceOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
             id: .deleteWorkspaceDialog,
             isPresented: { $0.dialogs.deleteWorkspaceDialog != nil },
             makeView: { AnyView(DeleteWorkspaceDialogOverlay()) }

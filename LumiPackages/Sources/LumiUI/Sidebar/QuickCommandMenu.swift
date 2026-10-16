@@ -80,18 +80,20 @@ extension Checkout {
     }
 
     /// Original checkout da yönetilen workspace'lerle aynı iki kolonlu
-    /// kimliği kullanır: solda sabit `main`, yanında gerçek SCM branch yolu.
+    /// kimliği kullanır: solda `main` (karar 120: projenin özel başlığı), yanında gerçek SCM branch yolu.
     @MainActor
     func identity(in shell: ShellContext) -> CheckoutIdentity {
         switch self {
         case .original(let repo):
+            // Karar 120: kök başlığı projenin görünümünden (varsayılan `main`).
+            let title = shell.settings.current.appearance(ofProject: repo.path).resolvedRootTitle
             if let branch = shell.git.branches[repo.path]?.first(where: { $0.isCurrent }) {
-                return identity(originalBranch: branch.name)
+                return identity(originalBranch: branch.name, originalTitle: title)
             }
             if let branch = shell.plastic.workspaces[repo.path]?.branch {
-                return identity(originalBranch: PlasticBranchName.display(branch))
+                return identity(originalBranch: PlasticBranchName.display(branch), originalTitle: title)
             }
-            return identity()
+            return identity(originalTitle: title)
         case .workspace:
             return identity()
         }

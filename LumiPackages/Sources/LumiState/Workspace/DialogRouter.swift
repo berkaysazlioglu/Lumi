@@ -103,6 +103,17 @@ public struct FavoriteFilesDialogState: Equatable, Sendable {
     }
 }
 
+/// Karar 120: proje görünümü modalı. `projectPath` düzenlenen projedir —
+/// açılışta sağ tıklanan proje; modal içindeki listeden başka projeye geçmek
+/// durumu `DialogRouter.selectProjectAppearance` ile değiştirir.
+public struct ProjectAppearanceDialogState: Equatable, Sendable {
+    public let projectPath: String
+
+    public init(projectPath: String) {
+        self.projectPath = projectPath
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -119,6 +130,8 @@ public enum ActiveDialog: Equatable, Sendable {
     case quickCommands(projectPath: String)
     /// Favori dosya arama/yönetim modalı (karar 107).
     case favoriteFiles(FavoriteFilesDialogState)
+    /// Proje görünümü: renk + kök checkout ikonu/başlığı (karar 120).
+    case projectAppearance(ProjectAppearanceDialogState)
     case settings
     /// Karar 114: orchestrator sohbet popup'ı.
     case orchestrator
@@ -139,7 +152,7 @@ public enum ActiveDialog: Equatable, Sendable {
     public var isInputBlockingOverlay: Bool {
         switch self {
         case .none: false
-        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .favoriteFiles, .settings,
+        case .repoSelector, .sidebarProjectSelector, .createWorkspace, .quickCommands, .favoriteFiles, .projectAppearance, .settings,
              .orchestrator, .onboarding, .closeTab,
              .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .removeCodexAccount,
              .quit, .installUpdate: true
@@ -194,6 +207,18 @@ public final class DialogRouter {
     public var installUpdateDialog: InstallUpdateDialogState? {
         guard case .installUpdate(let state) = active else { return nil }
         return state
+    }
+
+    public var projectAppearanceDialog: ProjectAppearanceDialogState? {
+        guard case .projectAppearance(let state) = active else { return nil }
+        return state
+    }
+
+    /// Modal açıkken düzenlenen projeyi değiştirir; başka bir modal açıksa
+    /// hiçbir şey yapmaz (modal dışından kazara açılmaz).
+    public func selectProjectAppearance(_ projectPath: String) {
+        guard projectAppearanceDialog != nil else { return }
+        active = .projectAppearance(ProjectAppearanceDialogState(projectPath: projectPath))
     }
 
     public var quitDialogTerminalCount: Int? {

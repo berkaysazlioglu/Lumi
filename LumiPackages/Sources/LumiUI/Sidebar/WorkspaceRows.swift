@@ -17,9 +17,11 @@ enum Checkout: Identifiable {
         }
     }
 
+    /// Kök checkout'un başlığı karar 120'de projenin görünümünden gelir
+    /// (`identity(in:)`); burası varsayılanı söyler.
     var title: String {
         switch self {
-        case .original: "main"
+        case .original: ProjectRootTitle.defaultTitle
         case .workspace(let workspace): workspace.name
         }
     }
@@ -31,10 +33,10 @@ enum Checkout: Identifiable {
         }
     }
 
-    func identity(originalBranch: String? = nil) -> CheckoutIdentity {
+    func identity(originalBranch: String? = nil, originalTitle: String? = nil) -> CheckoutIdentity {
         switch self {
         case .original:
-            CheckoutIdentity(title: title, branch: originalBranch)
+            CheckoutIdentity(title: originalTitle ?? title, branch: originalBranch)
         case .workspace(let workspace):
             CheckoutIdentity(title: title, branch: workspace.branch)
         }
@@ -130,8 +132,9 @@ struct CheckoutRow: View {
     @ViewBuilder
     private var icon: some View {
         switch checkout {
-        case .original:
-            Image(systemName: "house").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
+        case .original(let repo):
+            // Karar 120: kök checkout ikonu projenin görünümünden (varsayılan `house`).
+            ProjectIconView(icon: shell.settings.current.appearance(ofProject: repo.path).resolvedIcon)
         case .workspace:
             Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
         }

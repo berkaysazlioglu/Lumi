@@ -7,7 +7,8 @@ import SwiftUI
 /// Grid kartı (`TerminalCardView`) ile maximize görünümü (`MaximizedTerminalView`)
 /// aynı kabuğu kullanır. Faz 7.2'de zemin/köşe/kenarlık/gölge yığını ortak
 /// `Panel` bileşenine devredildi; ölçüler DEĞİŞMEDİ (bgSurface, 8pt köşe,
-/// aktifken accent kenarlık + mor glow).
+/// aktifken accent kenarlık + mor glow). Karar 120: renk atanmış projede
+/// aktif kenarlık ve hale proje rengindedir.
 struct TerminalCardChrome<Header: View, Content: View>: View {
     /// Aktif kart: 1px accent ring + 15pt glow. Maximize'da her zaman `true`.
     let isActive: Bool
@@ -20,11 +21,14 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
     @ViewBuilder let header: () -> Header
     @ViewBuilder let content: () -> Content
 
+    /// Karar 120: projenin kimlik rengi kenarlığa ve haleye iner.
+    @Environment(\.terminalProjectColors) private var projectColors
+
     var body: some View {
         Panel(
             variant: .card,
-            borderColor: borderColor,
-            glow: isActive ? .accent() : nil
+            borderColor: Theme.terminalBorderColor(emphasis),
+            glow: Theme.terminalGlowColor(emphasis).map { .accent($0) }
         ) {
             VStack(spacing: 0) {
                 header()
@@ -34,9 +38,14 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
         .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: terminalID, store: promptQueue)
     }
 
-    private var borderColor: Color {
-        if isActive { return Theme.accentPrimary }
-        return needsAttention ? Theme.warning : Theme.border
+    /// Öncelik: seçili (proje rengi | accent) > dikkat (karar 77) > proje
+    /// rengi soluk (karar 120) > border.
+    private var emphasis: TerminalBorderEmphasis {
+        TerminalBorderEmphasis.resolve(
+            isActive: isActive,
+            needsAttention: needsAttention,
+            projectColor: projectColors[terminalID]
+        )
     }
 }
 
@@ -99,6 +108,12 @@ struct TerminalCardHeader: View {
 
     /// Karar 103: All Terminals'ta başlığın yanında checkout adı.
     @Environment(\.terminalCheckoutLabels) private var checkoutLabels
+    /// Karar 120: projenin kimlik rengi — header zemini, başlık, ikon
+    /// butonları, alt çizgi ve checkout etiketi o renkte.
+    @Environment(\.terminalProjectColors) private var projectColors
+
+    private var projectColor: ProjectColor? { projectColors[meta.id] }
+    private var projectTint: Color? { projectColor.map(Theme.projectColor) }
 
     var body: some View {
         HStack(spacing: style.spacing) {
@@ -124,7 +139,7 @@ struct TerminalCardHeader: View {
             if let checkout = checkoutLabels[meta.repoPath] {
                 Text(checkout)
                     .font(Theme.Typography.mono(style.titleSize))
-                    .foregroundStyle(Theme.textMuted)
+                    .foregroundStyle(projectTint ?? Theme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .layoutPriority(-1)
@@ -163,9 +178,16 @@ struct TerminalCardHeader: View {
         .padding(.leading, style.leadingPadding)
         .padding(.trailing, style.trailingPadding)
         .padding(.vertical, style.verticalPadding)
-        .background(Theme.bgElevated)
+        .environment(\.iconButtonTint, projectColor.map(IconButtonTint.project))
+        .background {
+            ZStack {
+                Theme.bgElevated
+                projectTint?.opacity(Theme.ProjectTint.headerOpacity)
+            }
+        }
         .overlay(alignment: .bottom) {
-            Theme.border.frame(height: Theme.Stroke.hairline)
+            (projectTint?.opacity(Theme.ProjectTint.hairlineOpacity) ?? Theme.border)
+                .frame(height: Theme.Stroke.hairline)
         }
         .contentShape(Rectangle())
         .onTapGesture { if !isArranging { onTap?() } }
@@ -175,6 +197,7 @@ struct TerminalCardHeader: View {
 
     private var titleColor: Color {
         if needsAttention { return Theme.warning }
+        if let projectColor { return Theme.ProjectTint.titleColor(projectColor, isActive: isActive) }
         return isActive ? Theme.textPrimary : Theme.textSecondary
     }
 }

@@ -165,4 +165,40 @@ public final class SettingsStore: StoreLifecycle {
     public func removeAdditionalPath(id: String) {
         apply { $0.additionalPaths.removeAll { $0.id == id } }
     }
+
+    // MARK: - Karar 120: proje görünümü
+
+    /// Projenin görünümünü yazım anındaki TAZE değerin üzerinde değiştirir;
+    /// boşalan görünüm kaydı silinir (diske boş girdi yazılmaz). Anahtar proje
+    /// köküdür — workspace/worktree'ler rengi sahiplikten alır.
+    public func updateProjectAppearance(
+        for projectPath: String,
+        _ mutate: @escaping @Sendable (inout ProjectAppearance) -> Void
+    ) {
+        apply { config in
+            var appearance = config.appearance(ofProject: projectPath)
+            mutate(&appearance)
+            config.projectAppearance[projectPath] = appearance.isEmpty ? nil : appearance
+        }
+    }
+
+    /// `nil` rengi kaldırır.
+    public func setProjectColor(_ color: ProjectColor?, for projectPath: String) {
+        updateProjectAppearance(for: projectPath) { $0.color = color }
+    }
+
+    /// `nil` ya da varsayılan `house` → varsayılan ikon.
+    public func setProjectIcon(_ icon: ProjectIcon?, for projectPath: String) {
+        updateProjectAppearance(for: projectPath) { $0.setIcon(icon) }
+    }
+
+    /// Kırpılır ve sınırlanır; boş ya da `main` → varsayılan başlık.
+    public func setProjectRootTitle(_ title: String, for projectPath: String) {
+        updateProjectAppearance(for: projectPath) { $0.setRootTitle(title) }
+    }
+
+    /// `Reset`: projeyi bugünkü görünüme döndürür.
+    public func resetProjectAppearance(for projectPath: String) {
+        apply { $0.projectAppearance[projectPath] = nil }
+    }
 }

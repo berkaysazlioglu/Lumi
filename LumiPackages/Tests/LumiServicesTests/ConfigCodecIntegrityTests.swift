@@ -216,7 +216,11 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"],
         projectQuickCommands: [ProjectQuickCommand(id: "qc", projectPath: "/p", name: "Open", script: "open \"{path}\"", request: "open it")],
-        projectFavoriteFiles: [ProjectFavoriteFile(id: "fav", projectPath: "/p", relativePath: "Assets/Scripts/Player.cs")]
+        projectFavoriteFiles: [ProjectFavoriteFile(id: "fav", projectPath: "/p", relativePath: "Assets/Scripts/Player.cs")],
+        projectAppearance: [
+            "/p": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
+            "/tmp/selected": ProjectAppearance(icon: .emoji("🚀")),
+        ]
     )
 
     private static let fullyPopulatedUIState = UIState(

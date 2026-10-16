@@ -32,6 +32,8 @@ public struct TerminalsRouteView: View {
             content(scope)
                 .padding(Theme.Spacing.lg)
                 .environment(\.terminalCheckoutLabels, checkoutLabels(for: scope))
+                // Karar 120: iki kapsamda da (repo + All Terminals) aynı kapı.
+                .environment(\.terminalProjectColors, shell.terminalProjectColors)
         } else {
             WelcomeView()
         }

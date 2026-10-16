@@ -211,9 +211,20 @@ public struct ProjectsPanel: View {
     }
 
     private func menuItems(_ project: Repo) -> [PopoverMenu.Item] {
+        Self.projectMenuItems(project, shell: shell, isOperationRunning: operationBelongs(to: project))
+    }
+
+    /// Proje satırının sağ tık menüsü — view'dan bağımsız kurulur ki
+    /// kompozisyonu test edilebilsin (karar 120: `Appearance…`).
+    static func projectMenuItems(_ project: Repo, shell: ShellContext, isOperationRunning: Bool) -> [PopoverMenu.Item] {
         [
             .action("Create Workspace…", icon: "plus", isEnabled: !shell.workspaces.isCreating) {
                 shell.dialogs.present(.createWorkspace(projectPath: project.path))
+            },
+            .divider,
+            // Karar 120: renk + kök checkout ikonu/başlığı tek modalda.
+            .action("Appearance…", icon: "paintpalette") {
+                shell.dialogs.present(.projectAppearance(ProjectAppearanceDialogState(projectPath: project.path)))
             },
             .divider,
             .action("Reveal in Finder", icon: "folder") { shell.actions.revealPath(project.path) },
@@ -221,7 +232,7 @@ public struct ProjectsPanel: View {
             .divider,
             .action(
                 "Remove from Projects", icon: "trash", isDestructive: true,
-                isEnabled: !(shell.workspaces.isCreating && operationBelongs(to: project))
+                isEnabled: !(shell.workspaces.isCreating && isOperationRunning)
             ) {
                 shell.requestRemoveProject(project)
             },
@@ -244,6 +255,9 @@ public struct ProjectsPanel: View {
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if let color = shell.settings.current.appearance(ofProject: project.path).color {
+                        ProjectColorDot(color: Theme.projectColor(color))
+                    }
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

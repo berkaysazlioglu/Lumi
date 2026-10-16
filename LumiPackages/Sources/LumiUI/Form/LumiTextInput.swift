@@ -11,16 +11,21 @@ struct LumiTextInput: View {
     /// Sır alanı (API anahtarı): karakterler maskelenir.
     var isSecure = false
     var onSubmit: (() -> Void)?
+    /// Odağı çağıran yönetecekse (karar 120: emoji paleti alanı önce odaklar).
+    var focus: FocusState<Bool>.Binding?
 
-    @FocusState private var isFocused: Bool
+    @FocusState private var ownFocus: Bool
+
+    private var focusBinding: FocusState<Bool>.Binding { focus ?? $ownFocus }
+    private var isFocused: Bool { focusBinding.wrappedValue }
 
     var body: some View {
         field
             .textFieldStyle(.plain)
             .font(Theme.Typography.bodyMono)
             .foregroundStyle(Theme.textPrimary)
-            .focused($isFocused)
-            .onAppear { if autofocus { isFocused = true } }
+            .focused(focusBinding)
+            .onAppear { if autofocus { focusBinding.wrappedValue = true } }
             .onSubmit { onSubmit?() }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)

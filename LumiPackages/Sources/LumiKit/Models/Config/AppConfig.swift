@@ -80,6 +80,10 @@ public struct AppConfig: Sendable, Equatable {
     public var projectQuickCommands: [ProjectQuickCommand]
     /// Proje başına favori dosyalar (karar 107). Additive (karar 9): yoksa boş.
     public var projectFavoriteFiles: [ProjectFavoriteFile]
+    /// Proje kökü (mutlak yol) → görünüm: renk + kök checkout ikonu/başlığı
+    /// (karar 120). Boş görünüm tutulmaz. Proje Projects'ten kaldırılınca
+    /// silinmez (favoriler gibi). Additive (karar 9): yoksa boş.
+    public var projectAppearance: [String: ProjectAppearance]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -119,7 +123,8 @@ public struct AppConfig: Sendable, Equatable {
         workspaces: [],
         sidebarProjectPaths: [],
         projectQuickCommands: [],
-        projectFavoriteFiles: []
+        projectFavoriteFiles: [],
+        projectAppearance: [:]
     )
 
     public init(
@@ -149,7 +154,8 @@ public struct AppConfig: Sendable, Equatable {
         workspaces: [ProjectWorkspace] = [],
         sidebarProjectPaths: [String] = [],
         projectQuickCommands: [ProjectQuickCommand] = [],
-        projectFavoriteFiles: [ProjectFavoriteFile] = []
+        projectFavoriteFiles: [ProjectFavoriteFile] = [],
+        projectAppearance: [String: ProjectAppearance] = [:]
     ) {
         self.projectsRoot = projectsRoot
         self.onboardingCompleted = onboardingCompleted
@@ -178,5 +184,6 @@ public struct AppConfig: Sendable, Equatable {
         self.workspaces = workspaces
         self.projectQuickCommands = projectQuickCommands
         self.projectFavoriteFiles = projectFavoriteFiles
+        self.projectAppearance = projectAppearance
     }
 }
