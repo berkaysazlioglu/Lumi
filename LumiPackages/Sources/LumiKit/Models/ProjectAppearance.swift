@@ -1,12 +1,12 @@
 import Foundation
 
-/// Projenin görünümü (karar 120): kimlik rengi + Projects'teki kök checkout
-/// satırının ikonu ve başlığı. Tüm alanlar opsiyoneldir; `nil` alan bugünkü
-/// görünümdür (renksiz, `house`, `main`). Değerler bu tipin kurucularından
+/// Projenin görünümü (karar 120): kimlik rengi + Projects'teki proje
+/// satırının ikonu ve kök checkout'un başlığı. Tüm alanlar opsiyoneldir; `nil` alan bugünkü
+/// görünümdür (renksiz, `folder`, `main`). Değerler bu tipin kurucularından
 /// geçtiği için her zaman doğrulanmıştır — codec ve store aynı kuralı kullanır.
 public struct ProjectAppearance: Equatable, Sendable {
     public var color: ProjectColor?
-    /// `nil` → varsayılan `house`. Varsayılan ikon seçilirse `nil` tutulur.
+    /// `nil` → varsayılan `folder`. Varsayılan ikon seçilirse `nil` tutulur.
     public private(set) var icon: ProjectIcon?
     /// `nil` → `main`. Kırpılmış ve sınırlanmış; boş başlık tutulmaz.
     public private(set) var rootTitle: String?
@@ -35,21 +35,21 @@ public struct ProjectAppearance: Equatable, Sendable {
     }
 }
 
-/// Kök checkout ikonu: izin listesindeki bir SF Symbol ya da tek bir emoji.
+/// Proje ikonu (Projects'te proje adının başında): izin listesindeki bir SF Symbol ya da tek bir emoji.
 /// Diskte `sf:<ad>` / `emoji:<karakter>` olarak durur.
 public enum ProjectIcon: Equatable, Hashable, Sendable {
     case symbol(String)
     case emoji(String)
 
     /// Bugünkü sabit ikon.
-    public static let `default` = ProjectIcon.symbol("house")
+    public static let `default` = ProjectIcon.symbol("folder")
 
     /// Seçilebilir SF Symbol'ler — bilinçli olarak dar (renk paletiyle aynı
     /// gerekçe). İlki varsayılandır.
     public static let symbolNames: [String] = [
-        "house", "star", "bolt", "flame", "leaf", "gamecontroller",
-        "hammer", "cube", "globe", "sparkles", "flag", "heart",
-        "paintbrush", "book", "puzzlepiece", "terminal",
+        "folder", "house", "star", "bolt", "flame", "leaf",
+        "gamecontroller", "hammer", "cube", "globe", "sparkles", "flag",
+        "heart", "paintbrush", "book", "puzzlepiece", "terminal",
     ]
 
     /// Doğrulanmış SF Symbol; izin listesinde değilse `nil`.

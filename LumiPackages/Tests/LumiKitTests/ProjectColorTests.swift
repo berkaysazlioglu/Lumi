@@ -94,7 +94,7 @@ import Testing
     @Test func symbolsComeOnlyFromTheAllowlist() {
         #expect(ProjectIcon.symbol(named: "star") == .symbol("star"))
         #expect(ProjectIcon.symbol(named: "trash") == nil)
-        #expect(ProjectIcon.symbolNames.first == "house")
+        #expect(ProjectIcon.symbolNames.first == "folder")
         #expect(Set(ProjectIcon.symbolNames).count == ProjectIcon.symbolNames.count)
         #expect(ProjectIcon(persisted: "sf:trash") == nil)
         #expect(ProjectIcon(persisted: "emoji:🚀") == .emoji("🚀"))
@@ -112,7 +112,7 @@ import Testing
     @Test func defaultIconIsNotStoredAndEmptyAppearanceIsEmpty() {
         #expect(ProjectAppearance(icon: .default).icon == nil)
         #expect(ProjectAppearance(icon: .default, rootTitle: "main").isEmpty)
-        #expect(ProjectAppearance.none.resolvedIcon == .symbol("house"))
+        #expect(ProjectAppearance.none.resolvedIcon == .symbol("folder"))
         #expect(!ProjectAppearance(color: .blue).isEmpty)
     }
 

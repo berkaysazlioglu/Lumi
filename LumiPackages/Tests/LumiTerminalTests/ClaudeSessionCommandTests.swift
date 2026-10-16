@@ -1,4 +1,5 @@
 import XCTest
+import LumiKit
 @testable import LumiTerminal
 
 final class ClaudeSessionCommandTests: XCTestCase {
@@ -26,6 +27,14 @@ final class ClaudeSessionCommandTests: XCTestCase {
             result.command,
             "claude --dangerously-skip-permissions --session-id \(fixedID)"
         )
+        XCTAssertEqual(result.sessionID, fixedID)
+    }
+
+    /// Karar 121: model kısayolu terminali de resume edilebilir kalır.
+    func testInjectsSessionIDIntoModelAliasCommand() {
+        let result = prepare(ClaudeModelAlias.opus.launchCommand)
+
+        XCTAssertEqual(result.command, "claude --model opus --session-id \(fixedID)")
         XCTAssertEqual(result.sessionID, fixedID)
     }
 

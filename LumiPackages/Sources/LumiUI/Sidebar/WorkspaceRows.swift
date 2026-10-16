@@ -133,8 +133,8 @@ struct CheckoutRow: View {
     private var icon: some View {
         switch checkout {
         case .original(let repo):
-            // Karar 120: kök checkout ikonu projenin görünümünden (varsayılan `house`).
-            ProjectIconView(icon: shell.settings.current.appearance(ofProject: repo.path).resolvedIcon)
+            // Proje ikonu proje satırındadır (karar 120 eki); kök checkout sabit `house`.
+            Image(systemName: "house").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
         case .workspace:
             Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
         }

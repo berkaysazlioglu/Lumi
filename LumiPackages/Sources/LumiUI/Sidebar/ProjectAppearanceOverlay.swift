@@ -133,7 +133,7 @@ public struct ProjectAppearanceOverlay: View {
                 LumiField(title: "Color", hint: "Border and header of \(project.name)'s terminals, including its workspaces") {
                     colorRow(project.path)
                 }
-                LumiField(title: "Main checkout icon", hint: "Shown next to the main checkout in Projects") {
+                LumiField(title: "Project icon", hint: "Shown before the project name in Projects") {
                     iconPicker(project.path)
                 }
                 LumiField(
@@ -217,7 +217,8 @@ public struct ProjectAppearanceOverlay: View {
                         get: { emojiDraft },
                         set: { updateEmoji($0, projectPath: projectPath) }
                     ),
-                    placeholder: "🙂",
+                    // Placeholder yok: emoji placeholder renkli çizilip seçili değer gibi görünüyordu.
+                    placeholder: "",
                     width: Self.emojiFieldWidth,
                     focus: $isEmojiFocused
                 )
@@ -296,7 +297,7 @@ public struct ProjectAppearanceOverlay: View {
     }
 }
 
-/// Sol listedeki proje: ikon (kök checkout'unki) · ad · renk noktası.
+/// Sol listedeki proje: proje ikonu · ad · renk noktası.
 private struct ProjectAppearanceListRow: View {
     let name: String
     let appearance: ProjectAppearance

@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Ajan ayarları: orchestrator Activity özetleri (karar 114) ve ek ajan arka
+/// Ajan ayarları: Claude model kısayolları (karar 121), orchestrator Activity özetleri (karar 114) ve ek ajan arka
 /// uçları (karar 54 — DeepSeek'i Claude Code CLI'ı üzerinden çalıştıran env).
 struct AgentSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .agent
@@ -19,6 +19,24 @@ struct AgentSettingsTab: SettingsTabContent {
                 title: "Agent",
                 description: "The orchestrator and extra agent backends available to new terminals."
             )
+            SectionHeader(title: "Claude Models", icon: "cpu")
+                .padding(.bottom, Theme.Spacing.md)
+            LumiField(
+                title: "Model Shortcuts",
+                hint: "Lists New Claude Fable, Opus, Sonnet and Haiku at the top of the New Claude "
+                    + "dropdown. Each starts Claude Code with that model alias (claude --model …), "
+                    + "always the latest model of that family.",
+                isLast: true
+            ) {
+                LumiToggleSwitch(
+                    isOn: Binding(
+                        get: { shell.settings.current.claudeModelShortcutsEnabled },
+                        set: { shell.settings.setClaudeModelShortcutsEnabled($0) }
+                    ),
+                    label: "Claude model shortcuts"
+                )
+            }
+            .padding(.bottom, Theme.Spacing.xxl)
             SectionHeader(title: "Orchestrator", icon: OrchestratorToolbarItem.iconName)
                 .padding(.bottom, Theme.Spacing.md)
             LumiField(

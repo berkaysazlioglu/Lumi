@@ -40,6 +40,7 @@ struct SectionHeader<Trailing: View>: View {
     }
 
     let title: String
+    var titleSize: Theme.Typography.Size = .label
     var icon: String?
     var count: Count?
     var disclosure: Disclosure = .none
@@ -51,6 +52,7 @@ struct SectionHeader<Trailing: View>: View {
 
     init(
         title: String,
+        titleSize: Theme.Typography.Size = .label,
         icon: String? = nil,
         count: Count? = nil,
         disclosure: Disclosure = .none,
@@ -60,6 +62,7 @@ struct SectionHeader<Trailing: View>: View {
         @ViewBuilder trailing: @escaping () -> Trailing
     ) {
         self.title = title
+        self.titleSize = titleSize
         self.icon = icon
         self.count = count
         self.disclosure = disclosure
@@ -97,7 +100,7 @@ struct SectionHeader<Trailing: View>: View {
                     .accessibilityHidden(true)
             }
             Text(title.uppercased())
-                .font(Theme.Typography.mono(.label, weight: .semibold))
+                .font(Theme.Typography.mono(titleSize, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(Theme.textSecondary)
             if let count {

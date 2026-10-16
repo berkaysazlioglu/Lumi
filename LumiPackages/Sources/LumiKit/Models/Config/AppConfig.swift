@@ -63,6 +63,9 @@ public struct AppConfig: Sendable, Equatable {
     /// Activity paneline özet olarak düşmesi (uzun mesajlar haiku ile
     /// özetlenir). Additive (karar 9): yoksa açık.
     public var orchestratorDigestsEnabled: Bool
+    /// New Claude dropdown'unun başında model kısayolları (Fable / Opus /
+    /// Sonnet / Haiku — karar 121). Additive (karar 9): yoksa açık.
+    public var claudeModelShortcutsEnabled: Bool
     /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
     /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.
     public var claudeAccounts: [ClaudeAccount]
@@ -116,6 +119,7 @@ public struct AppConfig: Sendable, Equatable {
         indexShortcutStyle: .default,
         terminalLinkActionsEnabled: true,
         orchestratorDigestsEnabled: true,
+        claudeModelShortcutsEnabled: true,
         claudeAccounts: [],
         claudeAccountSelection: .systemDefault,
         codexAccounts: [],
@@ -147,6 +151,7 @@ public struct AppConfig: Sendable, Equatable {
         indexShortcutStyle: IndexShortcutStyle = .default,
         terminalLinkActionsEnabled: Bool = true,
         orchestratorDigestsEnabled: Bool = true,
+        claudeModelShortcutsEnabled: Bool = true,
         claudeAccounts: [ClaudeAccount] = [],
         claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
         codexAccounts: [CodexAccount] = [],
@@ -177,6 +182,7 @@ public struct AppConfig: Sendable, Equatable {
         self.indexShortcutStyle = indexShortcutStyle
         self.terminalLinkActionsEnabled = terminalLinkActionsEnabled
         self.orchestratorDigestsEnabled = orchestratorDigestsEnabled
+        self.claudeModelShortcutsEnabled = claudeModelShortcutsEnabled
         self.claudeAccounts = claudeAccounts
         self.claudeAccountSelection = claudeAccountSelection
         self.codexAccounts = codexAccounts

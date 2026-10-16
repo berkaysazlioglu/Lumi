@@ -81,6 +81,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.terminalLinkActionsEnabled = false
             // Karar 114 Faz 4 additive anahtar.
             config.orchestratorDigestsEnabled = false
+            // Karar 121 additive anahtar.
+            config.claudeModelShortcutsEnabled = false
             // Karar 120 additive anahtar: proje yolu → görünüm (boş alan yazılmaz).
             config.projectAppearance = [
                 "/Users/dev/selected": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
@@ -146,6 +148,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "claudeAccounts" : [
 
       ],
+      "claudeModelShortcutsEnabled" : false,
       "codexAccounts" : [
 
       ],

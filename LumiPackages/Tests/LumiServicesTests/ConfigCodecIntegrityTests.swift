@@ -190,6 +190,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         indexShortcutStyle: .repoOnCommand,
         terminalLinkActionsEnabled: false,
         orchestratorDigestsEnabled: false,
+        claudeModelShortcutsEnabled: false,
         claudeAccounts: [
             ClaudeAccount(
                 id: ConfigCodecIntegrityTests.accountID,

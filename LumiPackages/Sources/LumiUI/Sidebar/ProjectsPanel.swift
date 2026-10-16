@@ -28,7 +28,7 @@ public struct ProjectsPanel: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionHeader(
-                title: "Projects", icon: "folder", count: .neutral(filteredProjects.count),
+                title: "Projects", titleSize: .base, count: .neutral(filteredProjects.count),
                 disclosure: .none, onToggle: nil
             ) {
                 searchButton
@@ -247,9 +247,10 @@ public struct ProjectsPanel: View {
                 toggleProject(project)
             } label: {
                 HStack(spacing: Theme.Spacing.sm) {
-                    Image(systemName: "folder")
-                        .foregroundStyle(Theme.accentPrimary)
-                        .accessibilityHidden(true)
+                    ProjectIconView(
+                        icon: shell.settings.current.appearance(ofProject: project.path).resolvedIcon,
+                        size: .body, color: Theme.accentPrimary
+                    )
                     Text(project.name)
                         .font(Theme.Typography.mono(.body, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)

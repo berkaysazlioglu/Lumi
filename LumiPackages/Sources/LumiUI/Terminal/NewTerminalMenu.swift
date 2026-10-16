@@ -6,12 +6,14 @@ import SwiftUI
 /// Çağıranlar — topbar öğesi ve boş durum placeholder'ı — listeyi burada TEK
 /// yerden alır. Ana buton aktif sağlayıcıyı açtığı için o sağlayıcı listeye
 /// girmez. Spawn kapsamın intent'ine gider: repo'da checkout, All Terminals'ta
-/// serbest konum (karar 108).
+/// serbest konum (karar 108). Ayar açıksa listenin başında Claude model
+/// kısayolları durur (karar 121) — aktif sağlayıcı Claude olsa da.
 @MainActor
 enum NewTerminalMenu {
     static func items(shell: ShellContext, scope: TerminalScope) -> [NewTerminalMenuItem] {
         let active = shell.settings.current.aiProvider
-        var items = AgentProvider.allCases
+        var items = modelItems(shell: shell, scope: scope)
+        items += AgentProvider.allCases
             .filter { $0 != active }
             .map { provider in
                 NewTerminalMenuItem(label: "New \(provider.displayName)", glyph: .provider(provider)) {
@@ -27,6 +29,17 @@ enum NewTerminalMenu {
             shell.spawnTerminal(in: scope, command: nil, task: "Bash")
         })
         return items
+    }
+
+    /// Karar 121: `claude --model <takma ad>`; oturum kimliği spawn'da yine
+    /// enjekte edilir, kart başlığı modelin adını taşır.
+    private static func modelItems(shell: ShellContext, scope: TerminalScope) -> [NewTerminalMenuItem] {
+        guard shell.settings.current.claudeModelShortcutsEnabled else { return [] }
+        return ClaudeModelAlias.allCases.map { model in
+            NewTerminalMenuItem(label: "New Claude \(model.displayName)", glyph: .provider(.claude)) {
+                shell.spawnTerminal(in: scope, command: model.launchCommand, task: model.displayName)
+            }
+        }
     }
 
     /// Karar 108: All Terminals'ın konum bölümü — home, projeler kökleri, son

@@ -31,7 +31,7 @@ final class ProjectAppearanceCodecTests: XCTestCase {
             "/p/b": ["color": "blue", "icon": "emoji:🚀🚀", "title": "ok"],
             "/p/c": ["icon": "emoji:a"],
             "/p/d": ["icon": "star"],
-            "/p/e": ["icon": "sf:house", "title": "main"],
+            "/p/e": ["icon": "sf:folder", "title": "main"],
             "/p/f": ["icon": "emoji:👍🏽", "title": 3],
             "relative": ["color": "blue"],
             "/p/g": "blue",
