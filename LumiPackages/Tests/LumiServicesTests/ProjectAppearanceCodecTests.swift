@@ -57,7 +57,7 @@ final class ProjectAppearanceCodecTests: XCTestCase {
     /// Diske yazılan adlar kilitlenir — yeniden adlandırma diskteki seçimi
     /// sessizce düşürür.
     func testPersistedNamesAreStable() {
-        XCTAssertEqual(ProjectColor.allCases.map(\.rawValue), ["blue", "teal", "pink", "orange", "lime"])
+        XCTAssertEqual(ProjectColor.allCases.map(\.rawValue), ["blue", "teal", "pink", "orange", "lime", "green", "fuchsia"])
         XCTAssertEqual(ProjectIcon.symbol("star").persisted, "sf:star")
         XCTAssertEqual(ProjectIcon.emoji("🚀").persisted, "emoji:🚀")
     }

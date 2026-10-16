@@ -23,6 +23,8 @@ public extension Theme {
             public static let pink: UInt32 = 0xF472B6
             public static let orange: UInt32 = 0xFB923C
             public static let lime: UInt32 = 0xA3E635
+            public static let green: UInt32 = 0x4ADE80
+            public static let fuchsia: UInt32 = 0xE879F9
         }
 
         /// Seçili olmayan kartın çerçevesi (zemine karşı ~2,9–4,4:1;
@@ -52,6 +54,8 @@ public extension Theme {
             case .pink: return Hex.pink
             case .orange: return Hex.orange
             case .lime: return Hex.lime
+            case .green: return Hex.green
+            case .fuchsia: return Hex.fuchsia
             }
         }
 

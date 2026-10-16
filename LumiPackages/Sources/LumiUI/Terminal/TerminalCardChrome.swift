@@ -27,7 +27,7 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
     var body: some View {
         Panel(
             variant: .card,
-            borderColor: Theme.terminalBorderColor(emphasis),
+            borderColor: Theme.terminalBorderColor(isAttention ? restingEmphasis : emphasis),
             glow: Theme.terminalGlowColor(emphasis).map { .accent($0) }
         ) {
             VStack(spacing: 0) {
@@ -35,6 +35,7 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
                 content()
             }
         }
+        .overlay { attentionBorder }
         .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: terminalID, store: promptQueue)
     }
 
@@ -46,6 +47,26 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
             needsAttention: needsAttention,
             projectColor: projectColors[terminalID]
         )
+    }
+
+    private var isAttention: Bool { emphasis == .attention }
+
+    /// Dikkat nabzı açıldığında altta görünen dinlenme kenarlığı.
+    private var restingEmphasis: TerminalBorderEmphasis {
+        TerminalBorderEmphasis.resolve(isActive: false, needsAttention: false, projectColor: projectColors[terminalID])
+    }
+
+    /// Karar 77 eki: dikkat sarısı ayrı bir katmanda nefes alır ki nabız
+    /// kartın içeriğini (terminal view'ı) her karede yeniden çizdirmesin.
+    @ViewBuilder
+    private var attentionBorder: some View {
+        if isAttention {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .stroke(Theme.terminalBorderColor(.attention), lineWidth: Theme.Stroke.graph)
+                .shadow(color: Theme.warning.opacity(AttentionPulse.glowOpacity), radius: AttentionPulse.glowRadius)
+                .attentionPulse(true)
+                .allowsHitTesting(false)
+        }
     }
 }
 
@@ -132,6 +153,7 @@ struct TerminalCardHeader: View {
             Text(meta.displayTitle)
                 .font(Theme.Typography.mono(style.titleSize))
                 .foregroundStyle(titleColor)
+                .attentionPulse(needsAttention)
                 .lineLimit(1)
                 .accessibilityLabel(
                     needsAttention ? "\(meta.displayTitle), needs attention" : meta.displayTitle

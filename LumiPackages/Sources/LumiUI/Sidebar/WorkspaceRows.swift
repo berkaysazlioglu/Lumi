@@ -319,6 +319,7 @@ struct AgentRow: View {
                     Text(agent.meta.displayTitle)
                         .font(Theme.Typography.captionMono)
                         .foregroundStyle(titleColor(isHovering: isHovering))
+                        .attentionPulse(agent.needsAttention)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
@@ -360,6 +361,7 @@ struct AgentRow: View {
                 .frame(width: Theme.scaled(2))
                 .padding(.vertical, Theme.Spacing.xxs)
                 .padding(.leading, Theme.Spacing.xxl)
+                .attentionPulse(true)
                 .accessibilityHidden(true)
         }
     }

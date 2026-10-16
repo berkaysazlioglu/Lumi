@@ -5,8 +5,9 @@ import Foundation
 /// `config.json`'daki `projectColors` sözlüğüne yazılan değerdir (karar 9) —
 /// case adı değiştirilirse diskteki seçimler okunmaz.
 ///
-/// Palet bilinçli olarak dardır (kullanıcı isteği: "4-5 renk, özgür olmasınlar"):
-/// mor (aktif kart ring'i), sarı (dikkat, karar 77) ve kırmızı (hata) zaten
+/// Palet bilinçli olarak dardır (kullanıcı isteği: "4-5 renk, özgür olmasınlar";
+/// ekiyle 7 renk): mor (aktif kart ring'i), sarı (dikkat, karar 77 — limon ve kum
+/// sarısı denendi, dikkat amber'ine fazla yakın okundu) ve kırmızı (hata) zaten
 /// başka bir şey söylediği için listede yoktur.
 public enum ProjectColor: String, Sendable, Equatable, Hashable, CaseIterable {
     case blue
@@ -14,6 +15,8 @@ public enum ProjectColor: String, Sendable, Equatable, Hashable, CaseIterable {
     case pink
     case orange
     case lime
+    case green
+    case fuchsia
 
     /// Menüde görünen ad.
     public var title: String { rawValue.capitalized }
