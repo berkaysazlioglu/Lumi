@@ -118,6 +118,21 @@ public final class NavigationStore {
         setRoute(.repo(repoPath))
     }
 
+    /// Checkout'u route'a DOKUNMADAN açık tab'lara ekler ve persist eder.
+    ///
+    /// Route dışından doğan terminaller (orchestrator `start_terminal`, telefon
+    /// `start_session`) için: resume filtresi (`resumableEntries`, karar 108)
+    /// yalnız `openTabs`'taki ya da serbest yolları geri açar; tab'ı kapalı
+    /// checkout'ta doğan ajan quit sonrası kayboluyordu. Serbest yol asla tab
+    /// olmaz (karar 108 güvenlik kapısı); `onActiveRepoChanged` ateşlenmez.
+    @discardableResult
+    public func registerOpenTab(_ repoPath: String) -> Bool {
+        guard !openTabs.contains(repoPath), !isLooseTerminalPath(repoPath) else { return false }
+        openTabs.append(repoPath)
+        persist()
+        return true
+    }
+
     public func setRoute(_ route: WorkspaceRoute) {
         let previous = activeRoute
         activeRoute = route

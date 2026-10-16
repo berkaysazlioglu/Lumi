@@ -87,6 +87,11 @@ final class WorkspaceBootAssembly: FeatureAssembly {
         checkpointTask = Task { @MainActor [weak self] in
             for await event in stream {
                 guard let self else { return }
+                // Tab'ı kapalı checkout'ta doğan terminal (orchestrator,
+                // telefon) resume filtresine girsin diye tab'ı açık sayılır.
+                if case .spawned(let meta) = event {
+                    self.shared.navigation.registerOpenTab(meta.repoPath)
+                }
                 guard Self.affectsResumeSessions(event) else { continue }
                 await self.checkpointResumeSessions()
             }

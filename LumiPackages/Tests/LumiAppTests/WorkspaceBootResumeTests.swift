@@ -166,6 +166,36 @@ final class WorkspaceBootResumeTests: XCTestCase {
         await assembly.shutdown()
     }
 
+    /// Orchestrator `start_terminal` / telefon `start_session` route'u
+    /// değiştirmeden spawn eder: tab'ı kapalı checkout'ta doğan ajan açık tab
+    /// sayılmazsa `resumableEntries` onu quit sonrası atlıyordu. Serbest yol
+    /// tab olmaz (karar 108).
+    func testSpawnInClosedCheckoutRegistersTabWithoutRouteChange() async throws {
+        let (registry, shared, assembly) = await makeHarness(openTabs: ["/r/a"])
+        defer { registry.removeTemporaryDirectories() }
+        shared.navigation.projectOrder = { ["/r/a", "/r/b"] }
+        shared.navigation.projectCheckouts = { [$0] }
+        await assembly.start()
+
+        // Olaylar sırayla tüketilir: serbest spawn, beklenen tab'dan önce işlenmiş olur.
+        _ = try registry.fakeTerminal.spawn(repoPath: "/Users/me", task: nil, command: "claude")
+        let meta = try registry.fakeTerminal.spawn(repoPath: "/r/b", task: nil, command: "claude")
+
+        let deadline = Date().addingTimeInterval(2)
+        while !shared.navigation.openTabs.contains("/r/b"), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(shared.navigation.openTabs, ["/r/a", "/r/b"])
+        XCTAssertEqual(shared.navigation.activeRoute, .repo("/r/a"))
+        let resumable = WorkspaceBootAssembly.resumableEntries(
+            [claudeEntry(meta)],
+            isOpenTab: { shared.navigation.openTabs.contains($0) },
+            isLoose: { shared.navigation.isLooseTerminalPath($0) }
+        )
+        XCTAssertEqual(resumable, [claudeEntry(meta)])
+        await assembly.shutdown()
+    }
+
     func testCodexSessionIDChangedCheckpointsThreadWithHome() async throws {
         let (registry, _, assembly) = await makeHarness()
         defer { registry.removeTemporaryDirectories() }

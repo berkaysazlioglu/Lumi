@@ -227,6 +227,36 @@ final class NavigationStoreTests: XCTestCase {
         XCTAssertTrue(store.isLooseTerminalPath("/Users/me"))
     }
 
+    /// Route dışından (orchestrator / telefon) doğan terminalin checkout'u
+    /// resume filtresine girsin diye tab'ı açılır — route'a ve aktif repo
+    /// köprüsüne dokunmadan.
+    func testRegisterOpenTabAddsCheckoutWithoutChangingRoute() async throws {
+        wireProjects(["/r/alpha", "/r/beta"], checkouts: ["/r/beta": ["/r/beta/wt"]])
+        store.openTab("/r/alpha")
+        var repoChanges: [String?] = []
+        store.onActiveRepoChanged = { _, new in repoChanges.append(new) }
+        let persistsBefore = await config.uiStateUpdateCount
+
+        XCTAssertTrue(store.registerOpenTab("/r/beta/wt"))
+
+        XCTAssertEqual(store.openTabs, ["/r/alpha", "/r/beta/wt"])
+        XCTAssertEqual(store.activeRoute, .repo("/r/alpha"))
+        XCTAssertTrue(repoChanges.isEmpty)
+        try await waitForPersist(minimumCount: persistsBefore + 1)
+        let state = await config.uiState()
+        XCTAssertEqual(state.openTabs, ["/r/alpha", "/r/beta/wt"])
+    }
+
+    func testRegisterOpenTabIgnoresOpenAndLoosePaths() {
+        wireProjects(["/r/alpha"])
+        store.openTab("/r/alpha")
+
+        XCTAssertFalse(store.registerOpenTab("/r/alpha"))
+        XCTAssertFalse(store.registerOpenTab("/Users/me"))
+
+        XCTAssertEqual(store.openTabs, ["/r/alpha"])
+    }
+
     /// Serbest terminale gitmek ev dizinini repo tab'ı yapmaz: aktif repo
     /// köprüsü (dosya izleyici + tarama) hiç ateşlenmez.
     func testLooseTerminalSurfaceIsAllTerminalsAndNeverOpensTab() {
