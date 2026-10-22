@@ -38,6 +38,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var activityMonitor: any ActivityMonitoring
     public var processSampler: any ProcessSampling
     public var sleepAssertion: any SleepAsserting
+    public var lidSleep: any LidSleepControlling = FakeLidSleepControl()
     public var agentHooks: any AgentHookServing
     public var agentHookInstaller: any AgentHookInstalling
     public var chatSessions: any ChatSessionServicing = FakeChatSessionService()

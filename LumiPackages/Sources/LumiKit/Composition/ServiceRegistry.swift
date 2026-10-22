@@ -65,6 +65,8 @@ public protocol ServiceRegistry: AnyObject {
     /// Karar 43: alt bar Resource Manager örnekleyicisi ve uyku engeli.
     var processSampler: any ProcessSampling { get }
     var sleepAssertion: any SleepAsserting { get }
+    /// Karar 122: kapak kapalıyken uyku engeli (`pmset disablesleep`).
+    var lidSleep: any LidSleepControlling { get }
     /// Karar 45: ajan hook sunucusu ve sağlayıcı ayar dosyalarına kurulumu.
     var agentHooks: any AgentHookServing { get }
     var agentHookInstaller: any AgentHookInstalling { get }

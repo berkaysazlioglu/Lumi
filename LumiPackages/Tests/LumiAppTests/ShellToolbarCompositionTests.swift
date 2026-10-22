@@ -315,7 +315,8 @@ private struct ShellFixture {
                 terminals: shared.terminals, repos: repos, workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts)
             ),
             computerAwake: ComputerAwakeStore(
-                terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
+                terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion(),
+                lidSleep: FakeLidSleepControl()
             ),
             resourceUsage: ResourceUsageStore(
                 terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()

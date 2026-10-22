@@ -21,7 +21,8 @@ final class StatusBarFeatureAssembly: FeatureAssembly, ShellContributing {
         computerAwake = ComputerAwakeStore(
             terminals: shared.terminals,
             settings: shared.settings,
-            assertion: services.sleepAssertion
+            assertion: services.sleepAssertion,
+            lidSleep: services.lidSleep
         )
         resourceUsage = ResourceUsageStore(
             terminals: shared.terminals,
@@ -53,5 +54,6 @@ final class StatusBarFeatureAssembly: FeatureAssembly, ShellContributing {
     func shutdown() async {
         resourceUsage.stop()
         computerAwake.stop()
+        await computerAwake.restoreLidSleep()
     }
 }

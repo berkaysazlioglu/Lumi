@@ -9,6 +9,7 @@ final class ComputerAwakeStoreTests: XCTestCase {
     private var terminals: TerminalListStore!
     private var settings: SettingsStore!
     private var assertion: FakeSleepAssertion!
+    private var lid: FakeLidSleepControl!
     private var store: ComputerAwakeStore!
 
     override func setUp() async throws {
@@ -16,7 +17,8 @@ final class ComputerAwakeStoreTests: XCTestCase {
         terminals = TerminalListStore(service: FakeTerminalService(), toasts: toasts)
         settings = SettingsStore(config: FakeConfigService(), toasts: toasts)
         assertion = FakeSleepAssertion()
-        store = ComputerAwakeStore(terminals: terminals, settings: settings, assertion: assertion)
+        lid = FakeLidSleepControl()
+        store = ComputerAwakeStore(terminals: terminals, settings: settings, assertion: assertion, lidSleep: lid)
     }
 
     override func tearDown() async throws {
@@ -81,5 +83,72 @@ final class ComputerAwakeStoreTests: XCTestCase {
         store.sync()
         XCTAssertTrue(store.assertionFailed)
         XCTAssertFalse(store.status.isActive)
+    }
+
+    // MARK: - Karar 122: kapak
+
+    func testEnablingLidTakesOwnershipAndQuitRestores() async {
+        await store.setLidAwake(true)
+        XCTAssertEqual(lid.sleepDisabled, true)
+        XCTAssertTrue(store.lidStatus.isOn)
+        XCTAssertTrue(store.lidStatus.isOwnedByLumi)
+
+        await store.restoreLidSleep()
+        XCTAssertEqual(lid.changes, [true, false])
+        XCTAssertEqual(lid.sleepDisabled, false)
+        XCTAssertFalse(store.lidStatus.isOwnedByLumi)
+    }
+
+    func testCancelledPromptChangesNothing() async {
+        lid.nextChange = .cancelled
+        await store.setLidAwake(true)
+        XCTAssertFalse(store.lidStatus.isOn)
+        XCTAssertFalse(store.lidStatus.isOwnedByLumi)
+        XCTAssertNil(store.lidStatus.note)
+    }
+
+    func testFailureSurfacesMessage() async {
+        lid.nextChange = .failed("nope")
+        await store.setLidAwake(true)
+        XCTAssertEqual(store.lidStatus.note, "nope")
+    }
+
+    func testQuitLeavesExternallyEnabledSettingAlone() async {
+        lid.sleepDisabled = true
+        await store.refreshLidState()
+        XCTAssertTrue(store.lidStatus.isOn)
+        XCTAssertEqual(store.lidStatus.note, LidAwakeStatus.externalNote)
+
+        await store.restoreLidSleep()
+        XCTAssertTrue(lid.changes.isEmpty, "Lumi'nin açmadığı ayara çıkışta dokunulmaz")
+    }
+
+    func testLeftoverFromPreviousSessionIsFlaggedOnStart() async throws {
+        settings.apply { $0.lidSleepDisabledByLumi = true }
+        lid.sleepDisabled = true
+        store.start()
+        let deadline = Date().addingTimeInterval(2)
+        while !store.isLidLeftover, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.lidStatus.note, LidAwakeStatus.leftoverNote)
+
+        await store.setLidAwake(false)
+        XCTAssertFalse(store.isLidLeftover)
+        XCTAssertFalse(store.lidStatus.isOwnedByLumi)
+    }
+
+    func testOwnershipDropsWhenSettingWasRevertedOutsideLumi() async {
+        await store.setLidAwake(true)
+        lid.sleepDisabled = false
+        await store.refreshLidState()
+        XCTAssertFalse(store.lidStatus.isOn)
+        XCTAssertFalse(store.lidStatus.isOwnedByLumi)
+    }
+
+    func testBatteryStateIsReported() async {
+        lid.onBattery = true
+        await store.refreshLidState()
+        XCTAssertTrue(store.lidStatus.isOnBattery)
     }
 }

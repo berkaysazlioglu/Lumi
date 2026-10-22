@@ -48,6 +48,9 @@ public struct AppConfig: Sendable, Equatable {
     /// Alt bardaki "Keep computer awake" modu (karar 43). Additive (karar 9):
     /// yoksa/geçersizse `off`.
     public var computerAwakeMode: ComputerAwakeMode
+    /// Kapak kapalıyken uyku engelini (`pmset disablesleep`) Lumi açtı ve
+    /// çıkışta geri alması gerekiyor (karar 122). Additive (karar 9): yoksa kapalı.
+    public var lidSleepDisabledByLumi: Bool
     /// Claude/Codex hook'larının kurulup terminal durumunun hook'lardan okunması
     /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
     /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
@@ -115,6 +118,7 @@ public struct AppConfig: Sendable, Equatable {
         usageAutoRefresh: .defaults,
         usageIndicators: .defaults,
         computerAwakeMode: .default,
+        lidSleepDisabledByLumi: false,
         agentHooksEnabled: true,
         indexShortcutStyle: .default,
         terminalLinkActionsEnabled: true,
@@ -147,6 +151,7 @@ public struct AppConfig: Sendable, Equatable {
         usageAutoRefresh: UsageAutoRefresh = .defaults,
         usageIndicators: UsageIndicators = .defaults,
         computerAwakeMode: ComputerAwakeMode = .default,
+        lidSleepDisabledByLumi: Bool = false,
         agentHooksEnabled: Bool = true,
         indexShortcutStyle: IndexShortcutStyle = .default,
         terminalLinkActionsEnabled: Bool = true,
@@ -178,6 +183,7 @@ public struct AppConfig: Sendable, Equatable {
         self.usageAutoRefresh = usageAutoRefresh
         self.usageIndicators = usageIndicators
         self.computerAwakeMode = computerAwakeMode
+        self.lidSleepDisabledByLumi = lidSleepDisabledByLumi
         self.agentHooksEnabled = agentHooksEnabled
         self.indexShortcutStyle = indexShortcutStyle
         self.terminalLinkActionsEnabled = terminalLinkActionsEnabled

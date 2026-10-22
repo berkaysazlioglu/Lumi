@@ -154,6 +154,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
       ],
       "computerAwakeMode" : "auto",
       "indexShortcutStyle" : "repoOnControl",
+      "lidSleepDisabledByLumi" : false,
       "maxTerminals" : 12,
       "notifications" : {
         "seenEnabled" : false,

@@ -1340,3 +1340,12 @@ Kullanıcı isteği: "Project özelinde renk belirlemek istiyorlar; o projeye ai
 - **Ayar.** Settings ▸ Agent ▸ Claude Models ▸ Model Shortcuts; `config.json`'a additive `claudeModelShortcutsEnabled` (yoksa açık — karar 9).
 - **Resume modeli kendisi korur.** `claude --resume <id>` oturumu o sohbetin modeliyle açar (2026-10-16'da doğrulandı: `--model haiku --session-id` ile açılan oturum `--model`'siz `--resume` ile yine `claude-haiku-5-5` ile yanıt verdi). Bu yüzden resume listesine model yazılmaz; `ResumeSession` formatı değişmez.
 - **Kapsam dışı (bilinçli).** Ana butonun modelini seçmek, DeepSeek/Codex için model kısayolu, effort seçimi.
+
+### 122. Keep computer awake: kapak notu + "Also when lid is closed" anahtarı (2026-10-22)
+Karar 43'ün IOKit assertion'ları (`PreventUserIdleSystemSleep` + `PreventSystemSleep`) kapak kapanınca etkisizdir — clamshell (adaptör + harici ekran) dışında Mac yine uyur; popup bunu hiç söylemiyordu.
+
+- **Not:** mod satırlarının altına "On and Agent don't cover a closed lid…" notu eklendi (`LidAwakeStatus.lidNote`).
+- **Anahtar:** moddan bağımsız `Also when lid is closed` satırı sistem geneli `pmset -a disablesleep 1/0`'ı yönetir. Root ister: yazma `osascript … with administrator privileges` ile sistemin şifre dialogundan geçer (120 sn), iptal (`-128`) sessizdir, diğer hata satırın altında gösterilir. Okuma `pmset -g` → `SleepDisabled` (root'suz); doğruluk kaynağı sistemdir, popover her açılışta tazelenir. Servis `PMSetLidSleepControl` (`LidSleepControlling`, `ProcessRunning` enjeksiyonu), fake `FakeLidSleepControl`.
+- **Agent moduna bağlanmaz:** her `working` geçişinde şifre sormamak için anahtar kullanıcı kapatana ya da çıkışa kadar açık kalır. Helper daemon (`SMAppService`) bilinçli olarak yok.
+- **Sahiplik ve kalıntı:** `config.json`'a additive `lidSleepDisabledByLumi` — Lumi açtıysa çıkışta (`StatusBarFeatureAssembly.shutdown`) şifre sorarak geri alır; Lumi'nin açmadığı ayara dokunulmaz ("Turned on outside Lumi"). Çökme/iptal sonrası açılışta ayar hâlâ açık ve sahiplik Lumi'deyse "Still on from a previous Lumi session" uyarısı çıkar; ayar dışarıdan kapatılmışsa sahiplik düşer.
+- **Görünüm:** açıkken alt bar segmentinde `laptopcomputer` ikonu, nokta aktif; pildeyken satırda sarı uyarı (IOKit `IOPSGetProvidingPowerSourceType`).

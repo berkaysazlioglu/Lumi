@@ -186,6 +186,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 1),
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
+        lidSleepDisabledByLumi: true,
         agentHooksEnabled: false,
         indexShortcutStyle: .repoOnCommand,
         terminalLinkActionsEnabled: false,

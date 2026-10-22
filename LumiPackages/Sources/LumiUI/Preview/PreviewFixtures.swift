@@ -72,7 +72,8 @@ public extension ShellContext {
                 )
             ),
             computerAwake: ComputerAwakeStore(
-                terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
+                terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion(),
+                lidSleep: PreviewLidSleepControl()
             ),
             resourceUsage: ResourceUsageStore(
                 terminals: shared.terminals, terminalService: terminal, sampler: PreviewProcessSampler()
@@ -213,6 +214,12 @@ private final class PreviewSleepAssertion: SleepAsserting {
         isPreventingSleep = prevent
         return true
     }
+}
+
+private struct PreviewLidSleepControl: LidSleepControlling {
+    func isSleepDisabled() async -> Bool? { false }
+    func setSleepDisabled(_ disabled: Bool) async -> LidSleepChange { .applied }
+    func isOnBatteryPower() -> Bool { false }
 }
 
 /// İki hesaplı, ikincisi aktif bir liste — Settings ▸ Accounts önizlemesi

@@ -64,3 +64,45 @@ public struct ComputerAwakeStatus: Sendable, Equatable {
     /// "Agent · Active" biçimindeki durum metni.
     public var text: String { "\(mode.label) · \(isActive ? "Active" : "Inactive")" }
 }
+
+/// "Also when lid is closed" anahtarının durumu (karar 122). Kaynak sistemin
+/// kendisidir (`pmset -g` → `SleepDisabled`); Lumi yalnız kendi açtığını
+/// (`AppConfig.lidSleepDisabledByLumi`) çıkışta geri alır.
+public struct LidAwakeStatus: Sendable, Equatable {
+    public var isOn: Bool
+    /// Ayarı Lumi mi açtı (açıksa çıkışta geri alınır).
+    public var isOwnedByLumi: Bool
+    /// Önceki bir Lumi oturumundan geri alınamadan kalmış.
+    public var isLeftover: Bool
+    public var isPending: Bool
+    public var isOnBattery: Bool
+    public var errorMessage: String?
+
+    public init(
+        isOn: Bool = false, isOwnedByLumi: Bool = false, isLeftover: Bool = false,
+        isPending: Bool = false, isOnBattery: Bool = false, errorMessage: String? = nil
+    ) {
+        self.isOn = isOn
+        self.isOwnedByLumi = isOwnedByLumi
+        self.isLeftover = isLeftover
+        self.isPending = isPending
+        self.isOnBattery = isOnBattery
+        self.errorMessage = errorMessage
+    }
+
+    public static let title = "Also when lid is closed"
+    public static let detail = "Turns off system sleep with pmset (asks for your admin password). Lumi turns it back off when you quit."
+    /// Karar 122: On / Agent'ın kapsamadığı durumun dürüst notu.
+    public static let lidNote = "On and Agent don't cover a closed lid: the Mac still sleeps unless it's on power with an external display."
+    public static let batteryWarning = "On battery: a closed, awake Mac drains fast and can get hot in a bag."
+    public static let leftoverNote = "Still on from a previous Lumi session."
+    public static let externalNote = "Turned on outside Lumi: it stays on after quit."
+
+    /// Satırın altındaki durum notu; öncelik hata > kalıntı > dışarıdan açılmış.
+    public var note: String? {
+        if let errorMessage { return errorMessage }
+        if isLeftover { return Self.leftoverNote }
+        if isOn && !isOwnedByLumi { return Self.externalNote }
+        return nil
+    }
+}

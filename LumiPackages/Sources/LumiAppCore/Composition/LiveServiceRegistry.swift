@@ -41,6 +41,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let activityMonitor: any ActivityMonitoring
     let processSampler: any ProcessSampling
     let sleepAssertion: any SleepAsserting
+    let lidSleep: any LidSleepControlling
     let agentHooks: any AgentHookServing
     let agentHookInstaller: any AgentHookInstalling
     let chatSessions: any ChatSessionServicing
@@ -121,6 +122,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         activityMonitor = SystemActivityMonitor()
         processSampler = PSProcessSampler()
         sleepAssertion = IOKitSleepAssertion()
+        lidSleep = PMSetLidSleepControl()
         agentHooks = AgentHookServer()
         agentHookInstaller = AgentHookInstaller(paths: paths)
         sessionStarter = SessionStarterService()
