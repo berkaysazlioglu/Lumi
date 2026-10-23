@@ -12,8 +12,6 @@ struct ProjectsView: View {
     // in sequence. An explicit `navigationDestination(item:)` binding guarantees exactly
     // one push and a clean Back-to-home.
     @State private var openSession: String?
-    /// Agent whose deletion is awaiting confirmation (main-screen delete).
-    @State private var pendingDelete: String?
     /// Checkout whose one-tap agent start is in flight (its + shows a spinner).
     @State private var startingCheckout: String?
     @State private var startError: String?
@@ -94,23 +92,6 @@ struct ProjectsView: View {
             } message: {
                 Text("You'll return to the pairing screen and can scan a new QR code.")
             }
-            .confirmationDialog(
-                "Delete this chat?",
-                isPresented: Binding(
-                    get: { pendingDelete != nil },
-                    set: { if !$0 { pendingDelete = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: pendingDelete
-            ) { sessionId in
-                Button("Delete", role: .destructive) {
-                    Task { await model.deleteSession(sessionId: sessionId) }
-                    pendingDelete = nil
-                }
-                Button("Cancel", role: .cancel) { pendingDelete = nil }
-            } message: { sessionId in
-                Text("The \(model.session(sessionId)?.repoName ?? "") session will be ended on the Mac.")
-            }
         }
     }
 
@@ -124,7 +105,7 @@ struct ProjectsView: View {
             open: { openSession = $0 },
             start: { startAgent(at: $0) },
             newBranch: { newBranchPreset = NewBranchPreset(repoPath: $0, baseBranch: $1) },
-            delete: { pendingDelete = $0 }
+            delete: { sessionId in Task { await model.deleteSession(sessionId: sessionId) } }
         )
     }
 
@@ -203,61 +184,6 @@ struct ProjectsView: View {
         } label: {
             Image(systemName: "gearshape")
         }
-    }
-}
-
-private struct AddProjectSheet: View {
-    let model: AppModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List(model.projectsSnapshot.addable) { repo in
-                Button {
-                    Task { await model.addProject(path: repo.path) }
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "folder.fill")
-                            .font(.title3)
-                            .foregroundStyle(LumiPalette.accent)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(repo.name).font(.body.weight(.medium)).foregroundStyle(LumiPalette.textPrimary)
-                            Text(repo.path)
-                                .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-                                .lineLimit(1).truncationMode(.middle)
-                        }
-                        Spacer()
-                        Image(systemName: "plus.circle").foregroundStyle(LumiPalette.accent)
-                    }
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(LumiPalette.background)
-                .listRowSeparatorTint(LumiPalette.border)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(LumiPalette.background)
-            .overlay {
-                if model.projectsSnapshot.addable.isEmpty {
-                    Text("No more projects to add").foregroundStyle(LumiPalette.textSecondary)
-                }
-            }
-            .navigationTitle("Add project")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(LumiPalette.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-        // Inside the theme scope so the navy/black/white resolves with the Lumi trait.
-        .presentationBackground(LumiPalette.background)
-        .lumiThemed()
     }
 }
 

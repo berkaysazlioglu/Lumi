@@ -54,9 +54,13 @@ enum DemoData {
     ]
 
     static let addable = [
-        Repo(name: "sand-blocks", path: "/Users/demo/wkspaces/sand-blocks"),
+        Repo(name: "sand-blocks", path: "/Users/demo/wkspaces/Unity/sand-blocks"),
+        Repo(name: "tile-match", path: "/Users/demo/wkspaces/Unity/tile-match"),
         Repo(name: "toolbox", path: "/Users/demo/wkspaces/Tools/toolbox"),
-        Repo(name: "orca", path: "/Users/demo/wkspaces/orca"),
+        Repo(name: "orca", path: "/Users/demo/wkspaces/Github/orca"),
+        Repo(name: "SwiftTerm", path: "/Users/demo/wkspaces/Github/SwiftTerm"),
+        Repo(name: "Pomodoro", path: "/Users/demo/wkspaces/Swift/Pomodoro"),
+        Repo(name: "portfolio", path: "/Users/demo/wkspaces/Web/portfolio"),
     ]
 
     static let projects: [ProjectNode] = [

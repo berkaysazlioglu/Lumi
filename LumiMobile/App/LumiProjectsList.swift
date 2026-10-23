@@ -8,6 +8,8 @@ struct LumiProjectsList: View {
     let actions: ProjectsListActions
 
     @State private var collapsedProjects: Set<String> = []
+    /// Agent whose row is showing the delete confirmation.
+    @State private var confirmingDelete: String?
     @AppStorage(ProjectsRowSize.storageKey) private var rowSize = ProjectsRowSize.default
     // Test controls under the usage strip (to be removed once decided).
     @AppStorage(ProjectsRowMetrics.scaleKey) private var rowScale = 1.0
@@ -259,15 +261,19 @@ struct LumiProjectsList: View {
         .buttonStyle(.plain)
         .treeRow(.agent, verticalPadding: metrics.verticalPadding, tint: tint)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { actions.delete(agent.id) } label: {
+            Button(role: .destructive) { confirmingDelete = agent.id } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
         .contextMenu {
-            Button(role: .destructive) { actions.delete(agent.id) } label: {
+            Button(role: .destructive) { confirmingDelete = agent.id } label: {
                 Label("Delete this chat", systemImage: "trash")
             }
         }
+        .confirmDeleteChat(isPresented: Binding(
+            get: { confirmingDelete == agent.id },
+            set: { if !$0 { confirmingDelete = nil } }
+        ), title: agent.title) { actions.delete(agent.id) }
     }
 
 

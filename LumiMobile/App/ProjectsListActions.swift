@@ -15,7 +15,8 @@ struct ProjectsListActions {
     let start: (_ path: String) -> Void
     /// "New branch from …" sheet for a project, preset to `baseBranch`.
     let newBranch: (_ repoPath: String, _ baseBranch: String) -> Void
-    /// Asks to delete an agent (the screen shows the confirmation).
+    /// Ends an agent on the Mac. Rows confirm first with `confirmDeleteChat`
+    /// so the dialog anchors to the row that was pressed.
     let delete: (_ sessionId: String) -> Void
 }
 
@@ -33,5 +34,30 @@ enum ProjectsLayoutStyle: String, CaseIterable, Identifiable {
         case .lumi: "Lumi"
         case .apple: "Apple"
         }
+    }
+}
+
+/// "Delete this chat?" anchored to the row it's attached to. A screen-level
+/// dialog popped up wherever iOS placed the screen's anchor, away from the row
+/// that was long-pressed / swiped.
+private struct ConfirmDeleteChat: ViewModifier {
+    @Binding var isPresented: Bool
+    let title: String
+    let onDelete: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Delete this chat?", isPresented: $isPresented, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("“\(title)” will be ended on the Mac.")
+        }
+    }
+}
+
+extension View {
+    func confirmDeleteChat(isPresented: Binding<Bool>, title: String,
+                           onDelete: @escaping () -> Void) -> some View {
+        modifier(ConfirmDeleteChat(isPresented: isPresented, title: title, onDelete: onDelete))
     }
 }
