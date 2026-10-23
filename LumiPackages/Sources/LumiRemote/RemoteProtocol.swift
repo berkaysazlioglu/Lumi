@@ -210,6 +210,11 @@ enum RemoteProtocol {
         payload["mode"] as? String ?? "terminal"
     }
 
+    /// Karar 130 (Faz 4, additive): telefondaki son chat mesajının kimliği.
+    static func decodeSubscribeAfterId(_ payload: [String: Any]) -> String? {
+        payload["afterId"] as? String
+    }
+
     /// `chat_send` çözer — telefon→Mac sohbet mesajı. sessionId ve text String olmalı.
     static func decodeChatSend(_ payload: [String: Any]) -> (sessionId: String, text: String)? {
         guard let sessionId = payload["sessionId"] as? String,

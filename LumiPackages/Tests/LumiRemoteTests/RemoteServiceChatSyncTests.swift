@@ -87,4 +87,37 @@ import LumiTestSupport
         #expect(source.requested.count == 2, "welcome re-creates the tail → fresh snapshot")
         svc.stop()
     }
+
+    @Test func subscribeWithKnownAfterIdSendsOnlyTheMissingMessages() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let meta = claudeMeta()
+        term.metas.append(meta)
+        let source = FakeChatTranscriptSource(events: [.snapshot([message("u1"), message("u2"), message("u3")])],
+                                              keepOpen: true)
+        let svc = makeService(term: term, conn: conn, source: source)
+        await svc.start()
+        await conn.injectInbound(type: "subscribe",
+                                 payload: ["sessionId": meta.id.description, "mode": "chat", "afterId": "u1"])
+        try await conn.waitForCount(type: "chat_append", atLeast: 1)
+        #expect(await conn.lastString(type: "chat_append", key: "afterId") == "u1")
+        #expect(await conn.lastAppendIds() == ["u2", "u3"])
+        #expect(await conn.count(type: "chat") == 0, "no full snapshot when the phone is close")
+        svc.stop()
+    }
+
+    @Test func subscribeWithUnknownAfterIdSendsFullSnapshot() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let meta = claudeMeta()
+        term.metas.append(meta)
+        let source = FakeChatTranscriptSource(events: [.snapshot([message("u1"), message("u2")])], keepOpen: true)
+        let svc = makeService(term: term, conn: conn, source: source)
+        await svc.start()
+        await conn.injectInbound(type: "subscribe",
+                                 payload: ["sessionId": meta.id.description, "mode": "chat", "afterId": "old"])
+        try await conn.waitForCount(type: "chat", atLeast: 1)
+        #expect(await conn.chatMessageCounts() == [2])
+        svc.stop()
+    }
 }

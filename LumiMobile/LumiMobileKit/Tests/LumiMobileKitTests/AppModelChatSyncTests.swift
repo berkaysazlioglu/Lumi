@@ -107,4 +107,53 @@ final class AppModelChatSyncTests: XCTestCase {
         model.handle(.chat(sessionId: "s1", messages: [msg("m1")]))
         XCTAssertFalse(model.chatHasEarlier.contains("s1"), "a full snapshot clears the flag")
     }
+
+    // MARK: Delta sync (phase 4)
+
+    func testSubscribeSendsLastMessageIdAsCursor() async {
+        let (model, client) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1"), msg("u2")]))
+        model.subscribeChat("s1")
+        await waitUntil { client.sentFrames.contains { $0.contains(#""afterId":"u2""#) } }
+        XCTAssertTrue(client.sentFrames.contains { $0.contains(#""afterId":"u2""#) })
+    }
+
+    func testUnstableIdIsNotSentAsCursor() async {
+        let (model, client) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("idx-4")]))
+        model.subscribeChat("s1")
+        await waitUntil { subscribeCount(client, "s1") > 0 }
+        XCTAssertFalse(client.sentFrames.contains { $0.contains("afterId") })
+    }
+
+    func testDeltaReplyAppendsAndEndsSync() {
+        let (model, _) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1")]))
+        model.subscribeChat("s1")
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u2")], afterId: "u1"))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1", "u2"])
+        XCTAssertFalse(model.chatSyncing.contains("s1"))
+        model.subscribeChat("s1")
+        model.handle(.chatAppend(sessionId: "s1", messages: [], afterId: "u2"))
+        XCTAssertFalse(model.chatSyncing.contains("s1"), "an empty reply means up to date")
+    }
+
+    func testDeltaReplyForAnotherListIsIgnored() {
+        let (model, _) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1")]))
+        model.subscribeChat("s1")
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("x2")], afterId: "x1"))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1"], "a gap must not be papered over")
+        XCTAssertTrue(model.chatSyncing.contains("s1"))
+    }
+
+    func testDeltaFrameDecodesAfterId() {
+        let frame = #"{"v":1,"type":"chat_append","payload":{"sessionId":"s1","afterId":"u1","messages":[]}}"#
+        guard case let .chatAppend(sid, messages, afterId)? = PhoneProtocol.decodeServerMessage(frame) else {
+            return XCTFail("decode")
+        }
+        XCTAssertEqual(sid, "s1")
+        XCTAssertTrue(messages.isEmpty)
+        XCTAssertEqual(afterId, "u1")
+    }
 }

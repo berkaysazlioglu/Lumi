@@ -78,6 +78,12 @@ final actor FakeRelayConnection: RelayConnecting {
 
     func sentTypes() -> [String] { sent.map { $0.type } }
 
+    /// Son `chat_append` frame'inin mesaj kimlikleri.
+    func lastAppendIds() -> [String] {
+        let messages = sent.last { $0.type == "chat_append" }?.payload["messages"] as? [[String: Any]] ?? []
+        return messages.compactMap { $0["id"] as? String }
+    }
+
     /// Her `chat` frame'inin mesaj sayısı, gönderim sırasıyla.
     func chatMessageCounts() -> [Int] {
         sent.filter { $0.type == "chat" }.map { ($0.payload["messages"] as? [[String: Any]])?.count ?? -1 }

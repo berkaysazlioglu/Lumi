@@ -123,8 +123,12 @@ public enum PhoneProtocol {
 
     // MARK: Terminal-mirror encoders
 
-    public static func subscribeFrame(sessionId: String, mode: String = "terminal") -> String {
-        frame(type: "subscribe", payload: ["sessionId": sessionId, "mode": mode])
+    /// `afterId` (decision 130, additive): the last chat message the phone already has —
+    /// the Mac then sends only what follows it.
+    public static func subscribeFrame(sessionId: String, mode: String = "terminal", afterId: String? = nil) -> String {
+        var payload: [String: Any] = ["sessionId": sessionId, "mode": mode]
+        if let afterId { payload["afterId"] = afterId }
+        return frame(type: "subscribe", payload: payload)
     }
 
     public static func unsubscribeFrame(sessionId: String) -> String {

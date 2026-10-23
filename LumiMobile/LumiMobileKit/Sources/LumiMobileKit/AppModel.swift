@@ -328,8 +328,9 @@ public final class AppModel {
                 messages: messages, current: pendingBySession[sessionId] ?? [])
             recomputeStreaming(sessionId)
 
-        case .chatAppend(let sessionId, let messages, _):
+        case .chatAppend(let sessionId, let messages, let afterId):
             macOnline = true
+            if let afterId, !applyDeltaReply(sessionId, afterId: afterId) { return }
             var current = chatBySession[sessionId] ?? []
             for message in messages {
                 if let idx = current.firstIndex(where: { $0.id == message.id }) {

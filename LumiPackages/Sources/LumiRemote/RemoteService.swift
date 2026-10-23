@@ -318,10 +318,11 @@ public final class RemoteService: RemoteServicing {
         startTranscriptBridge(id: id, raw: raw, meta: meta)
     }
 
-    /// Transcript-tail köprüsünü (yeniden) kurar; ilk olayı tam snapshot'tır.
-    private func startTranscriptBridge(id: TerminalID, raw: String, meta: TerminalMeta) {
+    /// Transcript-tail köprüsünü (yeniden) kurar. İlk olay tam snapshot'tır;
+    /// `afterId` verilmişse yalnız o kimlikten sonrası gider (karar 130 Faz 4).
+    private func startTranscriptBridge(id: TerminalID, raw: String, meta: TerminalMeta, afterId: String? = nil) {
         chatSubscriptions[id] = Task { [weak self] in
-            await self?.awaitTranscript(id: id, raw: raw, meta: meta)
+            await self?.awaitTranscript(id: id, raw: raw, meta: meta, afterId: afterId)
         }
     }
 
@@ -513,8 +514,9 @@ public final class RemoteService: RemoteServicing {
             // Karar 79: Claude provider terminali için transcript köprüsü başlat.
             // Non-claude terminaller (bash/codex/shell) mirror-only kalır.
             if let meta, isClaude {
-                rlog("chat subscribe: claude terminali — transcript köprüsü başlatılıyor sid=\(raw.prefix(8))")
-                startTranscriptBridge(id: id, raw: raw, meta: meta)
+                let afterId = RemoteProtocol.decodeSubscribeAfterId(payload)
+                rlog("chat subscribe: claude terminali — transcript köprüsü başlatılıyor sid=\(raw.prefix(8)) afterId=\(afterId?.prefix(8) ?? "-")")
+                startTranscriptBridge(id: id, raw: raw, meta: meta, afterId: afterId)
             }
             return
         }
@@ -550,6 +552,36 @@ public final class RemoteService: RemoteServicing {
             }
         }
         subscriptions[id] = task
+    }
+
+    /// Transcript olaylarını telefona köprüler; ilk snapshot `afterId` ile farka indirgenir.
+    private func bridgeTranscript(sessionID: String, raw: String, meta: TerminalMeta, afterId: String?) async {
+        var isFirst = true
+        for await event in chatSource.stream(sessionID: sessionID, repoPath: meta.repoPath) {
+            guard !Task.isCancelled else { break }
+            if isFirst, case .snapshot(let messages) = event, let afterId {
+                isFirst = false
+                await emitInitialChat(sessionId: raw, messages: messages, afterId: afterId)
+                continue
+            }
+            isFirst = false
+            await emitChat(sessionId: raw, event: event)
+        }
+    }
+
+    /// Karar 130 (Faz 4): telefon güncelse boş, gerideyse yalnız eksik mesajlar
+    /// `chat_append{afterId}` olarak gider; kimlik bulunamazsa tam snapshot.
+    private func emitInitialChat(sessionId: String, messages: [ChatMessage], afterId: String) async {
+        switch ChatDeltaSync.plan(messages: messages, afterId: afterId) {
+        case .snapshot:
+            rlog("chat sync: tam snapshot sid=\(sessionId.prefix(8)) (afterId bulunamadı/büyük)")
+            await sendChatSnapshot(sessionId: sessionId, messages: messages)
+        case .delta(let delta):
+            rlog("chat sync: fark sid=\(sessionId.prefix(8)) +\(delta.count)")
+            await connection.send(type: "chat_append",
+                payload: RemoteProtocol.chatAppendPayload(
+                    sessionId: sessionId, messages: delta.map { ChatFrameBudget.clamp($0) }, afterId: afterId))
+        }
     }
 
     private func emitChat(sessionId: String, event: ChatMirrorEvent) async {
@@ -659,7 +691,7 @@ public final class RemoteService: RemoteServicing {
 
     /// Dış/taze oturum: transcript belirene kadar sınırlı poll (10 × 500ms).
     /// Bulanursa chatSource.stream üzerinden emitChat akışına geçer.
-    private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta) async {
+    private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta, afterId: String?) async {
         // Lumi-spawned claude oturumu: transcript id BİLİNİR (`--session-id` ile spawn
         // anında enjekte edilir → `meta.claudeSessionID`). O transcript'i doğrudan tail
         // et. Karar 80 regresyonu: locator'ın max-by-modified sezgisi taze telefon
@@ -668,11 +700,7 @@ public final class RemoteService: RemoteServicing {
         // görür, eski değil) ve claude dosyayı yazınca append eder.
         if let known = meta.claudeSessionID {
             rlog("chat subscribe: bilinen claudeSessionID kullanılıyor sid=\(known.prefix(8)) repo=\(meta.repoPath)")
-            let stream = chatSource.stream(sessionID: known, repoPath: meta.repoPath)
-            for await event in stream {
-                guard !Task.isCancelled else { break }
-                await emitChat(sessionId: raw, event: event)
-            }
+            await bridgeTranscript(sessionID: known, raw: raw, meta: meta, afterId: afterId)
             return
         }
         // Harici oturum (Rider/manuel — claudeSessionID taşımaz): locator ile en yeni
@@ -681,11 +709,7 @@ public final class RemoteService: RemoteServicing {
             if Task.isCancelled { return }
             if let resolved = transcriptLocator.locate(repoPath: meta.repoPath) {
                 rlog("chat subscribe: locator transcript buldu sid=\(resolved.prefix(8)) repo=\(meta.repoPath)")
-                let stream = chatSource.stream(sessionID: resolved, repoPath: meta.repoPath)
-                for await event in stream {
-                    guard !Task.isCancelled else { break }
-                    await emitChat(sessionId: raw, event: event)
-                }
+                await bridgeTranscript(sessionID: resolved, raw: raw, meta: meta, afterId: afterId)
                 return
             }
             try? await Task.sleep(for: locatorRetryDelay)
