@@ -34,6 +34,14 @@ struct PanelHostView: View {
                 stack(items)
                 if slot == .left { edgeDivider }
             }
+            // Karar 125: yalnız sabit (docked) yan yuvalar sürüklenir —
+            // auto-reveal overlay'i geçicidir, genişliği düzenlenmez.
+            .overlay(alignment: slot == .left ? .trailing : .leading) {
+                if presentation == .docked, slot != .bottom {
+                    PanelResizeHandle(slot: slot)
+                        .frame(width: PanelResizeHandle.hitWidth)
+                }
+            }
             .shadow(
                 color: presentation == .revealed
                     ? .black.opacity(Self.revealShadowOpacity) : .clear,

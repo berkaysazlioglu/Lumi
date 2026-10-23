@@ -90,6 +90,14 @@ public final class LayoutStore {
     /// Oturumluk — persist edilmez; kalıcı tercih `panelLayout.autoRevealSlots`.
     public private(set) var revealedSlots: Set<PanelSlot> = []
 
+    /// Karar 125: sürükleme sürerken yuvanın canlı genişliği. Her karede diske
+    /// yazılmasın diye ayrı tutulur; bırakınca `commitWidth` kalıcılaştırır.
+    /// Oturumluk — persist edilmez.
+    public private(set) var liveWidths: [PanelSlot: Double] = [:]
+    /// Kabuğun yatay genişliği (kabuk view'ı bildirir) — sürükleme orta alanı
+    /// `PanelLayout.minContentWidth`'ten dar bırakamaz.
+    @ObservationIgnored public var containerWidth: Double?
+
     /// Karar 61: arayüz ölçeği (⌘+/⌘−/⌘0). 1.0 = %100.
     public private(set) var uiScale: CGFloat = 1
 
@@ -221,8 +229,9 @@ public final class LayoutStore {
         panelLayout.items(in: slot)
     }
 
+    /// Sürükleme sürüyorsa canlı genişlik, yoksa kalıcı olan.
     public func width(for slot: PanelSlot) -> Double {
-        panelLayout.width(for: slot)
+        liveWidths[slot] ?? panelLayout.width(for: slot)
     }
 
     public func toggleSlot(_ slot: PanelSlot) {
@@ -241,6 +250,32 @@ public final class LayoutStore {
 
     public func setWidth(_ width: Double, for slot: PanelSlot) {
         apply(panelLayout.settingWidth(width, for: slot))
+    }
+
+    // MARK: - Sürükleyerek yeniden boyutlandırma (karar 125)
+
+    /// Sürükleme karesi: yalnız bellekte, kırpılmış. Yuva sabit (docked)
+    /// değilse — gizli, auto-reveal overlay'i ya da focus mode — hiçbir şey olmaz.
+    public func previewWidth(_ width: Double, for slot: PanelSlot) {
+        guard isSlotVisible(slot) else { return }
+        liveWidths[slot] = panelLayout.resizedWidth(width, for: slot, containerWidth: containerWidth)
+    }
+
+    /// Sürükleme bitti: canlı genişlik tek yazımla kalıcılaşır.
+    public func commitWidth(for slot: PanelSlot) {
+        guard let width = liveWidths.removeValue(forKey: slot) else { return }
+        setWidth(width, for: slot)
+    }
+
+    /// Settings ▸ Appearance ▸ Reset: tüm yuvalar varsayılan genişliğe.
+    public func resetPanelWidths() {
+        liveWidths = [:]
+        apply(panelLayout.resettingWidths())
+    }
+
+    /// Reset butonunun etkin olup olmadığı.
+    public var hasCustomPanelWidths: Bool {
+        panelLayout != panelLayout.resettingWidths()
     }
 
     /// Karar 124: sağ panel ile orchestrator paneli aynı anda açık durabilir mi.

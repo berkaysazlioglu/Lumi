@@ -86,8 +86,25 @@ public struct PanelLayout: Equatable, Sendable {
         case .left, .bottom: return defaultWidth
         }
     }
-    public static let minWidth: Double = 180
-    public static let maxWidth: Double = 640
+
+    /// Karar 125: yuva başına sürükleme aralığı. Sağ yuvanın alt sınırı
+    /// `legacyProjectPanelWidth`'in (280) üstündedir — K42 migration'ı diskteki
+    /// 280'i eski default sayar; sürüklemeyle 280 üretilememeli.
+    public static func widthRange(for slot: PanelSlot) -> ClosedRange<Double> {
+        switch slot {
+        case .left: return 200...480
+        case .right: return 300...640
+        // Codex TUI'si ~45 kolonun altında okunmaz.
+        case .innerRight: return 360...800
+        case .bottom: return 180...640
+        }
+    }
+
+    /// Karar 125: sürükleme orta alanı bundan dar bırakamaz.
+    public static let minContentWidth: Double = 360
+
+    /// Yatayda yan yana duran yuvalar (alt yuva hariç).
+    public static let horizontalSlots: [PanelSlot] = [.left, .innerRight, .right]
 
     public private(set) var slots: [PanelSlot: [PanelItemID]]
     public private(set) var visibleSlots: Set<PanelSlot>
@@ -154,8 +171,10 @@ public struct PanelLayout: Equatable, Sendable {
         visibleSlots.contains(slot)
     }
 
+    /// Karar 125: diskteki eski değer (eski genel 180…640 aralığı) yeni yuva
+    /// aralığına okunurken oturtulur.
     public func width(for slot: PanelSlot) -> Double {
-        widths[slot] ?? Self.defaultWidth(for: slot)
+        Self.clamp(widths[slot] ?? Self.defaultWidth(for: slot), to: Self.widthRange(for: slot))
     }
 
     public func isAutoReveal(_ slot: PanelSlot) -> Bool {
@@ -212,11 +231,38 @@ public struct PanelLayout: Equatable, Sendable {
         return copy
     }
 
-    /// Genişlik `minWidth...maxWidth` aralığına kırpılır.
+    /// Genişlik yuvanın `widthRange(for:)` aralığına kırpılır.
     public func settingWidth(_ width: Double, for slot: PanelSlot) -> PanelLayout {
         var copy = self
-        copy.widths[slot] = min(max(width, Self.minWidth), Self.maxWidth)
+        copy.widths[slot] = Self.clamp(width, to: Self.widthRange(for: slot))
         return copy
+    }
+
+    /// Karar 125: sürüklenen genişlik — yuva aralığına, ayrıca pencere
+    /// genişliği biliniyorsa orta alana `minContentWidth` kalacak şekilde
+    /// kırpılır (diğer görünür yan yuvalar düşülür). Pencere çok darsa yuvanın
+    /// alt sınırı kazanır — panel okunmaz hale gelmez.
+    public func resizedWidth(_ width: Double, for slot: PanelSlot, containerWidth: Double?) -> Double {
+        let range = Self.widthRange(for: slot)
+        guard let containerWidth else { return Self.clamp(width, to: range) }
+        let others = Self.horizontalSlots
+            .filter { $0 != slot && isVisible($0) }
+            .reduce(0) { $0 + self.width(for: $1) }
+        let upper = max(range.lowerBound, min(range.upperBound, containerWidth - others - Self.minContentWidth))
+        return Self.clamp(width, to: range.lowerBound...upper)
+    }
+
+    /// Karar 125: Settings ▸ Appearance ▸ Reset — tüm yuvalar varsayılan genişliğe.
+    public func resettingWidths() -> PanelLayout {
+        var copy = self
+        for slot in PanelSlot.allCases {
+            copy.widths[slot] = Self.defaultWidth(for: slot)
+        }
+        return copy
+    }
+
+    private static func clamp(_ value: Double, to range: ClosedRange<Double>) -> Double {
+        min(max(value, range.lowerBound), range.upperBound)
     }
 
     /// Öğeyi hedef yuvaya taşır (kaynak yuvadan düşer). `index` nil ise sona

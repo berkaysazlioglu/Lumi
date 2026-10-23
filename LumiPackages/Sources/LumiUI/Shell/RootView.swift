@@ -59,6 +59,15 @@ struct AppShellView: View {
                 PanelHostView(slot: .right, registry: registries.panels)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Karar 125: panel sürüklemesi orta alanı belli bir genişliğin
+            // altına indiremez — sınır kabuğun o anki genişliğinden hesaplanır.
+            .background(GeometryReader { proxy in
+                Color.clear
+                    .onAppear { shell.layout.containerWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in
+                        shell.layout.containerWidth = width
+                    }
+            })
             // Alt bar (karar 43): focus mode'da header gibi gizlenir.
             if !shell.layout.isFocusMode {
                 StatusBarView(registry: registries.toolbar)

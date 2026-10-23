@@ -223,16 +223,66 @@ final class PanelLayoutTests: XCTestCase {
     func testWidthIsClampedToBounds() {
         XCTAssertEqual(
             PanelLayout.defaults.settingWidth(10_000, for: .left).width(for: .left),
-            PanelLayout.maxWidth
+            PanelLayout.widthRange(for: .left).upperBound
         )
         XCTAssertEqual(
             PanelLayout.defaults.settingWidth(0, for: .left).width(for: .left),
-            PanelLayout.minWidth
+            PanelLayout.widthRange(for: .left).lowerBound
         )
         XCTAssertEqual(
             PanelLayout.defaults.settingWidth(320, for: .right).width(for: .right),
             320
         )
+    }
+
+    // MARK: - Sürükleyerek boyutlandırma (karar 125)
+
+    func testEachSlotHasItsOwnRangeAroundItsDefault() {
+        for slot in PanelSlot.allCases {
+            XCTAssertTrue(PanelLayout.widthRange(for: slot).contains(PanelLayout.defaultWidth(for: slot)), "\(slot)")
+        }
+        XCTAssertGreaterThan(
+            PanelLayout.widthRange(for: .right).lowerBound,
+            PanelLayout.legacyProjectPanelWidth,
+            "K42 migration'ı 280'i eski default sayar — sürüklemeyle üretilememeli"
+        )
+        XCTAssertEqual(PanelLayout.defaults.settingWidth(10_000, for: .innerRight).width(for: .innerRight), 800)
+        XCTAssertEqual(PanelLayout.defaults.settingWidth(0, for: .innerRight).width(for: .innerRight), 360)
+    }
+
+    func testStoredOutOfRangeWidthIsReadInsideTheSlotRange() {
+        let layout = PanelLayout(slots: [:], visibleSlots: [], widths: [.left: 180])
+        XCTAssertEqual(layout.width(for: .left), PanelLayout.widthRange(for: .left).lowerBound)
+    }
+
+    func testResizedWidthLeavesRoomForTheContent() {
+        let layout = PanelLayout.defaults.settingVisible(.right, true) // sol 280 + sağ 340 açık
+        // 1200 − 340 − 360 = 500 → sol yuvanın 480 üst sınırı kazanır.
+        XCTAssertEqual(layout.resizedWidth(10_000, for: .left, containerWidth: 1200), 480)
+        // 1000 − 340 − 360 = 300.
+        XCTAssertEqual(layout.resizedWidth(10_000, for: .left, containerWidth: 1000), 300)
+        // Pencere çok darsa yuvanın alt sınırı kazanır.
+        XCTAssertEqual(layout.resizedWidth(10_000, for: .left, containerWidth: 600), 200)
+        XCTAssertEqual(layout.resizedWidth(10_000, for: .left, containerWidth: nil), 480, "genişlik bilinmiyorsa yalnız yuva aralığı")
+    }
+
+    func testHiddenSlotsDoNotTakeFromTheContentBudget() {
+        let layout = PanelLayout.defaults // yalnız sol açık
+        XCTAssertEqual(layout.resizedWidth(10_000, for: .left, containerWidth: 900), 480)
+    }
+
+    func testResettingWidthsRestoresDefaultsAndKeepsTheRest() {
+        let custom = PanelLayout.defaults
+            .settingVisible(.right, true)
+            .settingWidth(400, for: .left)
+            .settingWidth(600, for: .right)
+            .settingWidth(700, for: .innerRight)
+        let reset = custom.resettingWidths()
+        for slot in PanelSlot.allCases {
+            XCTAssertEqual(reset.width(for: slot), PanelLayout.defaultWidth(for: slot))
+        }
+        XCTAssertTrue(reset.isVisible(.right), "görünürlük değişmez")
+        XCTAssertEqual(reset, PanelLayout.defaults.settingVisible(.right, true))
     }
 
     func testUnknownSlotFallsBackToDefaultWidth() {

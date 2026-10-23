@@ -2,7 +2,8 @@ import LumiKit
 import SwiftUI
 
 /// Arayüz yazı tipi (karar 63) + panel görünürlükleri + sağ kenarda tek panel
-/// kuralı (karar 124) + kenar hover'ıyla açılma (karar 44) — anında uygulanır
+/// kuralı (karar 124) + panel genişliklerini sıfırlama (karar 125) + kenar
+/// hover'ıyla açılma (karar 44) — anında uygulanır
 /// ve hatırlanır.
 struct AppearanceSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .appearance
@@ -59,6 +60,15 @@ struct AppearanceSettingsTab: SettingsTabContent {
                     set: { shell.layout.setExclusiveRightPanels($0) }
                 )
             )
+            LumiField(
+                title: "Panel Sizes",
+                hint: "Drag a panel's inner edge to resize it; double-click the edge to reset that panel. "
+                    + "Reset returns every panel to its default width.",
+                isLast: true
+            ) {
+                LumiActionButton(title: "Reset Sizes") { shell.layout.resetPanelWidths() }
+                    .disabled(!shell.layout.hasCustomPanelWidths)
+            }
             LumiToggleRow(
                 title: "Auto-reveal Left Sidebar",
                 hint: autoRevealHint(.left),

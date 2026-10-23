@@ -464,13 +464,58 @@ final class LayoutStoreTests: XCTestCase {
 
     func testWidthIsClampedAndPersisted() async throws {
         store.setWidth(10_000, for: .left)
-        XCTAssertEqual(store.width(for: .left), PanelLayout.maxWidth)
+        XCTAssertEqual(store.width(for: .left), PanelLayout.widthRange(for: .left).upperBound)
         store.setWidth(1, for: .left)
-        XCTAssertEqual(store.width(for: .left), PanelLayout.minWidth)
+        XCTAssertEqual(store.width(for: .left), PanelLayout.widthRange(for: .left).lowerBound)
 
         try await waitForPersist(minimumCount: 2)
         let persisted = await config.uiState()
-        XCTAssertEqual(persisted.panelLayout?.width(for: .left), PanelLayout.minWidth)
+        XCTAssertEqual(persisted.panelLayout?.width(for: .left), PanelLayout.widthRange(for: .left).lowerBound)
+    }
+
+    // MARK: - Sürükleyerek boyutlandırma (karar 125)
+
+    func testDragPreviewsInMemoryAndCommitsOnce() async throws {
+        store.containerWidth = 1600
+        store.previewWidth(300, for: .left)
+        store.previewWidth(350, for: .left)
+        XCTAssertEqual(store.width(for: .left), 350, "canlı genişlik okunur")
+        XCTAssertEqual(store.panelLayout.width(for: .left), 280, "kalıcı yerleşim sürüklerken değişmez")
+        try await Task.sleep(for: .milliseconds(50))
+        let duringDrag = await config.uiStateUpdateCount
+        XCTAssertEqual(duringDrag, 0, "sürükleme kareleri diske yazılmaz")
+
+        store.commitWidth(for: .left)
+        XCTAssertTrue(store.liveWidths.isEmpty)
+        try await waitForPersist()
+        let persisted = await config.uiState()
+        XCTAssertEqual(persisted.panelLayout?.width(for: .left), 350)
+    }
+
+    func testDragIsIgnoredWhenSlotIsNotDocked() {
+        store.previewWidth(400, for: .right) // sağ yuva kapalı
+        XCTAssertNil(store.liveWidths[.right])
+        store.toggleFocusMode()
+        store.previewWidth(400, for: .left)
+        XCTAssertNil(store.liveWidths[.left], "focus mode'da paneller çizilmez")
+    }
+
+    func testDragKeepsTheContentMinimum() {
+        // Yalnız sol açık: 700 − 360 = 340 (< sol yuvanın 480 üst sınırı).
+        store.containerWidth = 700
+        store.previewWidth(10_000, for: .left)
+        XCTAssertEqual(store.width(for: .left), 700 - PanelLayout.minContentWidth)
+    }
+
+    func testResetPanelWidthsRestoresDefaults() async throws {
+        store.setWidth(400, for: .left)
+        XCTAssertTrue(store.hasCustomPanelWidths)
+        store.resetPanelWidths()
+        XCTAssertFalse(store.hasCustomPanelWidths)
+        XCTAssertEqual(store.width(for: .left), PanelLayout.defaultWidth(for: .left))
+        try await waitForPersist(minimumCount: 2)
+        let persisted = await config.uiState()
+        XCTAssertEqual(persisted.panelLayout?.width(for: .left), PanelLayout.defaultWidth(for: .left))
     }
 
     /// K34 migration: yeni anahtar yoksa görünürlük eski bool'lardan türer,
