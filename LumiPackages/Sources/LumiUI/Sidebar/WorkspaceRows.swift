@@ -110,6 +110,7 @@ struct CheckoutRow: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .help(checkout.path)
+        .flightAnchor(.checkoutRow(checkout.path))
         // Proje satırıyla aynı: native `contextMenu` yerine Lumi `PopoverMenu`.
         .onRightClick { showsMenu = true }
         .popover(isPresented: $showsMenu, arrowEdge: .bottom) {
@@ -343,6 +344,7 @@ struct AgentRow: View {
                 ? "\(agent.state.title): \(agent.meta.displayTitle), needs attention"
                 : "\(agent.state.title): \(agent.meta.displayTitle)"
         )
+        .flightAnchor(.agentRow(agent.meta.id))
         .contextMenu {
             Button("Focus Session", action: onSelect)
             Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }

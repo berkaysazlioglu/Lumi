@@ -31,6 +31,7 @@ extension OrchestratorToolbox {
         case .found(let found): meta = found
         case .failure(let text): return .failure(text)
         }
+        flights?.launch(.outbound, [.terminal(meta.id)])
         switch delivery(for: meta) {
         case .now:
             guard terminals.submit(message, to: meta.id) else {
@@ -68,10 +69,15 @@ extension OrchestratorToolbox {
         guard let meta = terminals.spawn(in: path, command: command) else {
             return .failure("Lumi could not open a terminal in \(path).")
         }
+        // Yeni kart bir sonraki layout'ta çizilir; ışık ona insin.
+        flights?.launch(.outbound, [.terminal(meta.id)], delay: Self.newTerminalFlightDelay)
         return OrchestratorToolResult(
             text: "Started Claude in \(location.project) at \(path) — terminal id \(meta.id)." + watchNote(meta)
         )
     }
+
+    /// `start_terminal` ışığının kalkış gecikmesi (saniye).
+    static let newTerminalFlightDelay: TimeInterval = 0.3
 
     // MARK: - Ortak
 

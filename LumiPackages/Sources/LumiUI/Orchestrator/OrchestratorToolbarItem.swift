@@ -24,6 +24,8 @@ public struct OrchestratorToolbarItem: View {
             isActive: shell.orchestratorPresentation.isPresented || shell.orchestrator.isResponding,
             action: { shell.orchestratorPresentation.toggle() }
         )
+        // Karar 126: panel/popup kapalıyken ışık bu butondan çıkar ve buraya döner.
+        .flightAnchor(.orchestratorButton)
         // Faz 4: popup kapalıyken görülmemiş Activity olayı accent nokta.
         .overlay(alignment: .topTrailing) {
             if shell.orchestrator.activity.unreadCount > 0 {

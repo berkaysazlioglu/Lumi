@@ -18,6 +18,7 @@ extension OrchestratorToolbox {
         case .found(let found): meta = found
         case .failure(let text): return .failure(text)
         }
+        flights?.launch(.inbound, [.terminal(meta.id)])
         guard watchList.watch(meta) else {
             return OrchestratorToolResult(
                 text: "Already watching \"\(meta.displayTitle)\" (\(meta.id)). Use read_terminal for its latest messages."

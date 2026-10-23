@@ -23,6 +23,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     /// İzlenen terminaller ve sonradan izlemeye alınanın oturum özeti.
     public let watchList: OrchestratorWatchList
     let summarizer: (any TerminalDigestSummarizing)?
+    /// Karar 126: okuma/yazma araçlarının ışık süzmeleri (yalnız görsel).
+    public let flights: OrchestratorFlights?
     let now: @MainActor () -> Date
 
     public init(
@@ -35,6 +37,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         trust: (any ClaudeWorkspaceTrusting)? = nil,
         watchList: OrchestratorWatchList = OrchestratorWatchList(),
         summarizer: (any TerminalDigestSummarizing)? = nil,
+        flights: OrchestratorFlights? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.terminals = terminals
@@ -46,6 +49,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         self.trust = trust
         self.watchList = watchList
         self.summarizer = summarizer
+        self.flights = flights
         self.now = now
     }
 
@@ -114,6 +118,11 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         guard !projects.isEmpty || !others.isEmpty else {
             return OrchestratorToolResult(text: "No projects in Lumi's Projects panel yet.")
         }
+        flights?.launch(
+            .inbound,
+            snapshot.projects.map { .project($0.path) }
+                + snapshot.others.filter { $0.terminals.contains(where: Self.isClaude) }.map { .checkout($0.path) }
+        )
         var payload: [String: Any] = ["projects": projects]
         if !others.isEmpty { payload["other"] = others }
         return OrchestratorToolResult(text: OrchestratorToolFormat.json(payload))
@@ -128,15 +137,17 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     private func listTerminals(query: String?) -> OrchestratorToolResult {
         let locations = terminalLocations()
         let filter = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        let rows: [[String: Any]] = terminals.terminals
+        let matches = terminals.terminals
             .filter(Self.isClaude)
             .sorted { $0.lastActivityAt > $1.lastActivityAt }
-            .compactMap { meta in
+            .filter { meta in
                 let location = locations[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
-                let row = terminalRow(meta, location: location)
-                guard filter.isEmpty || Self.haystack(meta, location: location).contains(filter) else { return nil }
-                return row
+                return filter.isEmpty || Self.haystack(meta, location: location).contains(filter)
             }
+        let rows: [[String: Any]] = matches.map { meta in
+            terminalRow(meta, location: locations[meta.repoPath] ?? fallbackLocation(for: meta.repoPath))
+        }
+        flights?.launch(.inbound, matches.map { .terminal($0.id) })
         guard !rows.isEmpty else {
             let text = filter.isEmpty ? "No Claude terminals are open in Lumi." : "No Claude terminal matches \"\(filter)\"."
             return OrchestratorToolResult(text: text)
@@ -155,6 +166,7 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         case .found(let found): meta = found
         case .failure(let message): return .failure(message)
         }
+        flights?.launch(.inbound, [.terminal(meta.id)])
         let limit = Self.clampedLimit(args["limit"])
         let header = OrchestratorToolFormat.header(for: meta, status: status(of: meta))
 

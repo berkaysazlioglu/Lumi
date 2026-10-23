@@ -78,6 +78,8 @@ public struct ProjectsPanel: View {
                 OtherTerminalsSection(searchText: searchText)
             }
         }
+        // Karar 126: kaymış satıra inen ışık listenin kenarında kalır.
+        .flightAnchor(.projectsViewport)
     }
 
     // MARK: - Üst şerit
@@ -196,6 +198,7 @@ public struct ProjectsPanel: View {
         HoverReader { isHovering in
             projectRowContent(project, isHovering: isHovering)
         }
+        .flightAnchor(.projectRow(project.path))
         // Native `contextMenu` koyu panelde sistem görünümüyle çıkıyordu;
         // menü Lumi'nin kendi `PopoverMenu`suyla çizilir (karar 53 deseni).
         .onRightClick { menuProjectPath = project.path }

@@ -39,6 +39,8 @@ public extension OverlayID {
     static let terminalLinkActions = OverlayID("terminalLinkActions")
     /// Karar 114: orchestrator sohbet popup'ı.
     static let orchestrator = OverlayID("orchestrator")
+    /// Karar 126: orchestrator ile terminaller/projeler arasında uçan ışık.
+    static let orchestratorFlights = OverlayID("orchestratorFlights")
     /// Karar 118: `Restart to Update` onayı (Cancel / Install on Quit / Restart Now).
     static let installUpdateDialog = OverlayID("installUpdateDialog")
 }

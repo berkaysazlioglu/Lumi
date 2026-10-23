@@ -91,6 +91,24 @@ final class OrchestratorActivityMonitorTests: XCTestCase {
         XCTAssertNil(monitor.lastError)
     }
 
+    /// Karar 126: yalnız Codex'e GERÇEKTEN bırakılan özetler ışık kaldırır.
+    func testOnlyDeliveredSummariesAreReported() async {
+        var delivered: [TerminalID] = []
+        monitor.onDelivered = { events in delivered += events.map(\.terminalID) }
+        launcher.failQueue(with: .orchestratorQueueFailed(detail: "unknown thread"))
+        let first = TerminalID()
+        feed.append(event("ilk", terminal: first))
+        await settle()
+        XCTAssertTrue(delivered.isEmpty, "başarısız teslim uçmaz")
+
+        launcher.failQueue(with: nil)
+        let second = TerminalID()
+        feed.append(event("ikinci", terminal: second))
+        await settle()
+
+        XCTAssertEqual(Set(delivered), [first, second])
+    }
+
     func testStoppedMonitorDoesNotDeliver() async {
         monitor.stop()
         feed.append(event("x"))

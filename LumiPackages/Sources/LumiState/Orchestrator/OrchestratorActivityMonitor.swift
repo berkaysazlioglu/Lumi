@@ -43,6 +43,8 @@ public final class OrchestratorActivityMonitor {
     private let now: @MainActor () -> Date
     private var flushTask: Task<Void, Never>?
     private var isDelivering = false
+    /// Karar 126: özetler Codex'e bırakıldı — terminallerden orchestrator'a ışık.
+    public var onDelivered: (@MainActor ([OrchestratorEvent]) -> Void)?
 
     public init(
         feed: OrchestratorActivityFeed,
@@ -96,6 +98,7 @@ public final class OrchestratorActivityMonitor {
             try await launcher.queue(note, thread: target.thread, codexHome: target.codexHome)
             lastError = nil
             Self.logger.log("queued \(events.count) update(s) to the orchestrator")
+            onDelivered?(events)
         } catch {
             feed.returnUnreported(events)
             lastError = (error as? LumiError)?.errorDescription ?? error.localizedDescription

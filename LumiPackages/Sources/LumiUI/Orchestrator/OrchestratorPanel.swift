@@ -34,6 +34,7 @@ public struct OrchestratorPanel: View {
                 GeometryReader { proxy in
                     VStack(spacing: 0) {
                         OrchestratorConsole(store: store)
+                            .flightAnchor(.orchestratorPanel)
                             // Terminal bu yüzeyde çizildiği sürece önde kalır.
                             .onAppear { store.setPresented(.panel, true) }
                             .onDisappear { store.setPresented(.panel, false) }

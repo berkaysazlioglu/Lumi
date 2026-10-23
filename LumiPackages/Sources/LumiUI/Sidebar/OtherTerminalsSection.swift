@@ -108,6 +108,7 @@ private struct LooseLocationRow: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .help(group.path)
+        .flightAnchor(.checkoutRow(group.path))
         .onRightClick { showsMenu = true }
         .popover(isPresented: $showsMenu, arrowEdge: .bottom) {
             PopoverMenu(items: menuItems, dismiss: { showsMenu = false })

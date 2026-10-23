@@ -31,7 +31,8 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
             glow: Theme.terminalGlowColor(emphasis).map { .accent($0) }
         ) {
             VStack(spacing: 0) {
-                header()
+                // Karar 126: orchestrator ışığı ekrandaki kartın header'ına iner.
+                header().flightAnchor(.terminalHeader(terminalID))
                 content()
             }
         }

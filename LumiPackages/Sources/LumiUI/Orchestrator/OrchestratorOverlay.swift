@@ -38,6 +38,7 @@ public struct OrchestratorOverlay: View {
                         divider
                         HStack(spacing: 0) {
                             OrchestratorConsole(store: store)
+                                .flightAnchor(.orchestratorPopup)
                             Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
                             OrchestratorMonitorView(beforeFocus: dismiss)
                                 .frame(width: Self.activityWidth)

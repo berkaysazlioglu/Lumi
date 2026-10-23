@@ -50,6 +50,8 @@ public final class OrchestratorStore {
     public let activity: OrchestratorActivityFeed
     /// Raporu gelen, izlenen terminaller (konuşmaya aittir).
     public let watchList: OrchestratorWatchList
+    /// Karar 126: araç çağrılarının ışık süzmeleri (kabuk overlay'i çizer).
+    public let flights: OrchestratorFlights
     /// Orchestrator terminalinin view köprüsü (ana registry'den ayrı).
     @ObservationIgnored public let viewProvider: any TerminalViewProviding
 
@@ -95,6 +97,7 @@ public final class OrchestratorStore {
         tools: (any OrchestratorToolHandling)? = nil,
         activity: OrchestratorActivityFeed = OrchestratorActivityFeed(),
         watchList: OrchestratorWatchList = OrchestratorWatchList(),
+        flights: OrchestratorFlights = OrchestratorFlights(),
         promptContext: @escaping @MainActor () -> (projects: String, watched: [String]) = { ("(no projects)", []) },
         codexHome: @escaping @Sendable () async -> String? = { nil }
     ) {
@@ -107,6 +110,7 @@ public final class OrchestratorStore {
         self.tools = tools
         self.activity = activity
         self.watchList = watchList
+        self.flights = flights
         self.promptContext = promptContext
         self.codexHome = codexHome
     }

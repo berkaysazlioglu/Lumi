@@ -42,6 +42,8 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
         let watchList = OrchestratorWatchList(config: services.config)
         self.watchList = watchList
         terminals = shared.terminals
+        // Karar 126: araç çağrıları ve teslim edilen özetler ışık süzmesi kaldırır.
+        let flights = OrchestratorFlights()
         let toolbox = OrchestratorToolbox(
             terminals: shared.terminals,
             workspaces: repo.workspaceStore,
@@ -51,7 +53,8 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             promptQueue: terminal.promptQueue,
             trust: ClaudeWorkspaceTrust(),
             watchList: watchList,
-            summarizer: services.terminalDigests
+            summarizer: services.terminalDigests,
+            flights: flights
         )
         let activity = OrchestratorActivityFeed()
         let codexAccounts = services.codexAccounts
@@ -65,6 +68,7 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             tools: toolbox,
             activity: activity,
             watchList: watchList,
+            flights: flights,
             // Karar 123: talimat her açılışta canlı Projects ağacından üretilir.
             promptContext: { (toolbox.promptProjects(), toolbox.promptWatchedTerminals()) },
             // Karar 78: seçili Codex hesabı orchestrator'a da uygulanır.
@@ -77,6 +81,7 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             target: { store.deliveryTarget }
         )
         orchestrator.onDeliveryTargetAvailable = { [weak monitor] in monitor?.targetBecameAvailable() }
+        monitor.onDelivered = { events in flights.launch(.inbound, events.map { .terminal($0.terminalID) }) }
         let config = services.config
         digests = TerminalDigestCoordinator(
             service: terminalService,
@@ -105,6 +110,13 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             id: .orchestrator,
             isPresented: { $0.dialogs.isOrchestratorOpen },
             makeView: { AnyView(OrchestratorOverlay()) }
+        ))
+        // Karar 126: popup'ın üstünde, kabuğun Settings / dialog overlay'lerinin
+        // altında (feature overlay'leri kabuğunkilerden önce kaydedilir).
+        registries.overlays.register(OverlayDescriptor(
+            id: .orchestratorFlights,
+            isPresented: { !$0.orchestrator.flights.active.isEmpty },
+            makeView: { AnyView(OrchestratorFlightOverlay()) }
         ))
         registries.toolbar.register(ToolbarItemDescriptor(
             id: .orchestrator,

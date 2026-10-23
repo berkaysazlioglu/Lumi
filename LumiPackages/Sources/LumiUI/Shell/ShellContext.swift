@@ -109,6 +109,8 @@ public final class ShellContext {
     @ObservationIgnored public let highlighter: any SyntaxHighlighting
     @ObservationIgnored public let markdownParser: any MarkdownParsing
     @ObservationIgnored public let actions: ShellActions
+    /// Karar 126: ışık süzmelerinin iniş/kalkış çerçeveleri (izlenmez).
+    @ObservationIgnored public let flightAnchors = FlightAnchorRegistry()
 
     public init(
         navigation: NavigationStore,
