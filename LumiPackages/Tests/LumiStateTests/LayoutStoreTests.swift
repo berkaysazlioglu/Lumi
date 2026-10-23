@@ -219,6 +219,23 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertNil(written.projectToolsTab, "varsayılan sekmede anahtar yazılmamalı")
     }
 
+    /// Karar 124: Monitor bölmesi yalnız daraltılmışken diske iner ve geri yüklenir.
+    func testOrchestratorActivityCollapsePersistsAndRestores() async throws {
+        XCTAssertTrue(store.isOrchestratorActivityExpanded, "varsayılan açık")
+        store.toggleOrchestratorActivity()
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.orchestratorActivityCollapsed, true)
+
+        store.load(state: written, openTabs: [])
+        XCTAssertFalse(store.isOrchestratorActivityExpanded)
+
+        store.toggleOrchestratorActivity()
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.orchestratorActivityCollapsed, "açıkken anahtar yazılmamalı")
+    }
+
     // MARK: - Yükleme / migration
 
     func testLoadAppliesSidebarsAndLayouts() {

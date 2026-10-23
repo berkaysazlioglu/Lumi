@@ -39,16 +39,8 @@ public struct OrchestratorOverlay: View {
                         HStack(spacing: 0) {
                             OrchestratorConsole(store: store)
                             Rectangle().fill(Theme.border).frame(width: Theme.Stroke.hairline)
-                            OrchestratorActivityPanel(
-                                feed: store.activity,
-                                watched: watchedTerminals,
-                                onFocus: focus,
-                                onUnwatch: { store.watchList.unwatch($0) },
-                                isOpen: { shell.terminals.meta(for: $0) != nil },
-                                onOpen: open,
-                                onReply: reply
-                            )
-                            .frame(width: Self.activityWidth)
+                            OrchestratorMonitorView(beforeFocus: dismiss)
+                                .frame(width: Self.activityWidth)
                         }
                     }
                 }
@@ -62,35 +54,9 @@ public struct OrchestratorOverlay: View {
         .onAppear {
             store.setPresented(.popup, true)
             store.focusTerminal()
-            // Popup açıkken gelen olaylar görülmüş sayılır (top bar noktası).
-            store.activity.markAllRead()
         }
         .onDisappear { store.setPresented(.popup, false) }
         .onChange(of: store.terminalID) { store.focusTerminal() }
-        .onChange(of: store.activity.unreadCount) { _, count in
-            if count > 0 { store.activity.markAllRead() }
-        }
-    }
-
-    /// İzlenen canlı terminaller, terminal listesinin sırasıyla.
-    private var watchedTerminals: [TerminalMeta] {
-        shell.terminals.terminals.filter { store.watchList.isWatched($0) }
-    }
-
-    /// Terminali grid'de öne getirir; popup kapanır ki terminal görülsün.
-    private func open(_ event: OrchestratorEvent) {
-        guard let meta = shell.terminals.meta(for: event.terminalID) else { return }
-        focus(meta)
-    }
-
-    private func focus(_ meta: TerminalMeta) {
-        dismiss()
-        shell.focusAgent(meta)
-    }
-
-    /// Codex'in composer'ına yanıt başlangıcı yazar (göndermez) ve odağı verir.
-    private func reply(_ event: OrchestratorEvent) {
-        store.typeIntoComposer("Reply to “\(event.terminalTitle)”: ")
     }
 
     private var divider: some View {

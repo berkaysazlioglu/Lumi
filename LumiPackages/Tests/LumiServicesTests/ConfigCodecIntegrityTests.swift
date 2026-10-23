@@ -250,6 +250,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         projectToolsTab: "agentHistory",
         orchestratorCodexThreadID: "orch-1",
         orchestratorWatchedSessions: ["s-1"],
+        orchestratorActivityCollapsed: true,
         allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
         allTerminalsOrder: ["s-1", "s-2"],
         recentLooseLocations: ["/Users/me", "/Users/me/Desktop"]

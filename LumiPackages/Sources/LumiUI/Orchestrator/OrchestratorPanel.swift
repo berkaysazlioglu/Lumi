@@ -4,8 +4,9 @@ import SwiftUI
 
 /// Orchestrator'ın docked paneli (karar 124): orta alan ile sağ panelin
 /// arasındaki `.innerRight` yuvasında, kapanınca yalnız gizlenen Codex
-/// terminali. Başlıktaki buton aynı terminali %80'lik popup'a taşır; popup
-/// açıkken terminal oradadır ve panel yalnız bunu söyler.
+/// terminali; altında daraltılabilir Monitor bölmesi (izlenen terminaller +
+/// Activity). Başlıktaki buton aynı terminali %80'lik popup'a taşır; popup
+/// açıkken terminal ve Monitor oradadır, panel yalnız bunu söyler.
 public struct OrchestratorPanel: View {
     @Shell private var shell
 
@@ -30,10 +31,15 @@ public struct OrchestratorPanel: View {
             if presentation.isPopupOpen {
                 OrchestratorPoppedOutView(onShowHere: { presentation.closePopup() })
             } else {
-                OrchestratorConsole(store: store)
-                    // Terminal bu yüzeyde çizildiği sürece önde kalır.
-                    .onAppear { store.setPresented(.panel, true) }
-                    .onDisappear { store.setPresented(.panel, false) }
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        OrchestratorConsole(store: store)
+                            // Terminal bu yüzeyde çizildiği sürece önde kalır.
+                            .onAppear { store.setPresented(.panel, true) }
+                            .onDisappear { store.setPresented(.panel, false) }
+                        OrchestratorMonitorSection(availableHeight: proxy.size.height)
+                    }
+                }
             }
         }
         .task { await store.activate() }

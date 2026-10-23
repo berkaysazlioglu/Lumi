@@ -21,6 +21,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
     public var projectToolsTab: ProjectToolsTab?
     /// Karar 103: All Terminals'ın grid yerleşimi. Hiç seçilmediyse `nil`.
     public var allTerminalsGridLayout: GridLayout?
+    /// Karar 124: Monitor bölmesi daraltılmış mı. Açık (varsayılan) iken `nil`.
+    public var orchestratorActivityCollapsed: Bool?
 
     public init(
         panelLayout: PanelLayout,
@@ -28,7 +30,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
         uiScale: Double? = nil,
         uiFontFamily: UIFontFamily? = nil,
         projectToolsTab: ProjectToolsTab? = nil,
-        allTerminalsGridLayout: GridLayout? = nil
+        allTerminalsGridLayout: GridLayout? = nil,
+        orchestratorActivityCollapsed: Bool? = nil
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
@@ -36,6 +39,7 @@ public struct LayoutSnapshot: Equatable, Sendable {
         self.uiFontFamily = uiFontFamily
         self.projectToolsTab = projectToolsTab
         self.allTerminalsGridLayout = allTerminalsGridLayout
+        self.orchestratorActivityCollapsed = orchestratorActivityCollapsed
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -99,6 +103,11 @@ public final class LayoutStore {
     /// yerleşim durumudur ve `ui-state`'e iner.
     public private(set) var projectToolsTab: ProjectToolsTab = .explorer
 
+    /// Karar 124: orchestrator panelinin Monitor bölmesi (izlenen terminaller +
+    /// Activity) açık mı. Panel kapanınca view yok olduğu için `@State`'te
+    /// tutulamaz (karar 72 ile aynı gerekçe); `ui-state`'e iner.
+    public private(set) var isOrchestratorActivityExpanded = true
+
     /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
     /// değerler: diske yalnız bunlar iner, uçlarda sabitlenir.
     public static let uiScaleSteps: [CGFloat] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
@@ -150,6 +159,7 @@ public final class LayoutStore {
         onUIFontFamilyChanged?(uiFontFamily)
         // karar 72: anahtar yoksa/bozuksa Explorer.
         projectToolsTab = state.projectToolsTab.flatMap(ProjectToolsTab.init(rawValue:)) ?? .explorer
+        isOrchestratorActivityExpanded = state.orchestratorActivityCollapsed != true
         projectGridLayouts = state.projectGridLayouts
         allTerminalsGridLayout = state.allTerminalsGridLayout
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
@@ -427,7 +437,9 @@ public final class LayoutStore {
             uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily,
             // Explorer varsayılanında nil: aynı gerekçe.
             projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab,
-            allTerminalsGridLayout: allTerminalsGridLayout
+            allTerminalsGridLayout: allTerminalsGridLayout,
+            // Açık (varsayılan) iken nil: aynı gerekçe.
+            orchestratorActivityCollapsed: isOrchestratorActivityExpanded ? nil : true
         )
     }
 
@@ -437,6 +449,13 @@ public final class LayoutStore {
     public func setProjectToolsTab(_ tab: ProjectToolsTab) {
         guard tab != projectToolsTab else { return }
         projectToolsTab = tab
+        persist()
+    }
+
+    // MARK: - Orchestrator Monitor bölmesi (karar 124)
+
+    public func toggleOrchestratorActivity() {
+        isOrchestratorActivityExpanded.toggle()
         persist()
     }
 
@@ -496,6 +515,7 @@ public final class LayoutStore {
                 state.uiFontFamily = snapshot.uiFontFamily
                 state.projectToolsTab = snapshot.projectToolsTab?.rawValue
                 state.allTerminalsGridLayout = snapshot.allTerminalsGridLayout
+                state.orchestratorActivityCollapsed = snapshot.orchestratorActivityCollapsed
             }
         }
     }

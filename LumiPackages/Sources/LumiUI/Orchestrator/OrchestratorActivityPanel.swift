@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Popup'ın sağ sütunu (karar 114 Faz 4): üstte orchestrator'ın İZLEDİĞİ
+/// Monitor gövdesi (karar 114 Faz 4, karar 124): üstte orchestrator'ın İZLEDİĞİ
 /// Claude terminalleri, altında onlardan gelen "bitti / soru soruyor / karar
 /// bekliyor / hata" haiku özetleri, en yeni üstte.
 struct OrchestratorActivityPanel: View {

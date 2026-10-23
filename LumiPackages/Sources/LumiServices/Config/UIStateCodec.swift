@@ -70,6 +70,10 @@ enum UIStateCodec {
         if let raw = dict["orchestratorCodexThreadID"] as? String, !raw.isEmpty {
             state.orchestratorCodexThreadID = raw
         }
+        // Karar 124 (additive): Monitor bölmesi daraltılmış mı. Yoksa nil → açık.
+        if let collapsed = JSONValue.bool(dict["orchestratorActivityCollapsed"]) {
+            state.orchestratorActivityCollapsed = collapsed
+        }
         // Karar 114 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
         if let raw = dict["orchestratorWatchedSessions"] as? [Any] {
             state.orchestratorWatchedSessions = raw.compactMap { $0 as? String }.filter { !$0.isEmpty }
@@ -143,6 +147,10 @@ enum UIStateCodec {
         // Karar 123 (additive): yalnız DOLU iken yazılır (karar 9).
         if let threadID = state.orchestratorCodexThreadID {
             overlay["orchestratorCodexThreadID"] = threadID
+        }
+        // Karar 124 (additive): yalnız daraltılmışken yazılır (karar 9).
+        if let collapsed = state.orchestratorActivityCollapsed {
+            overlay["orchestratorActivityCollapsed"] = collapsed
         }
         // nil → yazılmaz; boş liste YAZILIR (merge bayat listeyi diskte bırakmasın).
         if let watched = state.orchestratorWatchedSessions {

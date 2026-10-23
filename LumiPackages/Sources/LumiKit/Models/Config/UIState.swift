@@ -57,6 +57,10 @@ public struct UIState: Sendable, Equatable {
     /// yazılmaz); izleme bir kez başladıysa boş liste de yazılır ki son
     /// terminalin bırakılması diske insin.
     public var orchestratorWatchedSessions: [String]?
+    /// Karar 124 (additive): orchestrator panelinin Monitor bölmesi (izlenen
+    /// terminaller + Activity) daraltılmış mı. nil = dosyada yok → açık; yalnız
+    /// daraltılmışken `true` yazılır.
+    public var orchestratorActivityCollapsed: Bool?
     /// Karar 103 (additive): All Terminals görünümünün grid yerleşimi. nil =
     /// dosyada yok → varsayılan yerleşim. `projectGridLayouts`'a girmez: o
     /// sözlüğün anahtarı repo yoludur (karar 9).
@@ -97,6 +101,7 @@ public struct UIState: Sendable, Equatable {
         projectToolsTab: String? = nil,
         orchestratorCodexThreadID: String? = nil,
         orchestratorWatchedSessions: [String]? = nil,
+        orchestratorActivityCollapsed: Bool? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
         allTerminalsOrder: [String] = [],
         recentLooseLocations: [String] = []
@@ -118,6 +123,7 @@ public struct UIState: Sendable, Equatable {
         self.projectToolsTab = projectToolsTab
         self.orchestratorCodexThreadID = orchestratorCodexThreadID
         self.orchestratorWatchedSessions = orchestratorWatchedSessions
+        self.orchestratorActivityCollapsed = orchestratorActivityCollapsed
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.allTerminalsOrder = allTerminalsOrder
         self.recentLooseLocations = recentLooseLocations
