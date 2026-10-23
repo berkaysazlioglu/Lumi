@@ -9,13 +9,17 @@ struct LumiProjectsList: View {
 
     @State private var collapsedProjects: Set<String> = []
     @AppStorage(ProjectsRowSize.storageKey) private var rowSize = ProjectsRowSize.default
+    // Test controls under the usage strip (to be removed once decided).
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var rowScale = 1.0
+    @AppStorage(ProjectsDebugControls.tintKey) private var tintsGroups = false
 
-    /// Project band padding (fixed — it's the anchor of the hierarchy).
-    private static let projectRowPadding: CGFloat = 9
+    private var metrics: ProjectsRowMetrics { ProjectsRowMetrics(size: rowSize, scale: rowScale) }
 
     var body: some View {
         List {
             ProjectsUsageStrip(report: model.usage, isStale: !model.macOnline)
+                .lumiRow()
+            ProjectsDebugControls()
                 .lumiRow()
             Text("Projects")
                 .font(.largeTitle.bold())
@@ -45,10 +49,10 @@ struct LumiProjectsList: View {
         // carry their own system fill that ignores the Lumi surface.
         sectionHeader(id: project.id, collapsed: collapsed) {
             ProjectIconView(icon: project.node.appearance.icon)
-            Text(project.node.name).font(.headline).foregroundStyle(LumiPalette.textPrimary)
+            Text(project.node.name).font(metrics.projectFont).foregroundStyle(LumiPalette.textPrimary)
             if let color = project.node.appearance.color { ProjectColorDot(color: color) }
         }
-        .treeRow(.project, verticalPadding: Self.projectRowPadding)
+        .treeRow(.project, verticalPadding: metrics.projectPadding, tint: groupTint(project))
         if !collapsed {
             // Agents are emitted as their own List rows (not nested inside a single
             // checkout cell) so each is individually selectable and supports swipe /
@@ -56,7 +60,7 @@ struct LumiProjectsList: View {
             ForEach(project.checkouts) { checkout in
                 checkoutHeader(checkout, in: project)
                 ForEach(checkout.agents) { agent in
-                    agentRow(agent)
+                    agentRow(agent, tint: groupTint(project))
                 }
             }
         }
@@ -65,13 +69,16 @@ struct LumiProjectsList: View {
     private func sectionHeader<Label: View>(id: String, collapsed: Bool,
                                             @ViewBuilder label: () -> Label) -> some View {
         Button {
-            if !collapsedProjects.insert(id).inserted { collapsedProjects.remove(id) }
+            withAnimation(ProjectsMotion.fold) {
+                if !collapsedProjects.insert(id).inserted { collapsedProjects.remove(id) }
+            }
         } label: {
             HStack(spacing: 8) {
                 label()
                 Spacer()
-                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                Image(systemName: "chevron.down")
                     .font(.caption).foregroundStyle(LumiPalette.textSecondary)
+                    .rotationEffect(.degrees(collapsed ? -90 : 0))
             }
             .contentShape(Rectangle())
         }
@@ -86,18 +93,18 @@ struct LumiProjectsList: View {
         let collapsed = collapsedProjects.contains(Self.otherSectionID)
         HStack(spacing: 8) {
             sectionHeader(id: Self.otherSectionID, collapsed: collapsed) {
-                Image(systemName: "tray").font(.headline).foregroundStyle(LumiPalette.textSecondary)
-                Text("Other").font(.headline).foregroundStyle(LumiPalette.textPrimary)
+                Image(systemName: "tray").font(metrics.projectFont).foregroundStyle(LumiPalette.textSecondary)
+                Text("Other").font(metrics.projectFont).foregroundStyle(LumiPalette.textPrimary)
             }
             looseStartMenu(locations)
         }
-        .treeRow(.project, verticalPadding: Self.projectRowPadding)
+        .treeRow(.project, verticalPadding: metrics.projectPadding)
         if !collapsed {
             ForEach(groups) { group in
                 HStack(spacing: 8) {
                     Image(systemName: "folder")
                         .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-                    Text(group.node.label).font(rowSize.checkoutFont)
+                    Text(group.node.label).font(metrics.checkoutFont)
                         .foregroundStyle(LumiPalette.textPrimary)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer()
@@ -105,7 +112,7 @@ struct LumiProjectsList: View {
                         actions.start(group.node.path)
                     }
                 }
-                .treeRow(.checkout, verticalPadding: rowSize.verticalPadding)
+                .treeRow(.checkout, verticalPadding: metrics.verticalPadding)
                 ForEach(group.agents) { agent in
                     agentRow(agent)
                 }
@@ -148,17 +155,17 @@ struct LumiProjectsList: View {
             // "workspace" kind → branch icon; "original" (main checkout) → house icon
             Image(systemName: checkout.node.kind == "workspace" ? "arrow.triangle.branch" : "house")
                 .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-            Text(checkoutDisplayTitle(checkout.node, in: project.node)).font(rowSize.checkoutFont)
+            Text(checkoutDisplayTitle(checkout.node, in: project.node)).font(metrics.checkoutFont)
                 .foregroundStyle(LumiPalette.textPrimary)
             if let branch = checkout.node.branch, !branch.isEmpty {
                 Text(branch)
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .font(metrics.detailFont).foregroundStyle(.tertiary)
                     .lineLimit(1).truncationMode(.middle)
             }
             Spacer()
             newAgentButton(checkout, in: project)
         }
-        .treeRow(.checkout, verticalPadding: rowSize.verticalPadding)
+        .treeRow(.checkout, verticalPadding: metrics.verticalPadding, tint: groupTint(project))
     }
 
     /// Tap: start a Claude agent right in this checkout's folder and open it.
@@ -210,16 +217,22 @@ struct LumiProjectsList: View {
         }
     }
 
+    /// The project's color for its whole group, when the test toggle is on.
+    private func groupTint(_ project: ProjectRowData) -> Color? {
+        guard tintsGroups, let color = project.node.appearance.color else { return nil }
+        return LumiPalette.projectColor(color)
+    }
+
     @ViewBuilder
-    private func agentRow(_ agent: AgentRowData) -> some View {
+    private func agentRow(_ agent: AgentRowData, tint: Color? = nil) -> some View {
         Button {
             actions.open(agent.id)
         } label: {
             HStack(spacing: 8) {
                 AgentActivityGlyph(activity: agent.activity)
-                UsageProviderIcon(id: agent.provider, size: rowSize.iconSize)
+                UsageProviderIcon(id: agent.provider, size: metrics.iconSize)
                 Text(agent.title)
-                    .font(rowSize.agentFont)
+                    .font(metrics.agentFont)
                     .foregroundStyle(agent.needsAttention ? Color.orange : LumiPalette.textPrimary)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer()
@@ -244,7 +257,7 @@ struct LumiProjectsList: View {
             }
         }
         .buttonStyle(.plain)
-        .treeRow(.agent, verticalPadding: rowSize.verticalPadding)
+        .treeRow(.agent, verticalPadding: metrics.verticalPadding, tint: tint)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { actions.delete(agent.id) } label: {
                 Label("Delete", systemImage: "trash")
