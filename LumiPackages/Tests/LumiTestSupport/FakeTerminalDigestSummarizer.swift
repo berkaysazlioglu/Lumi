@@ -8,6 +8,7 @@ public final class FakeTerminalDigestSummarizer: TerminalDigestSummarizing, @unc
     private var _requests: [String] = []
     private var _sessionRequests: [String] = []
     private var outcome: Result<TerminalDigest, LumiError> = .success(TerminalDigest(summary: "özet", needsUser: false))
+    private var delay: Duration = .zero
 
     public init() {}
 
@@ -17,12 +18,16 @@ public final class FakeTerminalDigestSummarizer: TerminalDigestSummarizing, @unc
     public var sessionRequests: [String] { lock.withLock { _sessionRequests } }
 
     public func stub(_ outcome: Result<TerminalDigest, LumiError>) { lock.withLock { self.outcome = outcome } }
+    /// Yavaş haiku (sıra/yarış testleri): `summarize` cevabı bu kadar gecikir.
+    public func setDelay(_ delay: Duration) { lock.withLock { self.delay = delay } }
 
     public func summarize(agentMessage: String, terminalTitle: String) async throws -> TerminalDigest {
         let outcome = lock.withLock { () -> Result<TerminalDigest, LumiError> in
             _requests.append(agentMessage)
             return self.outcome
         }
+        let delay = lock.withLock { self.delay }
+        if delay > .zero { try? await Task.sleep(for: delay) }
         return try outcome.get()
     }
 

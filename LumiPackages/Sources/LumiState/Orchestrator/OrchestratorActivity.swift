@@ -42,14 +42,15 @@ public struct OrchestratorEvent: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Orchestrator'ın Activity paneli (karar 114 Faz 4). Olaylar yalnız
-/// bellektedir (en yeni önce, `capacity` kadar).
+/// Haiku özetlerinin toplandığı yer (karar 114 Faz 4, karar 123): Activity
+/// paneli ve orchestrator monitörünün kaynağı. Olaylar yalnız bellektedir
+/// (en yeni önce, `capacity` kadar).
 ///
 /// İki ayrı "okundu" kavramı vardır:
 /// - **Kullanıcı**: popup açıkken görülen olaylar okunmuş sayılır (top bar noktası).
-/// - **Model**: olaylar model turu AÇMAZ; kullanıcının bir sonraki mesajına
-///   `<lumi-activity>` notu olarak iliştirilir (`consumeContextNote`) — böylece
-///   orchestrator "az önce ne bitti?" sorusunu araç çağırmadan bilir.
+/// - **Model**: `OrchestratorActivityMonitor` her yeni özette raporlanmamış
+///   olayları alır (`takeUnreported`) ve `codex queue` ile orchestrator'a
+///   bırakır; teslim edilemezse geri koyar (`returnUnreported`).
 @Observable
 @MainActor
 public final class OrchestratorActivityFeed {
@@ -58,10 +59,14 @@ public final class OrchestratorActivityFeed {
     public private(set) var events: [OrchestratorEvent] = []
     public private(set) var unreadCount = 0
 
-    /// Modele henüz bildirilmemiş olaylar (eskiden yeniye).
+    /// Monitörün kancası: her yeni özet geldiğinde çağrılır.
+    @ObservationIgnored public var onAppend: (@MainActor () -> Void)?
+    /// Orchestrator'a henüz bildirilmemiş olaylar (eskiden yeniye).
     @ObservationIgnored private var unreported: [OrchestratorEvent] = []
 
     public init() {}
+
+    public var hasUnreported: Bool { !unreported.isEmpty }
 
     public func append(_ event: OrchestratorEvent) {
         // Aynı terminalin eski kartı yenisiyle değişir — liste terminal başına tek durum gösterir.
@@ -71,6 +76,7 @@ public final class OrchestratorActivityFeed {
         unreported.removeAll { $0.terminalID == event.terminalID }
         unreported.append(event)
         unreadCount += 1
+        onAppend?()
     }
 
     public func markAllRead() {
@@ -81,22 +87,28 @@ public final class OrchestratorActivityFeed {
         events.removeAll { $0.id == id }
     }
 
-    /// Bir sonraki kullanıcı mesajına iliştirilecek not; yoksa nil. Çağrı
-    /// listeyi boşaltır (her olay modele bir kez gider).
-    public func consumeContextNote(now: Date = Date()) -> String? {
-        guard !unreported.isEmpty else { return nil }
+    /// Orchestrator'a gidecek olaylar; liste boşalır (her olay bir kez gider).
+    public func takeUnreported() -> [OrchestratorEvent] {
         defer { unreported.removeAll() }
-        return OrchestratorActivityNote.make(unreported, now: now)
+        return unreported
+    }
+
+    /// Teslim edilemeyen olaylar sıranın başına döner — bu arada aynı
+    /// terminalden daha yenisi geldiyse eskisi düşer.
+    public func returnUnreported(_ events: [OrchestratorEvent]) {
+        let newer = Set(unreported.map(\.terminalID))
+        unreported.insert(contentsOf: events.filter { !newer.contains($0.terminalID) }, at: 0)
     }
 }
 
-/// `<lumi-activity>` notunun biçimi. Not kullanıcı mesajıyla AYNI turda
-/// gider ama kullanıcının yazdığı değildir: balonda gizlenir (`strip`).
+/// `<lumi-activity>` notunun biçimi (karar 123): monitör bunu `codex queue`
+/// ile orchestrator'a bırakır; talimat (`OrchestratorPrompt`) notu Lumi'nin
+/// yazdığı bir güncelleme olarak tanımlar.
 public enum OrchestratorActivityNote {
-    public static let open = "<lumi-activity>"
-    public static let close = "</lumi-activity>"
+    public static let open = OrchestratorPrompt.activityOpen
+    public static let close = OrchestratorPrompt.activityClose
 
-    static func make(_ events: [OrchestratorEvent], now: Date) -> String {
+    public static func make(_ events: [OrchestratorEvent], now: Date) -> String {
         let lines = events.map { event in
             let tag: String
             switch event.kind {
@@ -109,19 +121,7 @@ public enum OrchestratorActivityNote {
             return "- [\(tag)] \"\(event.terminalTitle)\" (\(event.location), id \(event.terminalID)), "
                 + "\(OrchestratorToolFormat.ago(event.at, now: now)): \(summary)"
         }
-        return ([open, "Terminal updates from Lumi since the user's last message (not typed by the user):"]
+        return ([open, "Update from Lumi's monitor on watched terminals (not typed by the user):"]
             + lines + [close]).joined(separator: "\n")
-    }
-
-    /// Kullanıcı balonunda gösterilecek metin: baştaki not atılır.
-    public static func strip(_ text: String) -> String {
-        guard text.hasPrefix(open), let end = text.range(of: close) else { return text }
-        return String(text[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// Notu kullanıcı mesajının başına ekler.
-    public static func attach(_ note: String?, to message: String) -> String {
-        guard let note else { return message }
-        return note + "\n\n" + message
     }
 }

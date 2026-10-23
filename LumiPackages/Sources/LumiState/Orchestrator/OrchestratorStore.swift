@@ -65,9 +65,13 @@ public final class OrchestratorStore {
 
     private struct LaunchRecord {
         let resumedThread: String?
+        let codexHome: String?
         let at: ContinuousClock.Instant
         var learnedThread = false
     }
+
+    /// Faz 2: Codex thread'ini bildirdi — monitör bekleyen özetleri bıraksın.
+    @ObservationIgnored public var onDeliveryTargetAvailable: (@MainActor () -> Void)?
 
     public init(
         terminal: any TerminalSessionControlling,
@@ -100,6 +104,13 @@ public final class OrchestratorStore {
     /// Codex bir turn üzerinde çalışıyor mu (top bar vurgusu).
     public var isResponding: Bool { phase == .running && status == .working }
 
+    /// Monitörün `codex queue` adresi: yalnız ÇALIŞAN ve thread'ini bu
+    /// açılışta bildirmiş Codex — kapalı thread'e bırakılan not kaybolurdu.
+    public var deliveryTarget: OrchestratorDeliveryTarget? {
+        guard phase == .running, let launch, launch.learnedThread, let threadID else { return nil }
+        return OrchestratorDeliveryTarget(thread: threadID, codexHome: launch.codexHome)
+    }
+
     // MARK: - Yaşam döngüsü
 
     /// Terminal olaylarını dinlemeye başlar (composition `start`).
@@ -119,6 +130,14 @@ public final class OrchestratorStore {
     }
 
     // MARK: - Intent'ler
+
+    /// Uygulama açılışı (Faz 2): orchestrator daha önce kullanıldıysa (kayıtlı
+    /// thread var) Codex popup beklemeden arka planda sürdürülür — izlenen
+    /// terminallerin raporu kullanıcı popup'ı açmadan da Codex'e ulaşsın.
+    public func resumeIfUsedBefore() async {
+        guard phase == .idle, let thread = await storedThreadID() else { return }
+        await launchCodex(resume: thread)
+    }
 
     /// Popup açıldı: hiç başlamadıysa başlatır.
     public func activate() async {
@@ -190,14 +209,15 @@ public final class OrchestratorStore {
         do {
             let endpoint = try await controlEndpoint()
             let context = promptContext()
+            let home = await codexHome()
             let plan = try await launcher.prepare(OrchestratorLaunchRequest(
                 instructions: OrchestratorPrompt.make(projects: context.projects, watched: context.watched),
                 resumeThreadID: thread,
                 control: endpoint,
-                codexHome: await codexHome()
+                codexHome: home
             ))
             spawn(command: plan.command, environment: plan.environment) { [weak self] in
-                self?.launch = LaunchRecord(resumedThread: thread, at: .now)
+                self?.launch = LaunchRecord(resumedThread: thread, codexHome: home, at: .now)
                 self?.phase = .running
             }
         } catch LumiError.cliNotFound {
@@ -243,11 +263,15 @@ public final class OrchestratorStore {
         case .statusChanged(let id, let newStatus) where id == terminalID:
             status = newStatus
         case .codexSessionIDChanged(let id, let thread) where id == terminalID:
+            let wasDeliverable = deliveryTarget != nil
             launch?.learnedThread = true
             ignoresStoredThread = false
-            guard thread != threadID else { return }
+            let isNewThread = thread != threadID
             threadID = thread
-            Task { await config.updateUIState { $0.orchestratorCodexThreadID = thread } }
+            if isNewThread {
+                Task { await config.updateUIState { $0.orchestratorCodexThreadID = thread } }
+            }
+            if !wasDeliverable || isNewThread { onDeliveryTargetAvailable?() }
         case .exited(let id, let code):
             handleExit(id, code: code)
         default:

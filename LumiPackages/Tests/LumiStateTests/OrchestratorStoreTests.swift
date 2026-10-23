@@ -174,6 +174,59 @@ final class OrchestratorStoreTests: XCTestCase {
         XCTAssertNil(launcher.requests.last?.resumeThreadID)
     }
 
+    // MARK: - Monitoring (Faz 2)
+
+    func testDeliveryTargetExistsOnlyAfterTheRunningCodexReportsItsThread() async throws {
+        let store = makeStore()
+        var notified = 0
+        store.onDeliveryTargetAvailable = { notified += 1 }
+        await store.activate()
+        XCTAssertNil(store.deliveryTarget, "thread bilinmeden not bırakılmaz")
+        let id = try XCTUnwrap(store.terminalID)
+
+        terminal.emit(.codexSessionIDChanged(id, "thread-1"))
+        await drain()
+
+        XCTAssertEqual(store.deliveryTarget, OrchestratorDeliveryTarget(thread: "thread-1", codexHome: "/codex-home"))
+        XCTAssertEqual(notified, 1)
+
+        terminal.emit(.codexSessionIDChanged(id, "thread-1"))
+        await drain()
+        XCTAssertEqual(notified, 1, "aynı thread tekrar bildirmez")
+
+        terminal.emit(.exited(id, code: 0))
+        await drain()
+        XCTAssertNil(store.deliveryTarget, "kapalı Codex'e not bırakılmaz")
+    }
+
+    func testResumedThreadIsNotATargetUntilThisRunReportsIt() async throws {
+        var state = UIState.defaults
+        state.orchestratorCodexThreadID = "kept"
+        await config.seed(state)
+        let store = makeStore()
+        await store.activate()
+        XCTAssertNil(store.deliveryTarget)
+
+        terminal.emit(.codexSessionIDChanged(try XCTUnwrap(store.terminalID), "kept"))
+        await drain()
+        XCTAssertEqual(store.deliveryTarget?.thread, "kept")
+    }
+
+    func testAppLaunchResumesCodexOnlyIfTheOrchestratorWasUsedBefore() async {
+        let fresh = makeStore()
+        await fresh.resumeIfUsedBefore()
+        XCTAssertEqual(fresh.phase, .idle)
+        XCTAssertTrue(launcher.requests.isEmpty)
+
+        var state = UIState.defaults
+        state.orchestratorCodexThreadID = "kept"
+        await config.seed(state)
+        let used = makeStore()
+        await used.resumeIfUsedBefore()
+        XCTAssertEqual(used.phase, .running)
+        XCTAssertEqual(launcher.requests.map(\.resumeThreadID), ["kept"])
+    }
+
     // MARK: - Kurulum
 
     func testMissingCodexShowsInstallAndInstallerExitStartsCodex() async throws {

@@ -20,6 +20,9 @@ import LumiKit
 ///   uzunsa haiku ile özetlenir (başarısızsa kırpılmış metin). Karar beklemede
 ///   LLM'e gidilmez.
 /// - **Kapı:** ayar kapalıysa hiçbir şey üretilmez (token harcanmaz).
+/// - **Sıra (karar 123):** her olay terminal başına artan bir kuşak alır; haiku
+///   uzun sürerken aynı terminalin daha yeni olayı feed'e düştüyse eski özet
+///   atılır — yeni kartı ve orchestrator'a giden notu eskisi ezmez.
 @MainActor
 public final class TerminalDigestCoordinator {
     /// Bu uzunluğa kadar mesaj özetlenmeden gösterilir.
@@ -40,6 +43,10 @@ public final class TerminalDigestCoordinator {
 
     private var statuses: [TerminalID: TerminalStatus] = [:]
     private var settleTasks: [TerminalID: Task<Void, Never>] = [:]
+    /// Terminal başına planlanan son olayın kuşağı.
+    private var generations: [TerminalID: Int] = [:]
+    /// Terminal başına feed'e düşen son olayın kuşağı.
+    private var appendedGenerations: [TerminalID: Int] = [:]
 
     public init(
         service: any TerminalSessionControlling,
@@ -94,6 +101,8 @@ public final class TerminalDigestCoordinator {
         case .exited(let id, _):
             statuses[id] = nil
             cancel(id)
+            generations[id] = nil
+            appendedGenerations[id] = nil
             watchList.forget(id)
         case .spawned(let meta):
             // Açılışta resume edilen terminal diskteki izleme kaydına bağlanır.
@@ -112,12 +121,17 @@ public final class TerminalDigestCoordinator {
     private func schedule(_ id: TerminalID, _ kind: OrchestratorEvent.Kind) {
         cancel(id)
         guard let meta = terminals.meta(for: id), isReportable(meta) else { return }
+        let generation = (generations[id] ?? 0) + 1
+        generations[id] = generation
         settleTasks[id] = Task { @MainActor [weak self] in
             guard let self else { return }
             try? await Task.sleep(for: self.settleDelay)
-            guard !Task.isCancelled, self.isStillCurrent(id, kind) else { return }
-            self.settleTasks[id] = nil
-            await self.produce(id, kind)
+            guard !Task.isCancelled else { return }
+            // Geçerliliğini yitiren olayın kaydı da düşer — sonradan gelen bir
+            // kesme sinyali onu "interrupted"a çevirmesin.
+            if self.generations[id] == generation { self.settleTasks[id] = nil }
+            guard self.isStillCurrent(id, kind) else { return }
+            await self.produce(id, kind, generation: generation)
         }
     }
 
@@ -134,9 +148,12 @@ public final class TerminalDigestCoordinator {
         }
     }
 
-    private func produce(_ id: TerminalID, _ kind: OrchestratorEvent.Kind) async {
+    private func produce(_ id: TerminalID, _ kind: OrchestratorEvent.Kind, generation: Int) async {
         guard let meta = terminals.meta(for: id), isReportable(meta), await isEnabled() else { return }
         let digest = await digest(for: meta, kind: kind)
+        // Haiku sürerken aynı terminalin daha yeni olayı feed'e düştüyse bu bayattır.
+        guard generation > (appendedGenerations[id] ?? 0) else { return }
+        appendedGenerations[id] = generation
         feed.append(OrchestratorEvent(
             terminalID: meta.id, terminalTitle: meta.displayTitle, location: toolbox.location(of: meta),
             kind: kind, summary: digest.summary, needsUser: digest.needsUser, at: now()

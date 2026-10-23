@@ -10,8 +10,9 @@ import SwiftUI
 ///
 /// Top bar butonu + %80'lik popup kabuğa buradan kaydedilir; araçlar
 /// Lumi'nin loopback MCP sunucusundan `OrchestratorToolbox`'a düşer. Codex
-/// açılışta BAŞLAMAZ — popup ilk açıldığında başlar; quit'te sonlandırılır
-/// (konuşma Codex thread'inde kalır, sonraki açılış resume eder).
+/// popup ilk açıldığında başlar; daha önce kullanıldıysa uygulama açılışında
+/// arka planda sürdürülür ki monitoring popup açılmadan da işlesin. Quit'te
+/// sonlandırılır (konuşma Codex thread'inde kalır).
 @MainActor
 final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.ui
@@ -19,6 +20,8 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var orchestrator: OrchestratorStore!
     /// Faz 4: bitiş/soru özetleri Activity paneline.
     private var digests: TerminalDigestCoordinator!
+    /// Karar 123 Faz 2: yeni özetleri `codex queue` ile orchestrator'a bırakır.
+    private var monitor: OrchestratorActivityMonitor!
     /// Raporu gelen, izlenen terminaller — açılışta diskten geri bağlanır.
     private var watchList: OrchestratorWatchList!
     private var terminals: TerminalListStore!
@@ -66,6 +69,13 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             // Karar 78: seçili Codex hesabı orchestrator'a da uygulanır.
             codexHome: { await codexAccounts.selectedHome() }
         )
+        let store: OrchestratorStore = orchestrator
+        monitor = OrchestratorActivityMonitor(
+            feed: activity,
+            launcher: services.orchestratorLauncher,
+            target: { store.deliveryTarget }
+        )
+        orchestrator.onDeliveryTargetAvailable = { [weak monitor] in monitor?.targetBecameAvailable() }
         let config = services.config
         digests = TerminalDigestCoordinator(
             service: terminalService,
@@ -96,12 +106,18 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
 
     func start() async {
         orchestrator.start()
+        monitor.start()
         digests.start()
         await watchList.load(matching: terminals.terminals)
+        // İzleme listesi yüklendikten SONRA: talimat izlenen terminalleri görsün.
+        // Bootstrap'ı bekletmez (açılış `codex mcp list`'i bekleyebilir).
+        let store: OrchestratorStore = orchestrator
+        Task { await store.resumeIfUsedBefore() }
     }
 
     func shutdown() async {
         digests.stop()
+        monitor.stop()
         await orchestrator.shutdown()
         await watchList.flush()
     }

@@ -27,26 +27,46 @@ final class OrchestratorActivityFeedTests: XCTestCase {
         XCTAssertEqual(feed.unreadCount, 0)
     }
 
-    func testContextNoteIsConsumedOnceAndKeepsLatestPerTerminal() throws {
+    func testUnreportedEventsAreTakenOnceAndKeepLatestPerTerminal() {
         let feed = OrchestratorActivityFeed()
         let a = TerminalID()
         feed.append(event(a, "eski"))
         feed.append(event(a, "commit atayım mı?", needsUser: true))
 
-        let note = try XCTUnwrap(feed.consumeContextNote(now: now))
-        XCTAssertTrue(note.hasPrefix(OrchestratorActivityNote.open))
-        XCTAssertTrue(note.hasSuffix(OrchestratorActivityNote.close))
-        XCTAssertTrue(note.contains("[finished, asks the user] \"api\" (api · main, id \(a)), 2m ago: commit atayım mı?"))
-        XCTAssertFalse(note.contains("eski"))
-        XCTAssertNil(feed.consumeContextNote(now: now), "her olay modele bir kez gider")
-        XCTAssertEqual(feed.events.count, 1, "not tüketmek paneli boşaltmaz")
+        let taken = feed.takeUnreported()
+        XCTAssertEqual(taken.map(\.summary), ["commit atayım mı?"])
+        XCTAssertFalse(feed.hasUnreported, "her olay orchestrator'a bir kez gider")
+        XCTAssertEqual(feed.events.count, 1, "almak paneli boşaltmaz")
     }
 
-    func testStripRemovesOnlyTheLeadingNote() {
-        let message = OrchestratorActivityNote.attach("<lumi-activity>\nx\n</lumi-activity>", to: "selam")
-        XCTAssertEqual(OrchestratorActivityNote.strip(message), "selam")
-        XCTAssertEqual(OrchestratorActivityNote.strip("düz mesaj"), "düz mesaj")
-        XCTAssertEqual(OrchestratorActivityNote.attach(nil, to: "selam"), "selam")
+    func testReturnedEventsGoBackUnlessANewerOneArrived() {
+        let feed = OrchestratorActivityFeed()
+        let a = TerminalID(), b = TerminalID()
+        feed.append(event(a, "a1"))
+        feed.append(event(b, "b1"))
+        let taken = feed.takeUnreported()
+        feed.append(event(a, "a2"))
+
+        feed.returnUnreported(taken)
+
+        XCTAssertEqual(feed.takeUnreported().map(\.summary), ["b1", "a2"], "a1 bayat, b1 başa döner")
+    }
+
+    func testAppendNotifiesTheMonitor() {
+        let feed = OrchestratorActivityFeed()
+        var calls = 0
+        feed.onAppend = { calls += 1 }
+        feed.append(event(TerminalID(), "x"))
+        XCTAssertEqual(calls, 1)
+    }
+
+    func testNoteFormat() {
+        let a = TerminalID()
+        let note = OrchestratorActivityNote.make([event(a, "commit atayım mı?", needsUser: true)], now: now)
+        XCTAssertTrue(note.hasPrefix(OrchestratorPrompt.activityOpen))
+        XCTAssertTrue(note.hasSuffix(OrchestratorPrompt.activityClose))
+        XCTAssertTrue(note.contains("not typed by the user"))
+        XCTAssertTrue(note.contains("[finished, asks the user] \"api\" (api · main, id \(a)), 2m ago: commit atayım mı?"))
     }
 
     func testCapacityIsBounded() {
@@ -212,6 +232,41 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
         await settle(untilEvents: 1)
         XCTAssertEqual(feed.events.first?.needsUser, true)
+    }
+
+    /// Karar 123: yavaş haiku özeti, aynı terminalin sonradan gelen ve önce
+    /// feed'e düşen olayını ezmez (orchestrator'a bayat not gitmez).
+    func testSlowSummaryDoesNotOverwriteANewerEventOfTheSameTerminal() async {
+        let meta = agent()
+        summarizer.setDelay(.milliseconds(600))
+        reply(String(repeating: "uzun cevap ", count: 60))
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        // Oturma süresi dolsun, haiku başlasın; sonra ikinci kısa turn.
+        try? await Task.sleep(for: .milliseconds(100))
+        coordinator.apply(.statusChanged(meta.id, .working))
+        reply("Bitti. Push'layayım mı?")
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        await settle(untilEvents: 1)
+        try? await Task.sleep(for: .milliseconds(800))
+
+        XCTAssertEqual(feed.events.map(\.summary), ["Bitti. Push'layayım mı?"])
+        XCTAssertEqual(feed.unreadCount, 1, "bayat özet hiç eklenmedi")
+        XCTAssertEqual(feed.takeUnreported().map(\.summary), ["Bitti. Push'layayım mı?"])
+    }
+
+    /// Oturma süresinde geçersizleşen olayın kaydı düşer: sonradan gelen kesme
+    /// sinyali olay üretmez.
+    func testInvalidatedSettleDoesNotLeaveAPendingFinishForALaterInterrupt() async {
+        let meta = agent()
+        reply("tamam")
+        coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
+        coordinator.apply(.statusChanged(meta.id, .error))
+        await settle()
+        coordinator.apply(.statusChanged(meta.id, .waitingSeen))
+        coordinator.apply(.interruptInferred(meta.id))
+        await settle()
+
+        XCTAssertTrue(feed.events.isEmpty)
     }
 
     func testQuestionHeuristics() {
