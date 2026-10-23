@@ -50,8 +50,13 @@ public final class OrchestratorFlights {
         }
     }
 
-    /// Tek uçuşun süresi (saniye).
-    nonisolated public static let duration: TimeInterval = 0.9
+    /// Kalkış: ışık çıktığı yerde büyüyüp oturur ve kısa bir an bekler —
+    /// nereden çıktığı görülsün.
+    nonisolated public static let launchDuration: TimeInterval = 0.35
+    /// Kalkıştan sonraki uçuş.
+    nonisolated public static let travelDuration: TimeInterval = 0.9
+    /// Tek uçuşun toplam süresi (saniye).
+    nonisolated public static let duration: TimeInterval = launchDuration + travelDuration
     /// Aynı anda kalkan uçuşlar arasındaki aralık — çoklu okuma bir dizi gibi akar.
     public static let stagger: TimeInterval = 0.07
     /// Tek eylemin kaldırdığı en fazla uçuş (ör. 30 projeli `list_projects`).

@@ -44,6 +44,30 @@ struct OrchestratorFlightPath: Equatable {
         )
     }
 
+    /// Uçuşun evresi: önce çıktığı yerde büyüyüp bekler, sonra uçar.
+    enum Stage: Equatable {
+        /// `scale`: büyüme ölçeği (bump), `opacity`: beliriş.
+        case launch(scale: Double, opacity: Double)
+        /// `t`: yol üzerindeki ham ilerleme (0…1, easing öncesi).
+        case travel(t: Double)
+    }
+
+    static func stage(elapsed: TimeInterval, launch: TimeInterval, travel: TimeInterval) -> Stage {
+        guard elapsed >= launch else {
+            let p = max(elapsed, 0) / launch
+            return .launch(scale: launchScale(p), opacity: min(1, p / appearRatio))
+        }
+        return .travel(t: min((elapsed - launch) / travel, 1))
+    }
+
+    /// Kalkış ölçeği: `popRatio` içinde sıfırdan taşarak büyür (ease-out-back),
+    /// sonra 1'de oturur — bekleme evresinin geri kalanı durgundur.
+    static func launchScale(_ p: Double) -> Double {
+        let u = min(max(p / popRatio, 0), 1)
+        let c3 = overshoot + 1
+        return 1 + c3 * pow(u - 1, 3) + overshoot * pow(u - 1, 2)
+    }
+
     /// Yumuşak kalkış ve iniş (cubic ease-in-out).
     static func eased(_ t: Double) -> Double {
         let clamped = min(max(t, 0), 1)
@@ -52,11 +76,15 @@ struct OrchestratorFlightPath: Equatable {
             : 1 - pow(-2 * clamped + 2, 3) / 2
     }
 
-    /// Başta belirip sonda sönme çarpanı — inişte hiçbir şey patlamaz.
+    /// İnişte sönme çarpanı — inişte hiçbir şey patlamaz.
     static func fade(_ t: Double) -> Double {
-        min(1, t / fadeInRatio) * min(1, (1 - t) / fadeOutRatio)
+        min(1, (1 - t) / fadeOutRatio)
     }
 
-    static let fadeInRatio = 0.12
     static let fadeOutRatio = 0.25
+    /// Bekleme evresinin büyümeye ayrılan kısmı.
+    static let popRatio = 0.55
+    static let appearRatio = 0.15
+    /// Ease-out-back taşma katsayısı (~%25 taşma).
+    static let overshoot = 2.6
 }

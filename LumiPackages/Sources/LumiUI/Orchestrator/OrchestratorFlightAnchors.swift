@@ -6,8 +6,8 @@ public enum FlightAnchorKey: Hashable, Sendable {
     case orchestratorPopup
     case orchestratorPanel
     case orchestratorButton
-    /// Ekrandaki terminal kartının header'ı (grid ya da maximize).
-    case terminalHeader(TerminalID)
+    /// Ekrandaki terminal kartı (grid ya da maximize) — ışık merkezine iner.
+    case terminalCard(TerminalID)
     /// Projects panelindeki ajan satırı.
     case agentRow(TerminalID)
     /// Projects panelindeki checkout satırı ya da `Other` dizini.

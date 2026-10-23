@@ -10,7 +10,8 @@ import SwiftUI
 ///
 /// Uçların konumu her karede `FlightAnchorRegistry`'den çözülür: orchestrator
 /// tarafı popup → docked panel → top bar butonu; terminal tarafı ekrandaki
-/// kartın header'ı → Projects'teki ajan satırı → checkout → proje satırı.
+/// kartın merkezi → Projects'teki ajan satırı → checkout → proje satırı.
+/// Işık önce çıktığı yerde büyüyerek belirip kısa bir an bekler, sonra uçar.
 /// Hiçbiri görünmüyorsa o uçuş çizilmez.
 public struct OrchestratorFlightOverlay: View {
     @Shell private var shell
@@ -39,7 +40,7 @@ public struct OrchestratorFlightOverlay: View {
 
     struct Segment {
         let path: OrchestratorFlightPath
-        let progress: Double
+        let stage: OrchestratorFlightPath.Stage
         let color: Color
     }
 
@@ -57,7 +58,12 @@ public struct OrchestratorFlightOverlay: View {
             )
             // Giden ışık orchestrator'ın rengi, dönen ışık soğuk mavi.
             let color = flight.direction == .outbound ? Theme.accentPrimary : Theme.accentCyan
-            return Segment(path: path, progress: progress, color: color)
+            let stage = OrchestratorFlightPath.stage(
+                elapsed: progress * OrchestratorFlights.duration,
+                launch: OrchestratorFlights.launchDuration,
+                travel: OrchestratorFlights.travelDuration
+            )
+            return Segment(path: path, stage: stage, color: color)
         }
     }
 
@@ -71,8 +77,8 @@ public struct OrchestratorFlightOverlay: View {
     private func point(for endpoint: OrchestratorFlights.Endpoint) -> CGPoint? {
         switch endpoint {
         case .terminal(let id):
-            if let header = anchors.rect(.terminalHeader(id)) {
-                return CGPoint(x: header.midX, y: header.midY)
+            if let card = anchors.rect(.terminalCard(id)) {
+                return CGPoint(x: card.midX, y: card.midY)
             }
             if let row = anchors.rect(.agentRow(id)) { return rowPoint(row) }
             guard let meta = shell.terminals.meta(for: id) else { return nil }
@@ -107,13 +113,45 @@ public struct OrchestratorFlightOverlay: View {
     static var trailSize: CGFloat { Theme.scaled(4) }
     static var coreSize: CGFloat { Theme.scaled(5) }
 
+    /// Kalkışta halenin ve çekirdeğin büyüme çarpanı — ışık çıktığı yerde
+    /// uçarkenkinden iri görünür ki kaynağı fark edilsin.
+    static let launchEmphasisScale: CGFloat = 1.8
+
     private static func draw(_ segment: Segment, in context: inout GraphicsContext) {
-        let head = OrchestratorFlightPath.eased(segment.progress)
+        switch segment.stage {
+        case let .launch(scale, opacity):
+            drawLaunch(at: segment.path.start, scale: CGFloat(scale), opacity: opacity, color: segment.color, in: &context)
+        case let .travel(t):
+            drawTravel(segment.path, t: t, color: segment.color, in: &context)
+        }
+    }
+
+    /// Çıktığı yerde büyüyerek beliren ve bekleyen ışık.
+    private static func drawLaunch(
+        at point: CGPoint, scale: CGFloat, opacity: Double, color: Color, in context: inout GraphicsContext
+    ) {
+        let size = max(scale, 0) * launchEmphasisScale
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: glowBlur))
+            layer.blendMode = .plusLighter
+            layer.fill(circle(at: point, size: glowSize * size), with: .color(color.opacity(0.7 * opacity)))
+        }
+        context.drawLayer { layer in
+            layer.blendMode = .plusLighter
+            layer.fill(circle(at: point, size: trailSize * size), with: .color(color.opacity(0.9 * opacity)))
+            layer.fill(circle(at: point, size: coreSize * size), with: .color(.white.opacity(0.95 * opacity)))
+        }
+    }
+
+    private static func drawTravel(_ path: OrchestratorFlightPath, t: Double, color: Color, in context: inout GraphicsContext) {
+        let head = OrchestratorFlightPath.eased(t)
         let tail = max(0, head - trailRatio)
-        let fade = OrchestratorFlightPath.fade(segment.progress)
+        let fade = OrchestratorFlightPath.fade(t)
+        // Kalkışta iri olan baş, yola çıkarken uçuş boyuna iner.
+        let headScale = 1 + (launchEmphasisScale - 1) * CGFloat(max(0, 1 - t / settleRatio))
         let samples = (0...trailSamples).map { index -> (point: CGPoint, weight: Double) in
             let fraction = Double(index) / Double(trailSamples)
-            return (segment.path.point(at: CGFloat(tail + (head - tail) * fraction)), fraction * fraction)
+            return (path.point(at: CGFloat(tail + (head - tail) * fraction)), fraction * fraction)
         }
 
         // Hale: bulanık, eklemeli harmanlanan geniş katman.
@@ -121,8 +159,8 @@ public struct OrchestratorFlightOverlay: View {
             layer.addFilter(.blur(radius: glowBlur))
             layer.blendMode = .plusLighter
             for sample in samples {
-                let size = glowSize * CGFloat(0.35 + 0.65 * sample.weight)
-                layer.fill(circle(at: sample.point, size: size), with: .color(segment.color.opacity(0.55 * sample.weight * fade)))
+                let size = glowSize * CGFloat(0.35 + 0.65 * sample.weight) * (sample.weight == 1 ? headScale : 1)
+                layer.fill(circle(at: sample.point, size: size), with: .color(color.opacity(0.55 * sample.weight * fade)))
             }
         }
         // Kuyruk: incelen parlak iz.
@@ -130,14 +168,17 @@ public struct OrchestratorFlightOverlay: View {
             layer.blendMode = .plusLighter
             for sample in samples {
                 let size = trailSize * CGFloat(0.2 + 0.8 * sample.weight)
-                layer.fill(circle(at: sample.point, size: size), with: .color(segment.color.opacity(0.8 * sample.weight * fade)))
+                layer.fill(circle(at: sample.point, size: size), with: .color(color.opacity(0.8 * sample.weight * fade)))
             }
             // Baş: beyaza yakın çekirdek.
             if let headPoint = samples.last?.point {
-                layer.fill(circle(at: headPoint, size: coreSize), with: .color(.white.opacity(0.95 * fade)))
+                layer.fill(circle(at: headPoint, size: coreSize * headScale), with: .color(.white.opacity(0.95 * fade)))
             }
         }
     }
+
+    /// Başın kalkış iriliğinden uçuş boyuna inmesi için geçen yol payı.
+    static let settleRatio = 0.25
 
     private static func circle(at center: CGPoint, size: CGFloat) -> Path {
         Path(ellipseIn: CGRect(x: center.x - size / 2, y: center.y - size / 2, width: size, height: size))

@@ -31,12 +31,13 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
             glow: Theme.terminalGlowColor(emphasis).map { .accent($0) }
         ) {
             VStack(spacing: 0) {
-                // Karar 126: orchestrator ışığı ekrandaki kartın header'ına iner.
-                header().flightAnchor(.terminalHeader(terminalID))
+                header()
                 content()
             }
         }
         .overlay { attentionBorder }
+        // Karar 126: orchestrator ışığı ekrandaki kartın merkezine iner.
+        .flightAnchor(.terminalCard(terminalID))
         .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: terminalID, store: promptQueue)
     }
 
