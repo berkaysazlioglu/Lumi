@@ -87,7 +87,7 @@ public final class AppModel {
     // MARK: Chat state (mode=chat; orca native-chat)
 
     /// sessionId → chat messages (mode=chat subscription; orca native-chat).
-    private var chatBySession: [String: [ChatMessage]] = [:]
+    var chatBySession: [String: [ChatMessage]] = [:]
     /// Optimistic user message echoes (orca pending echo — client-side, immediate).
     /// Retired via count-based dedup when the transcript echoes them; kept otherwise.
     private var pendingBySession: [String: [ChatPending]] = [:]
@@ -117,7 +117,7 @@ public final class AppModel {
     /// The view keeps showing the messages it already has and marks them "Syncing…".
     public internal(set) var chatSyncing: Set<String> = []
     /// Chats whose snapshot left older rows on the Mac (frame size cap).
-    public private(set) var chatHasEarlier: Set<String> = []
+    public internal(set) var chatHasEarlier: Set<String> = []
     /// Per-session retry timer: re-sends the subscribe if no snapshot arrives in time.
     var syncWatchdogs: [String: Task<Void, Never>] = [:]
     /// Sessions whose sync retries ran out (Mac offline: the relay drops the subscribe).
@@ -129,9 +129,17 @@ public final class AppModel {
     /// within it re-syncs instead of starting a fresh tail.
     public var chatReleaseDelay: Duration = .seconds(30)
     var pendingReleases: [String: Task<Void, Never>] = [:]
+    /// Decision 130 (phase 3): chats on disk for an instant cold start.
+    let chatCache: any ChatCaching
+    /// Debounced per-session cache writes.
+    var cacheSaves: [String: Task<Void, Never>] = [:]
+    public var chatCacheDelay: Duration = .seconds(1)
 
-    public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
+    public init(client: any RelayClienting, store: any SecureStore,
+                prefs: any PreferenceStore = UserDefaultsPreferenceStore(),
+                chatCache: any ChatCaching = NoChatCache()) {
         self.client = client
+        self.chatCache = chatCache
         self.store = store
         self.prefs = prefs
         self.isPaired = store.read() != nil
@@ -212,6 +220,9 @@ public final class AppModel {
         pendingReleases = [:]
         chatSyncing = []
         chatHasEarlier = []
+        for task in cacheSaves.values { task.cancel() }
+        cacheSaves = [:]
+        chatCache.clear()
         syncGaveUp = []
         prompts = [:]
         models = [:]
@@ -253,6 +264,8 @@ public final class AppModel {
             // Only the Mac can send a sessions message → Mac is online.
             macOnline = true
             applySessions(metas)
+            // Mac-authored list only — the relay's welcome copy can be empty after a restart.
+            chatCache.prune(keeping: Set(metas.map(\.id)))
             // Decision 130: the Mac is back — retry a chat whose sync gave up meanwhile.
             if let sid = activeSessionId, activeChatMode, syncGaveUp.contains(sid) {
                 sendChatSubscribe(sid)
@@ -310,6 +323,7 @@ public final class AppModel {
             finishChatSync(sessionId)
             chatBySession[sessionId] = messages
             if hasEarlier { chatHasEarlier.insert(sessionId) } else { chatHasEarlier.remove(sessionId) }
+            scheduleChatCacheSave(sessionId)
             pendingBySession[sessionId] = chatRetireLandedPending(
                 messages: messages, current: pendingBySession[sessionId] ?? [])
             recomputeStreaming(sessionId)
@@ -328,6 +342,7 @@ public final class AppModel {
             pendingBySession[sessionId] = chatRetireLandedPending(
                 messages: current, current: pendingBySession[sessionId] ?? [])
             recomputeStreaming(sessionId)
+            scheduleChatCacheSave(sessionId)
 
         case .chatStatus(let sessionId, let status):
             macOnline = true
@@ -600,7 +615,7 @@ public final class AppModel {
         cancelPendingRelease(sessionId)
         activeSessionId = sessionId
         activeChatMode = true
-        chatBySession[sessionId] = chatBySession[sessionId] ?? []
+        restoreCachedChatIfNeeded(sessionId)
         // Don't drop scrollback that arrives before the strip mounts (subscribe(_:) parity).
         replayBuffers[sessionId] = []
         sendChatSubscribe(sessionId)
@@ -689,6 +704,9 @@ public final class AppModel {
         replayBuffers[id] = nil
         chatBySession[id] = nil
         chatHasEarlier.remove(id)
+        cacheSaves[id]?.cancel()
+        cacheSaves[id] = nil
+        chatCache.remove(id)
         pendingBySession[id] = nil
         streamingGates[id] = nil
         gatedStreaming[id] = nil

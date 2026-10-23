@@ -21,7 +21,7 @@ struct LumiMobileApp: App {
         DiagLog.shared.log("app", "started")
         // A demo build starts in demo mode until the user turns it off.
         UserDefaults.standard.register(defaults: [DemoMode.storageKey: DemoMode.buildDefault])
-        let model = AppModel(client: RelayClient(), store: KeychainStore())
+        let model = AppModel(client: RelayClient(), store: KeychainStore(), chatCache: FileChatCache.standard())
         let coordinator = PushCoordinator(
             model: model,
             authorizer: SystemNotificationAuthorizer(),
@@ -54,6 +54,7 @@ struct LumiMobileApp: App {
             // Decision 130: the socket may have died in the background.
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await model.appBecameActive() } }
+                if phase == .background { model.flushChatCache() }
             }
             .onOpenURL { url in
                 // A real pairing link ends demo mode — otherwise the live model
