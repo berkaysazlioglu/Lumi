@@ -55,4 +55,23 @@ final class ProjectTreeTests: XCTestCase {
         XCTAssertEqual(PhoneRelativeTime.shortLabel(now - 2 * 24 * 3_600_000, now: now), "2d")
         XCTAssertEqual(PhoneRelativeTime.shortLabel(nil, now: now), "")
     }
+
+    func testOwningProjectLocationsAndRootTitle() {
+        let root = CheckoutNode(kind: "original", title: "main", branch: nil, scm: "git", path: "/p/game", agentIds: ["a"])
+        let ws = CheckoutNode(kind: "workspace", title: "wt", branch: "feat", scm: "git", path: "/p/wt", agentIds: ["b"])
+        let game = ProjectNode(name: "game", path: "/p/game", checkouts: [root, ws],
+                               appearance: ProjectAppearance(color: .lime, rootTitle: "dev"))
+        let snapshot = ProjectsSnapshot(
+            projects: [game],
+            others: [OtherGroupNode(path: "/Users/me", label: "~", agentIds: ["c"]),
+                     OtherGroupNode(path: "/tmp", label: "/tmp", agentIds: ["d"])],
+            addable: [],
+            looseLocations: [LooseLocation(path: "/Users/me", label: "~"), LooseLocation(path: "/src", label: "/src")])
+
+        XCTAssertEqual(owningProject(of: "b", in: snapshot)?.path, "/p/game", "workspace agent → its project")
+        XCTAssertNil(owningProject(of: "c", in: snapshot), "loose terminal has no project")
+        XCTAssertEqual(looseStartLocations(snapshot).map(\.path), ["/Users/me", "/src", "/tmp"])
+        XCTAssertEqual(checkoutDisplayTitle(root, in: game), "dev")
+        XCTAssertEqual(checkoutDisplayTitle(ws, in: game), "wt")
+    }
 }

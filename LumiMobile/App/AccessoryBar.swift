@@ -32,7 +32,7 @@ struct AccessoryBar: View {
                 // Second row: free-text input + send
                 HStack(spacing: 8) {
                     TextField("Send…", text: $text)
-                        .textFieldStyle(.roundedBorder)
+                        .lumiField()
                         .autocorrectionDisabled(true)
                         .textInputAutocapitalization(.never)
                         .submitLabel(.send)
@@ -48,7 +48,7 @@ struct AccessoryBar: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(uiColor: .systemBackground))
+            .background(LumiPalette.background)
         }
     }
 
@@ -62,7 +62,7 @@ struct AccessoryBar: View {
         .font(.system(.footnote, design: .monospaced).bold())
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 6))
+        .background(LumiPalette.elevated, in: RoundedRectangle(cornerRadius: 6))
         .foregroundStyle(.primary)
     }
 

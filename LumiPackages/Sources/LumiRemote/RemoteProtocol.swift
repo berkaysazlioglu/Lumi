@@ -93,10 +93,30 @@ enum RemoteProtocol {
 
     /// `projects` payload: favorites tree + addable pool (Mac → phone).
     /// `others` (additive, karar 114): Projects ▸ Other — `{path,label,agentIds}`.
+    /// 2026-10-23 eki (additive): `looseLocations` — telefonun serbest terminal
+    /// açabileceği konumlar `{path,label}`; `display` — Mac'in terminal fontu
+    /// `{terminalFontFamily}` (boş = bundle'daki JetBrains Mono).
     static func projectsPayload(
-        projects: [[String: Any]], others: [[String: Any]] = [], addable: [[String: String]]
+        projects: [[String: Any]], others: [[String: Any]] = [], addable: [[String: String]],
+        looseLocations: [[String: String]] = [], terminalFontFamily: String = ""
     ) -> [String: Any] {
-        ["projects": projects, "others": others, "addable": addable]
+        [
+            "projects": projects, "others": others, "addable": addable,
+            "looseLocations": looseLocations,
+            "display": ["terminalFontFamily": terminalFontFamily],
+        ]
+    }
+
+    /// Projenin görünümü (karar 120) — telefon ağacına additive `appearance`:
+    /// `{color?, icon?, rootTitle?}`; `icon` diskteki biçimdedir (`sf:star` /
+    /// `emoji:🚀`). Görünümü boş projede `nil` (anahtar yazılmaz).
+    static func appearancePayload(_ appearance: ProjectAppearance) -> [String: String]? {
+        guard !appearance.isEmpty else { return nil }
+        var dict: [String: String] = [:]
+        if let color = appearance.color { dict["color"] = color.rawValue }
+        if let icon = appearance.icon { dict["icon"] = icon.persisted }
+        if let title = appearance.rootTitle { dict["rootTitle"] = title }
+        return dict
     }
 
     /// `scrollback` payload: ilk bağlantıda terminal geçmişini gönderir.

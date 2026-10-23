@@ -208,21 +208,107 @@ public struct ProjectNode: Decodable, Sendable, Equatable, Identifiable {
     public let name: String
     public let path: String
     public let checkouts: [CheckoutNode]
+    /// Mac project appearance (decision 120; additive — `.none` from an older Mac).
+    public let appearance: ProjectAppearance
     public var id: String { path }
 
-    public init(name: String, path: String, checkouts: [CheckoutNode]) {
-        self.name = name; self.path = path; self.checkouts = checkouts
+    public init(name: String, path: String, checkouts: [CheckoutNode], appearance: ProjectAppearance = .none) {
+        self.name = name; self.path = path; self.checkouts = checkouts; self.appearance = appearance
     }
 
-    private enum CodingKeys: String, CodingKey { case name, path, checkouts }
+    private enum CodingKeys: String, CodingKey { case name, path, checkouts, appearance }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             name: try c.decodeIfPresent(String.self, forKey: .name) ?? "",
             path: try c.decode(String.self, forKey: .path),
-            checkouts: try c.decodeIfPresent([CheckoutNode].self, forKey: .checkouts) ?? []
+            checkouts: try c.decodeIfPresent([CheckoutNode].self, forKey: .checkouts) ?? [],
+            appearance: (try? c.decodeIfPresent(ProjectAppearance.self, forKey: .appearance)) ?? .none
         )
+    }
+}
+
+/// Mac `ProjectColor` palette ids (decision 120). Unknown ids decode to `nil`.
+public enum ProjectColorID: String, Sendable, Equatable, CaseIterable {
+    case blue, teal, pink, orange, lime, green, fuchsia
+}
+
+/// Mac `ProjectIcon` wire form: `sf:<symbol>` or `emoji:<one emoji>`.
+public enum ProjectIconID: Sendable, Equatable {
+    case symbol(String)
+    case emoji(String)
+
+    public init?(wire raw: String) {
+        if raw.hasPrefix("sf:"), raw.count > 3 {
+            self = .symbol(String(raw.dropFirst(3)))
+        } else if raw.hasPrefix("emoji:"), raw.count > 6 {
+            self = .emoji(String(raw.dropFirst(6)))
+        } else {
+            return nil
+        }
+    }
+}
+
+/// Project identity mirrored from the Mac's Appearance… modal (decision 120).
+public struct ProjectAppearance: Decodable, Sendable, Equatable {
+    public let color: ProjectColorID?
+    public let icon: ProjectIconID?
+    /// Custom title of the root ("original") checkout; nil → "main".
+    public let rootTitle: String?
+
+    public static let none = ProjectAppearance()
+
+    public init(color: ProjectColorID? = nil, icon: ProjectIconID? = nil, rootTitle: String? = nil) {
+        self.color = color; self.icon = icon; self.rootTitle = rootTitle
+    }
+
+    private enum CodingKeys: String, CodingKey { case color, icon, rootTitle }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let title = try c.decodeIfPresent(String.self, forKey: .rootTitle)
+        self.init(
+            color: (try c.decodeIfPresent(String.self, forKey: .color)).flatMap(ProjectColorID.init(rawValue:)),
+            icon: (try c.decodeIfPresent(String.self, forKey: .icon)).flatMap(ProjectIconID.init(wire:)),
+            rootTitle: title?.isEmpty == false ? title : nil
+        )
+    }
+}
+
+/// A folder the phone may open a loose (project-less) terminal in (Mac decision 108).
+public struct LooseLocation: Decodable, Sendable, Equatable, Identifiable {
+    public let path: String
+    public let label: String
+    public var id: String { path }
+
+    public init(path: String, label: String) {
+        self.path = path; self.label = label
+    }
+
+    private enum CodingKeys: String, CodingKey { case path, label }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let path = try c.decode(String.self, forKey: .path)
+        self.init(path: path, label: try c.decodeIfPresent(String.self, forKey: .label) ?? path)
+    }
+}
+
+/// Mac display settings relevant to the phone's TUI rendering.
+public struct MacDisplay: Decodable, Sendable, Equatable {
+    /// Mac terminal font family; empty = bundled JetBrains Mono (Mac default).
+    public let terminalFontFamily: String
+
+    public static let `default` = MacDisplay(terminalFontFamily: "")
+
+    public init(terminalFontFamily: String) { self.terminalFontFamily = terminalFontFamily }
+
+    private enum CodingKeys: String, CodingKey { case terminalFontFamily }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(terminalFontFamily: try c.decodeIfPresent(String.self, forKey: .terminalFontFamily) ?? "")
     }
 }
 
@@ -256,19 +342,27 @@ public struct ProjectsSnapshot: Decodable, Sendable, Equatable {
     /// Additive: an older Mac omits it → empty.
     public let others: [OtherGroupNode]
     public let addable: [Repo]
+    /// Additive: where a loose terminal can be opened (home + roots); empty from an older Mac.
+    public let looseLocations: [LooseLocation]
+    /// Additive: Mac display settings; `.default` from an older Mac.
+    public let display: MacDisplay
 
-    public init(projects: [ProjectNode], others: [OtherGroupNode] = [], addable: [Repo]) {
+    public init(projects: [ProjectNode], others: [OtherGroupNode] = [], addable: [Repo],
+                looseLocations: [LooseLocation] = [], display: MacDisplay = .default) {
         self.projects = projects; self.others = others; self.addable = addable
+        self.looseLocations = looseLocations; self.display = display
     }
 
-    private enum CodingKeys: String, CodingKey { case projects, others, addable }
+    private enum CodingKeys: String, CodingKey { case projects, others, addable, looseLocations, display }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             projects: try c.decodeIfPresent([ProjectNode].self, forKey: .projects) ?? [],
             others: try c.decodeIfPresent([OtherGroupNode].self, forKey: .others) ?? [],
-            addable: try c.decodeIfPresent([Repo].self, forKey: .addable) ?? []
+            addable: try c.decodeIfPresent([Repo].self, forKey: .addable) ?? [],
+            looseLocations: (try? c.decodeIfPresent([LooseLocation].self, forKey: .looseLocations)) ?? [],
+            display: (try? c.decodeIfPresent(MacDisplay.self, forKey: .display)) ?? .default
         )
     }
 }
@@ -306,9 +400,14 @@ public struct Welcome: Decodable, Sendable, Equatable {
     public let addable: [Repo]?
     /// Projects ▸ Other groups (additive; nil if omitted by an older Mac/relay).
     public let others: [OtherGroupNode]?
+    /// Loose terminal locations (additive; nil if omitted by an older Mac/relay).
+    public let looseLocations: [LooseLocation]?
+    /// Mac display settings (additive; nil if omitted by an older Mac/relay).
+    public let display: MacDisplay?
 
     public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil,
-                projects: [ProjectNode]? = nil, addable: [Repo]? = nil, others: [OtherGroupNode]? = nil) {
+                projects: [ProjectNode]? = nil, addable: [Repo]? = nil, others: [OtherGroupNode]? = nil,
+                looseLocations: [LooseLocation]? = nil, display: MacDisplay? = nil) {
         self.macOnline = macOnline
         self.lastSeenAt = lastSeenAt
         self.sessions = sessions
@@ -316,10 +415,12 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.projects = projects
         self.addable = addable
         self.others = others
+        self.looseLocations = looseLocations
+        self.display = display
     }
 
     private enum CodingKeys: String, CodingKey {
-        case macOnline, lastSeenAt, sessions, repos, projects, addable, others
+        case macOnline, lastSeenAt, sessions, repos, projects, addable, others, looseLocations, display
     }
 
     public init(from decoder: Decoder) throws {
@@ -331,6 +432,8 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.projects = try c.decodeIfPresent([ProjectNode].self, forKey: .projects)
         self.addable = try c.decodeIfPresent([Repo].self, forKey: .addable)
         self.others = try c.decodeIfPresent([OtherGroupNode].self, forKey: .others)
+        self.looseLocations = try? c.decodeIfPresent([LooseLocation].self, forKey: .looseLocations)
+        self.display = try? c.decodeIfPresent(MacDisplay.self, forKey: .display)
     }
 }
 

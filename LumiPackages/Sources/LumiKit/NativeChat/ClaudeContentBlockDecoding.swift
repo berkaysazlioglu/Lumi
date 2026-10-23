@@ -34,11 +34,23 @@ public enum ClaudeContentBlockDecoding {
         }
     }
 
+    /// Claude TUI'nin `Bash(git status)` / `Read(path)` satırındaki birincil
+    /// argüman (telefon chat'i TUI paritesi, 2026-10-23). Tanınan anahtar
+    /// yoksa tüm girdiler `anahtar=değer` olarak sıralanır.
+    static let primaryInputKeys = [
+        "command", "file_path", "notebook_path", "pattern", "url", "query",
+        "path", "description", "prompt", "skill",
+    ]
+
     private static func preview(_ input: Any?) -> String {
         let text: String
         if let s = input as? String { text = s }
         else if let d = input as? [String: Any] {
-            text = d.map { "\($0.key)=\(flatten($0.value))" }.sorted().joined(separator: " ")
+            if let key = primaryInputKeys.first(where: { d[$0] is String }), let value = d[key] as? String {
+                text = value
+            } else {
+                text = d.map { "\($0.key)=\(flatten($0.value))" }.sorted().joined(separator: " ")
+            }
         } else { text = "" }
         return String(text.prefix(maxPreview))
     }

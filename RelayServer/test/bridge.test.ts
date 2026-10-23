@@ -326,3 +326,17 @@ describe('bridge terminal routing', () => {
     expect(phone.sent.filter(m => m.includes('"command_result"'))).toHaveLength(0)
   })
 })
+
+test('telefon hello → welcome serbest konumları ve display bilgisini de taşır', () => {
+  const { bridge } = setup()
+  const mac = new FakeClient()
+  const macSession = bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+  const looseLocations = [{ path: '/Users/me', label: '~' }]
+  const display = { terminalFontFamily: '' }
+  macSession.room.projects = { projects: [], others: [], addable: [], looseLocations, display }
+
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  expect(phone.last().payload.looseLocations).toEqual(looseLocations)
+  expect(phone.last().payload.display).toEqual(display)
+})

@@ -20,22 +20,25 @@ struct ProjectsView: View {
     @State private var startError: String?
     /// Long-press "New branch from …" → NewSessionView preset for that checkout.
     @State private var newBranchPreset: NewBranchPreset?
+    @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
+    @AppStorage(TUIStyle.sizeKey) private var textSize = TUIStyle.defaultSize
+    @AppStorage(DemoMode.storageKey) private var demoMode = false
 
     var body: some View {
         NavigationStack {
             List {
                 if !model.macOnline { offlineBanner }
                 let others = model.otherGroups
-                if model.projectTree.isEmpty && others.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(model.projectTree) { project in
-                        projectSection(project)
-                    }
-                    if !others.isEmpty { otherSection(others) }
+                let locations = looseStartLocations(model.projectsSnapshot)
+                if model.projectTree.isEmpty { emptyState }
+                ForEach(model.projectTree) { project in
+                    projectSection(project)
                 }
+                if !others.isEmpty || !locations.isEmpty { otherSection(others, locations: locations) }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(LumiPalette.background)
             .navigationTitle("Projects")
             .navigationDestination(item: $openSession) { sessionId in
                 TerminalSessionView(model: model, sessionId: sessionId)
@@ -116,76 +119,103 @@ struct ProjectsView: View {
     @ViewBuilder
     private func projectSection(_ project: ProjectRowData) -> some View {
         let collapsed = collapsedProjects.contains(project.id)
-        Section {
-            if !collapsed {
-                // Agents are emitted as their own List rows (not nested inside a single
-                // checkout cell) so each is individually selectable and supports swipe /
-                // long-press delete.
-                ForEach(project.checkouts) { checkout in
-                    checkoutHeader(checkout, in: project)
-                    ForEach(checkout.agents) { agent in
-                        agentRow(agent)
-                    }
+        // The header is a plain row (not a Section header): plain-list headers
+        // carry their own system fill that ignores the Lumi surface.
+        sectionHeader(id: project.id, collapsed: collapsed) {
+            ProjectIconView(icon: project.node.appearance.icon)
+            Text(project.node.name).font(.headline).foregroundStyle(LumiPalette.textPrimary)
+            if let color = project.node.appearance.color { ProjectColorDot(color: color) }
+        }
+        if !collapsed {
+            // Agents are emitted as their own List rows (not nested inside a single
+            // checkout cell) so each is individually selectable and supports swipe /
+            // long-press delete.
+            ForEach(project.checkouts) { checkout in
+                checkoutHeader(checkout, in: project)
+                ForEach(checkout.agents) { agent in
+                    agentRow(agent)
                 }
             }
-        } header: {
-            Button {
-                if !collapsedProjects.insert(project.id).inserted {
-                    collapsedProjects.remove(project.id)
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "folder").foregroundStyle(.purple)
-                    Text(project.node.name).font(.headline).foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .textCase(nil)
         }
     }
 
+    private func sectionHeader<Label: View>(id: String, collapsed: Bool,
+                                            @ViewBuilder label: () -> Label) -> some View {
+        Button {
+            if !collapsedProjects.insert(id).inserted { collapsedProjects.remove(id) }
+        } label: {
+            HStack(spacing: 8) {
+                label()
+                Spacer()
+                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption).foregroundStyle(LumiPalette.textSecondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 10)
+        .lumiRow()
+    }
+
     /// Projects ▸ Other (Mac decision 108): terminals opened outside any project,
-    /// grouped by folder. No `+` — the phone starts agents only in checkouts.
+    /// grouped by folder. `+` opens a new Claude in one of the Mac's locations
+    /// (home, roots) or next to existing loose terminals.
     @ViewBuilder
-    private func otherSection(_ groups: [OtherGroupRowData]) -> some View {
+    private func otherSection(_ groups: [OtherGroupRowData], locations: [LooseLocation]) -> some View {
         let collapsed = collapsedProjects.contains(Self.otherSectionID)
-        Section {
-            if !collapsed {
-                ForEach(groups) { group in
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text(group.node.label).font(.subheadline.weight(.medium))
-                            .lineLimit(1).truncationMode(.middle)
-                        Spacer()
-                    }
-                    .listRowSeparator(.hidden)
-                    ForEach(group.agents) { agent in
-                        agentRow(agent)
+        HStack(spacing: 8) {
+            sectionHeader(id: Self.otherSectionID, collapsed: collapsed) {
+                Image(systemName: "tray").font(.headline).foregroundStyle(LumiPalette.textSecondary)
+                Text("Other").font(.headline).foregroundStyle(LumiPalette.textPrimary)
+            }
+            looseStartMenu(locations)
+                .padding(.top, 10)
+        }
+        .lumiRow()
+        if !collapsed {
+            ForEach(groups) { group in
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .font(.caption).foregroundStyle(LumiPalette.textSecondary)
+                    Text(group.node.label).font(.subheadline.weight(.medium))
+                        .foregroundStyle(LumiPalette.textPrimary)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    startButton(id: group.id, label: "New Claude in \(group.node.label)") {
+                        startAgent(at: group.node.path)
                     }
                 }
+                .lumiRow()
+                ForEach(group.agents) { agent in
+                    agentRow(agent)
+                }
             }
-        } header: {
-            Button {
-                if !collapsedProjects.insert(Self.otherSectionID).inserted {
-                    collapsedProjects.remove(Self.otherSectionID)
+        }
+    }
+
+    /// `+` of the Other header: pick the folder for a new loose Claude.
+    @ViewBuilder
+    private func looseStartMenu(_ locations: [LooseLocation]) -> some View {
+        if let busy = startingCheckout, locations.contains(where: { $0.path == busy }) {
+            ProgressView().controlSize(.small).frame(width: 30, height: 30)
+        } else {
+            Menu {
+                Section("New Claude in…") {
+                    ForEach(locations) { location in
+                        Button { startAgent(at: location.path) } label: {
+                            Label(location.label, systemImage: location.label == "~" ? "house" : "folder")
+                        }
+                    }
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "tray").foregroundStyle(.secondary)
-                    Text("Other").font(.headline).foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
+                Image(systemName: "plus.circle")
+                    .font(.title3)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .textCase(nil)
+            .buttonStyle(.borderless)
+            .disabled(!model.macOnline || startingCheckout != nil || locations.isEmpty)
+            .accessibilityLabel("New Claude outside a project")
         }
     }
 
@@ -198,7 +228,8 @@ struct ProjectsView: View {
             // "workspace" kind → branch icon; "original" (main checkout) → house icon
             Image(systemName: checkout.node.kind == "workspace" ? "arrow.triangle.branch" : "house")
                 .font(.caption).foregroundStyle(.secondary)
-            Text(checkout.node.title).font(.subheadline.weight(.medium))
+            Text(checkoutDisplayTitle(checkout.node, in: project.node)).font(.subheadline.weight(.medium))
+                .foregroundStyle(LumiPalette.textPrimary)
             if let branch = checkout.node.branch, !branch.isEmpty {
                 Text(branch)
                     .font(.caption).foregroundStyle(.tertiary)
@@ -207,7 +238,7 @@ struct ProjectsView: View {
             Spacer()
             newAgentButton(checkout, in: project)
         }
-        .listRowSeparator(.hidden)
+        .lumiRow()
     }
 
     /// Tap: start a Claude agent right in this checkout's folder and open it.
@@ -242,11 +273,33 @@ struct ProjectsView: View {
     }
 
     private func startAgent(in checkout: CheckoutRowData) {
-        startingCheckout = checkout.id
+        startAgent(at: checkout.node.path)
+    }
+
+    /// Current-branch start at `path`: the Mac spawns `claude` right there
+    /// (checkout, worktree/workspace or a loose folder) — no workspace creation.
+    private func startAgent(at path: String) {
+        startingCheckout = path
         model.resetStartState()
-        // Current-branch start at the checkout path: the Mac spawns `claude` right
-        // there (worktree/workspace included) — no workspace creation involved.
-        Task { await model.startChatSession(repoPath: checkout.node.path) }
+        Task { await model.startChatSession(repoPath: path) }
+    }
+
+    /// `+` that starts a Claude right away (spinner while in flight).
+    @ViewBuilder
+    private func startButton(id: String, label: String, action: @escaping () -> Void) -> some View {
+        if startingCheckout == id {
+            ProgressView().controlSize(.small).frame(width: 30, height: 30)
+        } else {
+            Button(action: action) {
+                Image(systemName: "plus.circle")
+                    .font(.title3)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .disabled(!model.macOnline || startingCheckout != nil)
+            .accessibilityLabel(label)
+        }
     }
 
     @ViewBuilder
@@ -260,7 +313,7 @@ struct ProjectsView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text(agent.title)
                     .font(.body)
-                    .foregroundStyle(agent.needsAttention ? Color.orange : .primary)
+                    .foregroundStyle(agent.needsAttention ? Color.orange : LumiPalette.textPrimary)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer()
                 if agent.activity == .running || agent.activity == .awaitingDecision {
@@ -285,6 +338,7 @@ struct ProjectsView: View {
             }
         }
         .buttonStyle(.plain)
+        .lumiRow()
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { pendingDelete = agent.id } label: {
                 Label("Delete", systemImage: "trash")
@@ -314,11 +368,13 @@ struct ProjectsView: View {
             Text("Add a project on the Mac, or use +").font(.caption).foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 32)
+        .lumiRow()
     }
 
     private var offlineBanner: some View {
         Label("Mac offline", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
             .font(.callout).foregroundStyle(.orange)
+            .lumiRow()
     }
 
     private var connectionDot: some View {
@@ -349,7 +405,25 @@ struct ProjectsView: View {
                     }
                 }
             ))
-            Button("Disconnect", role: .destructive) { confirmUnpair = true }
+            Picker(selection: $appearance) {
+                ForEach(AppearanceMode.allCases) { Text($0.title).tag($0) }
+            } label: {
+                Label("Appearance", systemImage: "circle.lefthalf.filled")
+            }
+            .pickerStyle(.menu)
+            Picker(selection: $textSize) {
+                ForEach(Int(TUIStyle.sizeRange.lowerBound)...Int(TUIStyle.sizeRange.upperBound), id: \.self) {
+                    Text("\($0) pt").tag(Double($0))
+                }
+            } label: {
+                Label("Text Size", systemImage: "textformat.size")
+            }
+            .pickerStyle(.menu)
+            if demoMode {
+                Button("Exit Demo Data", role: .destructive) { demoMode = false }
+            } else {
+                Button("Disconnect", role: .destructive) { confirmUnpair = true }
+            }
         } label: {
             Image(systemName: "gearshape")
         }

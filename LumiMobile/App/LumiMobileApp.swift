@@ -6,6 +6,9 @@ import LumiWire
 struct LumiMobileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model: AppModel
+    /// Sample-data model, alive only while demo mode is on.
+    @State private var demoModel: AppModel?
+    @AppStorage(DemoMode.storageKey) private var demoMode = false
     private let coordinator: PushCoordinator
 
     init() {
@@ -15,6 +18,8 @@ struct LumiMobileApp: App {
             DiagLog.shared.configure(directory: docs, filename: "lumi-mobile.log")
         }
         DiagLog.shared.log("app", "started")
+        // A demo build starts in demo mode until the user turns it off.
+        UserDefaults.standard.register(defaults: [DemoMode.storageKey: DemoMode.buildDefault])
         let model = AppModel(client: RelayClient(), store: KeychainStore())
         let coordinator = PushCoordinator(
             model: model,
@@ -28,15 +33,37 @@ struct LumiMobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(model: model)
-                .task {
-                    appDelegate.coordinator = coordinator
-                    await coordinator.refreshAuthStatus()
-                    await model.start()
+            Group {
+                if demoMode {
+                    if let demoModel {
+                        RootView(model: demoModel)
+                    } else {
+                        ProgressView()
+                    }
+                } else {
+                    RootView(model: model)
                 }
-                .onOpenURL { url in
-                    Task { await model.pair(from: url.absoluteString) }
-                }
+            }
+            .task {
+                appDelegate.coordinator = coordinator
+                await coordinator.refreshAuthStatus()
+                await model.start()
+            }
+            .task(id: demoMode) { await switchDemo(on: demoMode) }
+            .onOpenURL { url in
+                Task { await model.pair(from: url.absoluteString) }
+            }
         }
+    }
+
+    private func switchDemo(on: Bool) async {
+        if let old = demoModel, !on {
+            demoModel = nil
+            await old.unpair()   // stops the demo client
+        }
+        guard on, demoModel == nil else { return }
+        let demo = AppModel(client: DemoRelayClient(), store: DemoSecureStore())
+        demoModel = demo
+        await demo.start()
     }
 }

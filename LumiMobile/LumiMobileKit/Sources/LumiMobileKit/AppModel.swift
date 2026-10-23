@@ -211,7 +211,8 @@ public final class AppModel {
             if let repos = welcome.repos { self.repos = repos }
             if let projects = welcome.projects {
                 projectsSnapshot = ProjectsSnapshot(
-                    projects: projects, others: welcome.others ?? [], addable: welcome.addable ?? []
+                    projects: projects, others: welcome.others ?? [], addable: welcome.addable ?? [],
+                    looseLocations: welcome.looseLocations ?? [], display: welcome.display ?? .default
                 )
             }
 

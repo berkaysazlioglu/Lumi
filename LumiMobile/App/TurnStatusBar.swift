@@ -28,7 +28,7 @@ struct TurnStatusBar: View {
                         .truncationMode(.middle)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color(uiColor: .secondarySystemBackground),
+                        .background(LumiPalette.elevated,
                                     in: RoundedRectangle(cornerRadius: 4))
                 }
                 Spacer()
@@ -38,7 +38,7 @@ struct TurnStatusBar: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color(uiColor: .systemBackground))
+            .background(LumiPalette.background)
         }
     }
 

@@ -53,6 +53,30 @@ extension FakeRelayConnection {
     }
 }
 
+/// Sendable özet: `projects` frame'inin 2026-10-23 additive alanları.
+struct ProjectsPayloadSnapshot: Sendable {
+    let appearances: [String: [String: String]]
+    let looseLocationPaths: [String]
+    let fontFamily: String?
+}
+
+extension FakeRelayConnection {
+    func lastProjectsPayloadSnapshot() -> ProjectsPayloadSnapshot? {
+        guard let payload = sent.last(where: { $0.type == "projects" })?.payload,
+              let list = payload["projects"] as? [[String: Any]] else { return nil }
+        var appearances: [String: [String: String]] = [:]
+        for project in list {
+            if let path = project["path"] as? String, let appearance = project["appearance"] as? [String: String] {
+                appearances[path] = appearance
+            }
+        }
+        let locations = (payload["looseLocations"] as? [[String: String]] ?? []).compactMap { $0["path"] }
+        let display = payload["display"] as? [String: String]
+        return ProjectsPayloadSnapshot(
+            appearances: appearances, looseLocationPaths: locations, fontFamily: display?["terminalFontFamily"])
+    }
+}
+
 // MARK: - Tests
 
 /// Task 8: Mac → phone projects broadcast.
@@ -142,6 +166,61 @@ extension FakeRelayConnection {
         #expect(await conn.otherGroups() == ["/tmp/scratch": [newer.id.description, older.id.description]])
 
         svc.stop()
+    }
+
+    // MARK: - 2026-10-23: görünüm, serbest konumlar, terminal fontu
+
+    /// Projenin görünümü `appearance` altında, serbest konumlar (home + kökler)
+    /// `looseLocations`'ta ve terminal fontu `display`'de gelir; görünümü boş
+    /// projede `appearance` anahtarı yazılmaz.
+    @Test func projectsCarryAppearanceLocationsAndFont() async throws {
+        let conn = FakeRelayConnection()
+        let repos = FakeRepoService(repos: [
+            Repo(name: "game", path: "/p/game", isGitRepo: true, source: .standalone),
+            Repo(name: "plain", path: "/p/plain", isGitRepo: true, source: .standalone),
+        ])
+        let cfg = FakeConfigService()
+        await cfg.seed(AppConfig(
+            projectsRoot: "",
+            additionalPaths: [AdditionalPath(id: "src", path: "/src", type: .root)],
+            aiProvider: .claude,
+            theme: "dark",
+            terminalFontSize: 13,
+            terminalFontFamily: "Menlo",
+            terminalCursorStyle: "block",
+            terminalCursorBlink: true,
+            notifications: .defaults,
+            sidebarProjectPaths: ["/p/game", "/p/plain"],
+            projectAppearance: ["/p/game": ProjectAppearance(
+                color: .lime, icon: .emoji("🏖️"), rootTitle: "dev")]
+        ))
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: repos,
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } }, config: cfg
+        )
+        await svc.start()
+        await conn.injectInbound(type: "welcome", payload: [:])
+        try await conn.waitForSent(types: ["projects"])
+
+        let payload = try #require(await conn.lastProjectsPayloadSnapshot())
+        #expect(payload.appearances == ["/p/game": ["color": "lime", "icon": "emoji:🏖️", "rootTitle": "dev"]])
+        #expect(payload.looseLocationPaths == [NSHomeDirectory(), "/src"])
+        #expect(payload.fontFamily == "Menlo")
+
+        svc.stop()
+    }
+
+    /// Görünüm değişikliği (karar 120) telefona yeni `projects` yayınlar.
+    @Test func appearanceChangeRebroadcastsProjects() {
+        let base = AppConfig.defaults
+        var colored = base
+        colored.projectAppearance = ["/p/game": ProjectAppearance(color: .blue)]
+        var font = base
+        font.terminalFontFamily = "Menlo"
+        #expect(RemoteService.projectsInputsChanged(base, colored))
+        #expect(RemoteService.projectsInputsChanged(base, font))
+        #expect(!RemoteService.projectsInputsChanged(base, base))
     }
 
     // MARK: - T2: addable = repos - favorited

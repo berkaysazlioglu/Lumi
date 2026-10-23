@@ -15,11 +15,23 @@ import LumiWire
         #expect(blocks.count == 3)   // thinking atlanır
         #expect(blocks[0] == .text("Selam", presentation: nil))
         if case let .toolCall(name, preview, state) = blocks[1] {
-            #expect(name == "Bash"); #expect(preview.contains("command=ls")); #expect(state == "completed")
+            #expect(name == "Bash"); #expect(preview == "ls"); #expect(state == "completed")
         } else { Issue.record("tool_use bekleniyordu") }
         if case let .toolResult(output, isError) = blocks[2] {
             #expect(output == "ok"); #expect(isError == false)
         } else { Issue.record("tool_result bekleniyordu") }
+    }
+
+    /// TUI paritesi: birincil argüman (`Read(path)`), tanınmayan girdide `anahtar=değer`.
+    @Test func toolPreviewShowsPrimaryArgumentLikeTheTUI() {
+        func preview(_ input: [String: Any]) -> String? {
+            let blocks = ClaudeContentBlockDecoding.decodeBlocks([["type": "tool_use", "name": "X", "input": input]])
+            if case let .toolCall(_, preview, _) = blocks.first { return preview }
+            return nil
+        }
+        #expect(preview(["file_path": "/p/a.swift", "limit": 20]) == "/p/a.swift")
+        #expect(preview(["pattern": "foo", "path": "src"]) == "foo")
+        #expect(preview(["todos": 3, "merge": true]) == "merge=1 todos=3")
     }
 
     @Test func stringContentBecomesSingleText() {

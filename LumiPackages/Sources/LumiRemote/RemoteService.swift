@@ -142,7 +142,7 @@ public final class RemoteService: RemoteServicing {
         configTask = Task { [weak self] in
             for await event in configStream {
                 if case .configChanged(let old, let new) = event,
-                   old.sidebarProjectPaths != new.sidebarProjectPaths || old.workspaces != new.workspaces {
+                   Self.projectsInputsChanged(old, new) {
                     await self?.sendProjects()
                 }
             }
@@ -154,6 +154,17 @@ public final class RemoteService: RemoteServicing {
 
     public func stop() {
         Task { await self.shutdown() }
+    }
+
+    /// `projects` anlık görüntüsünü değiştiren config alanları: ağaç (favoriler,
+    /// workspace'ler), görünüm (karar 120), serbest konum kökleri ve terminal fontu.
+    static func projectsInputsChanged(_ old: AppConfig, _ new: AppConfig) -> Bool {
+        old.sidebarProjectPaths != new.sidebarProjectPaths
+            || old.workspaces != new.workspaces
+            || old.projectAppearance != new.projectAppearance
+            || old.projectsRoot != new.projectsRoot
+            || old.additionalPaths != new.additionalPaths
+            || old.terminalFontFamily != new.terminalFontFamily
     }
 
     private func shutdown() async {
@@ -368,7 +379,11 @@ public final class RemoteService: RemoteServicing {
                 if let branch = checkout.branch { dict["branch"] = branch }
                 checkouts.append(dict)
             }
-            projects.append(["name": project.name, "path": project.path, "checkouts": checkouts])
+            var node: [String: Any] = ["name": project.name, "path": project.path, "checkouts": checkouts]
+            if let appearance = RemoteProtocol.appearancePayload(cfg.appearance(ofProject: project.path)) {
+                node["appearance"] = appearance
+            }
+            projects.append(node)
         }
         // Karar 108/114: Projects ▸ Other — serbest terminaller dizinlerine göre.
         var others: [[String: Any]] = []
@@ -384,7 +399,15 @@ public final class RemoteService: RemoteServicing {
             .filter { !favorited.contains($0.path) && !managedPaths.contains($0.path) }
             .map { ["name": $0.name, "path": $0.path] }
 
-        await connection.send(type: "projects", payload: RemoteProtocol.projectsPayload(projects: projects, others: others, addable: addable))
+        // Telefonun serbest terminal konumları: home + kökler (karar 108; son
+        // kullanılanlar ui-state'tedir, uzak yüzeye taşınmaz).
+        let looseLocations = LooseTerminalLocations.candidates(
+            projectsRoot: cfg.projectsRoot, additionalPaths: cfg.additionalPaths, recent: []
+        ).map { ["path": $0.path, "label": $0.label] }
+
+        await connection.send(type: "projects", payload: RemoteProtocol.projectsPayload(
+            projects: projects, others: others, addable: addable,
+            looseLocations: looseLocations, terminalFontFamily: cfg.terminalFontFamily))
     }
 
     // MARK: - Subscribe / Unsubscribe

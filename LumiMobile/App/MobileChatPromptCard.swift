@@ -46,7 +46,7 @@ struct MobileChatPromptCard: View {
             .frame(maxHeight: maxHeight)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Color(uiColor: .systemBackground))
+            .background(LumiPalette.background)
         }
     }
 
@@ -89,7 +89,7 @@ struct MobileChatPromptCard: View {
                 Text("Send\(selected.isEmpty ? "" : " (\(selected.count))")")
                     .font(.footnote.bold()).frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(Color.accentColor.opacity(selected.isEmpty ? 0.08 : 0.22),
+                    .background(LumiPalette.accent.opacity(selected.isEmpty ? 0.08 : 0.22),
                                 in: RoundedRectangle(cornerRadius: 6))
             }
             .disabled(sending || selected.isEmpty)
@@ -118,7 +118,7 @@ struct MobileChatPromptCard: View {
                             get: { draft.texts[qi] ?? "" },
                             set: { onDraftChange(draft.withText($0, question: qi)) }
                         ), axis: .vertical)
-                            .textFieldStyle(.roundedBorder).lineLimit(1...3)
+                            .lumiField().lineLimit(1...3)
                     }
                 }
             }
@@ -140,7 +140,7 @@ struct MobileChatPromptCard: View {
             Text("Send")
                 .font(.footnote.bold()).frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(Color.accentColor.opacity(groupedReady ? 0.22 : 0.08),
+                .background(LumiPalette.accent.opacity(groupedReady ? 0.22 : 0.08),
                             in: RoundedRectangle(cornerRadius: 6))
         }
         .disabled(sending || !groupedReady)
@@ -152,7 +152,7 @@ struct MobileChatPromptCard: View {
                 get: { draft.texts[0] ?? "" },
                 set: { onDraftChange(draft.withText($0, question: 0)) }
             ), axis: .vertical)
-                .textFieldStyle(.roundedBorder).lineLimit(1...3)
+                .lumiField().lineLimit(1...3)
             Button {
                 guard !sending, !trimmedOtherIsEmpty(for: 0) else { return }
                 sending = true
@@ -187,7 +187,7 @@ struct MobileChatPromptCard: View {
             HStack(spacing: 8) {
                 if let iconName {
                     Image(systemName: iconName)
-                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                        .foregroundStyle(isSelected ? LumiPalette.accent : .secondary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label).font(.footnote.bold())
@@ -197,12 +197,12 @@ struct MobileChatPromptCard: View {
             }
             .padding(.vertical, 8).padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Color.accentColor.opacity(0.22)
-                                    : (primary ? Color.accentColor.opacity(0.18) : Color(uiColor: .secondarySystemBackground)),
+            .background(isSelected ? LumiPalette.accent.opacity(0.22)
+                                    : (primary ? LumiPalette.accent.opacity(0.18) : LumiPalette.elevated),
                         in: RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                    .stroke(isSelected ? LumiPalette.accent : .clear, lineWidth: 1.5)
             )
         }
         .disabled(sending)

@@ -46,6 +46,8 @@ targets:
         # (CURRENT_PROJECT_VERSION = git commit sayısı, MARKETING_VERSION = VERSION env).
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "379"
+        # YES → ilk açılış demo (mock) veriyle; Settings'ten kapatılır.
+        LUMI_DEMO_BY_DEFAULT: "NO"
     info:
       path: App/Info.plist
       properties:
@@ -55,7 +57,15 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Yalnız standart şifreleme (HTTPS/WSS) → muaf; TestFlight "Missing Compliance" sormaz.
         ITSAppUsesNonExemptEncryption: false
+        # Demo build'i (DEMO=1 Scripts/make-mobile.sh) mock veriyle açılır.
+        LumiDemoByDefault: "$(LUMI_DEMO_BY_DEFAULT)"
         NSCameraUsageDescription: Eşleştirme QR kodunu okumak için kamera gerekir.
+        # Mac terminal fontu (karar 63 paritesi) — chat TUI görünümü + terminal mirror.
+        UIAppFonts:
+          - JetBrainsMono-Regular.ttf
+          - JetBrainsMono-Bold.ttf
+          - JetBrainsMono-Italic.ttf
+          - JetBrainsMono-BoldItalic.ttf
         UILaunchScreen: {}
         CFBundleURLTypes:
           - CFBundleURLName: com.uncosoft.lumi.pair

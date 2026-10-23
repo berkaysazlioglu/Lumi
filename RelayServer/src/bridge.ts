@@ -22,7 +22,9 @@ export class Bridge {
       ? this.registry.attachMac(hello.token, client)
       : this.registry.attachPhone(hello.token, client)
     if (hello.role === 'phone') {
-      const proj = (room.projects as { projects?: unknown; others?: unknown; addable?: unknown } | null) ?? null
+      const proj = (room.projects as {
+        projects?: unknown; others?: unknown; addable?: unknown; looseLocations?: unknown; display?: unknown
+      } | null) ?? null
       client.send(envelope('welcome', {
         sessions: room.sessions ?? [],
         repos: room.repos ?? [],
@@ -30,6 +32,9 @@ export class Bridge {
         addable: proj?.addable ?? [],
         // Projects ▸ Other (Mac karar 108/114) — additive; eski Mac'te boş.
         others: proj?.others ?? [],
+        // Serbest terminal konumları + Mac terminal fontu (2026-10-23) — additive.
+        looseLocations: proj?.looseLocations ?? [],
+        display: proj?.display ?? {},
         macOnline: room.mac !== null,
         lastSeenAt: room.lastSeenAt,
       }))

@@ -18,6 +18,10 @@ struct TerminalSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
 
+    private static let identityLineHeight: CGFloat = 2
+
+    private var project: ProjectNode? { owningProject(of: sessionId, in: model.projectsSnapshot) }
+
     var body: some View {
         // Phase 2.1: the view is chosen based on the session TYPE (reactive — `isChatSession`
         // checks `chatSessionIds`/`sessions`). Chat session → chat view; terminal
@@ -32,6 +36,13 @@ struct TerminalSessionView: View {
                 terminalBody
             }
         }
+        // Project identity (decision 120): the Mac tints the card; here a hairline
+        // in the project color under the bar.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let color = project?.appearance.color {
+                Rectangle().fill(LumiPalette.projectColor(color)).frame(height: Self.identityLineHeight)
+            }
+        }
         .onDisappear { model.unsubscribe(sessionId) }
         .navigationTitle(model.session(sessionId)?.repoName ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
@@ -40,10 +51,12 @@ struct TerminalSessionView: View {
                 let meta = model.session(sessionId)
                 HStack(spacing: 6) {
                     if let meta { AgentActivityGlyph(activity: meta.activity) }
+                    if let project { ProjectIconView(icon: project.appearance.icon, font: .subheadline) }
                     Text(meta?.repoName ?? "Session")
                         .font(.headline).lineLimit(1)
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) { TextSizeButton() }
             ToolbarItem(placement: .topBarTrailing) { toolbarItems }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -123,8 +136,8 @@ struct TerminalSessionView: View {
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Color.accentColor.opacity(0.12), in: Capsule())
-                .foregroundStyle(Color.accentColor)
+                .background(LumiPalette.accent.opacity(0.12), in: Capsule())
+                .foregroundStyle(LumiPalette.accent)
         }
     }
 }

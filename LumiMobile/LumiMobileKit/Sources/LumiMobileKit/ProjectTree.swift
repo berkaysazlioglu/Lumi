@@ -62,6 +62,28 @@ public func assembleOtherGroups(snapshot: ProjectsSnapshot,
     }
 }
 
+/// The project whose checkout runs `sessionId` (decision 120: a project's
+/// workspaces share its identity); `nil` for loose terminals.
+public func owningProject(of sessionId: String, in snapshot: ProjectsSnapshot) -> ProjectNode? {
+    snapshot.projects.first { project in
+        project.checkouts.contains { $0.agentIds.contains(sessionId) }
+    }
+}
+
+/// Where the phone can open a loose terminal: the Mac's locations (home +
+/// roots) first, then folders that already hold loose terminals.
+public func looseStartLocations(_ snapshot: ProjectsSnapshot) -> [LooseLocation] {
+    var seen = Set<String>()
+    let fromGroups = snapshot.others.map { LooseLocation(path: $0.path, label: $0.label) }
+    return (snapshot.looseLocations + fromGroups).filter { seen.insert($0.path).inserted }
+}
+
+/// Title of a checkout row: the root checkout takes the project's custom title.
+public func checkoutDisplayTitle(_ checkout: CheckoutNode, in project: ProjectNode) -> String {
+    guard checkout.kind == "original", let title = project.appearance.rootTitle else { return checkout.title }
+    return title
+}
+
 private struct AgentJoin {
     let byId: [String: SessionMeta]
     let selectedId: String?

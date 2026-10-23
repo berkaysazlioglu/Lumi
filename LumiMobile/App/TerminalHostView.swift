@@ -11,6 +11,36 @@ final class MirrorTerminalView: TerminalView {
     override var canBecomeFocused: Bool { false }
 }
 
+/// The Mac terminal's look (LumiTerminal `TerminalTheme.lumi`): navy
+/// background, Lumi ANSI palette and the bundled JetBrains Mono. The point size
+/// stays SwiftTerm's — the mirror keeps the Mac's column count.
+enum MirrorTerminalTheme {
+    private static let ansiHex: [UInt32] = [
+        0x0A0A12, 0xF87171, 0x4ADE80, 0xFBBF24, 0xA78BFA, 0x8B5CF6, 0x22D3EE, 0xE2E2F0,
+        0x4A4A6A, 0xF87171, 0x4ADE80, 0xFBBF24, 0xA78BFA, 0x8B5CF6, 0x22D3EE, 0xFFFFFF,
+    ]
+    private static let background: UInt32 = 0x12121F
+    private static let foreground: UInt32 = 0xE2E2F0
+    private static let cursor: UInt32 = 0xA78BFA
+    /// 8-bit → SwiftTerm's 16-bit channels.
+    private static let channelScale: UInt16 = 257
+
+    @MainActor
+    static func apply(to view: TerminalView) {
+        view.nativeBackgroundColor = UIColor(hex: background)
+        view.nativeForegroundColor = UIColor(hex: foreground)
+        view.caretColor = UIColor(hex: cursor)
+        view.installColors(ansiHex.map { hex in
+            SwiftTerm.Color(red: UInt16((hex >> 16) & 0xFF) * channelScale,
+                            green: UInt16((hex >> 8) & 0xFF) * channelScale,
+                            blue: UInt16(hex & 0xFF) * channelScale)
+        })
+        if let font = UIFont(name: "JetBrainsMono-Regular", size: view.font.pointSize) {
+            view.font = font
+        }
+    }
+}
+
 /// Wraps a real `TerminalView` as a `TerminalFeeder` (LumiMobileKit boundary).
 @MainActor
 final class TerminalViewFeeder: TerminalFeeder {
@@ -37,6 +67,7 @@ struct TerminalHostView: UIViewRepresentable {
     func makeUIView(context: Context) -> TerminalView {
         let v = MirrorTerminalView(frame: .zero)
         v.terminalDelegate = context.coordinator
+        MirrorTerminalTheme.apply(to: v)
         // View ready: attach the buffer → accumulated scrollback/data is applied immediately.
         buffer.attach(TerminalViewFeeder(v))
         return v

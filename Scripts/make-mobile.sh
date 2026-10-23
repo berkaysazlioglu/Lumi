@@ -7,6 +7,7 @@
 #   Scripts/make-mobile.sh                 # tam pipeline (archive + export + upload)
 #   Scripts/make-mobile.sh --no-upload     # sadece .ipa üret (build/export/), yükleme yapma
 #   VERSION=1.1 Scripts/make-mobile.sh     # marketing sürümünü ez (varsayılan 1.0)
+#   DEMO=1 Scripts/make-mobile.sh          # ilk açılışta demo (mock) veriyle başlayan build
 #
 # Build numarası (CFBundleVersion) otomatik = `git rev-list --count HEAD` — her commit'te
 # artar, TestFlight'ın istediği benzersiz/artıcı build numarasını garanti eder.
@@ -99,6 +100,7 @@ xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" archive \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+  LUMI_DEMO_BY_DEFAULT="$([ "${DEMO:-0}" = "1" ] && echo YES || echo NO)" \
   "${AUTH_ARGS[@]}"
 
 echo "▸ Export .ipa…"

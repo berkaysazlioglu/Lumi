@@ -5,6 +5,7 @@ struct PairingView: View {
     let model: AppModel
     @State private var pastedLink = ""
     @State private var showError = false
+    @AppStorage(DemoMode.storageKey) private var demoMode = false
 
     var body: some View {
         NavigationStack {
@@ -34,7 +35,18 @@ struct PairingView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                Section {
+                    Button {
+                        demoMode = true
+                    } label: {
+                        Label("Try with demo data", systemImage: "sparkles")
+                    }
+                } footer: {
+                    Text("Explore Lumi with sample projects and chats — no Mac needed.")
+                }
             }
+            .scrollContentBackground(.hidden)
+            .background(LumiPalette.background)
             .navigationTitle("Pairing")
         }
     }

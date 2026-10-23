@@ -19,6 +19,7 @@ struct MobileChatView: View {
     let sessionId: String
 
     @StateObject private var keyboard = KeyboardObserver()
+    @Environment(\.tuiStyle) private var style
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
     @State private var atBottom = true
@@ -37,13 +38,14 @@ struct MobileChatView: View {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 10) {
+                        LazyVStack(alignment: .leading, spacing: style.font().lineHeight) {
                             if turns.isEmpty {
                                 // Phase 2.1: a chat session is now opened only for kind=chat
                                 // (TerminalSessionView type routing). Empty chat = "no messages
                                 // yet" → call-to-action text instead of misleading "loading".
                                 Text("Chat is empty — type below to start.")
-                                    .foregroundStyle(.secondary)
+                                    .font(style.swiftUIFont)
+                                    .foregroundStyle(LumiPalette.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.top, 40)
                             }
@@ -66,6 +68,7 @@ struct MobileChatView: View {
                         .padding(.vertical, 8)
                     }
                     .coordinateSpace(name: "chatScroll")
+                    .background(LumiPalette.background)
                     // WhatsApp-style: reading never needs the keyboard. Dragging the
                     // transcript pulls it down, tapping empty space dismisses it
                     // (buttons inside messages still win their own taps).
@@ -97,8 +100,8 @@ struct MobileChatView: View {
                                 Image(systemName: "arrow.down.circle.fill")
                                     .font(.title)
                                     .symbolRenderingMode(.hierarchical)
-                                    .foregroundStyle(Color.accentColor)
-                                    .background(Circle().fill(Color(uiColor: .systemBackground)))
+                                    .foregroundStyle(LumiPalette.accent)
+                                    .background(Circle().fill(LumiPalette.background))
                             }
                             .buttonStyle(.plain)
                             .padding(.trailing, 16)
@@ -164,7 +167,8 @@ struct MobileChatView: View {
             Divider()
             HStack(spacing: 8) {
                 TextField("Message…", text: $draft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                    .font(style.swiftUIFont)
+                    .lumiField()
                     .lineLimit(1...5)
                     .focused($composerFocused)
                 Button {
@@ -180,7 +184,7 @@ struct MobileChatView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(uiColor: .systemBackground))
+            .background(LumiPalette.background)
         }
     }
 }

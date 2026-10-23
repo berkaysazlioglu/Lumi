@@ -82,4 +82,36 @@ final class ProjectsDecodeTests: XCTestCase {
         XCTAssertNil(b[0].provider)
         XCTAssertNil(b[0].lastActivityAt)
     }
+
+    /// 2026-10-23: project appearance + loose locations + Mac display (all additive).
+    func testProjectsDecodesAppearanceLocationsAndDisplay() {
+        let frame = """
+        {"v":1,"type":"projects","payload":{
+          "projects":[
+            {"name":"game","path":"/p/game","checkouts":[],"appearance":{"color":"lime","icon":"emoji:🏖️","rootTitle":"dev"}},
+            {"name":"lumi","path":"/p/lumi","checkouts":[],"appearance":{"color":"mauve","icon":"sf:star"}},
+            {"name":"plain","path":"/p/plain","checkouts":[]}
+          ],
+          "looseLocations":[{"path":"/Users/me","label":"~"},{"path":"/src"}],
+          "display":{"terminalFontFamily":"Menlo"}
+        }}
+        """
+        guard case .projects(let snap)? = PhoneProtocol.decodeServerMessage(frame) else {
+            return XCTFail("expected .projects")
+        }
+        XCTAssertEqual(snap.projects[0].appearance,
+                       ProjectAppearance(color: .lime, icon: .emoji("🏖️"), rootTitle: "dev"))
+        XCTAssertEqual(snap.projects[1].appearance, ProjectAppearance(color: nil, icon: .symbol("star")),
+                       "unknown color is dropped, icon kept")
+        XCTAssertEqual(snap.projects[2].appearance, .none)
+        XCTAssertEqual(snap.looseLocations.map(\.label), ["~", "/src"])
+        XCTAssertEqual(snap.display.terminalFontFamily, "Menlo")
+
+        let old = #"{"v":1,"type":"projects","payload":{"projects":[]}}"#
+        guard case .projects(let oldSnap)? = PhoneProtocol.decodeServerMessage(old) else {
+            return XCTFail("expected .projects")
+        }
+        XCTAssertEqual(oldSnap.looseLocations, [])
+        XCTAssertEqual(oldSnap.display, .default)
+    }
 }
