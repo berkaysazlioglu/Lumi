@@ -43,7 +43,9 @@ extension FakeRelayConnection {
         #expect(limits?[0]["percent"] as? Int == 42)
         #expect(limits?[0]["resetsAt"] as? Double == 1_000_000)
         #expect(limits?[0]["durationSec"] as? Double == 18_000)
+        #expect(limits?[0]["label"] as? String == "5-hour session", "readable title, not the raw provider label")
         #expect(limits?[1]["kind"] as? String == "model")
+        #expect(limits?[1]["label"] as? String == "Weekly (Opus)")
         #expect(limits?[1]["percent"] == nil)
         #expect(providers?[1]["error"] as? String == "offline")
         let deepSeek = payload["deepseek"] as? [String: Any]
@@ -72,6 +74,15 @@ extension FakeRelayConnection {
         let report = RemoteUsageReport(providers: [.init(provider: .claude, snapshot: nil, errorMessage: nil)], deepSeek: nil)
         await svc.publishUsage(report)
         await svc.publishUsage(report)
+        // Same content, new fetch time → still not resent.
+        let refetched = RemoteUsageReport(providers: [.init(
+            provider: .claude, snapshot: UsageSnapshot(limits: [], mode: .subscription, fetchedAt: Date()),
+            errorMessage: nil)], deepSeek: nil)
+        let refetchedLater = RemoteUsageReport(providers: [.init(
+            provider: .claude, snapshot: UsageSnapshot(limits: [], mode: .subscription, fetchedAt: Date().addingTimeInterval(60)),
+            errorMessage: nil)], deepSeek: nil)
+        await svc.publishUsage(refetched)
+        await svc.publishUsage(refetchedLater)
         try await conn.waitForCount(type: "usage", atLeast: 1)
         #expect(await conn.usageFrameCount() == 1)
         #expect(await conn.lastUsageSummary()?.ids == ["claude"])

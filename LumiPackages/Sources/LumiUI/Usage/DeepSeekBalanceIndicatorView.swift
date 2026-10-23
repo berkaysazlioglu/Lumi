@@ -13,10 +13,6 @@ public struct DeepSeekBalanceIndicatorView: View {
     private let store: DeepSeekBalanceStore
     @State private var isPresented = false
 
-    /// DeepSeek'in kabuk içindeki glyph'i — "New DeepSeek" menü öğesiyle aynı
-    /// (karar 54), böylece topbar ve dropdown aynı şeyi işaret eder.
-    static let glyph = "sparkles"
-
     public init(store: DeepSeekBalanceStore) {
         self.store = store
     }
@@ -34,9 +30,7 @@ public struct DeepSeekBalanceIndicatorView: View {
     private var compact: some View {
         // 5pt: ölçek dışı ara değer — kullanım göstergesiyle aynı ritim.
         HStack(spacing: Theme.scaled(5)) {
-            Image(systemName: Self.glyph)
-                .font(Theme.Typography.ui(.label))
-                .foregroundStyle(Theme.textSecondary)
+            DeepSeekIcon(size: .body)
             Text(label)
                 .font(Theme.Typography.mono(.label, weight: .semibold))
                 .foregroundStyle(tint)
@@ -98,9 +92,7 @@ private struct DeepSeekBalancePopover: View {
 
     private var header: some View {
         HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: DeepSeekBalanceIndicatorView.glyph)
-                .font(Theme.Typography.ui(.base))
-                .foregroundStyle(Theme.textSecondary)
+            DeepSeekIcon(size: .base)
             Text("DeepSeek Balance")
                 .font(Theme.Typography.mono(.base, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)

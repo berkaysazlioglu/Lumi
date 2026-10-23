@@ -4,7 +4,6 @@ import LumiMobileKit
 struct RootView: View {
     let model: AppModel
 
-    @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
     @AppStorage(TUIStyle.sizeKey) private var textSize = TUIStyle.defaultSize
 
     var body: some View {
@@ -15,9 +14,7 @@ struct RootView: View {
                 PairingView(model: model)
             }
         }
-        .tint(LumiPalette.accent)
-        .preferredColorScheme(appearance.colorScheme)
-        .environment(\.isLumiTheme, appearance.isLumi)
+        .lumiThemed()
         .environment(\.tuiStyle, TUIStyle(
             macFamily: model.projectsSnapshot.display.terminalFontFamily, size: textSize))
     }
@@ -32,4 +29,22 @@ enum DemoMode {
     static var buildDefault: Bool {
         Bundle.main.object(forInfoDictionaryKey: "LumiDemoByDefault") as? String == "YES"
     }
+}
+
+/// Applies the Appearance choice (color scheme + Lumi trait + accent). Sheets
+/// re-apply it: they are separate presentations and don't reliably inherit
+/// custom environment values.
+private struct LumiThemed: ViewModifier {
+    @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
+
+    func body(content: Content) -> some View {
+        content
+            .tint(LumiPalette.accent)
+            .preferredColorScheme(appearance.colorScheme)
+            .environment(\.isLumiTheme, appearance.isLumi)
+    }
+}
+
+extension View {
+    func lumiThemed() -> some View { modifier(LumiThemed()) }
 }

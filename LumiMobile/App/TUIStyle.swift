@@ -15,16 +15,18 @@ struct TUIStyle: Equatable {
     static let defaultSize: Double = 13
     static let sizeRange: ClosedRange<Double> = 10...20
     static let `default` = TUIStyle(macFamily: "", size: defaultSize)
+    /// Font families never change while the app runs; scanned once (the style
+    /// is rebuilt on every Projects broadcast).
+    private static let installedFamilies = Set(UIFont.familyNames)
 
     /// `macFamily` comes from the Mac's `display.terminalFontFamily`; a family
     /// the phone doesn't have falls back to JetBrains Mono, then to SF Mono.
     init(macFamily: String, size: Double) {
         let wanted = macFamily.isEmpty ? Self.bundledFamily : macFamily
-        let available = Set(UIFont.familyNames)
-        if available.contains(wanted) {
+        if Self.installedFamilies.contains(wanted) {
             family = wanted
         } else {
-            family = available.contains(Self.bundledFamily) ? Self.bundledFamily : nil
+            family = Self.installedFamilies.contains(Self.bundledFamily) ? Self.bundledFamily : nil
         }
         self.size = CGFloat(min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound))
     }

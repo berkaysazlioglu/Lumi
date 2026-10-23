@@ -11,17 +11,17 @@ enum DemoUsage {
         UsageReport(
             providers: [
                 UsageProviderReport(id: "claude", limits: [
-                    UsageLimitReport(id: "session", label: "Current session", kind: "session", percent: 38,
+                    UsageLimitReport(id: "session", label: "5-hour session", kind: "session", percent: 38,
                                      resetsAt: nowMs + 3 * hourMs, durationSec: fiveHoursSec),
-                    UsageLimitReport(id: "week.all", label: "Current week (all models)", kind: "week", percent: 21,
+                    UsageLimitReport(id: "week.all", label: "Weekly (all models)", kind: "week", percent: 21,
                                      resetsAt: nowMs + 120 * hourMs, durationSec: weekSec),
-                    UsageLimitReport(id: "week.opus", label: "Current week (Opus)", kind: "model", percent: 64,
+                    UsageLimitReport(id: "week.opus", label: "Weekly (Opus)", kind: "model", percent: 64,
                                      resetsAt: nowMs + 120 * hourMs, durationSec: weekSec),
                 ]),
                 UsageProviderReport(id: "codex", limits: [
-                    UsageLimitReport(id: "session", label: "5h limit", kind: "session", percent: 72,
+                    UsageLimitReport(id: "session", label: "5-hour session", kind: "session", percent: 72,
                                      resetsAt: nowMs + 4 * hourMs, durationSec: fiveHoursSec),
-                    UsageLimitReport(id: "week.all", label: "Weekly limit", kind: "week", percent: 33,
+                    UsageLimitReport(id: "week.all", label: "Weekly (all models)", kind: "week", percent: 33,
                                      resetsAt: nowMs + 90 * hourMs, durationSec: weekSec),
                 ]),
             ],

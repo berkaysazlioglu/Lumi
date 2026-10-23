@@ -26,6 +26,15 @@ enum ProjectsRowSize: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Provider icon in agent rows.
+    var iconSize: CGFloat {
+        switch self {
+        case .small: 12
+        case .medium: 14
+        case .large: 17
+        }
+    }
+
     var verticalPadding: CGFloat {
         switch self {
         case .small: 3

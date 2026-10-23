@@ -4,7 +4,6 @@ import LumiMobileKit
 
 struct ProjectsView: View {
     let model: AppModel
-    @State private var collapsedProjects: Set<String> = []
     @State private var showAdd = false
     @State private var confirmUnpair = false
     // Single-selection navigation. Replaces per-agent NavigationLink(value:) — when
@@ -24,40 +23,27 @@ struct ProjectsView: View {
     @AppStorage(TUIStyle.sizeKey) private var textSize = TUIStyle.defaultSize
     @AppStorage(DemoMode.storageKey) private var demoMode = false
     @AppStorage(ProjectsRowSize.storageKey) private var rowSize = ProjectsRowSize.default
-
-    /// Project band padding (fixed — it's the anchor of the hierarchy).
-    private static let projectRowPadding: CGFloat = 9
+    @AppStorage(ProjectsLayoutStyle.storageKey) private var layoutStyle = ProjectsLayoutStyle.default
 
     var body: some View {
         NavigationStack {
-            List {
-                if !model.macOnline { offlineBanner }
-                let others = model.otherGroups
-                let locations = looseStartLocations(model.projectsSnapshot)
-                if model.projectTree.isEmpty { emptyState }
-                ForEach(model.projectTree) { project in
-                    projectSection(project)
+            Group {
+                switch layoutStyle {
+                case .lumi:
+                    LumiProjectsList(model: model, actions: listActions)
+                        .navigationBarTitleDisplayMode(.inline)
+                        // The title is drawn in the list, under the usage strip (Mac top bar order).
+                        .toolbar { ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) } }
+                case .apple:
+                    AppleProjectsList(model: model, actions: listActions)
                 }
-                if !others.isEmpty || !locations.isEmpty { otherSection(others, locations: locations) }
             }
-            .listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 0)
-            .scrollContentBackground(.hidden)
-            .background(LumiPalette.background)
             .navigationTitle("Projects")
             .navigationDestination(item: $openSession) { sessionId in
                 TerminalSessionView(model: model, sessionId: sessionId)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 12) {
-                        connectionDot
-                        // Mac top bar quotas (decision 128).
-                        if let usage = model.usage, !usage.isEmpty { UsageIndicators(report: usage) }
-                    }
-                    .padding(.horizontal, 4)
-                    .fixedSize()
-                }
+                ToolbarItem(placement: .topBarLeading) { connectionDot }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                         .disabled(!model.macOnline || model.projectsSnapshot.addable.isEmpty)
@@ -70,6 +56,7 @@ struct ProjectsView: View {
                                baseBranch: preset.baseBranch) { sessionId in
                     openSession = sessionId
                 }
+                .lumiThemed()
             }
             .onChange(of: model.startState) { _, state in
                 // Only the one-tap start owns this; the sheet handles its own result.
@@ -127,164 +114,18 @@ struct ProjectsView: View {
         }
     }
 
-    // MARK: - Rows
 
-    @ViewBuilder
-    private func projectSection(_ project: ProjectRowData) -> some View {
-        let collapsed = collapsedProjects.contains(project.id)
-        // The header is a plain row (not a Section header): plain-list headers
-        // carry their own system fill that ignores the Lumi surface.
-        sectionHeader(id: project.id, collapsed: collapsed) {
-            ProjectIconView(icon: project.node.appearance.icon)
-            Text(project.node.name).font(.headline).foregroundStyle(LumiPalette.textPrimary)
-            if let color = project.node.appearance.color { ProjectColorDot(color: color) }
-        }
-        .treeRow(.project, verticalPadding: Self.projectRowPadding)
-        if !collapsed {
-            // Agents are emitted as their own List rows (not nested inside a single
-            // checkout cell) so each is individually selectable and supports swipe /
-            // long-press delete.
-            ForEach(project.checkouts) { checkout in
-                checkoutHeader(checkout, in: project)
-                ForEach(checkout.agents) { agent in
-                    agentRow(agent)
-                }
-            }
-        }
-    }
+    // MARK: - List actions
 
-    private func sectionHeader<Label: View>(id: String, collapsed: Bool,
-                                            @ViewBuilder label: () -> Label) -> some View {
-        Button {
-            if !collapsedProjects.insert(id).inserted { collapsedProjects.remove(id) }
-        } label: {
-            HStack(spacing: 8) {
-                label()
-                Spacer()
-                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                    .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Projects ▸ Other (Mac decision 108): terminals opened outside any project,
-    /// grouped by folder. `+` opens a new Claude in one of the Mac's locations
-    /// (home, roots) or next to existing loose terminals.
-    @ViewBuilder
-    private func otherSection(_ groups: [OtherGroupRowData], locations: [LooseLocation]) -> some View {
-        let collapsed = collapsedProjects.contains(Self.otherSectionID)
-        HStack(spacing: 8) {
-            sectionHeader(id: Self.otherSectionID, collapsed: collapsed) {
-                Image(systemName: "tray").font(.headline).foregroundStyle(LumiPalette.textSecondary)
-                Text("Other").font(.headline).foregroundStyle(LumiPalette.textPrimary)
-            }
-            looseStartMenu(locations)
-        }
-        .treeRow(.project, verticalPadding: Self.projectRowPadding)
-        if !collapsed {
-            ForEach(groups) { group in
-                HStack(spacing: 8) {
-                    Image(systemName: "folder")
-                        .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-                    Text(group.node.label).font(rowSize.checkoutFont)
-                        .foregroundStyle(LumiPalette.textPrimary)
-                        .lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                    startButton(id: group.id, label: "New Claude in \(group.node.label)") {
-                        startAgent(at: group.node.path)
-                    }
-                }
-                .treeRow(.checkout, verticalPadding: rowSize.verticalPadding)
-                ForEach(group.agents) { agent in
-                    agentRow(agent)
-                }
-            }
-        }
-    }
-
-    /// `+` of the Other header: pick the folder for a new loose Claude.
-    @ViewBuilder
-    private func looseStartMenu(_ locations: [LooseLocation]) -> some View {
-        if let busy = startingCheckout, locations.contains(where: { $0.path == busy }) {
-            ProgressView().controlSize(.small).frame(width: 28, height: 24)
-        } else {
-            Menu {
-                Section("New Claude in…") {
-                    ForEach(locations) { location in
-                        Button { startAgent(at: location.path) } label: {
-                            Label(location.label, systemImage: location.label == "~" ? "house" : "folder")
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: "plus.circle")
-                    .font(.body)
-                    .frame(width: 28, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .disabled(!model.macOnline || startingCheckout != nil || locations.isEmpty)
-            .accessibilityLabel("New Claude outside a project")
-        }
-    }
-
-    /// Collapse key for the Other section; NUL keeps it apart from project paths.
-    private static let otherSectionID = "\u{0}other"
-
-    @ViewBuilder
-    private func checkoutHeader(_ checkout: CheckoutRowData, in project: ProjectRowData) -> some View {
-        HStack(spacing: 8) {
-            // "workspace" kind → branch icon; "original" (main checkout) → house icon
-            Image(systemName: checkout.node.kind == "workspace" ? "arrow.triangle.branch" : "house")
-                .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-            Text(checkoutDisplayTitle(checkout.node, in: project.node)).font(rowSize.checkoutFont)
-                .foregroundStyle(LumiPalette.textPrimary)
-            if let branch = checkout.node.branch, !branch.isEmpty {
-                Text(branch)
-                    .font(.caption).foregroundStyle(.tertiary)
-                    .lineLimit(1).truncationMode(.middle)
-            }
-            Spacer()
-            newAgentButton(checkout, in: project)
-        }
-        .treeRow(.checkout, verticalPadding: rowSize.verticalPadding)
-    }
-
-    /// Tap: start a Claude agent right in this checkout's folder and open it.
-    /// Long-press: menu that also offers creating a new branch from this one.
-    @ViewBuilder
-    private func newAgentButton(_ checkout: CheckoutRowData, in project: ProjectRowData) -> some View {
-        let branch = checkout.node.branch.flatMap { $0.isEmpty ? nil : $0 }
-        if startingCheckout == checkout.id {
-            ProgressView().controlSize(.small).frame(width: 28, height: 24)
-        } else {
-            Menu {
-                Button { startAgent(in: checkout) } label: {
-                    Label("New Claude on \(branch ?? checkout.node.title)", systemImage: "sparkle")
-                }
-                Button {
-                    newBranchPreset = NewBranchPreset(repoPath: project.node.path, baseBranch: branch ?? "")
-                } label: {
-                    Label("New branch from \(branch ?? "current")…", systemImage: "arrow.triangle.branch")
-                }
-            } label: {
-                Image(systemName: "plus.circle")
-                    .font(.body)
-                    .frame(width: 28, height: 24)
-                    .contentShape(Rectangle())
-            } primaryAction: {
-                startAgent(in: checkout)
-            }
-            .buttonStyle(.borderless)
-            .disabled(!model.macOnline || startingCheckout != nil)
-            .accessibilityLabel("New agent on \(branch ?? checkout.node.title)")
-        }
-    }
-
-    private func startAgent(in checkout: CheckoutRowData) {
-        startAgent(at: checkout.node.path)
+    private var listActions: ProjectsListActions {
+        ProjectsListActions(
+            isOnline: model.macOnline,
+            startingPath: startingCheckout,
+            open: { openSession = $0 },
+            start: { startAgent(at: $0) },
+            newBranch: { newBranchPreset = NewBranchPreset(repoPath: $0, baseBranch: $1) },
+            delete: { pendingDelete = $0 }
+        )
     }
 
     /// Current-branch start at `path`: the Mac spawns `claude` right there
@@ -295,97 +136,7 @@ struct ProjectsView: View {
         Task { await model.startChatSession(repoPath: path) }
     }
 
-    /// `+` that starts a Claude right away (spinner while in flight).
-    @ViewBuilder
-    private func startButton(id: String, label: String, action: @escaping () -> Void) -> some View {
-        if startingCheckout == id {
-            ProgressView().controlSize(.small).frame(width: 28, height: 24)
-        } else {
-            Button(action: action) {
-                Image(systemName: "plus.circle")
-                    .font(.body)
-                    .frame(width: 28, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .disabled(!model.macOnline || startingCheckout != nil)
-            .accessibilityLabel(label)
-        }
-    }
-
-    @ViewBuilder
-    private func agentRow(_ agent: AgentRowData) -> some View {
-        Button {
-            openSession = agent.id
-        } label: {
-            HStack(spacing: 8) {
-                AgentActivityGlyph(activity: agent.activity)
-                Image(systemName: providerSymbol(agent.provider))
-                    .font(rowSize.agentFont).foregroundStyle(LumiPalette.textSecondary)
-                Text(agent.title)
-                    .font(rowSize.agentFont)
-                    .foregroundStyle(agent.needsAttention ? Color.orange : LumiPalette.textPrimary)
-                    .lineLimit(1).truncationMode(.tail)
-                Spacer()
-                if agent.activity == .running || agent.activity == .awaitingDecision {
-                    Text(agent.activity.title)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.orange)
-                }
-                Text(PhoneRelativeTime.shortLabel(
-                    agent.lastActivityAt,
-                    now: Date().timeIntervalSince1970 * 1000
-                ))
-                .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-            .overlay(alignment: .leading) {
-                if agent.needsAttention {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.orange).frame(width: 3)
-                        .offset(x: -8)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .treeRow(.agent, verticalPadding: rowSize.verticalPadding)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { pendingDelete = agent.id } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .contextMenu {
-            Button(role: .destructive) { pendingDelete = agent.id } label: {
-                Label("Delete this chat", systemImage: "trash")
-            }
-        }
-    }
-
-    private func providerSymbol(_ provider: String?) -> String {
-        switch provider {
-        case "claude": "sparkle"
-        case "codex": "chevron.left.forwardslash.chevron.right"
-        default: "circle.fill"
-        }
-    }
-
     // MARK: - Chrome
-
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "folder.badge.plus").font(.title).foregroundStyle(.secondary)
-            Text("No projects yet").foregroundStyle(.secondary)
-            Text("Add a project on the Mac, or use +").font(.caption).foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity).padding(.vertical, 32)
-        .lumiRow()
-    }
-
-    private var offlineBanner: some View {
-        Label("Mac offline", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
-            .font(.callout).foregroundStyle(.orange)
-            .lumiRow()
-    }
 
     private var connectionDot: some View {
         Circle()
@@ -429,12 +180,21 @@ struct ProjectsView: View {
                 Label("Text Size", systemImage: "textformat.size")
             }
             .pickerStyle(.menu)
-            Picker(selection: $rowSize) {
-                ForEach(ProjectsRowSize.allCases) { Text($0.title).tag($0) }
-            } label: {
-                Label("Row Size", systemImage: "list.bullet.indent")
+            Toggle(isOn: Binding(
+                get: { layoutStyle == .apple },
+                set: { layoutStyle = $0 ? .apple : .lumi }
+            )) {
+                Label("Apple Layout", systemImage: "list.bullet.rectangle")
             }
-            .pickerStyle(.menu)
+            // Apple layout sizes rows with Dynamic Type instead.
+            if layoutStyle == .lumi {
+                Picker(selection: $rowSize) {
+                    ForEach(ProjectsRowSize.allCases) { Text($0.title).tag($0) }
+                } label: {
+                    Label("Row Size", systemImage: "list.bullet.indent")
+                }
+                .pickerStyle(.menu)
+            }
             if demoMode {
                 Button("Exit Demo Data", role: .destructive) { demoMode = false }
             } else {
@@ -457,30 +217,47 @@ private struct AddProjectSheet: View {
                     Task { await model.addProject(path: repo.path) }
                     dismiss()
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "folder").foregroundStyle(.purple)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(repo.name).foregroundStyle(.primary)
+                    HStack(spacing: 12) {
+                        Image(systemName: "folder.fill")
+                            .font(.title3)
+                            .foregroundStyle(LumiPalette.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(repo.name).font(.body.weight(.medium)).foregroundStyle(LumiPalette.textPrimary)
                             Text(repo.path)
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(LumiPalette.textSecondary)
                                 .lineLimit(1).truncationMode(.middle)
                         }
+                        Spacer()
+                        Image(systemName: "plus.circle").foregroundStyle(LumiPalette.accent)
                     }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .listRowBackground(LumiPalette.background)
+                .listRowSeparatorTint(LumiPalette.border)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(LumiPalette.background)
             .overlay {
                 if model.projectsSnapshot.addable.isEmpty {
-                    Text("No more projects to add").foregroundStyle(.secondary)
+                    Text("No more projects to add").foregroundStyle(LumiPalette.textSecondary)
                 }
             }
             .navigationTitle("Add project")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(LumiPalette.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
             }
         }
+        // Inside the theme scope so the navy/black/white resolves with the Lumi trait.
+        .presentationBackground(LumiPalette.background)
+        .lumiThemed()
     }
 }
 

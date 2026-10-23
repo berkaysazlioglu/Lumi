@@ -20,7 +20,7 @@ enum NewTerminalMenu {
                     shell.spawnTerminal(in: scope, command: provider.launchCommand)
                 }
             }
-        items.append(NewTerminalMenuItem(label: "New DeepSeek", glyph: .symbol("sparkles")) {
+        items.append(NewTerminalMenuItem(label: "New DeepSeek", glyph: .deepSeek) {
             // Kurulu değilse store toast atar ve terminal açılmaz.
             guard let command = shell.deepSeek.launchCommandOrWarn() else { return }
             shell.spawnTerminal(in: scope, command: command, task: "DeepSeek")

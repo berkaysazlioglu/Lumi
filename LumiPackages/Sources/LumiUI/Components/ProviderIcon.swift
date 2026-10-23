@@ -34,6 +34,30 @@ struct ProviderIcon: View {
     }
 }
 
+/// DeepSeek'in marka ikonu (topbar bakiye göstergesi, New DeepSeek menüsü).
+/// Asset yüklenemezse eski `sparkles` glyph'ine düşer.
+struct DeepSeekIcon: View {
+    var size: Theme.Typography.Size = .body
+
+    static let fallbackSymbol = "sparkles"
+
+    var body: some View {
+        Group {
+            if let image = LumiAssets.deepSeekIcon {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: size.scaledPoints, height: size.scaledPoints)
+            } else {
+                Image(systemName: Self.fallbackSymbol)
+                    .font(Theme.Typography.ui(size))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 #if DEBUG
 #Preview("ProviderIcon") {
     HStack(spacing: Theme.Spacing.lg) {

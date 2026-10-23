@@ -75,8 +75,12 @@ public final class RemoteService: RemoteServicing {
     private var modelCache: [TerminalID: String] = [:]
     /// Karar 105: "karar bekliyor" (izin/soru promptu) olan terminaller — `sessions`'a yansır.
     private var awaitingDecision: Set<TerminalID> = []
-    /// Son kota raporu (karar 128) — değişince yayınlanır, telefon bağlanınca tekrar gider.
+    /// Son kota raporu (karar 128) — değişince yayınlanır; Mac relay'e yeniden
+    /// bağlanınca (`welcome`) tekrar gider. Telefonun bağlanması relay cache'inden beslenir.
     private var lastUsage: RemoteUsageReport?
+    /// Son yayının içeriği: `fetchedAt` her tazelemede değiştiği için raporun
+    /// kendisi değil gönderilen payload karşılaştırılır.
+    private var lastUsagePayload: Data?
 
     public init(
         paths: LumiPaths,
@@ -160,8 +164,10 @@ public final class RemoteService: RemoteServicing {
 
     /// Kota göstergelerinin yeni hâli (karar 128). Aynı rapor tekrar yayınlanmaz.
     public func publishUsage(_ report: RemoteUsageReport) async {
-        guard report != lastUsage else { return }
+        let encoded = try? JSONSerialization.data(withJSONObject: report.payload(), options: .sortedKeys)
+        guard encoded == nil || encoded != lastUsagePayload else { return }
         lastUsage = report
+        lastUsagePayload = encoded
         await sendUsage()
     }
 

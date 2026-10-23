@@ -21,6 +21,7 @@ struct TextSizeButton: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .lumiThemed()
             .presentationCompactAdaptation(.popover)
         }
     }

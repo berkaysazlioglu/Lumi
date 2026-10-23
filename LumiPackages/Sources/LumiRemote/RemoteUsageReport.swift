@@ -54,13 +54,25 @@ public struct RemoteUsageReport: Sendable, Equatable {
     }
 
     private static func limitPayload(_ limit: UsageLimit) -> [String: Any] {
-        var dict: [String: Any] = ["id": limit.id, "label": limit.rawLabel, "kind": kindName(limit.kind)]
+        var dict: [String: Any] = ["id": limit.id, "label": title(limit), "kind": kindName(limit.kind)]
         if let percent = limit.window.percentUsed { dict["percent"] = percent }
         if let resetsAt = limit.window.resetsAt {
             dict["resetsAt"] = (resetsAt.timeIntervalSince1970 * 1000).rounded()
         }
         if let duration = limit.window.duration { dict["durationSec"] = duration }
         return dict
+    }
+
+    /// Mac popover'ının başlığı (LumiUI `UsageLimit.displayTitle` paritesi) —
+    /// ham etiket sağlayıcı iç adıdır (`five_hour`, `primary`) ve telefona
+    /// okunur metin gitmeli. Tanınmayan limit ham etiketini taşır.
+    static func title(_ limit: UsageLimit) -> String {
+        switch limit.kind {
+        case .session: "5-hour session"
+        case .weeklyAll: "Weekly (all models)"
+        case .weeklyModel(let name): "Weekly (\(name))"
+        case .other: limit.rawLabel
+        }
     }
 
     private static func kindName(_ kind: UsageLimit.Kind) -> String {

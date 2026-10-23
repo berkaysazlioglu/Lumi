@@ -2,70 +2,109 @@ import SwiftUI
 import UIKit
 import LumiMobileKit
 
-/// Mac top bar quota indicators (decision 128): Claude · Codex · DeepSeek side
-/// by side; tapping opens a popover with every limit.
-struct UsageIndicators: View {
-    let report: UsageReport
+/// Mac top bar quota indicators (decision 128) as separate buttons in a row
+/// between the bar and the Projects title: Claude · Codex · DeepSeek, each
+/// with its own popover (Mac `UsageIndicatorView` / `DeepSeekBalanceIndicatorView`).
+struct ProjectsUsageStrip: View {
+    let report: UsageReport?
+    /// Mac offline: the numbers are the last known ones — shown dimmed.
+    var isStale = false
+
+    private static let staleOpacity = 0.45
+
+    var body: some View {
+        if let report, !report.isEmpty {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let nowMs = context.date.timeIntervalSince1970 * 1000
+                HStack(spacing: 8) {
+                    ForEach(report.providers) { provider in
+                        UsageChipButton(id: provider.id, label: provider.indicatorLimit?.percent.map { "\($0)%" } ?? "—",
+                                        tint: UsageToneColor.color(UsageTone(limit: provider.indicatorLimit, nowMs: nowMs))) {
+                            UsagePopover(providers: [provider], deepSeek: nil)
+                        }
+                    }
+                    if let deepSeek = report.deepSeek {
+                        UsageChipButton(id: "deepseek", label: deepSeek.balanceLabel, tint: nil) {
+                            UsagePopover(providers: [], deepSeek: deepSeek)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .opacity(isStale ? Self.staleOpacity : 1)
+            }
+        }
+    }
+}
+
+/// One Mac-top-bar-style indicator: icon + value on an elevated, bordered capsule.
+private struct UsageChipButton<Popover: View>: View {
+    let id: String
+    let label: String
+    let tint: Color?
+    @ViewBuilder let popover: () -> Popover
 
     @State private var showing = false
 
+    private static var corner: CGFloat { 8 }
+
     var body: some View {
         Button { showing = true } label: {
-            TimelineView(.periodic(from: .now, by: 60)) { context in
-                HStack(spacing: 10) {
-                    ForEach(report.providers) { provider in
-                        chip(provider, nowMs: context.date.timeIntervalSince1970 * 1000)
-                    }
-                    if let deepSeek = report.deepSeek {
-                        HStack(spacing: 3) {
-                            UsageProviderIcon(id: "deepseek")
-                            Text(deepSeek.balanceLabel).foregroundStyle(LumiPalette.textPrimary)
-                        }
-                    }
-                }
-                .font(.caption.monospacedDigit().weight(.medium))
-                .lineLimit(1)
-                .fixedSize()
+            HStack(spacing: 5) {
+                UsageProviderIcon(id: id)
+                Text(label)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(tint ?? LumiPalette.textPrimary)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(LumiPalette.elevated, in: RoundedRectangle(cornerRadius: Self.corner))
+            .overlay(RoundedRectangle(cornerRadius: Self.corner).stroke(LumiPalette.border, lineWidth: 1))
+            .fixedSize()
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Usage")
+        .accessibilityLabel("\(id) usage \(label)")
         .popover(isPresented: $showing) {
-            UsagePopover(report: report)
+            popover()
+                .presentationBackground(LumiPalette.background)
                 .presentationCompactAdaptation(.popover)
-        }
-    }
-
-    private func chip(_ provider: UsageProviderReport, nowMs: Double) -> some View {
-        let limit = provider.indicatorLimit
-        return HStack(spacing: 3) {
-            UsageProviderIcon(id: provider.id)
-            Text(limit?.percent.map { "\($0)%" } ?? "—")
-                .foregroundStyle(UsageToneColor.color(UsageTone(limit: limit, nowMs: nowMs)) ?? LumiPalette.textSecondary)
+                .lumiThemed()
         }
     }
 }
 
+/// Provider identity icon (Mac `ProviderIcon` parity): Claude / Codex / DeepSeek
+/// artwork from the asset catalog; plain shells get an SF Symbol.
 struct UsageProviderIcon: View {
-    let id: String
+    let id: String?
+    var size: CGFloat = 14
 
     var body: some View {
-        Image(systemName: symbol)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(LumiPalette.textSecondary)
+        Group {
+            if let asset {
+                Image(asset).resizable().interpolation(.high).scaledToFit()
+                    .foregroundStyle(LumiPalette.textPrimary)
+            } else {
+                Image(systemName: "terminal").resizable().scaledToFit()
+                    .foregroundStyle(LumiPalette.textSecondary)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 
-    private var symbol: String {
+    private var asset: String? {
         switch id {
-        case "claude": "sparkle"
-        case "codex": "chevron.left.forwardslash.chevron.right"
-        default: "fish"
+        case "claude": "ProviderClaude"
+        case "codex": "ProviderCodex"
+        case "deepseek": "ProviderDeepSeek"
+        default: nil
         }
     }
 }
 
-private struct UsagePopover: View {
-    let report: UsageReport
+struct UsagePopover: View {
+    let providers: [UsageProviderReport]
+    let deepSeek: DeepSeekReport?
 
     private static let barHeight: CGFloat = 6
     private static let width: CGFloat = 300
@@ -74,10 +113,10 @@ private struct UsagePopover: View {
         let nowMs = Date().timeIntervalSince1970 * 1000
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(report.providers) { provider in
+                ForEach(providers) { provider in
                     providerSection(provider, nowMs: nowMs)
                 }
-                if let deepSeek = report.deepSeek { deepSeekSection(deepSeek) }
+                if let deepSeek { deepSeekSection(deepSeek) }
             }
             .padding(16)
         }

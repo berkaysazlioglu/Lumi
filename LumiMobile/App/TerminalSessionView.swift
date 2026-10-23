@@ -56,7 +56,10 @@ struct TerminalSessionView: View {
                         .font(.headline).lineLimit(1)
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) { TextSizeButton() }
+            // Text size applies to the TUI chat; the mirror keeps the Mac's columns.
+            if model.isChatSession(sessionId) {
+                ToolbarItem(placement: .topBarTrailing) { TextSizeButton() }
+            }
             ToolbarItem(placement: .topBarTrailing) { toolbarItems }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

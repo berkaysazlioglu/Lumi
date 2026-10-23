@@ -152,6 +152,14 @@ public enum LumiAssets {
         return icons
     }()
 
+    /// DeepSeek marka ikonu (karar 128 eki) — DeepSeek bir `AgentProvider`
+    /// değildir (Claude'un env'li hâli, karar 54), o yüzden ayrı tutulur.
+    /// PNG (48 px); yüklenemezse nil, çağıran SF Symbol'e düşer.
+    public static let deepSeekIcon: NSImage? = {
+        Bundle.module.url(forResource: "provider-deepseek", withExtension: "png", subdirectory: "Icons")
+            .flatMap(NSImage.init(contentsOf:))
+    }()
+
     private static let providerIcons: [AgentProvider: NSImage?] = {
         var icons: [AgentProvider: NSImage?] = [:]
         for provider in AgentProvider.allCases {

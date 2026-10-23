@@ -51,6 +51,9 @@ struct LumiMobileApp: App {
             }
             .task(id: demoMode) { await switchDemo(on: demoMode) }
             .onOpenURL { url in
+                // A real pairing link ends demo mode — otherwise the live model
+                // pairs behind the demo and the user never sees it.
+                demoMode = false
                 Task { await model.pair(from: url.absoluteString) }
             }
         }

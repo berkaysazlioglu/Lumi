@@ -8,6 +8,7 @@ struct NewTerminalMenuItem: Identifiable {
     /// Satır ikonu: sağlayıcı marka glyph'i ya da SF Symbol.
     enum Glyph {
         case provider(AgentProvider)
+        case deepSeek
         case symbol(String)
     }
 
@@ -229,6 +230,8 @@ private struct NewTerminalDropdownItem: View {
         switch glyph {
         case .provider(let provider):
             ProviderIcon(provider: provider, size: .body)
+        case .deepSeek:
+            DeepSeekIcon(size: .body)
         case .symbol(let name):
             Image(systemName: name)
                 .font(Theme.Typography.ui(.body))
