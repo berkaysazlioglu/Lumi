@@ -36,6 +36,13 @@ public protocol RelayClienting: Sendable {
     @discardableResult func send(frame: String) async -> Bool
     func registerPush(deviceToken: String) async
     func unregisterPush(deviceToken: String) async
+    /// App came to the foreground (decision 130): verify a "connected" socket with a
+    /// ping and reconnect at once if it is dead; skip a pending back-off wait.
+    func reconnectIfStale() async
+}
+
+public extension RelayClienting {
+    func reconnectIfStale() async {}
 }
 
 /// Client that connects to the relay as the phone role: hello → welcome → message stream;
@@ -49,15 +56,24 @@ public actor RelayClient: RelayClienting {
     private var connection: (any WebSocketConnection)?
     private var runTask: Task<Void, Never>?
     private var continuations: [UUID: AsyncStream<ClientEvent>.Continuation] = [:]
+    /// Back-off wait between reconnect attempts; cancelled to reconnect immediately.
+    private var backoffWait: Task<Void, Never>?
+    /// Incremented on every pong — `reconnectIfStale` waits for it to move.
+    private var pongCount = 0
+    /// Bumped per socket so a stale check never closes a newer connection.
+    private var connectionEpoch = 0
+    private let pongTimeout: Duration
 
     public init(
         connect: @escaping ConnectionFactory = { URLSessionWebSocketConnection(url: $0) },
         sleep: @escaping @Sendable (Double) async -> Void = { seconds in
             try? await Task.sleep(for: .seconds(seconds))
-        }
+        },
+        pongTimeout: Duration = .seconds(2)
     ) {
         self.connect = connect
         self.sleep = sleep
+        self.pongTimeout = pongTimeout
     }
 
     public func events() -> AsyncStream<ClientEvent> {
@@ -105,6 +121,34 @@ public actor RelayClient: RelayClienting {
         _ = await sendFrame(PhoneProtocol.unregisterPushFrame(deviceToken: deviceToken))
     }
 
+    public func reconnectIfStale() async {
+        guard runTask != nil else { return }
+        guard state == .connected, let connection else {
+            // Already reconnecting: drop the remaining back-off and try now.
+            backoff.reset()
+            backoffWait?.cancel()
+            return
+        }
+        let before = pongCount
+        let epoch = connectionEpoch
+        guard await sendFrame(PhoneProtocol.pingFrame()) else {
+            connection.close()
+            return
+        }
+        let step = Duration.milliseconds(100)
+        var waited = Duration.zero
+        while waited < pongTimeout {
+            try? await Task.sleep(for: step)
+            waited += step
+            if pongCount != before { return }
+        }
+        // Still the same socket and no pong → it died in the background.
+        guard epoch == connectionEpoch else { return }
+        DiagLog.shared.log("relay", "foreground ping timed out → reconnect")
+        backoff.reset()
+        connection.close()
+    }
+
     // MARK: Internal
 
     private func run(url: URL, token: String) async {
@@ -113,6 +157,7 @@ public actor RelayClient: RelayClienting {
             DiagLog.shared.log("relay", "connecting \(url.host ?? url.absoluteString)")
             let conn = connect(url)
             connection = conn
+            connectionEpoch &+= 1
             do {
                 try await conn.send(PhoneProtocol.helloFrame(token: token))
                 for try await frame in conn.incoming {
@@ -124,6 +169,7 @@ public actor RelayClient: RelayClienting {
                         backoff.reset()
                         setState(.connected)
                     }
+                    if case .pong = message { pongCount &+= 1 }
                     yield(.message(message))
                 }
                 DiagLog.shared.log("relay", "stream closed (server side)")
@@ -134,7 +180,11 @@ public actor RelayClient: RelayClienting {
             connection = nil
             if Task.isCancelled { return }
             setState(.disconnected)
-            await sleep(backoff.nextDelay())
+            let delay = backoff.nextDelay()
+            let wait = Task { [sleep] in await sleep(delay) }
+            backoffWait = wait
+            await wait.value
+            backoffWait = nil
         }
     }
 

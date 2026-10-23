@@ -9,6 +9,7 @@ struct LumiMobileApp: App {
     /// Sample-data model, alive only while demo mode is on.
     @State private var demoModel: AppModel?
     @AppStorage(DemoMode.storageKey) private var demoMode = false
+    @Environment(\.scenePhase) private var scenePhase
     private let coordinator: PushCoordinator
 
     init() {
@@ -50,6 +51,10 @@ struct LumiMobileApp: App {
                 await model.start()
             }
             .task(id: demoMode) { await switchDemo(on: demoMode) }
+            // Decision 130: the socket may have died in the background.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await model.appBecameActive() } }
+            }
             .onOpenURL { url in
                 // A real pairing link ends demo mode — otherwise the live model
                 // pairs behind the demo and the user never sees it.

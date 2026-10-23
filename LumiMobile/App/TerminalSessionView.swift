@@ -43,7 +43,7 @@ struct TerminalSessionView: View {
                 Rectangle().fill(LumiPalette.projectColor(color)).frame(height: Self.identityLineHeight)
             }
         }
-        .onDisappear { model.unsubscribe(sessionId) }
+        .onDisappear { model.leaveSession(sessionId) }
         .navigationTitle(model.session(sessionId)?.repoName ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

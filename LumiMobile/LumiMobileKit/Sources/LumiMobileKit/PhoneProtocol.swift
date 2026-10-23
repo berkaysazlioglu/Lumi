@@ -13,8 +13,12 @@ public enum ServerMessage: Sendable, Equatable {
     // Repo list for starting a new session from the phone
     case repos([Repo])
     // Chat-mirror messages
-    case chat(sessionId: String, messages: [ChatMessage])
-    case chatAppend(sessionId: String, messages: [ChatMessage])
+    /// Full list (replaces). `hasEarlier`: the Mac dropped older rows to fit the
+    /// relay frame limit (decision 130).
+    case chat(sessionId: String, messages: [ChatMessage], hasEarlier: Bool = false)
+    /// Upsert by id. `afterId` marks the Mac's reply to a delta subscribe: the rows
+    /// that follow `afterId` (decision 130).
+    case chatAppend(sessionId: String, messages: [ChatMessage], afterId: String? = nil)
     case chatStatus(sessionId: String, status: ChatTurnStatus)
     // Phase 3: interactive prompt
     case prompt(sessionId: String, prompt: ChatPrompt)
@@ -83,8 +87,11 @@ public enum PhoneProtocol {
             guard let sessionId = payload["sessionId"] as? String,
                   let raw = payload["messages"] as? [[String: Any]] else { return nil }
             let messages = raw.compactMap(ChatMessage.decode)
-            return type == "chat" ? .chat(sessionId: sessionId, messages: messages)
-                                  : .chatAppend(sessionId: sessionId, messages: messages)
+            return type == "chat"
+                ? .chat(sessionId: sessionId, messages: messages,
+                        hasEarlier: payload["hasEarlier"] as? Bool ?? false)
+                : .chatAppend(sessionId: sessionId, messages: messages,
+                              afterId: payload["afterId"] as? String)
         case "chat_status":
             guard let sessionId = payload["sessionId"] as? String else { return nil }
             return .chatStatus(sessionId: sessionId, status: ChatTurnStatus.decode(payload))

@@ -11,7 +11,7 @@ final class ChatMirrorDecodeTests: XCTestCase {
             {"type":"tool-call","name":"Edit","inputPreview":"file.swift"},
             {"type":"tool-result","output":"ok","isError":false}]}]}}
         """#
-        guard case let .chat(sessionId, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
+        guard case let .chat(sessionId, messages, _)? = PhoneProtocol.decodeServerMessage(frame) else {
             return XCTFail("chat could not be decoded")
         }
         XCTAssertEqual(sessionId, "s1")
@@ -23,7 +23,7 @@ final class ChatMirrorDecodeTests: XCTestCase {
 
     func testDecodeChatAppendFrame() {
         let frame = #"{"v":1,"type":"chat_append","payload":{"sessionId":"s1","messages":[{"id":"m3","role":"assistant","blocks":[{"type":"text","text":"done"}]}]}}"#
-        guard case let .chatAppend(_, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
+        guard case let .chatAppend(_, messages, _)? = PhoneProtocol.decodeServerMessage(frame) else {
             return XCTFail("chat_append could not be decoded")
         }
         XCTAssertEqual(messages.first?.id, "m3")
@@ -42,7 +42,7 @@ final class ChatMirrorDecodeTests: XCTestCase {
             {"type":"code-fence","lang":"swift"}]},
           {"role":"assistant","blocks":[{"type":"text","text":"no id → dropped"}]}]}}
         """#
-        guard case let .chat(_, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
+        guard case let .chat(_, messages, _)? = PhoneProtocol.decodeServerMessage(frame) else {
             return XCTFail("chat could not be decoded")
         }
         XCTAssertEqual(messages.count, 1, "message without id is dropped by compactMap")

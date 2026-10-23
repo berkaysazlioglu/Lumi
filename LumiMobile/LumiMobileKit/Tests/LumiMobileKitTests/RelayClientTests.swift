@@ -29,7 +29,7 @@ final class Harness: @unchecked Sendable {
     var connections: [FakeConnection] { lock.withLock { _connections } }
     var sleeps: [Double] { lock.withLock { _sleeps } }
 
-    func makeClient() -> RelayClient {
+    func makeClient(pongTimeout: Duration = .seconds(2)) -> RelayClient {
         RelayClient(
             connect: { [self] _ in
                 let conn = FakeConnection()
@@ -39,7 +39,8 @@ final class Harness: @unchecked Sendable {
             sleep: { [self] seconds in
                 lock.withLock { _sleeps.append(seconds) }
                 await Task.yield()
-            }
+            },
+            pongTimeout: pongTimeout
         )
     }
 }
@@ -57,6 +58,43 @@ func waitUntil(_ condition: @escaping () async -> Bool) async -> Bool {
 }
 
 final class RelayClientTests: XCTestCase {
+
+    // MARK: Foreground stale check (decision 130)
+
+    func testForegroundPingWithoutPongReconnects() async {
+        let harness = Harness()
+        let client = harness.makeClient(pongTimeout: .milliseconds(200))
+        await client.start(pairing: pairing)
+        _ = await waitUntil { !harness.connections.isEmpty }
+        harness.connections[0].push(welcomeFrame)
+        _ = await waitUntil { await client.state == .connected }
+        await client.reconnectIfStale()
+        XCTAssertTrue(harness.connections[0].sent.contains { $0.contains(#""type":"ping""#) })
+        let reconnected = await waitUntil { harness.connections.count >= 2 }
+        XCTAssertTrue(reconnected, "a dead socket is replaced")
+        await client.stop()
+    }
+
+    func testForegroundPingWithPongKeepsSocket() async {
+        let harness = Harness()
+        let client = harness.makeClient(pongTimeout: .milliseconds(500))
+        await client.start(pairing: pairing)
+        _ = await waitUntil { !harness.connections.isEmpty }
+        harness.connections[0].push(welcomeFrame)
+        _ = await waitUntil { await client.state == .connected }
+        let conn = harness.connections[0]
+        let responder = Task {
+            _ = await waitUntil { conn.sent.contains { $0.contains(#""type":"ping""#) } }
+            conn.push(#"{"v":1,"type":"pong","payload":{}}"#)
+        }
+        await client.reconnectIfStale()
+        await responder.value
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(harness.connections.count, 1)
+        let state = await client.state
+        XCTAssertEqual(state, .connected)
+        await client.stop()
+    }
 
     func testSendsHelloFirstAndBecomesConnectedOnWelcome() async {
         let harness = Harness()

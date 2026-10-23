@@ -41,13 +41,21 @@ struct MobileChatView: View {
                         LazyVStack(alignment: .leading, spacing: style.font().lineHeight) {
                             if turns.isEmpty {
                                 // Phase 2.1: a chat session is now opened only for kind=chat
-                                // (TerminalSessionView type routing). Empty chat = "no messages
-                                // yet" → call-to-action text instead of misleading "loading".
-                                Text("Chat is empty — type below to start.")
+                                // (TerminalSessionView type routing). Decision 130: "empty" only
+                                // once the Mac's snapshot said so; before that it is still loading.
+                                Text(isSyncing ? "Loading chat…" : "Chat is empty — type below to start.")
                                     .font(style.swiftUIFont)
                                     .foregroundStyle(LumiPalette.textSecondary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.top, 40)
+                            }
+                            if model.chatHasEarlier.contains(sessionId) && !turns.isEmpty {
+                                // Decision 130: the snapshot was capped to fit the relay frame.
+                                Text("Earlier messages are on the Mac")
+                                    .font(.caption)
+                                    .foregroundStyle(LumiPalette.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 4)
                             }
                             ForEach(turns) { turn in
                                 MobileChatMessageView(turn: turn).id(turn.id)
@@ -111,6 +119,10 @@ struct MobileChatView: View {
                         }
                     }
                     .animation(.easeInOut(duration: 0.15), value: atBottom)
+                    .overlay(alignment: .top) {
+                        if isSyncing && !turns.isEmpty { syncingBadge }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: isSyncing)
                 }
                 let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
                 if let status = model.turnStatus[sessionId], status.working {
@@ -160,6 +172,23 @@ struct MobileChatView: View {
             try? await Task.sleep(for: .milliseconds(150))
             proxy.scrollTo("bottom", anchor: .bottom)
         }
+    }
+
+    /// Decision 130: shown over the cached messages while the Mac re-sends the chat.
+    private var isSyncing: Bool { model.chatSyncing.contains(sessionId) && model.macOnline }
+
+    private var syncingBadge: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.mini)
+            Text("Syncing…").font(.caption)
+        }
+        .foregroundStyle(LumiPalette.textSecondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(LumiPalette.elevated, in: Capsule())
+        .padding(.top, 6)
+        .transition(.opacity)
+        .accessibilityLabel("Syncing chat")
     }
 
     private var composer: some View {

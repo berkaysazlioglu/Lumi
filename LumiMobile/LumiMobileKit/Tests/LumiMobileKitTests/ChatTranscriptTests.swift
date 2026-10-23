@@ -75,17 +75,17 @@ final class ChatTranscriptTests: XCTestCase {
     func testPendingAppendComputesExpectedOccurrence() {
         var pend: [ChatPending] = []
         pend = chatPendingAppend(current: pend, id: "p1", text: "hello",
-                                 baselineOccurrences: 0, baselineTailMessageId: "a1")
+                                 baselineTailMessageId: "a1")
         XCTAssertEqual(pend.first?.expectedOccurrence, 1)
         // Send the same text again (not yet landed) → 2nd occurrence is expected.
         pend = chatPendingAppend(current: pend, id: "p2", text: "hello",
-                                 baselineOccurrences: 0, baselineTailMessageId: "a1")
+                                 baselineTailMessageId: "a1")
         XCTAssertEqual(pend.last?.expectedOccurrence, 2)
     }
 
     func testPendingRetiredWhenTranscriptEchoesText() {
         var pend = chatPendingAppend(current: [], id: "p1", text: "hello",
-                                     baselineOccurrences: 0, baselineTailMessageId: "a1")
+                                     baselineTailMessageId: "a1")
         // User "hello" appeared in the transcript → pending is retired.
         let msgs = [assistant("a1", "..."), user("u1", "hello")]
         pend = chatRetireLandedPending(messages: msgs, current: pend)
@@ -95,10 +95,21 @@ final class ChatTranscriptTests: XCTestCase {
     func testPendingKeptWhenNoTranscriptEcho() {
         // If stream-json does not echo the user message, the pending STAYS (persistent display).
         let pend = chatPendingAppend(current: [], id: "p1", text: "hello",
-                                     baselineOccurrences: 0, baselineTailMessageId: "a1")
+                                     baselineTailMessageId: "a1")
         let msgs = [assistant("a1", "response")]
         let after = chatRetireLandedPending(messages: msgs, current: pend)
         XCTAssertEqual(after.count, 1, "user message must remain on screen when there is no echo")
+    }
+
+    /// Decision 130: the count is relative to the baseline row — a snapshot that drops
+    /// older copies of the same text (size cap) still retires the echo exactly once.
+    func testPendingCountsOnlyEchoesAfterBaseline() {
+        let history = [user("u1", "hello"), assistant("a1", "x"), user("u2", "hello"), assistant("a2", "y")]
+        var pend = chatPendingAppend(current: [], id: "p1", text: "hello", baselineTailMessageId: "a2")
+        pend = chatRetireLandedPending(messages: history, current: pend)
+        XCTAssertEqual(pend.count, 1, "older copies before the baseline do not retire it")
+        let truncatedWithEcho = [assistant("a2", "y"), user("u3", "hello")]
+        XCTAssertTrue(chatRetireLandedPending(messages: truncatedWithEcho, current: pend).isEmpty)
     }
 
     // MARK: assemble

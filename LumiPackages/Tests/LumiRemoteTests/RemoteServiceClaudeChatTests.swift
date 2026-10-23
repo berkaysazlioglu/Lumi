@@ -156,14 +156,20 @@ import LumiTestSupport
             hookEvents: { AsyncStream { _ in } }, config: FakeConfigService())
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        try await conn.waitForCount(type: "chat", atLeast: 1)
+        // Karar 130: Claude terminalinde abonelik boş yer tutucu göndermez — işaret durum frame'i.
+        try await conn.waitForCount(type: "chat_status", atLeast: 1)
+        for _ in 0..<50 where chatSrc.requested.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(chatSrc.requested.map(\.sessionID) == ["before-clear"])
+        #expect(await conn.count(type: "chat") == 0)
 
         // /clear: servis meta'sı yeni kimliği taşır, ardından event yayınlanır.
         term.metas[0].claudeSessionID = "after-clear"
         term.emit(.claudeSessionIDChanged(claudeMeta.id, "after-clear"))
 
-        try await conn.waitForCount(type: "chat", atLeast: 2)
+        // Karar 94: retarget'ın boş snapshot'ı eski sohbeti siler.
+        try await conn.waitForCount(type: "chat", atLeast: 1)
         for _ in 0..<50 where chatSrc.requested.count < 2 {
             try await Task.sleep(for: .milliseconds(10))
         }

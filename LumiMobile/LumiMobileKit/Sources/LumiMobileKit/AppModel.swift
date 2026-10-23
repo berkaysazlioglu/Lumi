@@ -22,12 +22,12 @@ public final class AppModel {
     /// List of active terminal sessions (from welcome/sessions message).
     public private(set) var sessions: [SessionMeta] = []
     /// Currently subscribed (displayed) session; used to re-subscribe on reconnect (Task 11).
-    public private(set) var activeSessionId: String?
+    public internal(set) var activeSessionId: String?
     /// Mode of the active subscription (chat or terminal). Kept to re-subscribe in the
     /// SAME mode on reconnect — otherwise, after a disconnect in chat mode it would fall
     /// back to terminal mode and `chat`/`chat_append` frames would stop arriving,
     /// causing messages not to reach the phone (handoff #6).
-    private var activeChatMode = false
+    var activeChatMode = false
     public private(set) var repos: [Repo] = []
     public private(set) var personas: [Persona] = []
     public private(set) var lastCommandError: [String: String] = [:]
@@ -39,7 +39,7 @@ public final class AppModel {
     public private(set) var notificationAuthStatus: NotificationAuthStatus = .notDetermined
     public weak var pushControl: (any PushControlling)?
 
-    private let client: any RelayClienting
+    let client: any RelayClienting
     private let store: any SecureStore
     private let prefs: any PreferenceStore
     private var latestPushToken: String?
@@ -111,6 +111,25 @@ public final class AppModel {
     /// Decision 104: if the Mac never reports idle after a Stop, close the turn locally.
     public var stopFallbackDelay: Duration = .seconds(5)
 
+    // MARK: Chat sync (decision 130)
+
+    /// Chat sessions subscribed whose first post-subscribe snapshot has not arrived yet.
+    /// The view keeps showing the messages it already has and marks them "Syncing…".
+    public internal(set) var chatSyncing: Set<String> = []
+    /// Chats whose snapshot left older rows on the Mac (frame size cap).
+    public private(set) var chatHasEarlier: Set<String> = []
+    /// Per-session retry timer: re-sends the subscribe if no snapshot arrives in time.
+    var syncWatchdogs: [String: Task<Void, Never>] = [:]
+    /// Sessions whose sync retries ran out (Mac offline: the relay drops the subscribe).
+    /// The next Mac-originated `sessions` frame retries them.
+    var syncGaveUp: Set<String> = []
+    public var chatSyncTimeout: Duration = .seconds(8)
+    public var chatSyncMaxAttempts = 3
+    /// Leaving a chat keeps the Mac's transcript tail alive this long, so coming back
+    /// within it re-syncs instead of starting a fresh tail.
+    public var chatReleaseDelay: Duration = .seconds(30)
+    var pendingReleases: [String: Task<Void, Never>] = [:]
+
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
         self.store = store
@@ -136,8 +155,11 @@ public final class AppModel {
                     // send a re-subscribe to the Mac; the Mac restarts fresh scrollback + live data stream.
                     // If activeSessionId is nil (first connection or no subscriber) nothing happens.
                     if state == .connected, let sid = self.activeSessionId {
-                        let mode = self.activeChatMode ? "chat" : "terminal"
-                        Task { await self.client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sid, mode: mode)) }
+                        if self.activeChatMode {
+                            self.sendChatSubscribe(sid)
+                        } else {
+                            Task { await self.client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sid)) }
+                        }
                     }
                 case .message(let message):
                     self.handle(message)
@@ -184,6 +206,13 @@ public final class AppModel {
         gatedStreaming = [:]
         turnStatus = [:]
         stoppingSessions = []
+        for task in syncWatchdogs.values { task.cancel() }
+        syncWatchdogs = [:]
+        for task in pendingReleases.values { task.cancel() }
+        pendingReleases = [:]
+        chatSyncing = []
+        chatHasEarlier = []
+        syncGaveUp = []
         prompts = [:]
         models = [:]
         lastCommandError = [:]
@@ -224,6 +253,10 @@ public final class AppModel {
             // Only the Mac can send a sessions message → Mac is online.
             macOnline = true
             applySessions(metas)
+            // Decision 130: the Mac is back — retry a chat whose sync gave up meanwhile.
+            if let sid = activeSessionId, activeChatMode, syncGaveUp.contains(sid) {
+                sendChatSubscribe(sid)
+            }
 
         case .repos(let repos):
             // Only the Mac can send a repos message → Mac is online.
@@ -272,14 +305,16 @@ public final class AppModel {
         case .pong:
             break
 
-        case .chat(let sessionId, let messages):
+        case .chat(let sessionId, let messages, let hasEarlier):
             macOnline = true
+            finishChatSync(sessionId)
             chatBySession[sessionId] = messages
+            if hasEarlier { chatHasEarlier.insert(sessionId) } else { chatHasEarlier.remove(sessionId) }
             pendingBySession[sessionId] = chatRetireLandedPending(
                 messages: messages, current: pendingBySession[sessionId] ?? [])
             recomputeStreaming(sessionId)
 
-        case .chatAppend(let sessionId, let messages):
+        case .chatAppend(let sessionId, let messages, _):
             macOnline = true
             var current = chatBySession[sessionId] ?? []
             for message in messages {
@@ -340,9 +375,9 @@ public final class AppModel {
             "data \(chunk.sessionId.prefix(8)) seq=\(chunk.seq)"
         case .repos(let repos):
             "repos count=\(repos.count)"
-        case .chat(_, let messages):
+        case .chat(_, let messages, _):
             "chat count=\(messages.count)"
-        case .chatAppend(_, let messages):
+        case .chatAppend(_, let messages, _):
             "chat_append count=\(messages.count)"
         case .chatStatus(let sessionId, _):
             "chat_status \(sessionId.prefix(8))"
@@ -377,6 +412,8 @@ public final class AppModel {
             turnStatus[active] = nil
             stoppingSessions.remove(active)
             prompts[active] = nil
+            chatHasEarlier.remove(active)
+            finishChatSync(active)
         }
     }
 
@@ -550,7 +587,8 @@ public final class AppModel {
 
     // MARK: Chat subscription API (Task 10)
 
-    /// mode=chat subscription: set activeSessionId + send chat frame.
+    /// mode=chat subscription: set activeSessionId + send chat frame. Existing messages
+    /// stay on screen until the Mac's snapshot replaces them (decision 130).
     public func subscribeChat(_ sessionId: String) {
         // Same cleanup as terminal subscription: if the old session's sink is not finished,
         // late arriving old .data is yielded to it (see subscribe(_:)).
@@ -559,12 +597,13 @@ public final class AppModel {
             terminalSinks[old] = nil
             replayBuffers[old] = nil
         }
+        cancelPendingRelease(sessionId)
         activeSessionId = sessionId
         activeChatMode = true
         chatBySession[sessionId] = chatBySession[sessionId] ?? []
         // Don't drop scrollback that arrives before the strip mounts (subscribe(_:) parity).
         replayBuffers[sessionId] = []
-        Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId, mode: "chat")) }
+        sendChatSubscribe(sessionId)
     }
 
     public func chatMessages(_ sessionId: String) -> [ChatMessage] {
@@ -582,15 +621,11 @@ public final class AppModel {
 
     /// Appends an optimistic user echo (orca pending-echo append).
     private func appendChatPending(_ sessionId: String, text: String) {
-        let messages = chatBySession[sessionId] ?? []
-        let normalized = normalizeChatUserText(text)
-        let baselineOccurrences = chatCountUserTextOccurrences(messages, normalized)
-        let baselineTailId = messages.last?.id
+        let baselineTailId = chatBySession[sessionId]?.last?.id
         pendingCounter += 1
         pendingBySession[sessionId] = chatPendingAppend(
             current: pendingBySession[sessionId] ?? [],
             id: "pending-\(pendingCounter)", text: text,
-            baselineOccurrences: baselineOccurrences,
             baselineTailMessageId: baselineTailId)
     }
 
@@ -653,6 +688,7 @@ public final class AppModel {
         terminalSinks[id] = nil
         replayBuffers[id] = nil
         chatBySession[id] = nil
+        chatHasEarlier.remove(id)
         pendingBySession[id] = nil
         streamingGates[id] = nil
         gatedStreaming[id] = nil
@@ -663,6 +699,8 @@ public final class AppModel {
         models[id] = nil
         lastCommandError[id] = nil
         if activeSessionId == id { activeSessionId = nil; activeChatMode = false }
+        finishChatSync(id)
+        cancelPendingRelease(id)
     }
 
     /// Is the session a stream-json chat session? View routing (chat view vs

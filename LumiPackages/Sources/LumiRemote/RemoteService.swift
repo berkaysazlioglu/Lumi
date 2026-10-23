@@ -57,6 +57,8 @@ public final class RemoteService: RemoteServicing {
     private let keystrokeScheduler: any KeystrokeScheduling
     /// Bileşen B2: dış oturumlar için transcript bul (Task 3).
     private let transcriptLocator: any TranscriptLocating
+    /// Locator'ın harici oturum transcript'ini yeniden arama aralığı (10 deneme).
+    private let locatorRetryDelay: Duration
     private var promptWriteTasks: [TerminalID: Task<Void, Never>] = [:]
     private var promptSeq = 0
     private var hookTask: Task<Void, Never>?
@@ -93,6 +95,7 @@ public final class RemoteService: RemoteServicing {
         turnClock: @escaping @Sendable () -> Date = { Date() },
         keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
         transcriptLocator: any TranscriptLocating = NoopTranscriptLocating(),
+        locatorRetryDelay: Duration = .milliseconds(500),
         chatSessions: any ChatSessionServicing = NoopChatSessionService(),
         workspaces: any WorkspaceServicing = NoopWorkspaceServicing(),
         config: any ConfigServicing
@@ -110,6 +113,7 @@ public final class RemoteService: RemoteServicing {
         self.turnClock = turnClock
         self.keystrokeScheduler = keystrokeScheduler
         self.transcriptLocator = transcriptLocator
+        self.locatorRetryDelay = locatorRetryDelay
         self.chatSessions = chatSessions
     }
 
@@ -241,6 +245,7 @@ public final class RemoteService: RemoteServicing {
                 await sendRepos()
                 await sendProjects()
                 await sendUsage()
+                await resyncChatSubscriptions()
             case "subscribe":
                 await handleSubscribe(payload)
             case "unsubscribe":
@@ -310,8 +315,29 @@ public final class RemoteService: RemoteServicing {
         cancelChatSubscription(id)
         await connection.send(type: "chat",
             payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
+        startTranscriptBridge(id: id, raw: raw, meta: meta)
+    }
+
+    /// Transcript-tail köprüsünü (yeniden) kurar; ilk olayı tam snapshot'tır.
+    private func startTranscriptBridge(id: TerminalID, raw: String, meta: TerminalMeta) {
         chatSubscriptions[id] = Task { [weak self] in
             await self?.awaitTranscript(id: id, raw: raw, meta: meta)
+        }
+    }
+
+    /// Karar 130: Mac relay'e yeniden bağlandı (`welcome`). Kopukken gönderilen
+    /// chat frame'leri kayboldu ve telefon bunu bilemez — abone olunan Claude
+    /// terminallerinin köprüsü baştan kurulur (taze snapshot) ve durum yeniden yayınlanır.
+    private func resyncChatSubscriptions() async {
+        for id in chatModeTerminals where chatSubscriptions[id] != nil {
+            guard let meta = terminal.terminals.first(where: { $0.id == id }) else { continue }
+            rlog("chat resync: relay yeniden bağlandı sid=\(id.description.prefix(8))")
+            cancelChatSubscription(id)
+            await emitTurnStatus(id: id, status: turnReducers[id]?.status ?? .idle)
+            for item in (promptJournals[id]?.items ?? []) where item.state == .pending {
+                await emitPrompt(id: id, prompt: item)
+            }
+            startTranscriptBridge(id: id, raw: id.description, meta: meta)
         }
     }
 
@@ -469,23 +495,26 @@ public final class RemoteService: RemoteServicing {
             // Non-claude terminal → eski mirror-only davranış korunur (boş chat + idle).
             // Hook-tabanlı turn-status bu terminal için her iki durumda da aktif.
             chatModeTerminals.insert(id)
-            rlog("chat subscribe: terminal sid=\(raw.prefix(8)) provider=\(terminal.terminals.first(where: { $0.id == id })?.provider?.rawValue ?? "nil")")
-            await connection.send(type: "chat",
-                payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
-            await emitTurnStatus(id: id, status: .idle)
-            // Mevcut turn-status ve prompt'ları yayınla (yeniden bağlantı senaryosu)
-            let snapshot = turnReducers[id]?.status ?? .idle
-            if snapshot != .idle { await emitTurnStatus(id: id, status: snapshot) }
+            let meta = terminal.terminals.first(where: { $0.id == id })
+            let isClaude = meta?.provider == .claude
+            rlog("chat subscribe: terminal sid=\(raw.prefix(8)) provider=\(meta?.provider?.rawValue ?? "nil")")
+            // Karar 130: Claude terminalinde boş yer tutucu YOK — telefon eldeki sohbeti
+            // transcript snapshot'ı gelene kadar gösterir (yeniden abonelikte silinmez).
+            if !isClaude {
+                await connection.send(type: "chat",
+                    payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
+            }
+            // Karar 130: önce koşulsuz idle gitmez; gerçek durum her zaman TEK frame'de gider
+            // (telefon offline iken biten turn "working"de kalmasın, titreme olmasın).
+            await emitTurnStatus(id: id, status: turnReducers[id]?.status ?? .idle)
             for item in (promptJournals[id]?.items ?? []) where item.state == .pending {
                 await emitPrompt(id: id, prompt: item)
             }
             // Karar 79: Claude provider terminali için transcript köprüsü başlat.
             // Non-claude terminaller (bash/codex/shell) mirror-only kalır.
-            if let meta = terminal.terminals.first(where: { $0.id == id }), meta.provider == .claude {
+            if let meta, isClaude {
                 rlog("chat subscribe: claude terminali — transcript köprüsü başlatılıyor sid=\(raw.prefix(8))")
-                chatSubscriptions[id] = Task { [weak self] in
-                    await self?.awaitTranscript(id: id, raw: raw, meta: meta)
-                }
+                startTranscriptBridge(id: id, raw: raw, meta: meta)
             }
             return
         }
@@ -527,12 +556,28 @@ public final class RemoteService: RemoteServicing {
         switch event {
         case .snapshot(let messages):
             rlog("chat snapshot gönderiliyor: sid=\(sessionId.prefix(8)) count=\(messages.count)")
-            await connection.send(type: "chat",
-                payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: messages))
+            await sendChatSnapshot(sessionId: sessionId, messages: messages)
         case .append(let messages):
-            guard !messages.isEmpty else { return }
+            await sendChatAppend(sessionId: sessionId, messages: messages)
+        }
+    }
+
+    /// Karar 130: snapshot relay frame bütçesine oturtulur (en yeni mesajlar).
+    private func sendChatSnapshot(sessionId: String, messages: [ChatMessage]) async {
+        let fit = ChatFrameBudget.fitSnapshot(messages)
+        if fit.hasEarlier {
+            rlog("chat snapshot kırpıldı: sid=\(sessionId.prefix(8)) \(messages.count)→\(fit.messages.count)")
+        }
+        await connection.send(type: "chat",
+            payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: fit.messages,
+                                                hasEarlier: fit.hasEarlier))
+    }
+
+    /// Karar 130: append bütçe altı parçalarla gider.
+    private func sendChatAppend(sessionId: String, messages: [ChatMessage]) async {
+        for chunk in ChatFrameBudget.chunkAppend(messages) {
             await connection.send(type: "chat_append",
-                payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: messages))
+                payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: chunk))
         }
     }
 
@@ -556,19 +601,16 @@ public final class RemoteService: RemoteServicing {
         if isFirstEmit {
             // İlk yayın: her koşulda tam snapshot (boş mesaj listesiyle dahi telefonu uyandırır)
             rlog("chat-bridge: initial snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
-            await connection.send(type: "chat",
-                payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))
+            await sendChatSnapshot(sessionId: sessionId, messages: snap.messages)
         } else if !changed.isEmpty {
             if prev.sentMessages.isEmpty {
                 // İlk mesajlar (ilk emit'ten sonra geldiyse): tam snapshot
                 rlog("chat-bridge: snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
-                await connection.send(type: "chat",
-                    payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))
+                await sendChatSnapshot(sessionId: sessionId, messages: snap.messages)
             } else {
                 // Yeni + güncellenmiş mesajlar: append (upsert)
                 rlog("chat-bridge: append sid=\(sessionId.prefix(8)) +\(changed.count)")
-                await connection.send(type: "chat_append",
-                    payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: changed))
+                await sendChatAppend(sessionId: sessionId, messages: changed)
             }
         }
         prev.sentMessages = Dictionary(snap.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
@@ -646,9 +688,13 @@ public final class RemoteService: RemoteServicing {
                 }
                 return
             }
-            try? await Task.sleep(for: .milliseconds(500))
+            try? await Task.sleep(for: locatorRetryDelay)
         }
-        rlog("chat subscribe: transcript bulunamadı, chat-unavailable kalıyor repo=\(meta.repoPath)")
+        // Karar 130: telefon "Syncing…"te asılı kalmasın — boş snapshot gerçeği söyler.
+        guard !Task.isCancelled else { return }
+        rlog("chat subscribe: transcript bulunamadı, boş chat gönderiliyor repo=\(meta.repoPath)")
+        await connection.send(type: "chat",
+            payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
     }
 
     // MARK: - Turn status (Faz 2)

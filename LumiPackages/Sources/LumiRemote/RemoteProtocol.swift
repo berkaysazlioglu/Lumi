@@ -139,14 +139,20 @@ enum RemoteProtocol {
         ]
     }
 
-    /// `chat` payload: bir oturumun tam mesaj listesi (snapshot).
-    static func chatPayload(sessionId: String, messages: [ChatMessage]) -> [String: Any] {
-        ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
+    /// `chat` payload: bir oturumun tam mesaj listesi (snapshot). `hasEarlier`
+    /// (karar 130, additive): boyut sınırı yüzünden eski mesajlar düşürüldü.
+    static func chatPayload(sessionId: String, messages: [ChatMessage], hasEarlier: Bool = false) -> [String: Any] {
+        var payload: [String: Any] = ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
+        if hasEarlier { payload["hasEarlier"] = true }
+        return payload
     }
 
-    /// `chat_append` payload: tail'de gelen yeni mesajlar.
-    static func chatAppendPayload(sessionId: String, messages: [ChatMessage]) -> [String: Any] {
-        ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
+    /// `chat_append` payload: tail'de gelen yeni mesajlar. `afterId` (karar 130,
+    /// additive): fark tabanlı aboneliğe cevap — mesajlar bu kimlikten sonrakilerdir.
+    static func chatAppendPayload(sessionId: String, messages: [ChatMessage], afterId: String? = nil) -> [String: Any] {
+        var payload: [String: Any] = ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
+        if let afterId { payload["afterId"] = afterId }
+        return payload
     }
 
     /// `chat_status` payload: bir oturumun canlı turn-status'u (Faz 2). Mac→telefon.

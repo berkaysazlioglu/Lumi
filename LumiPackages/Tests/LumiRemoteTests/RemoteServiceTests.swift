@@ -78,6 +78,11 @@ final actor FakeRelayConnection: RelayConnecting {
 
     func sentTypes() -> [String] { sent.map { $0.type } }
 
+    /// Her `chat` frame'inin mesaj sayısı, gönderim sırasıyla.
+    func chatMessageCounts() -> [Int] {
+        sent.filter { $0.type == "chat" }.map { ($0.payload["messages"] as? [[String: Any]])?.count ?? -1 }
+    }
+
     /// Gönderilen `sessions` frame'lerindeki meta `kind` değerleri (Sendable [String]
     /// döner — actor sınırından [String: Any] geçirmemek için).
     func sessionKinds() -> [String] {

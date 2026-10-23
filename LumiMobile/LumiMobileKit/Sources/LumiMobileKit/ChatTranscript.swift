@@ -42,7 +42,7 @@ public func normalizedChatUserText(_ message: ChatMessage) -> String? {
 public struct ChatPending: Identifiable, Sendable, Equatable {
     public let id: String
     public let text: String
-    /// Which occurrence of this text in the transcript triggers retirement.
+    /// Which occurrence of this text after `baselineTailMessageId` triggers retirement.
     public let expectedOccurrence: Int
     /// The transcript tail message id at send time (the echo is drawn after this row).
     public let baselineTailMessageId: String?
@@ -55,37 +55,33 @@ public struct ChatPending: Identifiable, Sendable, Equatable {
     }
 }
 
-/// Appends a new pending. expectedOccurrence = current copy count in the transcript
-/// (baselineOccurrences) + outstanding same-text echo count + 1 (orca).
+/// Appends a new pending. `expectedOccurrence` counts echoes AFTER the baseline tail
+/// row: outstanding same-text echoes + 1 (decision 130 — relative to the baseline so
+/// a snapshot that drops old rows can neither retire it early nor keep it forever).
 public func chatPendingAppend(current: [ChatPending], id: String, text: String,
-                              baselineOccurrences: Int, baselineTailMessageId: String?) -> [ChatPending] {
+                              baselineTailMessageId: String?) -> [ChatPending] {
     let normalized = normalizeChatUserText(text)
-    let earlierOutstanding = current.filter {
-        normalizeChatUserText($0.text) == normalized && $0.expectedOccurrence > baselineOccurrences
-    }.count
-    let expected = baselineOccurrences + earlierOutstanding + 1
-    return current + [ChatPending(id: id, text: text, expectedOccurrence: expected,
+    let earlierOutstanding = current.filter { normalizeChatUserText($0.text) == normalized }.count
+    return current + [ChatPending(id: id, text: text, expectedOccurrence: earlierOutstanding + 1,
                                   baselineTailMessageId: baselineTailMessageId)]
 }
 
-/// Retires a pending when the same text has appeared expectedOccurrence times in the
-/// transcript (orca exact-landing count pass). Glue-run/image branches not ported.
+/// Retires a pending once its text appeared `expectedOccurrence` times after its baseline
+/// row (orca exact-landing count pass). A baseline that is absent (empty chat at send
+/// time, or a replaced transcript after `/clear`) counts the whole list.
+/// Glue-run/image branches not ported.
 public func chatRetireLandedPending(messages: [ChatMessage], current: [ChatPending]) -> [ChatPending] {
-    var landedCounts: [String: Int] = [:]
-    for m in messages {
-        if let t = normalizedChatUserText(m) { landedCounts[t, default: 0] += 1 }
+    var indexById: [String: Int] = [:]
+    for (index, message) in messages.enumerated() where indexById[message.id] == nil {
+        indexById[message.id] = index
     }
     return current.filter { p in
         let n = normalizeChatUserText(p.text)
         if n.isEmpty { return true }
-        let landed = (landedCounts[n] ?? 0) >= p.expectedOccurrence
-        return !landed
+        let start = p.baselineTailMessageId.flatMap { indexById[$0] }.map { $0 + 1 } ?? 0
+        let landed = messages[start...].reduce(0) { normalizedChatUserText($1) == n ? $0 + 1 : $0 }
+        return landed < p.expectedOccurrence
     }
-}
-
-/// Number of user-message copies of the given text in the transcript (baselineOccurrences).
-public func chatCountUserTextOccurrences(_ messages: [ChatMessage], _ normalized: String) -> Int {
-    messages.reduce(0) { acc, m in normalizedChatUserText(m) == normalized ? acc + 1 : acc }
 }
 
 // MARK: - Streaming gate (orca deriveMobileNativeChatStreaming + hold adaptation)
