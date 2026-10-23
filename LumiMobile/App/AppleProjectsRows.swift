@@ -1,39 +1,102 @@
 import SwiftUI
 import LumiMobileKit
 
-/// Shared metrics of the Apple Projects rows.
+/// Shared metrics of the Apple Projects rows (compact: one text line per row).
 enum AppleProjectsMetrics {
     /// Width of the leading icon column (checkout symbol, provider artwork),
     /// so titles line up the way `Label` lines them up.
-    static let iconColumn: CGFloat = 28
+    static let iconColumn: CGFloat = 22
     /// Agents step in by one icon column under their checkout / folder.
     static let childIndent: CGFloat = iconColumn
-    static let providerIconSize: CGFloat = 20
+    static let providerIconSize: CGFloat = 15
     /// Project badge (Reminders' "My Lists" icon): a filled circle with a white glyph.
-    static let projectBadgeSize: CGFloat = 26
+    static let projectBadgeSize: CGFloat = 22
     static let projectGlyphScale: CGFloat = 0.5
     static let projectEmojiScale: CGFloat = 0.7
-    static let rowSpacing: CGFloat = 12
+    static let rowSpacing: CGFloat = 10
     static let subtitleSpacing: CGFloat = 2
+    static let minRowHeight: CGFloat = 34
+    static let rowInsets = EdgeInsets(top: 4, leading: 14, bottom: 4, trailing: 14)
+    static let titleFont = Font.subheadline
+    static let detailFont = Font.caption
+    /// The project band: its color washed over the card surface.
+    static let bandOpacity = 0.22
+    /// Group Color test toggle: the project color fading over its checkouts / agents.
+    static let checkoutTintOpacity = 0.12
+    static let agentTintOpacity = 0.07
+    private static let titlePoints: CGFloat = 15   // .subheadline
+    private static let detailPoints: CGFloat = 12  // .caption
+
+    /// Fonts under the A− / A+ test scale (scale 1 = the text styles above).
+    static func titleFont(_ scale: CGFloat) -> Font { .system(size: titlePoints * scale) }
+    static func detailFont(_ scale: CGFloat) -> Font { .system(size: detailPoints * scale) }
 }
 
-// MARK: - Project header
+extension View {
+    /// Row surface, optionally washed with the project color (Group Color test toggle).
+    func appleRowBackground(tint: Color?, opacity: Double) -> some View {
+        listRowBackground(ZStack {
+            Color(.secondarySystemGroupedBackground)
+            if let tint { tint.opacity(opacity) }
+        })
+    }
+}
 
-/// Section header of a project: its colored badge and name.
-struct AppleProjectHeader: View {
-    let node: ProjectNode
-    /// Agents hidden while the section is collapsed (shown as a count).
-    let collapsedCount: Int?
+extension View {
+    /// Compact insets shared by every Apple Projects row.
+    /// `scale` (A− / A+ test control) grows the whole row — insets too —
+    /// not only its text, so every step makes the row itself bigger.
+    func appleProjectsRow(scale: CGFloat = 1) -> some View {
+        let insets = AppleProjectsMetrics.rowInsets
+        return listRowInsets(EdgeInsets(top: insets.top * scale, leading: insets.leading,
+                                        bottom: insets.bottom * scale, trailing: insets.trailing))
+    }
+}
+
+// MARK: - Group header
+
+/// First row of a project (or `Other`) card: badge and name on a band of the
+/// project's color, so the card reads as one group. Tap collapses the card;
+/// collapsed, it shows how many agents it hides.
+struct AppleGroupHeaderRow<Title: View>: View {
+    let tint: Color
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
+    @Binding var isExpanded: Bool
+    let collapsedCount: Int
+    @ViewBuilder let title: () -> Title
 
     var body: some View {
-        HStack(spacing: AppleProjectsMetrics.rowSpacing) {
-            AppleProjectBadge(appearance: node.appearance)
-            Text(node.name).lineLimit(1)
-            Spacer(minLength: 0)
-            if let collapsedCount, collapsedCount > 0 {
-                Text("\(collapsedCount)")
-                    .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+        Button {
+            // The binding's setter animates the fold (ProjectsMotion.fold).
+            isExpanded.toggle()
+        } label: {
+            HStack(spacing: AppleProjectsMetrics.rowSpacing) {
+                title()
+                    .font(AppleProjectsMetrics.titleFont(scale).weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if !isExpanded && collapsedCount > 0 {
+                    Text("\(collapsedCount)")
+                        .font(AppleProjectsMetrics.detailFont(scale)).foregroundStyle(.secondary).monospacedDigit()
+                }
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .appleProjectsRow(scale: scale)
+        .listRowBackground(band)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+    }
+
+    private var band: some View {
+        ZStack {
+            Color(.secondarySystemGroupedBackground)
+            tint.opacity(AppleProjectsMetrics.bandOpacity)
         }
     }
 }
@@ -43,7 +106,8 @@ struct AppleProjectHeader: View {
 struct AppleProjectBadge: View {
     let appearance: ProjectAppearance
 
-    private var size: CGFloat { AppleProjectsMetrics.projectBadgeSize }
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
+    private var size: CGFloat { AppleProjectsMetrics.projectBadgeSize * scale }
 
     var body: some View {
         switch appearance.icon {
@@ -83,7 +147,8 @@ struct AppleSymbolBadge: View {
     let symbol: String
     let color: Color
 
-    private var size: CGFloat { AppleProjectsMetrics.projectBadgeSize }
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
+    private var size: CGFloat { AppleProjectsMetrics.projectBadgeSize * scale }
 
     var body: some View {
         Image(systemName: symbol)
@@ -102,6 +167,9 @@ struct AppleCheckoutRow: View {
     let checkout: CheckoutRowData
     let project: ProjectNode
     let actions: ProjectsListActions
+    /// Project color for the Group Color test toggle.
+    var tint: Color?
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
 
     private var title: String { checkoutDisplayTitle(checkout.node, in: project) }
     private var branch: String? { checkout.node.branch.flatMap { $0.isEmpty ? nil : $0 } }
@@ -110,15 +178,15 @@ struct AppleCheckoutRow: View {
     var body: some View {
         HStack(spacing: AppleProjectsMetrics.rowSpacing) {
             Image(systemName: symbol)
+                .font(AppleProjectsMetrics.titleFont(scale))
                 .foregroundStyle(.secondary)
-                .frame(width: AppleProjectsMetrics.iconColumn)
-            VStack(alignment: .leading, spacing: AppleProjectsMetrics.subtitleSpacing) {
-                Text(title).font(.body.weight(.medium)).lineLimit(1)
-                if let branch, branch != title {
-                    Text(branch)
-                        .font(.footnote).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
+                .frame(width: AppleProjectsMetrics.iconColumn * scale)
+            Text(title).font(AppleProjectsMetrics.titleFont(scale).weight(.medium)).lineLimit(1)
+                .layoutPriority(1)
+            if let branch, branch != title {
+                Text(branch)
+                    .font(AppleProjectsMetrics.detailFont(scale)).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 0)
             AppleStartMenu(path: checkout.node.path, actions: actions,
@@ -126,6 +194,8 @@ struct AppleCheckoutRow: View {
                 startItems
             }
         }
+        .appleProjectsRow(scale: scale)
+        .appleRowBackground(tint: tint, opacity: AppleProjectsMetrics.checkoutTintOpacity)
         .contextMenu { startItems }
     }
 
@@ -159,7 +229,7 @@ struct AppleStartMenu<Items: View>: View {
                 items()
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                    .font(.body)
                     .symbolRenderingMode(.hierarchical)
             } primaryAction: {
                 actions.start(path)
@@ -173,64 +243,63 @@ struct AppleStartMenu<Items: View>: View {
 
 // MARK: - Agent
 
-/// An agent, Mail-style: provider artwork, title over its status, relative
-/// time and a disclosure chevron. Attention (finished unseen / needs input)
-/// reads like an unread message — bold title, tinted status.
+/// An agent on one line: provider artwork, title, status glyph, relative time
+/// and a disclosure chevron. Attention (finished unseen / needs input) reads
+/// like an unread message — bold title.
 struct AppleAgentRow: View {
     let agent: AgentRowData
     let actions: ProjectsListActions
+    /// Project color for the Group Color test toggle.
+    var tint: Color?
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
+    @State private var confirmingDelete = false
 
     var body: some View {
         Button { actions.open(agent.id) } label: { label }
             .padding(.leading, AppleProjectsMetrics.childIndent)
             .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] + AppleProjectsMetrics.childIndent }
+            .appleProjectsRow(scale: scale)
+            .appleRowBackground(tint: tint, opacity: AppleProjectsMetrics.agentTintOpacity)
             .swipeActions(edge: .trailing) {
-                Button(role: .destructive) { actions.delete(agent.id) } label: {
+                Button(role: .destructive) { confirmingDelete = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
             .contextMenu {
                 Button { actions.open(agent.id) } label: { Label("Open", systemImage: "arrow.up.forward.app") }
-                Button(role: .destructive) { actions.delete(agent.id) } label: {
+                Button(role: .destructive) { confirmingDelete = true } label: {
                     Label("Delete Chat", systemImage: "trash")
                 }
             }
+            .confirmDeleteChat(isPresented: $confirmingDelete, title: agent.title) { actions.delete(agent.id) }
     }
 
     private var label: some View {
         HStack(spacing: AppleProjectsMetrics.rowSpacing) {
-            UsageProviderIcon(id: agent.provider, size: AppleProjectsMetrics.providerIconSize)
-                .frame(width: AppleProjectsMetrics.iconColumn)
-            VStack(alignment: .leading, spacing: AppleProjectsMetrics.subtitleSpacing) {
-                Text(agent.title)
-                    .fontWeight(agent.needsAttention ? .semibold : .regular)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                status
-            }
+            UsageProviderIcon(id: agent.provider, size: AppleProjectsMetrics.providerIconSize * scale)
+                .frame(width: AppleProjectsMetrics.iconColumn * scale)
+            Text(agent.title)
+                .font(AppleProjectsMetrics.titleFont(scale))
+                .fontWeight(agent.needsAttention ? .semibold : .regular)
+                .foregroundStyle(titleColor)
+                .lineLimit(1)
             Spacer(minLength: 0)
+            AgentActivityGlyph(activity: agent.activity)
             Text(PhoneRelativeTime.shortLabel(agent.lastActivityAt, now: Date().timeIntervalSince1970 * 1000))
-                .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+                .font(AppleProjectsMetrics.detailFont(scale)).foregroundStyle(.secondary).monospacedDigit()
             Image(systemName: "chevron.forward")
-                .font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                .font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
     }
 
-    private var status: some View {
-        HStack(spacing: AppleProjectsMetrics.subtitleSpacing * 2) {
-            AgentActivityGlyph(activity: agent.activity)
-            Text(agent.activity.title)
-                .font(.subheadline)
-                .foregroundStyle(statusColor)
-        }
-    }
-
-    private var statusColor: AnyShapeStyle {
+    /// Decision and failure tint the title — the status line is gone in the compact row.
+    /// Concrete colors: a hierarchical `.primary` inside a list `Button` resolves to the tint.
+    private var titleColor: Color {
         switch agent.activity {
-        case .awaitingDecision: AnyShapeStyle(.orange)
-        case .failed: AnyShapeStyle(.red)
-        default: agent.needsAttention ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
+        case .awaitingDecision: .orange
+        case .failed: .red
+        default: .primary
         }
     }
 }

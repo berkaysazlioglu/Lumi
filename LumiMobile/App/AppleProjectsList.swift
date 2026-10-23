@@ -1,18 +1,25 @@
 import SwiftUI
 import LumiMobileKit
 
-/// Apple-standard Projects list (Settings ▸ Apple Layout): a system sidebar-style
-/// list like Files ▸ Browse or Mail's mailboxes — one collapsible section per
-/// project (Reminders-style colored badge), checkouts as rows with a `+`,
-/// agents as Mail-like two-line rows under them, `Other` for loose terminals,
-/// search, swipe / context-menu delete and system colors throughout.
+/// Apple-standard Projects list (Settings ▸ Apple Layout): a compact inset-grouped
+/// list — one card per project whose first row is the project itself on a band
+/// of its color (tap collapses the card), checkouts as rows with a `+`, agents
+/// as single-line rows under them, `Other` for loose terminals, search, swipe /
+/// context-menu delete and system colors throughout.
 struct AppleProjectsList: View {
     let model: AppModel
     let actions: ProjectsListActions
 
     /// Collapsed sections survive relaunches, like Files' and Mail's sidebars.
     @AppStorage(Self.collapsedKey) private var collapsedStorage = ""
+    /// Live fold state. `@AppStorage` writes land outside the animation
+    /// transaction (the fold snapped open/closed), so the view animates this
+    /// and only mirrors it to storage; seeded from storage on first appear.
+    @State private var collapsedIDs: Set<String>?
     @State private var query = ""
+    // Test controls (shared with the Lumi layout): Group Color + A− / A+.
+    @AppStorage(ProjectsDebugControls.tintKey) private var tintsGroups = false
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var rowScale = 1.0
 
     /// Collapse key for the Other section; NUL keeps it apart from project paths.
     private static let otherSectionID = "\u{0}other"
@@ -35,7 +42,9 @@ struct AppleProjectsList: View {
                 otherSection(others, locations: locations, isSearching: filter.isActive)
             }
         }
-        .listStyle(.sidebar)
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
+        .environment(\.defaultMinListRowHeight, AppleProjectsMetrics.minRowHeight * rowScale)
         .navigationTitle("Projects")
         .searchable(text: $query, prompt: "Projects, Branches, Chats")
         .overlay {
@@ -53,40 +62,56 @@ struct AppleProjectsList: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: Self.stripInset, bottom: 0, trailing: Self.stripInset))
                 .listRowBackground(Color.clear)
         }
+        if !isSearching {
+            ProjectsDebugControls()
+                .listRowInsets(EdgeInsets(top: 0, leading: Self.stripInset, bottom: 0, trailing: Self.stripInset))
+                .listRowBackground(Color.clear)
+        }
         if !model.macOnline {
             Section { offlineRow }
         }
     }
 
+    /// The project row heads its own card, so the project reads as one group
+    /// with its checkouts and agents.
     private func projectSection(_ slice: AppleProjectSlice, isSearching: Bool) -> some View {
-        Section(isExpanded: expansion(slice.id, isSearching: isSearching)) {
-            ForEach(slice.checkouts) { checkout in
-                AppleCheckoutRow(checkout: checkout.checkout, project: slice.project.node, actions: actions)
-                ForEach(checkout.agents) { AppleAgentRow(agent: $0, actions: actions) }
+        let isExpanded = expansion(slice.id, isSearching: isSearching)
+        return Section {
+            AppleGroupHeaderRow(tint: AppleProjectBadge.color(slice.project.node.appearance.color),
+                                isExpanded: isExpanded,
+                                collapsedCount: slice.agentCount) {
+                AppleProjectBadge(appearance: slice.project.node.appearance)
+                Text(slice.project.node.name)
             }
-        } header: {
-            AppleProjectHeader(node: slice.project.node,
-                               collapsedCount: !isSearching && collapsed.contains(slice.id) ? slice.agentCount : nil)
+            if isExpanded.wrappedValue {
+                let tint = groupTint(slice.project.node)
+                ForEach(slice.checkouts) { checkout in
+                    AppleCheckoutRow(checkout: checkout.checkout, project: slice.project.node,
+                                     actions: actions, tint: tint)
+                    ForEach(checkout.agents) { AppleAgentRow(agent: $0, actions: actions, tint: tint) }
+                }
+            }
         }
-        .headerProminence(.increased)
     }
 
     /// Projects ▸ Other (Mac decision 108): terminals outside any project, by folder.
     private func otherSection(_ groups: [AppleOtherSlice], locations: [LooseLocation],
                               isSearching: Bool) -> some View {
-        Section(isExpanded: expansion(Self.otherSectionID, isSearching: isSearching)) {
-            ForEach(groups) { group in
-                AppleFolderRow(group: group.group.node, actions: actions)
-                ForEach(group.agents) { AppleAgentRow(agent: $0, actions: actions) }
-            }
-            if !locations.isEmpty { AppleLooseStartRow(locations: locations, actions: actions)}
-        } header: {
-            HStack(spacing: AppleProjectsMetrics.rowSpacing) {
+        let isExpanded = expansion(Self.otherSectionID, isSearching: isSearching)
+        return Section {
+            AppleGroupHeaderRow(tint: Color(.systemGray), isExpanded: isExpanded,
+                                collapsedCount: groups.reduce(0) { $0 + $1.agents.count }) {
                 AppleSymbolBadge(symbol: "tray.full", color: Color(.systemGray))
                 Text("Other")
             }
+            if isExpanded.wrappedValue {
+                ForEach(groups) { group in
+                    AppleFolderRow(group: group.group.node, actions: actions)
+                    ForEach(group.agents) { AppleAgentRow(agent: $0, actions: actions) }
+                }
+                if !locations.isEmpty { AppleLooseStartRow(locations: locations, actions: actions) }
+            }
         }
-        .headerProminence(.increased)
     }
 
     // MARK: - Chrome
@@ -94,9 +119,9 @@ struct AppleProjectsList: View {
     private var offlineRow: some View {
         Label {
             VStack(alignment: .leading, spacing: AppleProjectsMetrics.subtitleSpacing) {
-                Text("Mac Offline").font(.headline)
+                Text("Mac Offline").font(.subheadline.weight(.semibold))
                 Text("Agents can't be started until your Mac reconnects.")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         } icon: {
             Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
@@ -114,8 +139,14 @@ struct AppleProjectsList: View {
         .listRowBackground(Color.clear)
     }
 
+    /// The project's color over its whole card, when the Group Color test toggle is on.
+    private func groupTint(_ project: ProjectNode) -> Color? {
+        guard tintsGroups, project.appearance.color != nil else { return nil }
+        return AppleProjectBadge.color(project.appearance.color)
+    }
+
     private var collapsed: Set<String> {
-        Set(collapsedStorage.split(separator: Self.collapsedSeparator).map(String.init))
+        collapsedIDs ?? Set(collapsedStorage.split(separator: Self.collapsedSeparator).map(String.init))
     }
 
     /// Search results always show expanded; collapsing then is not remembered.
@@ -126,6 +157,7 @@ struct AppleProjectsList: View {
                 guard !isSearching else { return }
                 var ids = collapsed
                 if isExpanded { ids.remove(id) } else { ids.insert(id) }
+                withAnimation(ProjectsMotion.fold) { collapsedIDs = ids }
                 collapsedStorage = ids.sorted().joined(separator: String(Self.collapsedSeparator))
             }
         )
@@ -138,13 +170,15 @@ struct AppleProjectsList: View {
 private struct AppleFolderRow: View {
     let group: OtherGroupNode
     let actions: ProjectsListActions
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
 
     var body: some View {
         HStack(spacing: AppleProjectsMetrics.rowSpacing) {
             Image(systemName: group.label == "~" ? "house" : "folder")
+                .font(AppleProjectsMetrics.titleFont(scale))
                 .foregroundStyle(.secondary)
-                .frame(width: AppleProjectsMetrics.iconColumn)
-            Text(group.label).font(.body.weight(.medium))
+                .frame(width: AppleProjectsMetrics.iconColumn * scale)
+            Text(group.label).font(AppleProjectsMetrics.titleFont(scale))
                 .lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 0)
             AppleStartMenu(path: group.path, actions: actions,
@@ -154,6 +188,7 @@ private struct AppleFolderRow: View {
                 }
             }
         }
+        .appleProjectsRow(scale: scale)
     }
 }
 
@@ -162,6 +197,7 @@ private struct AppleFolderRow: View {
 private struct AppleLooseStartRow: View {
     let locations: [LooseLocation]
     let actions: ProjectsListActions
+    @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
 
     private var isBusy: Bool {
         guard let busy = actions.startingPath else { return false }
@@ -183,9 +219,10 @@ private struct AppleLooseStartRow: View {
                     if isBusy { ProgressView() } else { Image(systemName: "plus.circle.fill") }
                 }
                 .frame(width: AppleProjectsMetrics.iconColumn)
-                Text("New Claude in…")
+                Text("New Claude in…").font(AppleProjectsMetrics.titleFont(scale))
             }
         }
         .disabled(!actions.isOnline || actions.startingPath != nil)
+        .appleProjectsRow(scale: scale)
     }
 }
