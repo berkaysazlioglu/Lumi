@@ -56,7 +56,7 @@ public final class TerminalDigestCoordinator {
         feed: OrchestratorActivityFeed,
         watchList: OrchestratorWatchList,
         isEnabled: @escaping @MainActor () async -> Bool,
-        settleDelay: Duration = .seconds(3),
+        settleDelay: Duration = .milliseconds(500),
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.service = service

@@ -4,11 +4,14 @@ import LumiKit
 /// Ajan terminalinin son mesajını `claude -p --model haiku` ile 1–3 satıra
 /// indirir ve "kullanıcıdan bir şey istiyor mu?" sorusunu cevaplar (karar 114
 /// Faz 4). Commit mesajı servisinin (karar 47) deseni: binary `BinaryLocating`
-/// ile çözülür, mesaj stdin'den gider, araçsız tek turn, kullanıcı ayarları ve
+/// ile çözülür, mesaj stdin'den gider, `--effort low`, araçsız tek turn, kullanıcı ayarları ve
 /// Lumi hook'ları yüklenmez (`--setting-sources ""`), oturum kaydedilmez.
 public actor ClaudeDigestService: TerminalDigestSummarizing {
     public static let binaryName = "claude"
     public static let model = "haiku"
+    /// Açıkça en düşük: ayar dosyaları yüklenmediği için verilmezse modelin
+    /// varsayılanı geçer ve haiku ara sıra düşünmeye geçip özeti uzatıyordu.
+    public static let effort = "low"
     public static let timeout: TimeInterval = 60
     /// Stdin'e giden mesajın üst sınırı — özet için fazlası gereksiz.
     public static let maxInputCharacters = 12_000
@@ -96,6 +99,7 @@ public actor ClaudeDigestService: TerminalDigestSummarizing {
     private static func arguments(instruction: String) -> [String] { [
         "-p", instruction,
         "--model", model,
+        "--effort", effort,
         "--output-format", "json",
         "--tools", "",
         "--setting-sources", "",
