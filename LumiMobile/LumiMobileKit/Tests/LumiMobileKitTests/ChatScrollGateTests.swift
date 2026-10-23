@@ -1,31 +1,51 @@
 import XCTest
 @testable import LumiMobileKit
 
+/// Decision 131: distance from the bottom + Claude Code-style auto-follow.
 final class ChatScrollGateTests: XCTestCase {
-    func testSentinelAtViewportBottomIsAtBottom() {
-        XCTAssertTrue(chatAtBottom(sentinelMinY: 600, viewportHeight: 600))
+    private let policy = ChatFollowPolicy(threshold: 48)
+
+    func testDistanceFromBottom() {
+        XCTAssertEqual(chatDistanceFromBottom(sentinelMinY: 592, viewportHeight: 600), -8)
+        XCTAssertEqual(chatDistanceFromBottom(sentinelMinY: 700, viewportHeight: 600), 100)
     }
 
-    func testSentinelExactlyAtThresholdIsAtBottom() {
-        // 600 + 80 == 680 → still at bottom (inclusive).
-        XCTAssertTrue(chatAtBottom(sentinelMinY: 680, viewportHeight: 600))
+    func testUnloadedSentinelIsFar() {
+        // The lazy list drops the sentinel far from the bottom.
+        XCTAssertEqual(chatDistanceFromBottom(sentinelMinY: nil, viewportHeight: 600), .infinity)
     }
 
-    func testSentinelJustBeyondThresholdIsNotAtBottom() {
-        XCTAssertFalse(chatAtBottom(sentinelMinY: 681, viewportHeight: 600))
+    func testUserScrollingWithinThresholdKeepsFollowing() {
+        let step = policy.step(distance: 40, isFollowing: true, isUserScrolling: true)
+        XCTAssertTrue(step.isFollowing)
+        XCTAssertFalse(step.shouldScrollToBottom, "never fight the user's finger")
+        XCTAssertFalse(policy.showsJumpButton(distance: 40, isFollowing: step.isFollowing))
+        XCTAssertTrue(step.isScrolledUp, "the prompt header may show before the jump button")
     }
 
-    func testFarScrolledUpIsNotAtBottom() {
-        XCTAssertFalse(chatAtBottom(sentinelMinY: 1200, viewportHeight: 600))
+    func testUserScrollingPastThresholdPausesFollowing() {
+        let step = policy.step(distance: 49, isFollowing: true, isUserScrolling: true)
+        XCTAssertFalse(step.isFollowing)
+        XCTAssertTrue(policy.showsJumpButton(distance: 49, isFollowing: step.isFollowing))
     }
 
-    func testShortContentThatFitsIsAtBottom() {
-        // Content shorter than the viewport → sentinel above the fold → at bottom.
-        XCTAssertTrue(chatAtBottom(sentinelMinY: 200, viewportHeight: 600))
+    func testUserScrollingBackDownResumesFollowing() {
+        XCTAssertTrue(policy.step(distance: 0, isFollowing: false, isUserScrolling: true).isFollowing)
     }
 
-    func testCustomThreshold() {
-        XCTAssertFalse(chatAtBottom(sentinelMinY: 650, viewportHeight: 600, threshold: 40))
-        XCTAssertTrue(chatAtBottom(sentinelMinY: 640, viewportHeight: 600, threshold: 40))
+    func testContentGrowthWhileFollowingRepins() {
+        let step = policy.step(distance: 300, isFollowing: true, isUserScrolling: false)
+        XCTAssertTrue(step.isFollowing)
+        XCTAssertTrue(step.shouldScrollToBottom)
+        XCTAssertFalse(step.isScrolledUp, "no header flash while re-pinning")
+        XCTAssertFalse(policy.step(distance: -8, isFollowing: true, isUserScrolling: false).shouldScrollToBottom,
+                       "already pinned")
+    }
+
+    func testContentGrowthWhilePausedStaysPut() {
+        // Also a jump to a prompt: programmatic, paused — must not snap back down.
+        let step = policy.step(distance: 300, isFollowing: false, isUserScrolling: false)
+        XCTAssertFalse(step.isFollowing)
+        XCTAssertFalse(step.shouldScrollToBottom)
     }
 }

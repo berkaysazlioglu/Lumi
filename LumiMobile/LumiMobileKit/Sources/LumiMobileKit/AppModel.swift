@@ -122,6 +122,8 @@ public final class AppModel {
     /// accepted delta reply, with no disconnect or unsubscribe since. Plain appends only
     /// apply to these — anything else would leave a hole the next delta cannot see.
     var liveChats: Set<String> = []
+    /// Decision 131: chats whose full snapshot was asked for ("Load earlier messages").
+    public internal(set) var fullChatRequested: Set<String> = []
     /// Per-session retry timer: re-sends the subscribe if no snapshot arrives in time.
     var syncWatchdogs: [String: Task<Void, Never>] = [:]
     /// Sessions whose sync retries ran out (Mac offline: the relay drops the subscribe).
@@ -227,6 +229,7 @@ public final class AppModel {
         chatSyncing = []
         chatHasEarlier = []
         liveChats = []
+        fullChatRequested = []
         for task in cacheSaves.values { task.cancel() }
         cacheSaves = [:]
         chatCache.clear()
@@ -709,6 +712,7 @@ public final class AppModel {
         chatBySession[id] = nil
         chatHasEarlier.remove(id)
         liveChats.remove(id)
+        fullChatRequested.remove(id)
         cacheSaves[id]?.cancel()
         cacheSaves[id] = nil
         chatCache.remove(id)

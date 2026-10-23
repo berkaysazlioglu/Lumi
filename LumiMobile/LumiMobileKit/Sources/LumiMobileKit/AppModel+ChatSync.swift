@@ -5,25 +5,35 @@ import LumiWire
 /// already shows; it marks the chat "syncing" until the Mac's snapshot arrives,
 /// retries a lost subscribe, and leaving a chat releases the Mac tail lazily.
 extension AppModel {
-    /// Sends a mode=chat subscribe and arms the retry watchdog.
-    func sendChatSubscribe(_ sessionId: String, attempt: Int = 1) {
+    /// Sends a mode=chat subscribe and arms the retry watchdog. `full` leaves out the
+    /// cursor, so the Mac answers with its whole (budgeted) snapshot.
+    func sendChatSubscribe(_ sessionId: String, attempt: Int = 1, full: Bool = false) {
         chatSyncing.insert(sessionId)
         syncGaveUp.remove(sessionId)
         let frame = PhoneProtocol.subscribeFrame(sessionId: sessionId, mode: "chat",
-                                                 afterId: syncCursor(sessionId))
+                                                 afterId: full ? nil : syncCursor(sessionId))
         Task { await client.send(frame: frame) }
         syncWatchdogs[sessionId]?.cancel()
         let timeout = chatSyncTimeout
         syncWatchdogs[sessionId] = Task { [weak self] in
             try? await Task.sleep(for: timeout)
             guard !Task.isCancelled else { return }
-            self?.chatSyncTimedOut(sessionId, attempt: attempt)
+            self?.chatSyncTimedOut(sessionId, attempt: attempt, full: full)
         }
+    }
+
+    /// Decision 131: the list starts with the cache's (or the Mac frame's) cut — ask the
+    /// Mac for everything it can send. A list still cut after that ends at the Mac's
+    /// frame budget; the view then stops offering the button.
+    public func loadEarlierChat(_ sessionId: String) {
+        guard chatHasEarlier.contains(sessionId), !fullChatRequested.contains(sessionId) else { return }
+        fullChatRequested.insert(sessionId)
+        sendChatSubscribe(sessionId, full: true)
     }
 
     /// The snapshot did not arrive in time. While disconnected the reconnect path
     /// re-subscribes, so only a live connection spends an attempt.
-    private func chatSyncTimedOut(_ sessionId: String, attempt: Int) {
+    private func chatSyncTimedOut(_ sessionId: String, attempt: Int, full: Bool) {
         syncWatchdogs[sessionId] = nil
         guard chatSyncing.contains(sessionId), activeSessionId == sessionId, activeChatMode,
               connection == .connected else { return }
@@ -34,7 +44,7 @@ extension AppModel {
             return
         }
         DiagLog.shared.log("model", "chat sync retry sid=\(sessionId.prefix(8)) attempt=\(attempt + 1)")
-        sendChatSubscribe(sessionId, attempt: attempt + 1)
+        sendChatSubscribe(sessionId, attempt: attempt + 1, full: full)
     }
 
     /// Last message the phone holds, if its id is stable across Mac reads — `idx-N`

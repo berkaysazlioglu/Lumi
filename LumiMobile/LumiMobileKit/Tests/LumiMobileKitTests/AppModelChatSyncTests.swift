@@ -196,6 +196,33 @@ final class AppModelChatSyncTests: XCTestCase {
         XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1"])
     }
 
+    // MARK: Load earlier (decision 131)
+
+    func testLoadEarlierAsksForTheWholeChatOnce() async {
+        let (model, client) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("u5")], hasEarlier: true))
+        model.subscribeChat("s1")
+        await waitUntil { subscribeCount(client, "s1") == 1 }
+        model.loadEarlierChat("s1")
+        model.loadEarlierChat("s1")
+        await waitUntil { subscribeCount(client, "s1") == 2 }
+        let subscribes = client.sentFrames.filter { $0.contains(#""type":"subscribe""#) }
+        XCTAssertEqual(subscribes.count, 2, "a second tap sends nothing")
+        XCTAssertFalse(subscribes[1].contains("afterId"), "no cursor → whole snapshot")
+        XCTAssertTrue(model.fullChatRequested.contains("s1"))
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1"), msg("u5")]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1", "u5"])
+        XCTAssertFalse(model.chatHasEarlier.contains("s1"))
+    }
+
+    func testLoadEarlierNeedsACutList() async {
+        let (model, client) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1")]))
+        model.loadEarlierChat("s1")
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(subscribeCount(client, "s1"), 0)
+    }
+
     func testDeltaFrameDecodesAfterId() {
         let frame = #"{"v":1,"type":"chat_append","payload":{"sessionId":"s1","afterId":"u1","messages":[]}}"#
         guard case let .chatAppend(sid, messages, afterId)? = PhoneProtocol.decodeServerMessage(frame) else {
