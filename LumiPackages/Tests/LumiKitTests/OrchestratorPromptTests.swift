@@ -25,6 +25,15 @@ final class OrchestratorPromptTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Turkish"))
     }
 
+    /// Sesli hitap ("Hey Codex") ve zamanlama ("bitince") terminale gitmez.
+    func testKeepsAddressAndTimingOutOfRelayedText() {
+        let prompt = OrchestratorPrompt.make(projects: "{}", watched: [])
+        XCTAssertTrue(prompt.contains("\"Hey Codex\""))
+        XCTAssertTrue(prompt.contains("strip every such address"))
+        XCTAssertTrue(prompt.contains("Timing and conditions are instructions to YOU"))
+        XCTAssertTrue(prompt.contains("without the condition words"))
+    }
+
     func testEmbedsProjectsAndWatchedTerminals() {
         let prompt = OrchestratorPrompt.make(
             projects: #"{"projects":[{"name":"api","path":"/p/api"}]}"#,
