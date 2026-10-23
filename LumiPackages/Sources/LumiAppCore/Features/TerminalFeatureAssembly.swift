@@ -103,7 +103,7 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
         }
         // Karar 57
         if old.terminalLinkActionsEnabled != new.terminalLinkActionsEnabled {
-            services.terminal.applyLinkActions(enabled: new.terminalLinkActionsEnabled)
+            appearanceTargets.forEach { $0.applyLinkActions(enabled: new.terminalLinkActionsEnabled) }
         }
         // Karar 24
         if old.autoMinimizeOnSend != new.autoMinimizeOnSend {
@@ -123,22 +123,26 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
     private func applyAppearance(_ config: AppConfig) {
         applyFont(config)
         applyCursor(config)
-        services.terminal.applyLinkActions(enabled: config.terminalLinkActionsEnabled)
+        appearanceTargets.forEach { $0.applyLinkActions(enabled: config.terminalLinkActionsEnabled) }
     }
 
     /// Karar 61: kullanıcının font boyutu ayarı arayüz ölçeğiyle ÇARPILIR —
     /// SwiftTerm SwiftUI token'larını kullanmadığı için ölçek ona ayrıca iner.
     private func applyFont(_ config: AppConfig) {
-        services.terminal.applyFont(LumiFonts.mono(
+        let font = LumiFonts.mono(
             family: config.terminalFontFamily,
             size: Theme.scaled(CGFloat(config.terminalFontSize))
-        ))
+        )
+        appearanceTargets.forEach { $0.applyFont(font) }
     }
 
     private func applyCursor(_ config: AppConfig) {
-        services.terminal.applyCursor(
-            shape: TerminalCursorShape.parse(config.terminalCursorStyle),
-            blink: config.terminalCursorBlink
-        )
+        let shape = TerminalCursorShape.parse(config.terminalCursorStyle)
+        appearanceTargets.forEach { $0.applyCursor(shape: shape, blink: config.terminalCursorBlink) }
+    }
+
+    /// Karar 123: orchestrator Codex'inin terminali de aynı görünümü taşır.
+    private var appearanceTargets: [any TerminalAppearanceControlling] {
+        [services.terminal, services.orchestratorTerminal]
     }
 }

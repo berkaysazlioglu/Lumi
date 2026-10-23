@@ -3,8 +3,8 @@ import LumiState
 import SwiftUI
 
 /// Top bar'daki orchestrator butonu (karar 114) — popup'ı açar/kapatır (⌘J).
-/// Orchestrator bir cevap üzerinde çalışırken ikon accent'le yanar; bekleyen
-/// onay varsa köşede sarı, görülmemiş ajan olayı varsa mor nokta çıkar.
+/// Orchestrator Codex'i bir turn üzerinde çalışırken ikon accent'le yanar;
+/// görülmemiş ajan olayı varsa köşede accent nokta çıkar.
 public struct OrchestratorToolbarItem: View {
     @Shell private var shell
 
@@ -23,25 +23,14 @@ public struct OrchestratorToolbarItem: View {
             isActive: shell.dialogs.isOrchestratorOpen || shell.orchestrator.isResponding,
             action: { shell.dialogs.isOrchestratorOpen.toggle() }
         )
-        // Faz 3: popup kapalıyken bekleyen onay görünür kalsın.
-        // Faz 4: görülmemiş Activity olayı accent nokta (onay önceliklidir).
+        // Faz 4: popup kapalıyken görülmemiş Activity olayı accent nokta.
         .overlay(alignment: .topTrailing) {
-            if let dot {
+            if shell.orchestrator.activity.unreadCount > 0 {
                 Circle()
-                    .fill(dot.color)
+                    .fill(Theme.accentPrimary)
                     .frame(width: Theme.Spacing.sm, height: Theme.Spacing.sm)
-                    .accessibilityLabel(dot.label)
+                    .accessibilityLabel("New agent activity in the orchestrator")
             }
         }
-    }
-
-    private var dot: (color: Color, label: String)? {
-        if !shell.orchestrator.approvals.pending.isEmpty {
-            return (Theme.warning, "Orchestrator is waiting for your approval")
-        }
-        if shell.orchestrator.activity.unreadCount > 0 {
-            return (Theme.accentPrimary, "New agent activity in the orchestrator")
-        }
-        return nil
     }
 }

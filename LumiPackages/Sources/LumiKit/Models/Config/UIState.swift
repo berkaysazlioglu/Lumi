@@ -47,9 +47,10 @@ public struct UIState: Sendable, Equatable {
     /// dahil) sıfırlanıyordu. Ham `String`: `ProjectToolsTab` LumiState'te
     /// tanımlı, LumiKit onu göremez; bilinmeyen değer okumada varsayılana iner.
     public var projectToolsTab: String?
-    /// Karar 114 (additive): orchestrator'ın sürdürülen Claude konuşması.
-    /// nil = dosyada yok → ilk açılışta yeni kimlik üretilir.
-    public var orchestratorSessionID: String?
+    /// Karar 123 (additive): orchestrator Codex'inin sürdürülen thread'i
+    /// (`codex resume`). nil = dosyada yok → ilk açılışta yeni konuşma; kimlik
+    /// Codex'in hook'undan öğrenilir.
+    public var orchestratorCodexThreadID: String?
     /// Karar 114 (additive): orchestrator'ın izlediği Claude terminallerinin
     /// oturum kimlikleri — terminal kimliği yeniden açılışta değiştiği için
     /// oturum kimliğiyle tutulur. nil = orchestrator hiç izleme yapmadı (anahtar
@@ -94,7 +95,7 @@ public struct UIState: Sendable, Equatable {
         uiFontFamily: UIFontFamily? = nil,
         lastCheckouts: [String: String] = [:],
         projectToolsTab: String? = nil,
-        orchestratorSessionID: String? = nil,
+        orchestratorCodexThreadID: String? = nil,
         orchestratorWatchedSessions: [String]? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
         allTerminalsOrder: [String] = [],
@@ -115,7 +116,7 @@ public struct UIState: Sendable, Equatable {
         self.uiFontFamily = uiFontFamily
         self.lastCheckouts = lastCheckouts
         self.projectToolsTab = projectToolsTab
-        self.orchestratorSessionID = orchestratorSessionID
+        self.orchestratorCodexThreadID = orchestratorCodexThreadID
         self.orchestratorWatchedSessions = orchestratorWatchedSessions
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.allTerminalsOrder = allTerminalsOrder

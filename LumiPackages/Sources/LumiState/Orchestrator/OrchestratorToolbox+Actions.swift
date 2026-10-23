@@ -1,10 +1,10 @@
 import Foundation
 import LumiKit
 
-/// Yazma araçları (karar 114 Faz 3). İkisi de önce popup'ta onay ister; onay
-/// gelene kadar hiçbir terminale dokunulmaz. Onaydan SONRA hedef yeniden
-/// çözülür — bekleme sırasında terminal kapanmış ya da durumu değişmiş olabilir.
-/// Başarılı her eylemin hedefi izlemeye alınır: cevabı Activity'ye düşer.
+/// Yazma araçları (karar 114 Faz 3, karar 123'ten beri onaysız): çağrıldıkları
+/// an çalışırlar — Codex orchestrator'ı auto modda koşar ve doğru hedefi
+/// seçmek talimatın işidir. Başarılı her eylemin hedefi izlemeye alınır:
+/// cevabı Activity'ye ve monitor üzerinden orchestrator'a düşer.
 extension OrchestratorToolbox {
     // MARK: - send_to_terminal
 
@@ -20,7 +20,7 @@ extension OrchestratorToolbox {
         return .now
     }
 
-    func sendToTerminal(_ args: [String: Any]) async -> OrchestratorToolResult {
+    func sendToTerminal(_ args: [String: Any]) -> OrchestratorToolResult {
         guard let rawID = args["terminal_id"] as? String, !rawID.isEmpty else {
             return .failure("terminal_id is required.")
         }
@@ -31,60 +31,36 @@ extension OrchestratorToolbox {
         case .found(let found): meta = found
         case .failure(let text): return .failure(text)
         }
-        let decision = await approvals.request(OrchestratorApprovalRequest(
-            kind: .sendMessage,
-            title: "Send to “\(meta.displayTitle)”",
-            target: target(of: meta),
-            body: message,
-            note: delivery(for: meta) == .queued
-                ? "The agent is busy — the message is queued and sent when it finishes its turn."
-                : nil
-        ))
-        if let declined = Self.outcome(of: decision) { return declined }
-
-        guard let current = terminals.meta(for: meta.id) else {
-            return .failure("\"\(meta.displayTitle)\" was closed before the message could be sent.")
-        }
-        switch delivery(for: current) {
+        switch delivery(for: meta) {
         case .now:
-            guard terminals.submit(message, to: current.id) else {
-                return .failure("Writing to \"\(current.displayTitle)\" failed.")
+            guard terminals.submit(message, to: meta.id) else {
+                return .failure("Writing to \"\(meta.displayTitle)\" failed.")
             }
-            return OrchestratorToolResult(text: "Sent to \"\(current.displayTitle)\" (\(current.id))." + watchNote(current))
+            return OrchestratorToolResult(text: "Sent to \"\(meta.displayTitle)\" (\(meta.id))." + watchNote(meta))
         case .queued:
             guard let promptQueue else {
-                return .failure("\"\(current.displayTitle)\" is busy and no prompt queue is available; try again when it is waiting.")
+                return .failure("\"\(meta.displayTitle)\" is busy and no prompt queue is available; try again when it is waiting.")
             }
-            promptQueue.enqueue(message, for: current.id)
-            let position = promptQueue.count(for: current.id)
-            let paused = promptQueue.isPaused(current.id) ? " Its queue is paused, so it waits until the user resumes it." : ""
+            promptQueue.enqueue(message, for: meta.id)
+            let position = promptQueue.count(for: meta.id)
+            let paused = promptQueue.isPaused(meta.id) ? " Its queue is paused, so it waits until the user resumes it." : ""
             return OrchestratorToolResult(
-                text: "\"\(current.displayTitle)\" is busy — queued at position \(position); it is sent when the agent finishes its current turn.\(paused)"
-                    + watchNote(current)
+                text: "\"\(meta.displayTitle)\" is busy — queued at position \(position); it is sent when the agent finishes its current turn.\(paused)"
+                    + watchNote(meta)
             )
         }
     }
 
     // MARK: - start_terminal
 
-    func startTerminal(_ args: [String: Any]) async -> OrchestratorToolResult {
-        guard let path = (args["path"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty else {
+    func startTerminal(_ args: [String: Any]) -> OrchestratorToolResult {
+        guard let rawPath = (args["path"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !rawPath.isEmpty else {
             return .failure("path is required.")
         }
-        guard let location = resolveCheckout(path) else {
-            return .failure("Unknown checkout path \"\(path)\". Use a checkout path from list_projects.")
+        guard let (path, location) = resolveCheckout(rawPath) else {
+            return .failure("Unknown checkout path \"\(rawPath)\". Use a checkout path from list_projects.")
         }
         let prompt = (args["prompt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        let decision = await approvals.request(OrchestratorApprovalRequest(
-            kind: .startTerminal,
-            title: "Start Claude",
-            target: [location.project, location.checkout, location.branch].compactMap { $0 }.joined(separator: " · ")
-                + " — \(path)",
-            body: prompt.isEmpty ? "(no first prompt)" : prompt
-        ))
-        if let declined = Self.outcome(of: decision) { return declined }
-
         // İlk prompt ilk-açılış güven menüsünde takılmasın (karar 89 ile aynı).
         trust?.markTrusted(repoPath: path)
         let launch = AgentProvider.claude.launchCommand
@@ -104,18 +80,6 @@ extension OrchestratorToolbox {
         watchList.watch(meta) ? " Lumi now watches it: its reply arrives as an activity note." : ""
     }
 
-    /// Onaylanmadıysa modele dönecek sonuç; onaylandıysa nil.
-    static func outcome(of decision: OrchestratorApprovals.Decision) -> OrchestratorToolResult? {
-        switch decision {
-        case .approved:
-            return nil
-        case .rejected:
-            return .failure("The user declined this action; nothing was done. Do not retry unless they ask.")
-        case .timedOut:
-            return .failure("The user did not answer the approval in time; nothing was done.")
-        }
-    }
-
     /// proje · checkout · dal (Activity kartı ve bağlam notu — Faz 4).
     func location(of meta: TerminalMeta) -> String {
         let location = terminalLocations()[meta.repoPath] ?? fallbackLocation(for: meta.repoPath)
@@ -132,11 +96,6 @@ extension OrchestratorToolbox {
         }
         let screen = OrchestratorToolFormat.screenTail(screenText(meta.id))
         return screen.isEmpty ? nil : screen
-    }
-
-    /// Kartın hedef satırı: proje · checkout · dal · durum.
-    func target(of meta: TerminalMeta) -> String {
-        [location(of: meta), status(of: meta)].joined(separator: " · ")
     }
 }
 

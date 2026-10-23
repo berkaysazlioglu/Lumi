@@ -1,297 +1,227 @@
+import Foundation
 import LumiKit
 import LumiTestSupport
 import XCTest
 @testable import LumiState
 
+/// Karar 123: orchestrator popup'taki etkileşimli bir Codex terminalidir —
+/// kendi terminal yöneticisinde açılır, thread'i hook'tan öğrenilip sürdürülür.
 @MainActor
 final class OrchestratorStoreTests: XCTestCase {
-    private func makeStore(
-        service: FakeOrchestratorService = FakeOrchestratorService(),
-        config: FakeConfigService = FakeConfigService(),
-        ids: [String] = ["s-1", "s-2", "s-3"]
-    ) -> OrchestratorStore {
-        let queue = IDQueue(ids)
-        return OrchestratorStore(service: service, config: config, makeSessionID: { queue.next() })
+    private var terminal: FakeTerminalService!
+    private var launcher: FakeOrchestratorLauncher!
+    private var config: FakeConfigService!
+    private var control: FakeOrchestratorControlServer!
+
+    override func setUp() async throws {
+        terminal = FakeTerminalService()
+        launcher = FakeOrchestratorLauncher()
+        config = FakeConfigService()
+        control = FakeOrchestratorControlServer()
     }
 
-    private func userText(_ id: String, _ text: String) -> ChatMessage {
-        ChatMessage(id: id, role: .user, blocks: [.text(text, presentation: nil)], timestampMs: nil, turnId: id)
+    private func makeStore(watchList: OrchestratorWatchList = OrchestratorWatchList()) -> OrchestratorStore {
+        let store = OrchestratorStore(
+            terminal: terminal,
+            viewProvider: FakeTerminalViewProvider(),
+            launcher: launcher,
+            config: config,
+            workingDirectory: "/home/.lumi/orchestrator",
+            control: control,
+            tools: NoTools(),
+            watchList: watchList,
+            promptContext: { (#"{"projects":[{"name":"api"}]}"#, [#""login" (t-1, working)"#]) },
+            codexHome: { "/codex-home" }
+        )
+        store.start()
+        return store
     }
 
-    private func assistantText(_ id: String, _ text: String) -> ChatMessage {
-        ChatMessage(id: id, role: .assistant, blocks: [.text(text, presentation: nil)], timestampMs: nil, turnId: id)
-    }
-
-    /// Bir sonraki main-actor turuna kadar bekler (akış tüketicisi işlesin).
+    /// Olay tüketicisi işlesin.
     private func drain() async {
         for _ in 0..<5 { await Task.yield() }
         try? await Task.sleep(for: .milliseconds(20))
     }
 
-    func testFirstActivationCreatesAndPersistsNewConversation() async {
-        let service = FakeOrchestratorService()
-        let config = FakeConfigService()
-        let store = makeStore(service: service, config: config)
+    private func storedThread() async -> String? {
+        await config.uiState().orchestratorCodexThreadID
+    }
+
+    // MARK: - Açılış
+
+    func testFirstActivationOpensFreshCodexWithDynamicInstructions() async throws {
+        let store = makeStore()
 
         await store.activate()
 
-        XCTAssertEqual(service.launches, [OrchestratorLaunch(sessionID: "s-1", resume: false)])
+        let request = try XCTUnwrap(launcher.requests.first)
+        XCTAssertNil(request.resumeThreadID)
+        XCTAssertEqual(request.codexHome, "/codex-home")
+        XCTAssertEqual(request.control, FakeOrchestratorControlServer.endpoint, "MCP ucu Codex'e gider")
+        XCTAssertTrue(request.instructions.contains(#""name":"api""#), "aktif projeler talimatta")
+        XCTAssertTrue(request.instructions.contains(#""login" (t-1, working)"#), "izlenen terminaller talimatta")
+        for tool in OrchestratorTools.specs.map(\.name) {
+            XCTAssertTrue(request.instructions.contains("`\(tool)`"), "araç kataloğunda yok: \(tool)")
+        }
+        let spawn = try XCTUnwrap(terminal.spawnCalls.first)
+        XCTAssertEqual(spawn.repoPath, "/home/.lumi/orchestrator")
+        XCTAssertEqual(spawn.command, "codex new")
+        XCTAssertEqual(spawn.environment["LUMI_MCP_TOKEN"], "fake-token")
         XCTAssertEqual(store.phase, .running)
-        let saved = await config.uiState().orchestratorSessionID
-        XCTAssertEqual(saved, "s-1")
-    }
-
-    func testNewConversationForgetsWatchedTerminals() async {
-        let config = FakeConfigService()
-        let watchList = OrchestratorWatchList(config: config)
-        let store = OrchestratorStore(
-            service: FakeOrchestratorService(), config: config, watchList: watchList, makeSessionID: { "s-new" }
-        )
-        let meta = TerminalMeta(id: TerminalID(), name: "api", repoPath: "/p", createdAt: Date(),
-                                claudeSessionID: "c-1", provider: .claude)
-        watchList.watch(meta)
-
-        await store.newConversation()
-        await watchList.flush()
-
-        XCTAssertTrue(watchList.terminalIDs.isEmpty)
-        let saved = await config.uiState().orchestratorWatchedSessions
-        XCTAssertEqual(saved, [], "boşalan liste diske de iner")
-    }
-
-    func testStoredConversationIsResumedWithHistory() async {
-        let service = FakeOrchestratorService()
-        service.stubHistory([userText("u0", "eski"), assistantText("a0", "cevap")])
-        let config = FakeConfigService()
-        var state = UIState.defaults
-        state.orchestratorSessionID = "kept"
-        await config.seed(state)
-        let store = makeStore(service: service, config: config)
-
-        await store.activate()
-
-        XCTAssertEqual(service.launches, [OrchestratorLaunch(sessionID: "kept", resume: true)])
-        XCTAssertEqual(store.messages.map(\.id), ["u0", "a0"])
+        XCTAssertEqual(store.terminalID, terminal.spawnedMetas.first?.id)
+        XCTAssertEqual(control.startCount, 1)
     }
 
     func testActivateIsIdempotentWhileRunning() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
+        let store = makeStore()
         await store.activate()
         await store.activate()
-        XCTAssertEqual(service.launches.count, 1)
+        XCTAssertEqual(terminal.spawnCalls.count, 1)
     }
 
-    func testSendShowsPendingUntilEchoAndRespondsUntilTurnResult() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
+    func testThreadFromHookIsPersistedAndResumedNextTime() async throws {
+        let store = makeStore()
         await store.activate()
+        let id = try XCTUnwrap(store.terminalID)
 
-        await store.send("  merhaba  ")
-        XCTAssertEqual(service.sent, ["merhaba"])
-        XCTAssertEqual(store.pendingPrompt, "merhaba")
+        terminal.emit(.codexSessionIDChanged(id, "thread-1"))
+        await drain()
+
+        XCTAssertEqual(store.threadID, "thread-1")
+        let saved = await storedThread()
+        XCTAssertEqual(saved, "thread-1")
+
+        let next = OrchestratorStore(
+            terminal: FakeTerminalService(), viewProvider: FakeTerminalViewProvider(),
+            launcher: launcher, config: config, workingDirectory: "/w"
+        )
+        await next.activate()
+        XCTAssertEqual(launcher.requests.last?.resumeThreadID, "thread-1")
+    }
+
+    func testStatusDrivesRespondingAndIgnoresOtherTerminals() async throws {
+        let store = makeStore()
+        await store.activate()
+        let id = try XCTUnwrap(store.terminalID)
+
+        terminal.emit(.statusChanged(TerminalID(), .working))
+        await drain()
+        XCTAssertFalse(store.isResponding)
+
+        terminal.emit(.statusChanged(id, .working))
+        await drain()
         XCTAssertTrue(store.isResponding)
-
-        var echoed = ChatJournalState()
-        echoed.messages = [userText("u1", "merhaba")]
-        service.emit(echoed)
-        await drain()
-        XCTAssertNil(store.pendingPrompt, "yankı gelince bekleyen balon kalkar")
-        XCTAssertTrue(store.isResponding, "turn bitmeden cevap bekleniyor")
-
-        var done = echoed
-        done.messages.append(assistantText("a1", "selam"))
-        done.completedTurns = 1
-        service.emit(done)
-        await drain()
-        XCTAssertFalse(store.isResponding)
-        XCTAssertEqual(store.messages.map(\.id), ["u1", "a1"])
     }
 
-    func testSendLaunchesLazilyWhenIdle() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
-        await store.send("ilk")
-        XCTAssertEqual(service.launches.count, 1)
-        XCTAssertEqual(service.sent, ["ilk"])
-    }
+    // MARK: - Çıkış
 
-    func testBlankMessageIsIgnored() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
-        await store.send("   \n ")
-        XCTAssertTrue(service.launches.isEmpty)
-        XCTAssertTrue(service.sent.isEmpty)
-    }
-
-    func testStartFailureSurfacesErrorAndStaysIdle() async {
-        let service = FakeOrchestratorService()
-        service.stubStartError(.cliNotFound(binary: "claude"))
-        let store = makeStore(service: service)
-
-        await store.send("selam")
-
-        XCTAssertEqual(store.phase, .idle)
-        XCTAssertNil(store.pendingPrompt)
-        XCTAssertEqual(store.errorMessage, LumiError.cliNotFound(binary: "claude").errorDescription)
-        XCTAssertTrue(service.sent.isEmpty)
-    }
-
-    func testUnexpectedExitWhileRespondingKeepsMessagesAndReportsError() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
-        await store.activate()
-        await store.send("uzun iş")
-        var echoed = ChatJournalState()
-        echoed.messages = [userText("u1", "uzun iş")]
-        service.emit(echoed)
-        await drain()
-
-        service.finish()
-        await drain()
-
-        XCTAssertEqual(store.phase, .idle)
-        XCTAssertEqual(store.messages.map(\.id), ["u1"], "canlı mesajlar geçmişe katlanır")
-        XCTAssertNotNil(store.errorMessage)
-        XCTAssertFalse(store.isResponding)
-    }
-
-    func testStopResponseKeepsConversationAndNextSendResumes() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
-        await store.activate()
-        await store.send("dur")
-
-        await store.stopResponse()
-
-        XCTAssertEqual(store.phase, .idle)
-        XCTAssertFalse(store.isResponding)
-        XCTAssertNil(store.errorMessage, "kullanıcının kesmesi hata değildir")
-
-        await store.send("devam")
-        XCTAssertEqual(service.launches.last, OrchestratorLaunch(sessionID: "s-1", resume: true))
-    }
-
-    func testNewConversationUsesFreshIDAndClearsMessages() async {
-        let service = FakeOrchestratorService()
-        service.stubHistory([userText("u0", "eski")])
-        let config = FakeConfigService()
+    func testUnexpectedExitStopsAndRestartResumesSameThread() async throws {
         var state = UIState.defaults
-        state.orchestratorSessionID = "old"
+        state.orchestratorCodexThreadID = "kept"
         await config.seed(state)
-        let store = makeStore(service: service, config: config)
+        let store = makeStore()
         await store.activate()
-        XCTAssertFalse(store.messages.isEmpty)
-        service.stubHistory([])
+        let id = try XCTUnwrap(store.terminalID)
+        terminal.emit(.codexSessionIDChanged(id, "kept"))
+        terminal.emit(.exited(id, code: 1))
+        await drain()
+
+        XCTAssertEqual(store.phase, .stopped)
+        XCTAssertNotNil(store.errorMessage)
+
+        await store.restart()
+        XCTAssertEqual(launcher.requests.map(\.resumeThreadID), ["kept", "kept"])
+        XCTAssertEqual(store.phase, .running)
+    }
+
+    func testResumeThatExitsBeforeReportingAThreadFallsBackToANewConversation() async throws {
+        var state = UIState.defaults
+        state.orchestratorCodexThreadID = "gone"
+        await config.seed(state)
+        let store = makeStore()
+        await store.activate()
+        let id = try XCTUnwrap(store.terminalID)
+
+        terminal.emit(.exited(id, code: 1))
+        await drain()
+
+        XCTAssertEqual(launcher.requests.map(\.resumeThreadID), ["gone", nil])
+        XCTAssertEqual(store.phase, .running)
+    }
+
+    func testNewConversationKillsQuietlyForgetsWatchListAndIgnoresStoredThread() async throws {
+        var state = UIState.defaults
+        state.orchestratorCodexThreadID = "old"
+        await config.seed(state)
+        let watchList = OrchestratorWatchList(config: config)
+        let store = makeStore(watchList: watchList)
+        watchList.watch(TerminalMeta(id: TerminalID(), name: "api", repoPath: "/p", createdAt: Date(),
+                                     claudeSessionID: "c-1", provider: .claude))
+        await store.activate()
+        let old = try XCTUnwrap(store.terminalID)
 
         await store.newConversation()
-
-        XCTAssertEqual(service.launches.last, OrchestratorLaunch(sessionID: "s-1", resume: false))
-        XCTAssertTrue(store.messages.isEmpty)
-        let saved = await config.uiState().orchestratorSessionID
-        XCTAssertEqual(saved, "s-1")
-    }
-
-    /// Faz 2: araç yürütücüsü varsa MCP sunucusu ilk süreçte açılır ve uç
-    /// sürece verilir; sonraki süreçler aynı sunucuyu kullanır.
-    func testControlServerStartsWithFirstLaunchAndEndpointReachesProcess() async {
-        let service = FakeOrchestratorService()
-        let control = FakeOrchestratorControlServer()
-        let store = OrchestratorStore(
-            service: service, config: FakeConfigService(),
-            control: control, tools: NoTools(), makeSessionID: { "s-1" }
-        )
-
-        await store.activate()
-
-        XCTAssertEqual(control.startCount, 1)
-        XCTAssertEqual(service.launches.last?.control, FakeOrchestratorControlServer.endpoint)
-        await store.shutdown()
-        XCTAssertEqual(control.stopCount, 1)
-    }
-
-    func testControlServerFailureSurfacesAsStartError() async {
-        let service = FakeOrchestratorService()
-        let control = FakeOrchestratorControlServer()
-        control.stubStartError(.underlying(domain: "LumiMCPServer", message: "port busy"))
-        let store = OrchestratorStore(
-            service: service, config: FakeConfigService(),
-            control: control, tools: NoTools(), makeSessionID: { "s-1" }
-        )
-
-        await store.activate()
-
-        XCTAssertEqual(store.phase, .idle)
-        XCTAssertNotNil(store.errorMessage)
-        XCTAssertTrue(service.launches.isEmpty)
-    }
-
-    /// Faz 3: süreç durunca bekleyen onay kartları asılı kalmaz.
-    func testStopRejectsPendingApprovals() async {
-        let service = FakeOrchestratorService()
-        let approvals = OrchestratorApprovals()
-        let store = OrchestratorStore(
-            service: service, config: FakeConfigService(), approvals: approvals, makeSessionID: { "s-1" }
-        )
-        await store.activate()
-        let request = OrchestratorApprovalRequest(kind: .sendMessage, title: "t", target: "x", body: "y")
-        let waiting = Task { await approvals.request(request) }
-        while approvals.pending.isEmpty { await Task.yield() }
-
-        await store.stopResponse()
-
-        let decision = await waiting.value
-        XCTAssertEqual(decision, .rejected)
-        XCTAssertTrue(approvals.pending.isEmpty)
-    }
-
-    /// Faz 4: araya giren olaylar bir sonraki mesaja not olarak iliştirilir;
-    /// balon notsuz metinle eşleşir.
-    func testPendingActivityIsAttachedToNextMessageOnce() async {
-        let service = FakeOrchestratorService()
-        let activity = OrchestratorActivityFeed()
-        let store = OrchestratorStore(
-            service: service, config: FakeConfigService(), activity: activity, makeSessionID: { "s-1" }
-        )
-        await store.activate()
-        activity.append(OrchestratorEvent(
-            terminalID: TerminalID(), terminalTitle: "api", location: "api · main",
-            kind: .finished, summary: "bitti", needsUser: false, at: Date()
-        ))
-
-        await store.send("ne oldu?")
-        XCTAssertTrue(service.sent[0].hasPrefix(OrchestratorActivityNote.open))
-        XCTAssertTrue(service.sent[0].hasSuffix("\n\nne oldu?"))
-        XCTAssertEqual(store.pendingPrompt, "ne oldu?", "balon notsuz metni gösterir")
-
-        var echoed = ChatJournalState()
-        echoed.messages = [userText("u1", service.sent[0])]
-        echoed.completedTurns = 1
-        service.emit(echoed)
+        terminal.emit(.exited(old, code: 0))
         await drain()
-        XCTAssertNil(store.pendingPrompt, "notlu yankı bekleyen balonu kapatır")
 
-        await store.send("tamam")
-        XCTAssertEqual(service.sent.last, "tamam", "not bir kez gider")
+        XCTAssertEqual(terminal.killedIDs, [old])
+        XCTAssertEqual(launcher.requests.map(\.resumeThreadID), ["old", nil])
+        XCTAssertEqual(store.phase, .running, "bilerek kapatılan terminalin çıkışı durdurmaz")
+        XCTAssertTrue(watchList.terminalIDs.isEmpty)
+
+        // Yeni thread henüz gelmeden yeniden başlatma eski konuşmaya dönmez.
+        await store.restart()
+        XCTAssertNil(launcher.requests.last?.resumeThreadID)
     }
 
-    func testShutdownStopsProcess() async {
-        let service = FakeOrchestratorService()
-        let store = makeStore(service: service)
+    // MARK: - Kurulum
+
+    func testMissingCodexShowsInstallAndInstallerExitStartsCodex() async throws {
+        launcher.setCodexMissing(true)
+        let store = makeStore()
+        await store.activate()
+        XCTAssertEqual(store.phase, .codexMissing)
+        XCTAssertTrue(terminal.spawnCalls.isEmpty)
+
+        store.installCodex()
+        XCTAssertEqual(store.phase, .installing)
+        XCTAssertEqual(terminal.spawnCalls.first?.command, OrchestratorStore.installCommand + " && exit")
+        let installer = try XCTUnwrap(store.terminalID)
+
+        launcher.setCodexMissing(false)
+        terminal.emit(.exited(installer, code: 0))
+        await drain()
+
+        XCTAssertEqual(store.phase, .running)
+        XCTAssertEqual(launcher.requests.count, 1)
+    }
+
+    func testInstallCommandIsTheOfficialScript() {
+        XCTAssertEqual(OrchestratorStore.installCommand, "curl -fsSL https://chatgpt.com/codex/install.sh | sh")
+    }
+
+    // MARK: - Popup
+
+    func testReplyPastesIntoComposerWithoutSubmitting() async throws {
+        let store = makeStore()
+        await store.activate()
+        let id = try XCTUnwrap(store.terminalID)
+
+        store.typeIntoComposer("Reply to “api”: ")
+
+        XCTAssertEqual(terminal.writtenTexts.first?.id, id)
+        XCTAssertEqual(terminal.writtenTexts.first?.text, "\u{1b}[200~Reply to “api”: \u{1b}[201~")
+        XCTAssertFalse(terminal.writtenTexts.first?.text.contains("\r") ?? true)
+        XCTAssertEqual(terminal.focusCalls.last, id)
+    }
+
+    func testShutdownKillsCodexAndStopsServer() async {
+        let store = makeStore()
         await store.activate()
         await store.shutdown()
-        XCTAssertEqual(service.stopCount, 1)
+        XCTAssertEqual(terminal.killAllCount, 1)
+        XCTAssertEqual(control.stopCount, 1)
         XCTAssertEqual(store.phase, .idle)
-    }
-}
-
-/// Sıralı, deterministik oturum kimlikleri.
-private final class IDQueue: @unchecked Sendable {
-    private let lock = NSLock()
-    private var ids: [String]
-    init(_ ids: [String]) { self.ids = ids }
-    func next() -> String {
-        lock.withLock { ids.isEmpty ? UUID().uuidString : ids.removeFirst() }
     }
 }
 

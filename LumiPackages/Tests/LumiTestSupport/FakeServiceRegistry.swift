@@ -42,11 +42,12 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var agentHooks: any AgentHookServing
     public var agentHookInstaller: any AgentHookInstalling
     public var chatSessions: any ChatSessionServicing = FakeChatSessionService()
-    public var orchestrator: any OrchestratorServicing = FakeOrchestratorService()
+    public var orchestratorTerminal: any TerminalServicing = FakeTerminalService()
+    public var orchestratorViewProvider: any TerminalViewProviding = FakeTerminalViewProvider()
+    public var orchestratorLauncher: any OrchestratorLaunching = FakeOrchestratorLauncher()
     public var orchestratorControl: any OrchestratorControlServing = FakeOrchestratorControlServer()
     public var terminalTranscripts: any TerminalTranscriptReading = FakeTerminalTranscripts()
     public var terminalDigests: any TerminalDigestSummarizing = FakeTerminalDigestSummarizer()
-    public var projectAsker: any ProjectQuestionAnswering = FakeProjectQuestionAnswerer()
     public var usageServices: [AgentProvider: any UsageServicing]
 
     /// Somut fake'lere tipli erişim (kayıt okumak için).

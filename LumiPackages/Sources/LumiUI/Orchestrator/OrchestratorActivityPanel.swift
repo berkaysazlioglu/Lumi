@@ -4,8 +4,7 @@ import SwiftUI
 
 /// Popup'ın sağ sütunu (karar 114 Faz 4): üstte orchestrator'ın İZLEDİĞİ
 /// Claude terminalleri, altında onlardan gelen "bitti / soru soruyor / karar
-/// bekliyor / hata" kartları, en yeni üstte. Kartlar model turu açmaz;
-/// kullanıcının bir sonraki mesajına not olarak iliştirilir.
+/// bekliyor / hata" haiku özetleri, en yeni üstte.
 struct OrchestratorActivityPanel: View {
     let feed: OrchestratorActivityFeed
     /// İzlenen canlı terminaller.
@@ -146,7 +145,7 @@ struct OrchestratorActivityCard: View {
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text(OrchestratorAssistantText.rendered(event.summary))
+            Text(Self.rendered(event.summary))
                 .font(Theme.Typography.ui(.body))
                 .foregroundStyle(Theme.textSecondary)
                 .textSelection(.enabled)
@@ -166,6 +165,12 @@ struct OrchestratorActivityCard: View {
             RoundedRectangle(cornerRadius: Theme.Radius.md)
                 .stroke(event.needsUser ? Theme.warning.opacity(0.6) : Theme.border, lineWidth: Theme.Stroke.hairline)
         )
+    }
+
+    /// Özet satır içi markdown'dır (kalın, kod); satır sonları korunur.
+    static func rendered(_ text: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 
     private func linkButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {

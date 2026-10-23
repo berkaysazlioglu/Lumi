@@ -66,9 +66,9 @@ enum UIStateCodec {
         if let raw = dict["projectToolsTab"] as? String {
             state.projectToolsTab = raw
         }
-        // Karar 114 (additive): orchestrator konuşması. Yoksa nil → yeni kimlik.
-        if let raw = dict["orchestratorSessionID"] as? String, !raw.isEmpty {
-            state.orchestratorSessionID = raw
+        // Karar 123 (additive): orchestrator Codex thread'i. Yoksa nil → yeni konuşma.
+        if let raw = dict["orchestratorCodexThreadID"] as? String, !raw.isEmpty {
+            state.orchestratorCodexThreadID = raw
         }
         // Karar 114 (additive): izlenen oturumlar. Yalnız dolu String'ler alınır.
         if let raw = dict["orchestratorWatchedSessions"] as? [Any] {
@@ -140,9 +140,9 @@ enum UIStateCodec {
         if let tab = state.projectToolsTab {
             overlay["projectToolsTab"] = tab
         }
-        // Karar 114 (additive): yalnız DOLU iken yazılır (karar 9).
-        if let sessionID = state.orchestratorSessionID {
-            overlay["orchestratorSessionID"] = sessionID
+        // Karar 123 (additive): yalnız DOLU iken yazılır (karar 9).
+        if let threadID = state.orchestratorCodexThreadID {
+            overlay["orchestratorCodexThreadID"] = threadID
         }
         // nil → yazılmaz; boş liste YAZILIR (merge bayat listeyi diskte bırakmasın).
         if let watched = state.orchestratorWatchedSessions {

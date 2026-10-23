@@ -75,16 +75,19 @@ public protocol ServiceRegistry: AnyObject {
     /// PTY'siz `claude --output-format stream-json` child'larıdır.
     var chatSessions: any ChatSessionServicing { get }
 
-    /// Karar 114: tüm ajan terminallerini yöneten orchestrator Claude'u.
-    var orchestrator: any OrchestratorServicing { get }
+    /// Karar 123: orchestrator Codex'inin kendi terminal yöneticisi — ana
+    /// servisten ayrıdır ki terminali grid'e, Projects'e, telefona ve resume
+    /// listesine hiç girmesin.
+    var orchestratorTerminal: any TerminalServicing { get }
+    var orchestratorViewProvider: any TerminalViewProviding { get }
+    /// Karar 123: Codex açılış komutu + `codex queue`.
+    var orchestratorLauncher: any OrchestratorLaunching { get }
     /// Karar 114 Faz 2: orchestrator'ın Lumi'yi yönettiği loopback MCP sunucusu.
     var orchestratorControl: any OrchestratorControlServing { get }
     /// Claude terminallerinin transkript kuyruğu (`read_terminal`).
     var terminalTranscripts: any TerminalTranscriptReading { get }
     /// Faz 4: uzun ajan mesajlarının haiku özeti.
     var terminalDigests: any TerminalDigestSummarizing { get }
-    /// Faz 5: `ask_project` arka plan ajanı.
-    var projectAsker: any ProjectQuestionAnswering { get }
 
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.

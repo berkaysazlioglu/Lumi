@@ -45,11 +45,12 @@ final class LiveServiceRegistry: ServiceRegistry {
     let agentHooks: any AgentHookServing
     let agentHookInstaller: any AgentHookInstalling
     let chatSessions: any ChatSessionServicing
-    let orchestrator: any OrchestratorServicing
+    let orchestratorTerminal: any TerminalServicing
+    let orchestratorViewProvider: any TerminalViewProviding
+    let orchestratorLauncher: any OrchestratorLaunching
     let orchestratorControl: any OrchestratorControlServing
     let terminalTranscripts: any TerminalTranscriptReading
     let terminalDigests: any TerminalDigestSummarizing
-    let projectAsker: any ProjectQuestionAnswering
 
     private let usageServices: [AgentProvider: any UsageServicing]
     /// P1 ölçüm harness'ı somut manager'a bağlıdır (debug-only araç, design/04).
@@ -129,14 +130,16 @@ final class LiveServiceRegistry: ServiceRegistry {
         // Stream-json chat lane (Faz 2): child env'inden claude-oturum kimliği
         // temizlenir (AgentChildEnvironment) — nested-oturum transcript hatası.
         chatSessions = ChatSessionService(environment: AgentChildEnvironment.cleaned())
-        orchestrator = OrchestratorService(
-            workingDirectory: paths.orchestratorDir,
-            environment: AgentChildEnvironment.cleaned()
-        )
+        // Karar 123: orchestrator Codex'i kendi yöneticisinde — olayları ana
+        // tüketicilere (grid, resume, telefon) hiç ulaşmaz. Global NSEvent
+        // monitörü ana manager'ınkidir (tüm Lumi terminal view'larına uygulanır).
+        let orchestratorManager = TerminalSessionManager(eventMonitor: nil)
+        orchestratorTerminal = orchestratorManager
+        orchestratorViewProvider = orchestratorManager.viewRegistry
+        orchestratorLauncher = CodexOrchestratorLauncher(workingDirectory: paths.orchestratorDir)
         orchestratorControl = LumiMCPServer(serverVersion: AppAboutInfo.current.version)
         terminalTranscripts = TranscriptChatSource()
         terminalDigests = ClaudeDigestService()
-        projectAsker = ClaudeProjectAskService()
         let manager = TerminalSessionManager()
         terminalManager = manager
         terminal = manager

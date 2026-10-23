@@ -322,7 +322,10 @@ private struct ShellFixture {
                 terminals: shared.terminals, terminalService: terminalService, sampler: FakeProcessSampler()
             ),
             appUpdate: AppUpdateStore(currentVersion: "0.8.0", service: FakeAppReleaseService(), installer: FakeAppUpdateInstaller()),
-            orchestrator: OrchestratorStore(service: FakeOrchestratorService(), config: FakeConfigService()),
+            orchestrator: OrchestratorStore(
+                terminal: FakeTerminalService(), viewProvider: FakeTerminalViewProvider(),
+                launcher: FakeOrchestratorLauncher(), config: FakeConfigService(), workingDirectory: "/tmp/orchestrator"
+            ),
             viewProvider: FakeTerminalViewProvider(),
             highlighter: NoopHighlighter(),
             markdownParser: FakeMarkdownParser(),

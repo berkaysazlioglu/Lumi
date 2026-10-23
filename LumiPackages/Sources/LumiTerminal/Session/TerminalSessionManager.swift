@@ -38,15 +38,18 @@ public final class TerminalSessionManager: TerminalServicing {
     /// Terminal alt sisteminin tek uygulama-seviyesi NSEvent monitörü (refactor 4.7):
     /// klavye eşlemesi, kart odağı, tekerlek/hover. Enjekte edilir ki testler gerçek
     /// bir global monitör kurmadan (ya da kurulumu doğrulayarak) koşabilsin.
-    private let eventMonitor: TerminalEventMonitor
+    /// `nil` = monitör yok: ikinci bir manager (orchestrator, karar 123) ana
+    /// manager'ın monitörünü paylaşır — monitör tüm Lumi terminal view'larına
+    /// first responder / hit-test üzerinden uygulanır, kayda bakmaz.
+    private let eventMonitor: TerminalEventMonitor?
 
     public init(
         font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular),
-        eventMonitor: TerminalEventMonitor = TerminalEventMonitor()
+        eventMonitor: TerminalEventMonitor? = TerminalEventMonitor()
     ) {
         self.font = font
         self.eventMonitor = eventMonitor
-        eventMonitor.start { [weak self] view in
+        eventMonitor?.start { [weak self] view in
             self?.noteViewFocused(view)
         }
     }
@@ -248,7 +251,7 @@ public final class TerminalSessionManager: TerminalServicing {
     /// (Faz 3'te `StoreLifecycle` ile composition root'a bağlanacak.)
     public func shutdown() {
         Self.logger.log("shutdown: event monitor stopped (sessions \(self.sessions.count))")
-        eventMonitor.stop()
+        eventMonitor?.stop()
     }
 
     // MARK: - Remote mirror

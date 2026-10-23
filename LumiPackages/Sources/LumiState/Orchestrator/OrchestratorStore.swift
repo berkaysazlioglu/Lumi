@@ -2,233 +2,296 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Orchestrator sohbetinin tek kaynağı (karar 114).
+/// Orchestrator'ın tek kaynağı (karar 123): popup'ta kullanıcının doğrudan
+/// konuştuğu etkileşimli bir Codex terminali.
 ///
-/// Süreç tembel başlar: popup ilk açıldığında (`activate`) ya da ilk mesajda.
-/// Popup kapanınca süreç YAŞAR — kapatmak yalnız gizler. Süreç ölürse
-/// (crash, `Stop`) bir sonraki mesaj aynı konuşmayı `--resume` ile açar.
-///
-/// Görünen mesajlar = önceki süreçlerin transkriptten okunan geçmişi +
-/// canlı sürecin journal'ı. Kullanıcı mesajı süreç yankılayana kadar
-/// `pendingPrompt` olarak gösterilir.
+/// Terminal, ana terminal servisinden AYRI bir yöneticide yaşar — grid'e,
+/// Projects'e, telefona ve resume listesine hiç girmez. Codex yalnız Lumi'nin
+/// MCP araçlarıyla çalışır; talimatı her açılışta canlı durumdan üretilir
+/// (`OrchestratorPrompt`). Popup'ı kapatmak yalnız gizler; süreç yaşar.
+/// Konuşma Codex thread kimliğiyle (`orchestratorCodexThreadID`) sürdürülür.
 @Observable
 @MainActor
 public final class OrchestratorStore {
     public enum Phase: Equatable, Sendable {
+        /// Hiç başlamadı (popup açılınca başlar).
         case idle
         case starting
         case running
+        /// Codex bulunamadı — kurulum paneli.
+        case codexMissing
+        /// Kurulum script'i popup'taki terminalde koşuyor.
+        case installing
+        /// Codex çıktı ya da açılamadı — `Restart` bekler.
+        case stopped
     }
 
-    public private(set) var phase: Phase = .idle
-    public private(set) var history: [ChatMessage] = []
-    public private(set) var live = ChatJournalState()
-    /// Gönderildi ama henüz süreçten yankılanmadı.
-    public private(set) var pendingPrompt: String?
-    /// Son başarısızlık (başlatma hatası, beklenmedik çıkış) — satır içi gösterilir.
-    public private(set) var errorMessage: String?
-    /// Faz 3: yazma araçlarının bekleyen onayları (popup kartları).
-    public let approvals: OrchestratorApprovals
-    /// Faz 4: ajan terminallerinden gelen bitiş/soru özetleri (Activity paneli).
-    public let activity: OrchestratorActivityFeed
-    /// Raporu Activity'ye düşen, izlenen terminaller (konuşmaya aittir).
-    public let watchList: OrchestratorWatchList
+    /// `Install` butonunun koştuğu ve `Copy` ile kopyalanan komut.
+    public static let installCommand = "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+    /// Resume'dan hemen sonraki çıkış = thread artık yok; bir kez yeni konuşmaya düşülür.
+    static let resumeFailureWindow: Duration = .seconds(15)
 
-    @ObservationIgnored private let service: any OrchestratorServicing
+    public private(set) var phase: Phase = .idle
+    /// Popup'ta gösterilen terminal (Codex ya da kurulum).
+    public private(set) var terminalID: TerminalID?
+    public private(set) var status: TerminalStatus = .idle
+    public private(set) var threadID: String?
+    /// Son başarısızlık — panelde satır içi gösterilir.
+    public private(set) var errorMessage: String?
+    /// Ajanlardan gelen haiku özetleri (Activity paneli).
+    public let activity: OrchestratorActivityFeed
+    /// Raporu gelen, izlenen terminaller (konuşmaya aittir).
+    public let watchList: OrchestratorWatchList
+    /// Orchestrator terminalinin view köprüsü (ana registry'den ayrı).
+    @ObservationIgnored public let viewProvider: any TerminalViewProviding
+
+    @ObservationIgnored private let terminal: any TerminalSessionControlling
+    @ObservationIgnored private let launcher: any OrchestratorLaunching
     @ObservationIgnored private let config: any ConfigServicing
-    /// Lumi'nin MCP ucu + araç yürütücüsü (Faz 2). İkisinden biri yoksa
-    /// orchestrator araçsız sohbet eder.
     @ObservationIgnored private let control: (any OrchestratorControlServing)?
     @ObservationIgnored private let tools: (any OrchestratorToolHandling)?
-    @ObservationIgnored private let makeSessionID: @Sendable () -> String
-    @ObservationIgnored private var sessionID: String?
-    @ObservationIgnored private var updatesTask: Task<Void, Never>?
-    /// Her `start` yeni bir kuşaktır; eski sürecin akışı bitince yeni
-    /// sürecin durumunu ezmesin.
-    @ObservationIgnored private var generation = 0
-    /// Bu süreçte gönderilen mesaj sayısı — `live.completedTurns` ile
-    /// karşılaştırılıp "cevap bekleniyor mu?" türetilir.
-    @ObservationIgnored private var sentTurns = 0
+    @ObservationIgnored private let workingDirectory: String
+    @ObservationIgnored private let promptContext: @MainActor () -> (projects: String, watched: [String])
+    @ObservationIgnored private let codexHome: @Sendable () async -> String?
+    @ObservationIgnored private let consumer = EventConsumer(label: "orchestrator")
+    /// Bu açılışın bilgisi: resume mı, ne zaman, thread öğrenildi mi?
+    @ObservationIgnored private var launch: LaunchRecord?
+    /// Bilerek kapatılan terminaller (restart / yeni konuşma / quit) — çıkışları hata değildir.
+    @ObservationIgnored private var expectedExits: Set<TerminalID> = []
+    @ObservationIgnored private var isLaunching = false
+    /// Yeni konuşma açıldı ama Codex thread'ini henüz bildirmedi: diskteki
+    /// eski thread bu arada resume edilmesin.
+    @ObservationIgnored private var ignoresStoredThread = false
+
+    private struct LaunchRecord {
+        let resumedThread: String?
+        let at: ContinuousClock.Instant
+        var learnedThread = false
+    }
 
     public init(
-        service: any OrchestratorServicing,
+        terminal: any TerminalSessionControlling,
+        viewProvider: any TerminalViewProviding,
+        launcher: any OrchestratorLaunching,
         config: any ConfigServicing,
+        workingDirectory: String,
         control: (any OrchestratorControlServing)? = nil,
         tools: (any OrchestratorToolHandling)? = nil,
-        approvals: OrchestratorApprovals = OrchestratorApprovals(),
         activity: OrchestratorActivityFeed = OrchestratorActivityFeed(),
         watchList: OrchestratorWatchList = OrchestratorWatchList(),
-        makeSessionID: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() }
+        promptContext: @escaping @MainActor () -> (projects: String, watched: [String]) = { ("(no projects)", []) },
+        codexHome: @escaping @Sendable () async -> String? = { nil }
     ) {
-        self.service = service
+        self.terminal = terminal
+        self.viewProvider = viewProvider
+        self.launcher = launcher
         self.config = config
+        self.workingDirectory = workingDirectory
         self.control = control
         self.tools = tools
-        self.approvals = approvals
         self.activity = activity
         self.watchList = watchList
-        self.makeSessionID = makeSessionID
+        self.promptContext = promptContext
+        self.codexHome = codexHome
     }
 
     // MARK: - Türevler
 
-    public var messages: [ChatMessage] { history + live.messages }
-    public var streamingText: String? { live.streamingText }
+    /// Codex bir turn üzerinde çalışıyor mu (top bar vurgusu).
+    public var isResponding: Bool { phase == .running && status == .working }
 
-    /// Orchestrator bir cevap üzerinde çalışıyor mu (girdi kilitlenmez, Stop görünür).
-    public var isResponding: Bool {
-        phase == .starting || pendingPrompt != nil || sentTurns > live.completedTurns
+    // MARK: - Yaşam döngüsü
+
+    /// Terminal olaylarını dinlemeye başlar (composition `start`).
+    public func start() {
+        consumer.start(terminal.events()) { [weak self] event in
+            self?.apply(event)
+        }
+    }
+
+    public func shutdown() async {
+        if let terminalID { expectedExits.insert(terminalID) }
+        terminal.killAll()
+        consumer.stop()
+        await control?.stop()
+        terminalID = nil
+        phase = .idle
     }
 
     // MARK: - Intent'ler
 
-    /// Popup açıldı: süreç yoksa başlat (resume'da geçmiş yüklenir).
+    /// Popup açıldı: hiç başlamadıysa başlatır.
     public func activate() async {
         guard phase == .idle else { return }
-        await launch()
+        await launchCodex(resume: await storedThreadID())
     }
 
-    public func send(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        errorMessage = nil
-        pendingPrompt = trimmed
-        if phase == .idle { await launch() }
-        guard phase == .running else {
-            pendingPrompt = nil
-            return
-        }
-        sentTurns += 1
-        // Faz 4: araya giren terminal olayları bu turla birlikte modele gider
-        // (ayrı tur açılmaz); balonda gösterilmez.
-        await service.send(OrchestratorActivityNote.attach(activity.consumeContextNote(), to: trimmed))
+    /// Codex'i aynı konuşmayla yeniden açar (çıktıysa ya da takıldıysa).
+    public func restart() async {
+        guard !isLaunching else { return }
+        closeCurrentTerminal()
+        await launchCodex(resume: await storedThreadID())
     }
 
-    /// Cevabı keser: süreç sonlandırılır, konuşma transkriptte kalır ve
-    /// bir sonraki mesaj onu `--resume` ile sürdürür.
-    public func stopResponse() async {
-        generation += 1
-        updatesTask?.cancel()
-        await service.stop()
-        settleStopped(error: nil)
-    }
-
-    /// Yeni konuşma: yeni kimlik, boş geçmiş, boş izleme listesi — yeni
-    /// model eski konuşmada izlemeye alınan terminalleri bilmez.
+    /// Yeni konuşma: yeni thread, boş izleme listesi — yeni konuşma eski
+    /// konuşmada izlemeye alınan terminalleri bilmez.
     public func newConversation() async {
+        guard !isLaunching else { return }
         watchList.clear()
-        generation += 1
-        updatesTask?.cancel()
-        await service.stop()
-        let id = makeSessionID()
-        sessionID = id
-        await persist(id)
-        settleStopped(error: nil)
-        history = []
-        await launch(resume: false)
+        forgetThread()
+        closeCurrentTerminal()
+        await launchCodex(resume: nil)
     }
 
-    public func shutdown() async {
-        approvals.rejectAll()
-        generation += 1
-        updatesTask?.cancel()
-        updatesTask = nil
-        await service.stop()
-        await control?.stop()
-        phase = .idle
+    /// Kurulum script'ini popup'taki terminalde koşar; bitince Codex başlar.
+    public func installCodex() {
+        guard phase == .codexMissing else { return }
+        errorMessage = nil
+        // Başarıda terminal kapanır (`exited` → Codex başlar); hatada shell
+        // açık kalır ki kullanıcı çıktıyı okusun.
+        spawn(command: Self.installCommand + " && exit", environment: [:]) { [weak self] in
+            self?.phase = .installing
+        }
     }
 
-    // MARK: - Süreç
+    /// Popup açıkken terminal klavye odağını ve canlı akışı alır.
+    public func focusTerminal() {
+        guard let terminalID else { return }
+        terminal.setSurfaceState(.foreground, for: terminalID)
+        terminal.setFocused(terminalID)
+    }
 
-    private func launch(resume: Bool? = nil) async {
+    /// Activity kartının `Reply`'ı: metni Codex'in composer'ına yapıştırır
+    /// (bracketed paste, Enter YOK) — kullanıcı tamamlayıp kendisi gönderir.
+    public func typeIntoComposer(_ text: String) {
+        guard phase == .running, let terminalID else { return }
+        try? terminal.write(id: terminalID, text: Self.bracketedPaste(text))
+        focusTerminal()
+    }
+
+    static func bracketedPaste(_ text: String) -> String {
+        "\u{1b}[200~" + text + "\u{1b}[201~"
+    }
+
+    /// Popup kapandı: terminal arka plana iner (süreç yaşar).
+    public func hideTerminal() {
+        guard let terminalID else { return }
+        terminal.setFocused(nil)
+        terminal.setSurfaceState(.background, for: terminalID)
+    }
+
+    // MARK: - Açılış
+
+    private func launchCodex(resume thread: String?) async {
+        isLaunching = true
+        defer { isLaunching = false }
         phase = .starting
-        let (id, isKnown) = await currentSessionID()
-        generation += 1
-        let current = generation
+        errorMessage = nil
         do {
             let endpoint = try await controlEndpoint()
-            let run = try await service.start(OrchestratorLaunch(
-                sessionID: id, resume: resume ?? isKnown, control: endpoint
+            let context = promptContext()
+            let plan = try await launcher.prepare(OrchestratorLaunchRequest(
+                instructions: OrchestratorPrompt.make(projects: context.projects, watched: context.watched),
+                resumeThreadID: thread,
+                control: endpoint,
+                codexHome: await codexHome()
             ))
-            guard current == generation else { return }
-            history = run.history
-            live = ChatJournalState()
-            sentTurns = 0
-            phase = .running
-            observe(run.updates, generation: current)
+            spawn(command: plan.command, environment: plan.environment) { [weak self] in
+                self?.launch = LaunchRecord(resumedThread: thread, at: .now)
+                self?.phase = .running
+            }
+        } catch LumiError.cliNotFound {
+            phase = .codexMissing
         } catch {
-            guard current == generation else { return }
-            settleStopped(error: (error as? LumiError)?.errorDescription ?? error.localizedDescription)
+            phase = .stopped
+            errorMessage = (error as? LumiError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    /// MCP sunucusu ilk süreçte tembel açılır; sonrakilerde aynı uç döner.
+    private func spawn(command: String, environment: [String: String], onSpawned: () -> Void) {
+        do {
+            let meta = try terminal.spawn(
+                repoPath: workingDirectory, task: nil, command: command, environment: environment
+            )
+            terminalID = meta.id
+            status = meta.status
+            onSpawned()
+        } catch {
+            phase = .stopped
+            errorMessage = (error as? LumiError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// MCP sunucusu ilk açılışta tembel başlar; sonrakilerde aynı uç döner.
     private func controlEndpoint() async throws -> OrchestratorControlEndpoint? {
         guard let control, let tools else { return nil }
         return try await control.start(handler: tools)
     }
 
-    private func observe(_ updates: AsyncStream<ChatJournalState>, generation current: Int) {
-        updatesTask?.cancel()
-        updatesTask = Task { [weak self] in
-            for await state in updates {
-                guard let self, current == self.generation else { return }
-                self.apply(state)
-            }
-            guard let self, current == self.generation else { return }
-            // Akış kendiliğinden bitti: süreç çıktı. Cevap bekleniyorduysa
-            // kullanıcı bunu görmeli.
-            let wasResponding = self.isResponding
-            self.settleStopped(error: wasResponding ? "Orchestrator stopped unexpectedly." : nil)
+    private func closeCurrentTerminal() {
+        guard let terminalID else { return }
+        expectedExits.insert(terminalID)
+        try? terminal.kill(id: terminalID)
+        self.terminalID = nil
+        launch = nil
+    }
+
+    // MARK: - Terminal olayları
+
+    func apply(_ event: TerminalEvent) {
+        switch event {
+        case .statusChanged(let id, let newStatus) where id == terminalID:
+            status = newStatus
+        case .codexSessionIDChanged(let id, let thread) where id == terminalID:
+            launch?.learnedThread = true
+            ignoresStoredThread = false
+            guard thread != threadID else { return }
+            threadID = thread
+            Task { await config.updateUIState { $0.orchestratorCodexThreadID = thread } }
+        case .exited(let id, let code):
+            handleExit(id, code: code)
+        default:
+            break
         }
     }
 
-    private func apply(_ state: ChatJournalState) {
-        live = state
-        if let pending = pendingPrompt, state.messages.contains(where: { $0.isUserText(pending) }) {
-            pendingPrompt = nil
+    private func handleExit(_ id: TerminalID, code: Int32) {
+        if expectedExits.remove(id) != nil { return }
+        guard id == terminalID else { return }
+        terminalID = nil
+        status = .idle
+        let finished = phase
+        let record = launch
+        launch = nil
+        switch finished {
+        case .installing:
+            // Kurulum bitti: Codex artık bulunuyorsa başlar, yoksa panel geri gelir.
+            Task { await self.launchCodex(resume: await self.storedThreadID()) }
+        case .running where Self.resumeFailed(record):
+            // Thread artık yok (silinmiş / başka hesapta): yeni konuşma açılır.
+            forgetThread()
+            Task { await self.launchCodex(resume: nil) }
+        default:
+            phase = .stopped
+            errorMessage = code == 0 ? nil : "Codex exited with code \(code)."
         }
     }
 
-    /// Süreç yok: canlı journal geçmişe katlanır, bir sonraki mesaj resume eder.
-    private func settleStopped(error: String?) {
-        // Süreç yok: cevabı bekleyen araç çağrısı da yok — kartlar asılı kalmasın.
-        approvals.rejectAll()
-        if !live.messages.isEmpty, phase == .running {
-            history += live.messages
-        }
-        live = ChatJournalState()
-        sentTurns = 0
-        pendingPrompt = nil
-        phase = .idle
-        errorMessage = error
+    private static func resumeFailed(_ record: LaunchRecord?) -> Bool {
+        guard let record, record.resumedThread != nil, !record.learnedThread else { return false }
+        return ContinuousClock.now - record.at < resumeFailureWindow
     }
 
-    /// Kalıcı kimlik; yoksa yenisi üretilip yazılır. `isKnown` = daha önce
-    /// kaydedilmişti → konuşma resume edilir.
-    private func currentSessionID() async -> (String, Bool) {
-        if let sessionID { return (sessionID, true) }
-        if let stored = await config.uiState().orchestratorSessionID {
-            sessionID = stored
-            return (stored, true)
-        }
-        let id = makeSessionID()
-        sessionID = id
-        await persist(id)
-        return (id, false)
+    private func forgetThread() {
+        threadID = nil
+        ignoresStoredThread = true
     }
 
-    private func persist(_ id: String) async {
-        await config.updateUIState { $0.orchestratorSessionID = id }
-    }
-}
-
-private extension ChatMessage {
-    func isUserText(_ text: String) -> Bool {
-        guard role == .user else { return false }
-        return blocks.contains { block in
-            if case let .text(value, _) = block { return OrchestratorActivityNote.strip(value) == text }
-            return false
-        }
+    private func storedThreadID() async -> String? {
+        if let threadID { return threadID }
+        guard !ignoresStoredThread else { return nil }
+        let stored = await config.uiState().orchestratorCodexThreadID
+        threadID = stored
+        return stored
     }
 }

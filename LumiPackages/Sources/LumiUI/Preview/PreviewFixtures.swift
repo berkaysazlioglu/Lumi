@@ -79,7 +79,10 @@ public extension ShellContext {
                 terminals: shared.terminals, terminalService: terminal, sampler: PreviewProcessSampler()
             ),
             appUpdate: .preview,
-            orchestrator: OrchestratorStore(service: PreviewOrchestratorService(), config: config),
+            orchestrator: OrchestratorStore(
+                terminal: terminal, viewProvider: viewProvider, launcher: PreviewOrchestratorLauncher(),
+                config: config, workingDirectory: "/tmp/lumi-orchestrator"
+            ),
             viewProvider: viewProvider,
             highlighter: PreviewHighlighter(),
             markdownParser: PreviewMarkdownParser(),
@@ -669,21 +672,12 @@ private struct PreviewAppUpdateInstaller: AppUpdateInstalling {
     func discardStaged(except keep: StagedAppUpdate?) async {}
 }
 
-/// Süreçsiz sahte orchestrator (karar 114): sabit bir geçmiş döner.
-struct PreviewOrchestratorService: OrchestratorServicing {
-    func start(_ launch: OrchestratorLaunch) async throws -> OrchestratorRun {
-        let history = [
-            ChatMessage(id: "u1", role: .user, blocks: [.text("Hangi terminaller çalışıyor?", presentation: nil)],
-                        timestampMs: nil, turnId: "u1"),
-            ChatMessage(id: "a1", role: .assistant, blocks: [.text(
-                "Şu an **3** ajan açık:\n- `api-refactor` — çalışıyor\n- `ios-fix` — senden cevap bekliyor",
-                presentation: nil
-            )], timestampMs: nil, turnId: "a1"),
-        ]
-        return OrchestratorRun(history: history, updates: AsyncStream { _ in })
+/// Süreçsiz sahte orchestrator başlatıcısı (karar 123).
+struct PreviewOrchestratorLauncher: OrchestratorLaunching {
+    func prepare(_ request: OrchestratorLaunchRequest) async throws -> OrchestratorLaunchPlan {
+        OrchestratorLaunchPlan(command: "codex", environment: [:])
     }
 
-    func send(_ text: String) async {}
-    func stop() async {}
+    func queue(_ message: String, thread: String, codexHome: String?) async throws {}
 }
 #endif

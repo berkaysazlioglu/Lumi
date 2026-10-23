@@ -207,14 +207,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController.replaceContentView(content)
         // Reparent sonrası canlı terminal view'ları yeni host'lara oturur.
         composition.registry.viewProvider.refreshAttachedViews()
+        composition.registry.orchestratorViewProvider.refreshAttachedViews()
     }
 
     private func applyTerminalFont() {
         let config = shared.settings.current
-        composition.registry.terminal.applyFont(LumiFonts.mono(
+        let font = LumiFonts.mono(
             family: config.terminalFontFamily,
             size: Theme.scaledFontSize(CGFloat(config.terminalFontSize))
-        ))
+        )
+        composition.registry.terminal.applyFont(font)
+        // Karar 123: orchestrator terminali de aynı ölçeği alır.
+        composition.registry.orchestratorTerminal.applyFont(font)
     }
 
     /// Fullscreen giriş/çıkışı terminal NSView'larını bayat/boş bırakabilir

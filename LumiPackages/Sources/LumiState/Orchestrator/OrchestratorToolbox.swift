@@ -4,8 +4,8 @@ import LumiKit
 /// Orchestrator araçlarının yürütücüsü (karar 114 Faz 2) — MCP sunucusunun
 /// `tools/call` istekleri buraya düşer. Store'ların CANLI durumunu okur:
 /// Projects paneliyle aynı ağaç (`ProjectTree`), terminal listesiyle aynı
-/// durumlar. Yazma araçları (Faz 3, `OrchestratorToolbox+Actions`) kullanıcı
-/// onayı olmadan hiçbir şeye dokunmaz.
+/// durumlar. Yazma araçları (`OrchestratorToolbox+Actions`) karar 123'ten beri
+/// onaysız, doğrudan çalışır.
 ///
 /// Orchestrator yalnız Claude Code terminalleriyle çalışır: listelerde Codex
 /// ve düz shell terminalleri görünmez, kimlikleri verilirse açıkça reddedilir.
@@ -17,13 +17,9 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     let transcripts: any TerminalTranscriptReading
     /// Terminal ekranının düz metni (scrollback + görünür satırlar).
     let screenText: @MainActor (TerminalID) -> String
-    /// Faz 3: yazma eylemlerinin onay kapısı, meşgul ajan için kuyruk ve
-    /// Claude'un ilk-açılış güven menüsünü atlatma.
-    let approvals: OrchestratorApprovals
+    /// Meşgul ajan için prompt kuyruğu ve Claude'un ilk-açılış güven menüsünü atlatma.
     let promptQueue: PromptQueueStore?
     let trust: (any ClaudeWorkspaceTrusting)?
-    /// Faz 5: `ask_project`'in salt-okunur arka plan ajanı.
-    let projectAsker: (any ProjectQuestionAnswering)?
     /// İzlenen terminaller ve sonradan izlemeye alınanın oturum özeti.
     public let watchList: OrchestratorWatchList
     let summarizer: (any TerminalDigestSummarizing)?
@@ -35,10 +31,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         repos: RepoStore,
         transcripts: any TerminalTranscriptReading,
         screenText: @escaping @MainActor (TerminalID) -> String,
-        approvals: OrchestratorApprovals = OrchestratorApprovals(),
         promptQueue: PromptQueueStore? = nil,
         trust: (any ClaudeWorkspaceTrusting)? = nil,
-        projectAsker: (any ProjectQuestionAnswering)? = nil,
         watchList: OrchestratorWatchList = OrchestratorWatchList(),
         summarizer: (any TerminalDigestSummarizing)? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
@@ -48,10 +42,8 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         self.repos = repos
         self.transcripts = transcripts
         self.screenText = screenText
-        self.approvals = approvals
         self.promptQueue = promptQueue
         self.trust = trust
-        self.projectAsker = projectAsker
         self.watchList = watchList
         self.summarizer = summarizer
         self.now = now
@@ -67,11 +59,9 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         case OrchestratorTools.readTerminal:
             return await readTerminal(args)
         case OrchestratorTools.sendToTerminal:
-            return await sendToTerminal(args)
+            return sendToTerminal(args)
         case OrchestratorTools.startTerminal:
-            return await startTerminal(args)
-        case OrchestratorTools.askProject:
-            return await askProject(args)
+            return startTerminal(args)
         case OrchestratorTools.watchTerminal:
             return await watchTerminal(args)
         case OrchestratorTools.unwatchTerminal:
@@ -79,6 +69,20 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
         default:
             return .failure("Unknown tool: \(name)")
         }
+    }
+
+    // MARK: - Prompt bağlamı (karar 123)
+
+    /// Talimata gömülen proje ağacı — `list_projects`'in döndürdüğüyle aynı metin.
+    public func promptProjects() -> String {
+        listProjects().text
+    }
+
+    /// Talimata gömülen izleme listesi: `"başlık" (id, durum)`.
+    public func promptWatchedTerminals() -> [String] {
+        terminals.terminals
+            .filter { Self.isClaude($0) && watchList.isWatched($0) }
+            .map { "\"\($0.displayTitle)\" (\($0.id), \(status(of: $0)))" }
     }
 
     // MARK: - list_projects
@@ -251,9 +255,19 @@ public final class OrchestratorToolbox: OrchestratorToolHandling {
     }
 
     /// Bir checkout yolu (Projects ağacından) ya da bilinen bir repo kökü;
-    /// başka yol nil — araçlar rastgele dizinlere uzanmaz.
-    func resolveCheckout(_ path: String) -> Location? {
-        checkoutLocations()[path] ?? repos.repo(at: path).map { _ in fallbackLocation(for: path) }
+    /// başka yol nil — araçlar rastgele dizinlere uzanmaz. Sondaki `/` ve `~`
+    /// tolere edilir (model yolu çoğu kez böyle yazar).
+    func resolveCheckout(_ path: String) -> (path: String, location: Location)? {
+        let normalized = Self.normalizedPath(path)
+        if let location = checkoutLocations()[normalized] { return (normalized, location) }
+        guard repos.repo(at: normalized) != nil else { return nil }
+        return (normalized, fallbackLocation(for: normalized))
+    }
+
+    static func normalizedPath(_ path: String) -> String {
+        let expanded = (path as NSString).expandingTildeInPath
+        guard expanded.count > 1, expanded.hasSuffix("/") else { return expanded }
+        return String(expanded.dropLast())
     }
 
     /// Ağaçta da `Other`'da da olmayan yol — `resolveCheckout`'un bilinen

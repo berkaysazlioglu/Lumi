@@ -57,6 +57,8 @@ final class AgentHooksAssembly: FeatureAssembly {
         do {
             let endpoint = try await services.agentHooks.start()
             services.terminal.setAgentHookEndpoint(endpoint)
+            // Karar 123: orchestrator Codex'i thread kimliğini ve durumunu hook'tan bildirir.
+            services.orchestratorTerminal.setAgentHookEndpoint(endpoint)
         } catch {
             shared.toasts.show(
                 .error,
@@ -80,6 +82,7 @@ final class AgentHooksAssembly: FeatureAssembly {
         guard isEnabled else { return }
         isEnabled = false
         services.terminal.setAgentHookEndpoint(nil)
+        services.orchestratorTerminal.setAgentHookEndpoint(nil)
         await services.agentHooks.stop()
         if uninstall {
             let results = await services.agentHookInstaller.uninstall()
@@ -96,7 +99,9 @@ final class AgentHooksAssembly: FeatureAssembly {
             var handled = 0
             for await event in stream {
                 guard let self else { return }
+                // Her yönetici yalnız kendi terminalini tanır; diğeri olayı düşürür.
                 self.services.terminal.applyAgentHookEvent(event)
+                self.services.orchestratorTerminal.applyAgentHookEvent(event)
                 handled += 1
             }
             Self.logger.log("ingest loop ended (cancelled: \(Task.isCancelled), handled \(handled))")

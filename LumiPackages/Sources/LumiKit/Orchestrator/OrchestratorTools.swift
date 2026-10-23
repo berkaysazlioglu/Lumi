@@ -14,7 +14,7 @@ public struct OrchestratorToolSpec: Sendable, Equatable {
     }
 }
 
-/// Orchestrator araç sözleşmesinin tek kaynağı (karar 114): MCP sunucusu
+/// Orchestrator araç sözleşmesinin tek kaynağı (karar 114/123): MCP sunucusu
 /// `tools/list`'i buradan döner, yürütücü adları buradan eşler, Claude'a
 /// verilen izin kuralı (`--allowedTools`) sunucu adından türer.
 public enum OrchestratorTools {
@@ -28,7 +28,6 @@ public enum OrchestratorTools {
     public static let readTerminal = "read_terminal"
     public static let sendToTerminal = "send_to_terminal"
     public static let startTerminal = "start_terminal"
-    public static let askProject = "ask_project"
     public static let watchTerminal = "watch_terminal"
     public static let unwatchTerminal = "unwatch_terminal"
 
@@ -73,31 +72,21 @@ public enum OrchestratorTools {
             name: sendToTerminal,
             description: """
             Send a message to a Claude Code terminal's prompt as if the user typed it and pressed Enter. \
-            The user must approve it in Lumi first; you get the outcome back. If the agent is busy, the \
-            message is queued and delivered when it finishes its current turn. Send the user's words as \
-            they asked — do not rewrite their intent. The terminal is watched from then on.
+            It runs immediately. If the agent is busy, the message is queued and delivered when it \
+            finishes its current turn. Send the user's words as they asked — do not rewrite their \
+            intent. The terminal is watched from then on.
             """,
             inputSchema: #"{"type":"object","properties":{"terminal_id":{"type":"string","description":"Terminal id from list_terminals (unique prefix of 6+ characters accepted)."},"message":{"type":"string","description":"The text to send."}},"required":["terminal_id","message"],"additionalProperties":false}"#
         ),
         OrchestratorToolSpec(
             name: startTerminal,
             description: """
-            Open a new Claude Code terminal in a checkout and optionally give it a first prompt. The user \
-            must approve it in Lumi first. `path` must be a checkout path from list_projects (a project \
-            root or one of its workspaces). Returns the new terminal's id; it is watched from then on.
+            Open a new Claude Code terminal in a checkout and optionally give it a first prompt — the \
+            way to hand new work to an agent. It runs immediately. `path` must be a checkout path from \
+            list_projects (a project root or one of its workspaces). Returns the new terminal's id; it \
+            is watched from then on.
             """,
             inputSchema: #"{"type":"object","properties":{"path":{"type":"string","description":"Checkout path from list_projects."},"prompt":{"type":"string","description":"Optional first message for the new agent."}},"required":["path"],"additionalProperties":false}"#
-        ),
-        OrchestratorToolSpec(
-            name: askProject,
-            description: """
-            Ask a question about a project's code and docs ("summarize this project", "where is X \
-            implemented?", "how is the build set up?"). A separate read-only agent explores the checkout \
-            with Read/Glob/Grep (it also sees the project's CLAUDE.md) and returns only its answer, so \
-            your context stays small. It cannot run commands or change files. Takes from a few seconds to \
-            a few minutes; `path` must be a checkout path from list_projects.
-            """,
-            inputSchema: #"{"type":"object","properties":{"path":{"type":"string","description":"Checkout path from list_projects."},"question":{"type":"string","description":"The question, self-contained (the helper has no chat context)."}},"required":["path","question"],"additionalProperties":false}"#
         ),
         OrchestratorToolSpec(
             name: watchTerminal,

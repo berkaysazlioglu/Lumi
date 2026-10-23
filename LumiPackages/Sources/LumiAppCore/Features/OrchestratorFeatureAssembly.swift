@@ -5,12 +5,13 @@ import LumiState
 import LumiUI
 import SwiftUI
 
-/// Orchestrator (karar 114): tüm ajan terminallerini yöneten sohbet.
+/// Orchestrator (karar 114/123): tüm ajan terminallerini yöneten, popup'ta
+/// etkileşimli bir Codex terminali.
 ///
-/// Top bar butonu + %80'lik popup kabuğa buradan kaydedilir; araçlar (Faz 2)
-/// Lumi'nin loopback MCP sunucusundan `OrchestratorToolbox`'a düşer. Süreç
-/// açılışta BAŞLAMAZ — popup ilk açıldığında ya da ilk mesajda tembel başlar;
-/// quit'te sonlandırılır (konuşma transkriptte kalır, sonraki açılış resume eder).
+/// Top bar butonu + %80'lik popup kabuğa buradan kaydedilir; araçlar
+/// Lumi'nin loopback MCP sunucusundan `OrchestratorToolbox`'a düşer. Codex
+/// açılışta BAŞLAMAZ — popup ilk açıldığında başlar; quit'te sonlandırılır
+/// (konuşma Codex thread'inde kalır, sonraki açılış resume eder).
 @MainActor
 final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.ui
@@ -34,7 +35,6 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
         let terminalService = services.terminal
-        let approvals = OrchestratorApprovals()
         let watchList = OrchestratorWatchList(config: services.config)
         self.watchList = watchList
         terminals = shared.terminals
@@ -44,22 +44,27 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
             repos: repo.repoStore,
             transcripts: services.terminalTranscripts,
             screenText: { id in String(decoding: terminalService.serializeScrollback(id).data, as: UTF8.self) },
-            approvals: approvals,
             promptQueue: terminal.promptQueue,
             trust: ClaudeWorkspaceTrust(),
-            projectAsker: services.projectAsker,
             watchList: watchList,
             summarizer: services.terminalDigests
         )
         let activity = OrchestratorActivityFeed()
+        let codexAccounts = services.codexAccounts
         orchestrator = OrchestratorStore(
-            service: services.orchestrator,
+            terminal: services.orchestratorTerminal,
+            viewProvider: services.orchestratorViewProvider,
+            launcher: services.orchestratorLauncher,
             config: services.config,
+            workingDirectory: services.paths.orchestratorDir.path,
             control: services.orchestratorControl,
             tools: toolbox,
-            approvals: approvals,
             activity: activity,
-            watchList: watchList
+            watchList: watchList,
+            // Karar 123: talimat her açılışta canlı Projects ağacından üretilir.
+            promptContext: { (toolbox.promptProjects(), toolbox.promptWatchedTerminals()) },
+            // Karar 78: seçili Codex hesabı orchestrator'a da uygulanır.
+            codexHome: { await codexAccounts.selectedHome() }
         )
         let config = services.config
         digests = TerminalDigestCoordinator(
@@ -90,6 +95,7 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func start() async {
+        orchestrator.start()
         digests.start()
         await watchList.load(matching: terminals.terminals)
     }
