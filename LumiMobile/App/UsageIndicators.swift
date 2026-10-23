@@ -63,7 +63,10 @@ private struct UsageChipButton<Popover: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(id) usage \(label)")
-        .popover(isPresented: $showing) {
+        // Always below the chip: on iOS `arrowEdge` is the popover's own edge
+        // carrying the arrow, so `.top` (arrow up) places it underneath. Left to
+        // the system, each chip's bubble picked a different side.
+        .popover(isPresented: $showing, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             popover()
                 .presentationBackground(LumiPalette.background)
                 .presentationCompactAdaptation(.popover)
