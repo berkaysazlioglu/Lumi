@@ -1,8 +1,9 @@
 import LumiKit
 import SwiftUI
 
-/// Arayüz yazı tipi (karar 63) + panel görünürlükleri + kenar hover'ıyla
-/// açılma (karar 44) — anında uygulanır ve hatırlanır.
+/// Arayüz yazı tipi (karar 63) + panel görünürlükleri + sağ kenarda tek panel
+/// kuralı (karar 124) + kenar hover'ıyla açılma (karar 44) — anında uygulanır
+/// ve hatırlanır.
 struct AppearanceSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .appearance
 
@@ -44,6 +45,19 @@ struct AppearanceSettingsTab: SettingsTabContent {
                 title: "Right Sidebar",
                 hint: "Project Tools (Explorer · Agent History · Source Control)",
                 isOn: slotBinding(.right)
+            )
+            LumiToggleRow(
+                title: "Orchestrator Panel",
+                hint: "Codex orchestrator between the terminals and the right sidebar (⌘J)",
+                isOn: slotBinding(shell.orchestratorPresentation.panelSlot)
+            )
+            LumiToggleRow(
+                title: "One Right Panel at a Time",
+                hint: "Opening the orchestrator panel closes the right sidebar, and vice versa",
+                isOn: Binding(
+                    get: { shell.layout.exclusiveRightPanels },
+                    set: { shell.layout.setExclusiveRightPanels($0) }
+                )
             )
             LumiToggleRow(
                 title: "Auto-reveal Left Sidebar",

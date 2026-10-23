@@ -68,6 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             closeActiveProject: { [weak self] in
                 self?.composition.shell.context.requestCloseActiveProject()
             },
+            toggleOrchestrator: { [weak self] in
+                self?.composition.shell.context.orchestratorPresentation.toggle()
+            },
             spawnTerminal: { [weak self] scope, command in
                 self?.composition.shell.context.spawnTerminal(in: scope, command: command)
             }

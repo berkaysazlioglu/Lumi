@@ -216,7 +216,9 @@ enum PanelLayoutCodec {
             slots: slots,
             visibleSlots: visible,
             widths: widths,
-            autoRevealSlots: autoReveal
+            autoRevealSlots: autoReveal,
+            // Karar 124 (additive): anahtar yoksa varsayılan açık.
+            exclusiveRightPanels: JSONValue.bool(dict["exclusiveRight"]) ?? true
         )
     }
 
@@ -229,7 +231,10 @@ enum PanelLayoutCodec {
         }
         // Karar 44: `visibleSlots` gibi deterministik sırayla (allCases).
         let autoReveal = PanelSlot.allCases.filter(layout.isAutoReveal).map(\.rawValue)
-        return ["slots": slots, "widths": widths, "autoReveal": autoReveal]
+        var dict: [String: Any] = ["slots": slots, "widths": widths, "autoReveal": autoReveal]
+        // Karar 124: varsayılan (açık) değer diske yazılmaz.
+        if !layout.exclusiveRightPanels { dict["exclusiveRight"] = false }
+        return dict
     }
 
     /// Deterministik sıra: `.sortedKeys` yalnız sözlükleri sıralar, diziyi değil.

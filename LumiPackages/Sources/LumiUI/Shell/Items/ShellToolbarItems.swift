@@ -65,6 +65,8 @@ public enum ShellToolbarItems {
         public let order: Int
     }
 
+    /// `.innerRight` bilerek yoktur (karar 124): o yuvanın toggle'ı
+    /// orchestrator'ın kendi top bar butonudur (⌘J).
     public static let slotPresentations: [PanelSlot: SlotPresentation] = [
         .left: SlotPresentation(
             icon: "sidebar.left",
@@ -166,6 +168,7 @@ private extension PanelSlot {
         case .left: return "Left"
         case .right: return "Right"
         case .bottom: return "Bottom"
+        case .innerRight: return "Orchestrator"
         }
     }
 }

@@ -5,13 +5,14 @@ import LumiState
 import LumiUI
 import SwiftUI
 
-/// Orchestrator (karar 114/123): tüm ajan terminallerini yöneten, popup'ta
+/// Orchestrator (karar 114/123/124): tüm ajan terminallerini yöneten,
 /// etkileşimli bir Codex terminali.
 ///
-/// Top bar butonu + %80'lik popup kabuğa buradan kaydedilir; araçlar
-/// Lumi'nin loopback MCP sunucusundan `OrchestratorToolbox`'a düşer. Codex
-/// popup ilk açıldığında başlar; daha önce kullanıldıysa uygulama açılışında
-/// arka planda sürdürülür ki monitoring popup açılmadan da işlesin. Quit'te
+/// Top bar butonu, docked panel (`.innerRight`) ve %80'lik popup kabuğa
+/// buradan kaydedilir; araçlar Lumi'nin loopback MCP sunucusundan
+/// `OrchestratorToolbox`'a düşer. Codex panel ya da popup ilk açıldığında
+/// başlar; daha önce kullanıldıysa uygulama açılışında arka planda
+/// sürdürülür ki monitoring hiçbir yüzey açılmadan da işlesin. Quit'te
 /// sonlandırılır (konuşma Codex thread'inde kalır).
 @MainActor
 final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
@@ -91,6 +92,15 @@ final class OrchestratorFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func registerShellItems(into registries: ShellRegistries) {
+        // Karar 124: varsayılan sunum orta alan ile sağ panel arasındaki panel;
+        // repo'ya bağlı değildir (All Terminals'ta ve proje yokken de açılır).
+        registries.panels.register(PanelItemDescriptor(
+            id: .orchestrator,
+            title: "Orchestrator",
+            icon: OrchestratorToolbarItem.iconName,
+            defaultSlot: .innerRight,
+            makeView: { AnyView(OrchestratorPanel()) }
+        ))
         registries.overlays.register(OverlayDescriptor(
             id: .orchestrator,
             isPresented: { $0.dialogs.isOrchestratorOpen },

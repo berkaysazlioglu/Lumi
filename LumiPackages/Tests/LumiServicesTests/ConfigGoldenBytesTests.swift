@@ -230,6 +230,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
           "bottom" : [
 
           ],
+          "innerRight" : [
+            "orchestrator"
+          ],
           "left" : [
             "tasks",
             "projects"
@@ -240,6 +243,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
         },
         "widths" : {
           "bottom" : 280,
+          "innerRight" : 460,
           "left" : 280,
           "right" : 320
         }

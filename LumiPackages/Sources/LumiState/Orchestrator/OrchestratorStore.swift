@@ -2,8 +2,8 @@ import Foundation
 import LumiKit
 import Observation
 
-/// Orchestrator'ın tek kaynağı (karar 123): popup'ta kullanıcının doğrudan
-/// konuştuğu etkileşimli bir Codex terminali.
+/// Orchestrator'ın tek kaynağı (karar 123): kullanıcının doğrudan konuştuğu
+/// etkileşimli bir Codex terminali — docked panelde ya da popup'ta (karar 124).
 ///
 /// Terminal, ana terminal servisinden AYRI bir yöneticide yaşar — grid'e,
 /// Projects'e, telefona ve resume listesine hiç girmez. Codex yalnız Lumi'nin
@@ -14,16 +14,24 @@ import Observation
 @MainActor
 public final class OrchestratorStore {
     public enum Phase: Equatable, Sendable {
-        /// Hiç başlamadı (popup açılınca başlar).
+        /// Hiç başlamadı (panel ya da popup açılınca başlar).
         case idle
         case starting
         case running
         /// Codex bulunamadı — kurulum paneli.
         case codexMissing
-        /// Kurulum script'i popup'taki terminalde koşuyor.
+        /// Kurulum script'i orchestrator terminalinde koşuyor.
         case installing
         /// Codex çıktı ya da açılamadı — `Restart` bekler.
         case stopped
+    }
+
+    /// Karar 124: orchestrator terminalini çizebilen yüzeyler.
+    public enum Host: Hashable, Sendable {
+        /// Orta alan ile sağ panel arasındaki docked panel.
+        case panel
+        /// %80'lik popup.
+        case popup
     }
 
     /// `Install` butonunun koştuğu ve `Copy` ile kopyalanan komut.
@@ -62,6 +70,10 @@ public final class OrchestratorStore {
     /// Yeni konuşma açıldı ama Codex thread'ini henüz bildirmedi: diskteki
     /// eski thread bu arada resume edilmesin.
     @ObservationIgnored private var ignoresStoredThread = false
+    /// Karar 124: terminali o an çizen yüzeyler.
+    @ObservationIgnored private var presentedHosts: Set<Host> = []
+    /// Odak istendi ama terminal henüz doğmadı.
+    @ObservationIgnored private var focusWhenSpawned = false
 
     private struct LaunchRecord {
         let resumedThread: String?
@@ -139,7 +151,7 @@ public final class OrchestratorStore {
         await launchCodex(resume: thread)
     }
 
-    /// Popup açıldı: hiç başlamadıysa başlatır.
+    /// Panel ya da popup açıldı: hiç başlamadıysa başlatır.
     public func activate() async {
         guard phase == .idle else { return }
         await launchCodex(resume: await storedThreadID())
@@ -174,8 +186,13 @@ public final class OrchestratorStore {
     }
 
     /// Popup açıkken terminal klavye odağını ve canlı akışı alır.
+    /// Terminal henüz yoksa (Codex başlıyor) odak, terminal doğunca verilir.
     public func focusTerminal() {
-        guard let terminalID else { return }
+        guard let terminalID else {
+            focusWhenSpawned = true
+            return
+        }
+        focusWhenSpawned = false
         terminal.setSurfaceState(.foreground, for: terminalID)
         terminal.setFocused(terminalID)
     }
@@ -192,11 +209,30 @@ public final class OrchestratorStore {
         "\u{1b}[200~" + text + "\u{1b}[201~"
     }
 
-    /// Popup kapandı: terminal arka plana iner (süreç yaşar).
-    public func hideTerminal() {
+    /// Karar 124: terminali çizen yüzey göründü/kayboldu. Terminal en az bir
+    /// yüzey görünürken önde, hiçbiri yokken arka plandadır (süreç yaşar).
+    /// Yüzeyler sayıldığı için popup ⇄ panel geçişinde SwiftUI'nin
+    /// appear/disappear sırası sonucu değiştirmez. Odak burada verilmez —
+    /// açılışta kayıtlı panel görünürken grid'deki terminalin odağı çalınmasın.
+    public func setPresented(_ host: Host, _ presented: Bool) {
+        if presented {
+            presentedHosts.insert(host)
+        } else {
+            presentedHosts.remove(host)
+        }
+        // Görünmeyen terminale sonradan odak verilmez.
+        if presentedHosts.isEmpty { focusWhenSpawned = false }
+        applySurface()
+    }
+
+    private func applySurface() {
         guard let terminalID else { return }
-        terminal.setFocused(nil)
-        terminal.setSurfaceState(.background, for: terminalID)
+        if presentedHosts.isEmpty {
+            terminal.setFocused(nil)
+            terminal.setSurfaceState(.background, for: terminalID)
+        } else {
+            terminal.setSurfaceState(.foreground, for: terminalID)
+        }
     }
 
     // MARK: - Açılış
@@ -236,6 +272,9 @@ public final class OrchestratorStore {
             terminalID = meta.id
             status = meta.status
             onSpawned()
+            // Restart / yeni konuşma açık bir yüzeyde olur: yeni terminal önde doğar.
+            if !presentedHosts.isEmpty { applySurface() }
+            if focusWhenSpawned { focusTerminal() }
         } catch {
             phase = .stopped
             errorMessage = (error as? LumiError)?.errorDescription ?? error.localizedDescription

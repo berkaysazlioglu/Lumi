@@ -8,6 +8,18 @@ public enum PanelSlot: String, Codable, CaseIterable, Sendable {
     case left
     case right
     case bottom
+    /// Karar 124: orta alan ile sağ yuvanın ARASI — orchestrator paneli.
+    case innerRight
+
+    /// Karar 124: sağ kenarı paylaşan iki yuva — `PanelLayout.exclusiveRightPanels`
+    /// açıkken biri açılınca diğeri kapanır.
+    public var rightEdgePartner: PanelSlot? {
+        switch self {
+        case .right: return .innerRight
+        case .innerRight: return .right
+        case .left, .bottom: return nil
+        }
+    }
 }
 
 /// Bir panel öğesinin kimliği (K33).
@@ -32,6 +44,8 @@ public struct PanelItemID: RawRepresentable, Hashable, Sendable, Codable {
 public extension PanelItemID {
     static let projects = PanelItemID("projects")
     static let projectTools = PanelItemID("projectTools")
+    /// Karar 124: orchestrator'ın docked paneli.
+    static let orchestrator = PanelItemID("orchestrator")
 
     /// Sol panelin Tasks/Remote sekmeleri (karar 55 — eski `sessions` öğesinin
     /// yeri).
@@ -61,9 +75,16 @@ public struct PanelLayout: Equatable, Sendable {
     /// eski 280 değeri daima eski default'tur, yeni default'a taşınır.
     public static let legacyProjectPanelWidth: Double = 280
 
+    /// Karar 124: orchestrator paneli Codex TUI'sine ~60 kolon bırakır.
+    public static let orchestratorPanelWidth: Double = 460
+
     /// Yuvaya göre varsayılan genişlik.
     public static func defaultWidth(for slot: PanelSlot) -> Double {
-        slot == .right ? projectPanelWidth : defaultWidth
+        switch slot {
+        case .right: return projectPanelWidth
+        case .innerRight: return orchestratorPanelWidth
+        case .left, .bottom: return defaultWidth
+        }
     }
     public static let minWidth: Double = 180
     public static let maxWidth: Double = 640
@@ -75,17 +96,22 @@ public struct PanelLayout: Equatable, Sendable {
     /// alanı daraltmadan, içeriğin üstünde geçici olarak açılır. Görünürlükten
     /// bağımsız bir tercihtir: yuva sabitlenmişse (visible) etkisi yoktur.
     public private(set) var autoRevealSlots: Set<PanelSlot>
+    /// Karar 124: sağ kenarı paylaşan yuvalardan (`rightEdgePartner`) yalnız
+    /// biri açık durur — biri açılınca diğeri kapanır. Varsayılan açık.
+    public private(set) var exclusiveRightPanels: Bool
 
     public init(
         slots: [PanelSlot: [PanelItemID]],
         visibleSlots: Set<PanelSlot>,
         widths: [PanelSlot: Double],
-        autoRevealSlots: Set<PanelSlot> = []
+        autoRevealSlots: Set<PanelSlot> = [],
+        exclusiveRightPanels: Bool = true
     ) {
         self.slots = slots
         self.visibleSlots = visibleSlots
         self.widths = widths
         self.autoRevealSlots = autoRevealSlots
+        self.exclusiveRightPanels = exclusiveRightPanels
     }
 
     /// Sol = Sessions, sağ = sekmeli Project Tools; sol açık, sağ kapalı.
@@ -94,12 +120,14 @@ public struct PanelLayout: Equatable, Sendable {
             .left: [.tasks, .projects],
             .right: [.projectTools],
             .bottom: [],
+            .innerRight: [.orchestrator],
         ],
         visibleSlots: [.left],
         widths: [
             .left: defaultWidth(for: .left),
             .right: defaultWidth(for: .right),
             .bottom: defaultWidth(for: .bottom),
+            .innerRight: defaultWidth(for: .innerRight),
         ]
     )
 
@@ -144,10 +172,14 @@ public struct PanelLayout: Equatable, Sendable {
 
     // MARK: - Mutasyonlar (hepsi yeni değer döndürür)
 
+    /// Karar 124: `exclusiveRightPanels` açıkken sağ kenar ortağı kapanır.
     public func settingVisible(_ slot: PanelSlot, _ visible: Bool) -> PanelLayout {
         var copy = self
         if visible {
             copy.visibleSlots.insert(slot)
+            if exclusiveRightPanels, let partner = slot.rightEdgePartner {
+                copy.visibleSlots.remove(partner)
+            }
         } else {
             copy.visibleSlots.remove(slot)
         }
@@ -165,6 +197,17 @@ public struct PanelLayout: Equatable, Sendable {
             copy.autoRevealSlots.insert(slot)
         } else {
             copy.autoRevealSlots.remove(slot)
+        }
+        return copy
+    }
+
+    /// Karar 124: tercih açılırken iki ortak da açıksa orchestrator yuvası
+    /// kapanır — "yalnız biri açık" kuralı kurulduğu anda geçerli olsun.
+    public func settingExclusiveRightPanels(_ enabled: Bool) -> PanelLayout {
+        var copy = self
+        copy.exclusiveRightPanels = enabled
+        if enabled, isVisible(.right), isVisible(.innerRight) {
+            copy.visibleSlots.remove(.innerRight)
         }
         return copy
     }

@@ -17,6 +17,7 @@ enum AppMenuCommands {
         openAbout: @escaping () -> Void,
         checkForUpdates: @escaping () -> Void,
         closeActiveProject: @escaping () -> Void,
+        toggleOrchestrator: @escaping () -> Void,
         spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void
     ) {
         // Karar 103/108: ⌘T aktif terminal YÜZEYİNE vurur — repo route'unda o
@@ -52,9 +53,9 @@ enum AppMenuCommands {
         dispatcher.register(.openRepoSelector) {
             shared.dialogs.isRepoSelectorOpen = true
         }
-        dispatcher.register(.toggleOrchestrator) {
-            shared.dialogs.isOrchestratorOpen.toggle()
-        }
+        // Karar 124: panel/popup kuralı `OrchestratorPresentation`'da; store
+        // `SharedStores`'ta olmadığı için aksiyon dışarıdan enjekte edilir.
+        dispatcher.register(.toggleOrchestrator, toggleOrchestrator)
         // Karar 103: terminal gezinmesi aktif YÜZEYE vurur — repo route'unda
         // o checkout, All Terminals'ta o görünümün kart sırası.
         dispatcher.register(.focusNextTerminal) {

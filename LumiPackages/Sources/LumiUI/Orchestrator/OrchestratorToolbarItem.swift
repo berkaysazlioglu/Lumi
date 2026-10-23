@@ -2,7 +2,8 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Top bar'daki orchestrator butonu (karar 114) — popup'ı açar/kapatır (⌘J).
+/// Top bar'daki orchestrator butonu (karar 114) — docked paneli açar/kapatır,
+/// popup açıksa onu kapatır (⌘J, karar 124 — `OrchestratorPresentation.toggle`).
 /// Orchestrator Codex'i bir turn üzerinde çalışırken ikon accent'le yanar;
 /// görülmemiş ajan olayı varsa köşede accent nokta çıkar.
 public struct OrchestratorToolbarItem: View {
@@ -10,7 +11,7 @@ public struct OrchestratorToolbarItem: View {
 
     public init() {}
 
-    static let iconName = "point.3.filled.connected.trianglepath.dotted"
+    public static let iconName = "point.3.filled.connected.trianglepath.dotted"
 
     public var body: some View {
         IconButton(
@@ -20,8 +21,8 @@ public struct OrchestratorToolbarItem: View {
             weight: .regular,
             side: TopBarMetrics.controlHeight,
             role: .toggle,
-            isActive: shell.dialogs.isOrchestratorOpen || shell.orchestrator.isResponding,
-            action: { shell.dialogs.isOrchestratorOpen.toggle() }
+            isActive: shell.orchestratorPresentation.isPresented || shell.orchestrator.isResponding,
+            action: { shell.orchestratorPresentation.toggle() }
         )
         // Faz 4: popup kapalıyken görülmemiş Activity olayı accent nokta.
         .overlay(alignment: .topTrailing) {

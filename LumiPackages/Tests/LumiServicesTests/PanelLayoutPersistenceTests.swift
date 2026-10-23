@@ -72,6 +72,30 @@ final class PanelLayoutPersistenceTests: XCTestCase {
         XCTAssertEqual(state.panelLayout?.visibleSlots, [.left], "bilinmeyen yuva adı atlanır")
     }
 
+    // MARK: - Sağ kenarda tek panel (karar 124)
+
+    func testMissingExclusiveRightKeyDecodesAsEnabled() {
+        let state = decode(["panelLayout": ["slots": [:]], "visibleSlots": ["left"]])
+        XCTAssertEqual(state.panelLayout?.exclusiveRightPanels, true)
+        XCTAssertEqual(
+            state.panelLayout?.items(in: .innerRight),
+            [.orchestrator],
+            "eski dosyada orchestrator yuvası default'tan gelir"
+        )
+    }
+
+    func testExclusiveRightIsWrittenOnlyWhenDisabled() throws {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout.defaults
+        let enabled = try XCTUnwrap(overlay(state)["panelLayout"] as? [String: Any])
+        XCTAssertNil(enabled["exclusiveRight"], "varsayılan değer diske girmez")
+
+        state.panelLayout = PanelLayout.defaults.settingExclusiveRightPanels(false)
+        let disabled = try XCTUnwrap(overlay(state)["panelLayout"] as? [String: Any])
+        XCTAssertEqual(disabled["exclusiveRight"] as? Bool, false)
+        XCTAssertEqual(decode(overlay(state)).panelLayout?.exclusiveRightPanels, false, "round-trip")
+    }
+
     // MARK: - Yazım (karar 9 projeksiyonu)
 
     func testOverlayOmitsPanelKeysWhenLayoutIsNil() {

@@ -29,7 +29,8 @@ struct PanelHostView: View {
         let items = resolvedItems
         if !items.isEmpty {
             HStack(spacing: 0) {
-                if slot == .right { edgeDivider }
+                // Karar 124: orchestrator yuvası da orta alanın sağındadır.
+                if slot == .right || slot == .innerRight { edgeDivider }
                 stack(items)
                 if slot == .left { edgeDivider }
             }

@@ -159,10 +159,11 @@ final class ToolbarRegistryTests: XCTestCase {
 
     func testPanelTogglesAreDerivedFromAllCases() {
         let toggles = ShellToolbarItems.panelToggles(panels: PanelItemRegistry())
+        // Karar 124: `.innerRight`'ın toggle'ı orchestrator'ın kendi butonudur.
         XCTAssertEqual(
             Set(toggles.map(\.id)),
-            Set(PanelSlot.allCases.map(ToolbarItemID.panelToggle)),
-            "her yuva için tam bir toggle; yeni yuva eklenince kendiliğinden gelir"
+            Set(PanelSlot.allCases.filter { $0 != .innerRight }.map(ToolbarItemID.panelToggle)),
+            "sunumu olan her yuva için tam bir toggle; yeni yuva eklenince kendiliğinden gelir"
         )
     }
 

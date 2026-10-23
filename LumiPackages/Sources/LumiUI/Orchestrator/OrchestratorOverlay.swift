@@ -8,6 +8,8 @@ import SwiftUI
 ///
 /// Kapatmak (dışarı tık, ✕, ⌘J) yalnız GİZLER — Codex ve konuşma yaşar.
 /// Escape terminaldeyken Codex'e gider (turn'ü keser), popup'ı kapatmaz.
+/// Karar 124: docked panelin "popup olarak aç" butonuyla açılır; başlıktaki
+/// dock butonu panele geri yerleştirir.
 public struct OrchestratorOverlay: View {
     @Shell private var shell
 
@@ -24,7 +26,15 @@ public struct OrchestratorOverlay: View {
             ModalOverlay(onDismiss: dismiss) {
                 Panel(variant: .modal) {
                     VStack(spacing: 0) {
-                        OrchestratorHeader(store: store, onClose: dismiss)
+                        OrchestratorHeader(
+                            store: store,
+                            layoutButton: .init(
+                                systemName: "sidebar.right",
+                                label: "Dock to panel",
+                                action: { shell.orchestratorPresentation.dock() }
+                            ),
+                            onClose: dismiss
+                        )
                         divider
                         HStack(spacing: 0) {
                             OrchestratorConsole(store: store)
@@ -50,11 +60,12 @@ public struct OrchestratorOverlay: View {
         }
         .task { await store.activate() }
         .onAppear {
+            store.setPresented(.popup, true)
             store.focusTerminal()
             // Popup açıkken gelen olaylar görülmüş sayılır (top bar noktası).
             store.activity.markAllRead()
         }
-        .onDisappear { store.hideTerminal() }
+        .onDisappear { store.setPresented(.popup, false) }
         .onChange(of: store.terminalID) { store.focusTerminal() }
         .onChange(of: store.activity.unreadCount) { _, count in
             if count > 0 { store.activity.markAllRead() }
@@ -87,13 +98,24 @@ public struct OrchestratorOverlay: View {
     }
 
     private func dismiss() {
-        shell.dialogs.isOrchestratorOpen = false
+        shell.orchestratorPresentation.closePopup()
     }
 }
 
-/// Başlık: ad + Codex durumu, yeniden başlatma, yeni konuşma ve kapatma.
+/// Başlık: ad + Codex durumu, yeniden başlatma, yeni konuşma, sunum
+/// değiştirme (popup ⇄ panel, karar 124) ve kapatma.
 struct OrchestratorHeader: View {
+    /// Diğer sunuma geçiren buton.
+    struct LayoutButton {
+        let systemName: String
+        let label: String
+        let action: () -> Void
+    }
+
     let store: OrchestratorStore
+    let layoutButton: LayoutButton
+    /// Docked panel dar: daha az iç boşluk.
+    var isCompact = false
     let onClose: () -> Void
 
     private static var buttonSide: CGFloat { Theme.scaled(28) }
@@ -114,6 +136,8 @@ struct OrchestratorHeader: View {
                     Text(statusText)
                         .font(Theme.Typography.labelMono)
                         .foregroundStyle(Theme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
             Spacer()
@@ -132,12 +156,17 @@ struct OrchestratorHeader: View {
             }
             .disabled(!canRelaunch)
             IconButton(
+                systemName: layoutButton.systemName, label: layoutButton.label,
+                size: .body, weight: .regular, side: Self.buttonSide, cornerRadius: Theme.Radius.md,
+                action: layoutButton.action
+            )
+            IconButton(
                 systemName: "xmark", label: "Close orchestrator (⌘J)",
                 side: Self.buttonSide, cornerRadius: Theme.Radius.md, action: onClose
             )
         }
-        .padding(.horizontal, Theme.Spacing.xxl)
-        .padding(.vertical, Theme.Spacing.lg)
+        .padding(.horizontal, isCompact ? Theme.Spacing.lg : Theme.Spacing.xxl)
+        .padding(.vertical, isCompact ? Theme.Spacing.md : Theme.Spacing.lg)
     }
 
     private var canRelaunch: Bool {

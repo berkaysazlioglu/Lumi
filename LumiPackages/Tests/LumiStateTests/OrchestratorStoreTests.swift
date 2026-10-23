@@ -276,6 +276,59 @@ final class OrchestratorStoreTests: XCTestCase {
         XCTAssertEqual(control.stopCount, 1)
         XCTAssertEqual(store.phase, .idle)
     }
+
+    // MARK: - Yüzeyler (karar 124)
+
+    func testTerminalStaysForegroundWhileAnyHostPresentsIt() async throws {
+        let store = makeStore()
+        await store.activate()
+        let id = try XCTUnwrap(store.terminalID)
+        terminal.resetSurfaceStateCalls()
+
+        // Panel → popup geçişi: SwiftUI önce yenisini gösterip sonra eskisini
+        // kaldırsa da terminal arka plana inmez.
+        store.setPresented(.panel, true)
+        store.setPresented(.popup, true)
+        store.setPresented(.panel, false)
+        XCTAssertEqual(terminal.surfaceStateCalls.last?.state, .foreground)
+
+        store.setPresented(.popup, false)
+        XCTAssertEqual(terminal.surfaceStateCalls.last, .init(state: .background, id: id, repoPath: nil))
+        XCTAssertEqual(terminal.focusCalls.last, .some(nil), "görünmeyen terminal odağı bırakır")
+    }
+
+    func testPresentingDoesNotStealKeyboardFocus() async {
+        let store = makeStore()
+        await store.activate()
+        let focusCount = terminal.focusCalls.count
+        store.setPresented(.panel, true)
+        XCTAssertEqual(terminal.focusCalls.count, focusCount, "açılışta kayıtlı panel odağı çalmaz")
+    }
+
+    func testFocusRequestedBeforeSpawnIsGivenOnceTerminalExists() async throws {
+        let store = makeStore()
+        store.setPresented(.panel, true)
+        store.focusTerminal()
+        XCTAssertNil(store.terminalID)
+
+        await store.activate()
+
+        let id = try XCTUnwrap(store.terminalID)
+        XCTAssertEqual(terminal.focusCalls.last, id)
+        XCTAssertEqual(terminal.surfaceStateCalls.last?.state, .foreground)
+    }
+
+    func testFocusRequestIsDroppedWhenEveryHostCloses() async {
+        let store = makeStore()
+        store.setPresented(.panel, true)
+        store.focusTerminal()
+        store.setPresented(.panel, false)
+
+        await store.activate()
+
+        XCTAssertFalse(terminal.focusCalls.contains { $0 != nil }, "kapanan panelin isteği sonradan odak çalmaz")
+    }
+
 }
 
 private struct NoTools: OrchestratorToolHandling {

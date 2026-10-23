@@ -33,7 +33,7 @@ public struct RootView: View {
     }
 }
 
-/// Kabuğun iskeleti: header + (sol panel · route · sağ panel) + alt bar + overlay host.
+/// Kabuğun iskeleti: header + (sol panel · route · orchestrator · sağ panel) + alt bar + overlay host.
 ///
 /// Hiçbir özel görünüm adı geçmez — panel öğeleri, orta alan ve overlay'ler
 /// registry'den gelir (Faz 6.2/6.3/6.5).
@@ -55,6 +55,7 @@ struct AppShellView: View {
                 PanelHostView(slot: .left, registry: registries.panels)
                 ContentRouterView(registry: registries.routes)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                PanelHostView(slot: .innerRight, registry: registries.panels)
                 PanelHostView(slot: .right, registry: registries.panels)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

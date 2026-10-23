@@ -405,6 +405,12 @@ public final class ShellContext {
         }
     }
 
+    /// Karar 124: orchestrator'ın panel ⇄ popup geçiş kuralları (⌘J, top bar,
+    /// iki yüzeyin başlık butonları).
+    public var orchestratorPresentation: OrchestratorPresentation {
+        OrchestratorPresentation(layout: layout, dialogs: dialogs, orchestrator: orchestrator)
+    }
+
     /// Karar 97: Edit modunu aç/kapa. Çıkışta klavye odağı (Edit modunda grid'e
     /// alınmıştı) bu repo'nun son aktif terminaline geri verilir — global aktif
     /// terminal başka repo'da olabilir.

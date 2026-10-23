@@ -37,6 +37,7 @@ final class AppMenuCommandsTests: XCTestCase {
             openAbout: {},
             checkForUpdates: {},
             closeActiveProject: { [weak self] in self?.closeProjectCount += 1 },
+            toggleOrchestrator: {},
             spawnTerminal: { [weak self] scope, command in
                 self?.spawnRequests.append((scope, command))
             }

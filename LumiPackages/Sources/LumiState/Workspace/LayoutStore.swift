@@ -233,6 +233,14 @@ public final class LayoutStore {
         apply(panelLayout.settingWidth(width, for: slot))
     }
 
+    /// Karar 124: sağ panel ile orchestrator paneli aynı anda açık durabilir mi.
+    public var exclusiveRightPanels: Bool { panelLayout.exclusiveRightPanels }
+
+    /// Idempotent (Settings → Appearance toggle'ı).
+    public func setExclusiveRightPanels(_ enabled: Bool) {
+        apply(panelLayout.settingExclusiveRightPanels(enabled))
+    }
+
     private func apply(_ newLayout: PanelLayout) {
         guard newLayout != panelLayout else { return }
         panelLayout = newLayout

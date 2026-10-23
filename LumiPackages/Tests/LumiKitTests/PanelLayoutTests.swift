@@ -18,6 +18,53 @@ final class PanelLayoutTests: XCTestCase {
         XCTAssertEqual(layout.width(for: .right), 340, "sağ proje paneli daha geniş açılır (K42)")
     }
 
+    // MARK: - Sağ kenarda tek panel (karar 124)
+
+    func testOrchestratorSlotDefaults() {
+        let layout = PanelLayout.defaults
+        XCTAssertEqual(layout.items(in: .innerRight), [.orchestrator])
+        XCTAssertFalse(layout.isVisible(.innerRight), "orchestrator paneli kapalı doğar")
+        XCTAssertEqual(layout.width(for: .innerRight), PanelLayout.orchestratorPanelWidth)
+        XCTAssertTrue(layout.exclusiveRightPanels, "varsayılan: aynı anda tek sağ panel")
+    }
+
+    func testExclusiveRuleClosesTheRightEdgePartner() {
+        let right = PanelLayout.defaults.settingVisible(.right, true)
+        let orchestrator = right.settingVisible(.innerRight, true)
+        XCTAssertTrue(orchestrator.isVisible(.innerRight))
+        XCTAssertFalse(orchestrator.isVisible(.right), "orchestrator açılınca sağ panel kapanır")
+
+        let back = orchestrator.togglingVisible(.right)
+        XCTAssertTrue(back.isVisible(.right))
+        XCTAssertFalse(back.isVisible(.innerRight), "sağ panel açılınca orchestrator kapanır")
+        XCTAssertTrue(back.isVisible(.left), "sol yuva kuraldan etkilenmez")
+    }
+
+    func testBothRightPanelsStayOpenWhenRuleIsOff() {
+        let layout = PanelLayout.defaults
+            .settingExclusiveRightPanels(false)
+            .settingVisible(.right, true)
+            .settingVisible(.innerRight, true)
+        XCTAssertTrue(layout.isVisible(.right))
+        XCTAssertTrue(layout.isVisible(.innerRight))
+    }
+
+    func testEnablingRuleWithBothOpenClosesOrchestrator() {
+        let both = PanelLayout.defaults
+            .settingExclusiveRightPanels(false)
+            .settingVisible(.right, true)
+            .settingVisible(.innerRight, true)
+        let exclusive = both.settingExclusiveRightPanels(true)
+        XCTAssertTrue(exclusive.exclusiveRightPanels)
+        XCTAssertTrue(exclusive.isVisible(.right))
+        XCTAssertFalse(exclusive.isVisible(.innerRight))
+    }
+
+    func testHidingASlotNeverOpensItsPartner() {
+        let layout = PanelLayout.defaults.settingVisible(.right, true).settingVisible(.right, false)
+        XCTAssertFalse(layout.isVisible(.innerRight))
+    }
+
     func testMigratingDerivesVisibilityFromLegacyBooleans() {
         XCTAssertEqual(PanelLayout.migrating(leftOpen: true, rightOpen: false).visibleSlots, [.left])
         XCTAssertEqual(PanelLayout.migrating(leftOpen: false, rightOpen: true).visibleSlots, [.right])
