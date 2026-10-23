@@ -35,6 +35,8 @@ export class Bridge {
         // Serbest terminal konumları + Mac terminal fontu (2026-10-23) — additive.
         looseLocations: proj?.looseLocations ?? [],
         display: proj?.display ?? {},
+        // Kota göstergeleri (Mac top bar paritesi) — additive; Mac henüz göndermediyse null.
+        usage: room.usage ?? null,
         macOnline: room.mac !== null,
         lastSeenAt: room.lastSeenAt,
       }))
@@ -75,6 +77,11 @@ export class Bridge {
       case 'projects': {
         room.projects = env.payload
         this.broadcast(room, envelope('projects', env.payload))
+        break
+      }
+      case 'usage': {
+        room.usage = env.payload
+        this.broadcast(room, envelope('usage', env.payload))
         break
       }
       case 'scrollback':

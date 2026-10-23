@@ -20,6 +20,8 @@ public enum ServerMessage: Sendable, Equatable {
     case prompt(sessionId: String, prompt: ChatPrompt)
     // Projects tree
     case projects(ProjectsSnapshot)
+    // Quota indicators (Mac decision 128)
+    case usage(UsageReport)
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -91,6 +93,7 @@ public enum PhoneProtocol {
                   let p = ChatPrompt.decode(payload) else { return nil }
             return .prompt(sessionId: sessionId, prompt: p)
         case "projects": return decodePayload(ProjectsSnapshot.self).map(ServerMessage.projects)
+        case "usage": return decodePayload(UsageReport.self).map(ServerMessage.usage)
         default: return nil
         }
     }

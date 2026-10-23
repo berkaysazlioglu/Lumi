@@ -17,6 +17,12 @@ final class RemoteFeatureAssembly: FeatureAssembly {
     private(set) var remoteStore: RemoteStore!
     private var remoteService: RemoteService!
     private var services: (any ServiceRegistry)!
+    /// Kota göstergeleri → telefon (karar 128).
+    private let usageBridge: RemoteUsageBridge
+
+    init(usage: UsageFeatureAssembly) {
+        usageBridge = RemoteUsageBridge(usage: usage)
+    }
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
         self.services = services
@@ -40,9 +46,12 @@ final class RemoteFeatureAssembly: FeatureAssembly {
         // config.enabled=false ise start() içi no-op.
         remoteStore.start()
         Task { [remoteService] in await remoteService?.start() }
+        let service = remoteService!
+        usageBridge.start { report in await service.publishUsage(report) }
     }
 
     func shutdown() async {
+        usageBridge.stop()
         remoteService.stop()
     }
 }

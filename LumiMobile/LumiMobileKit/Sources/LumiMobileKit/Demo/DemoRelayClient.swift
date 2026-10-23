@@ -106,7 +106,8 @@ public actor DemoRelayClient: RelayClienting {
         emit(.message(.welcome(Welcome(
             macOnline: true, lastSeenAt: nowMs, sessions: world.sessions, repos: world.repos,
             projects: world.projects, addable: world.addable, others: world.others,
-            looseLocations: world.looseLocations, display: DemoData.display))))
+            looseLocations: world.looseLocations, display: DemoData.display,
+            usage: DemoUsage.report(nowMs: nowMs)))))
     }
 
     // MARK: Commands

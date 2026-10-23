@@ -23,6 +23,10 @@ struct ProjectsView: View {
     @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
     @AppStorage(TUIStyle.sizeKey) private var textSize = TUIStyle.defaultSize
     @AppStorage(DemoMode.storageKey) private var demoMode = false
+    @AppStorage(ProjectsRowSize.storageKey) private var rowSize = ProjectsRowSize.default
+
+    /// Project band padding (fixed — it's the anchor of the hierarchy).
+    private static let projectRowPadding: CGFloat = 9
 
     var body: some View {
         NavigationStack {
@@ -37,6 +41,7 @@ struct ProjectsView: View {
                 if !others.isEmpty || !locations.isEmpty { otherSection(others, locations: locations) }
             }
             .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 0)
             .scrollContentBackground(.hidden)
             .background(LumiPalette.background)
             .navigationTitle("Projects")
@@ -44,7 +49,15 @@ struct ProjectsView: View {
                 TerminalSessionView(model: model, sessionId: sessionId)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { connectionDot }
+                ToolbarItem(placement: .topBarLeading) {
+                    HStack(spacing: 12) {
+                        connectionDot
+                        // Mac top bar quotas (decision 128).
+                        if let usage = model.usage, !usage.isEmpty { UsageIndicators(report: usage) }
+                    }
+                    .padding(.horizontal, 4)
+                    .fixedSize()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                         .disabled(!model.macOnline || model.projectsSnapshot.addable.isEmpty)
@@ -126,6 +139,7 @@ struct ProjectsView: View {
             Text(project.node.name).font(.headline).foregroundStyle(LumiPalette.textPrimary)
             if let color = project.node.appearance.color { ProjectColorDot(color: color) }
         }
+        .treeRow(.project, verticalPadding: Self.projectRowPadding)
         if !collapsed {
             // Agents are emitted as their own List rows (not nested inside a single
             // checkout cell) so each is individually selectable and supports swipe /
@@ -153,8 +167,6 @@ struct ProjectsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.top, 10)
-        .lumiRow()
     }
 
     /// Projects ▸ Other (Mac decision 108): terminals opened outside any project,
@@ -169,15 +181,14 @@ struct ProjectsView: View {
                 Text("Other").font(.headline).foregroundStyle(LumiPalette.textPrimary)
             }
             looseStartMenu(locations)
-                .padding(.top, 10)
         }
-        .lumiRow()
+        .treeRow(.project, verticalPadding: Self.projectRowPadding)
         if !collapsed {
             ForEach(groups) { group in
                 HStack(spacing: 8) {
                     Image(systemName: "folder")
                         .font(.caption).foregroundStyle(LumiPalette.textSecondary)
-                    Text(group.node.label).font(.subheadline.weight(.medium))
+                    Text(group.node.label).font(rowSize.checkoutFont)
                         .foregroundStyle(LumiPalette.textPrimary)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer()
@@ -185,7 +196,7 @@ struct ProjectsView: View {
                         startAgent(at: group.node.path)
                     }
                 }
-                .lumiRow()
+                .treeRow(.checkout, verticalPadding: rowSize.verticalPadding)
                 ForEach(group.agents) { agent in
                     agentRow(agent)
                 }
@@ -197,7 +208,7 @@ struct ProjectsView: View {
     @ViewBuilder
     private func looseStartMenu(_ locations: [LooseLocation]) -> some View {
         if let busy = startingCheckout, locations.contains(where: { $0.path == busy }) {
-            ProgressView().controlSize(.small).frame(width: 30, height: 30)
+            ProgressView().controlSize(.small).frame(width: 28, height: 24)
         } else {
             Menu {
                 Section("New Claude in…") {
@@ -209,8 +220,8 @@ struct ProjectsView: View {
                 }
             } label: {
                 Image(systemName: "plus.circle")
-                    .font(.title3)
-                    .frame(width: 30, height: 30)
+                    .font(.body)
+                    .frame(width: 28, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
@@ -227,8 +238,8 @@ struct ProjectsView: View {
         HStack(spacing: 8) {
             // "workspace" kind → branch icon; "original" (main checkout) → house icon
             Image(systemName: checkout.node.kind == "workspace" ? "arrow.triangle.branch" : "house")
-                .font(.caption).foregroundStyle(.secondary)
-            Text(checkoutDisplayTitle(checkout.node, in: project.node)).font(.subheadline.weight(.medium))
+                .font(.caption).foregroundStyle(LumiPalette.textSecondary)
+            Text(checkoutDisplayTitle(checkout.node, in: project.node)).font(rowSize.checkoutFont)
                 .foregroundStyle(LumiPalette.textPrimary)
             if let branch = checkout.node.branch, !branch.isEmpty {
                 Text(branch)
@@ -238,7 +249,7 @@ struct ProjectsView: View {
             Spacer()
             newAgentButton(checkout, in: project)
         }
-        .lumiRow()
+        .treeRow(.checkout, verticalPadding: rowSize.verticalPadding)
     }
 
     /// Tap: start a Claude agent right in this checkout's folder and open it.
@@ -247,7 +258,7 @@ struct ProjectsView: View {
     private func newAgentButton(_ checkout: CheckoutRowData, in project: ProjectRowData) -> some View {
         let branch = checkout.node.branch.flatMap { $0.isEmpty ? nil : $0 }
         if startingCheckout == checkout.id {
-            ProgressView().controlSize(.small).frame(width: 30, height: 30)
+            ProgressView().controlSize(.small).frame(width: 28, height: 24)
         } else {
             Menu {
                 Button { startAgent(in: checkout) } label: {
@@ -260,8 +271,8 @@ struct ProjectsView: View {
                 }
             } label: {
                 Image(systemName: "plus.circle")
-                    .font(.title3)
-                    .frame(width: 30, height: 30)
+                    .font(.body)
+                    .frame(width: 28, height: 24)
                     .contentShape(Rectangle())
             } primaryAction: {
                 startAgent(in: checkout)
@@ -288,12 +299,12 @@ struct ProjectsView: View {
     @ViewBuilder
     private func startButton(id: String, label: String, action: @escaping () -> Void) -> some View {
         if startingCheckout == id {
-            ProgressView().controlSize(.small).frame(width: 30, height: 30)
+            ProgressView().controlSize(.small).frame(width: 28, height: 24)
         } else {
             Button(action: action) {
                 Image(systemName: "plus.circle")
-                    .font(.title3)
-                    .frame(width: 30, height: 30)
+                    .font(.body)
+                    .frame(width: 28, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
@@ -307,12 +318,12 @@ struct ProjectsView: View {
         Button {
             openSession = agent.id
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 AgentActivityGlyph(activity: agent.activity)
                 Image(systemName: providerSymbol(agent.provider))
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(rowSize.agentFont).foregroundStyle(LumiPalette.textSecondary)
                 Text(agent.title)
-                    .font(.body)
+                    .font(rowSize.agentFont)
                     .foregroundStyle(agent.needsAttention ? Color.orange : LumiPalette.textPrimary)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer()
@@ -328,17 +339,16 @@ struct ProjectsView: View {
                 .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                 Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
             }
-            .padding(.vertical, 6)
-            .padding(.leading, 16)
             .contentShape(Rectangle())
             .overlay(alignment: .leading) {
                 if agent.needsAttention {
                     RoundedRectangle(cornerRadius: 2).fill(Color.orange).frame(width: 3)
+                        .offset(x: -8)
                 }
             }
         }
         .buttonStyle(.plain)
-        .lumiRow()
+        .treeRow(.agent, verticalPadding: rowSize.verticalPadding)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { pendingDelete = agent.id } label: {
                 Label("Delete", systemImage: "trash")
@@ -417,6 +427,12 @@ struct ProjectsView: View {
                 }
             } label: {
                 Label("Text Size", systemImage: "textformat.size")
+            }
+            .pickerStyle(.menu)
+            Picker(selection: $rowSize) {
+                ForEach(ProjectsRowSize.allCases) { Text($0.title).tag($0) }
+            } label: {
+                Label("Row Size", systemImage: "list.bullet.indent")
             }
             .pickerStyle(.menu)
             if demoMode {

@@ -27,7 +27,9 @@ enum MirrorTerminalTheme {
 
     @MainActor
     static func apply(to view: TerminalView) {
-        view.nativeBackgroundColor = UIColor(hex: background)
+        // The mirror stays a dark terminal (Mac palette): black in Dark mode,
+        // Lumi navy otherwise — light-on-white would break the ANSI colors.
+        view.nativeBackgroundColor = LumiPalette.themed(light: UIColor(hex: background), dark: .black, lumi: background)
         view.nativeForegroundColor = UIColor(hex: foreground)
         view.caretColor = UIColor(hex: cursor)
         view.installColors(ansiHex.map { hex in

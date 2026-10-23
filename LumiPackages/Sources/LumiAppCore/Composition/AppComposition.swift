@@ -44,7 +44,7 @@ struct AppComposition {
         let repo = RepoFeatureAssembly()
         let workspaceBoot = WorkspaceBootAssembly()
         let statusBar = StatusBarFeatureAssembly()
-        let remote = RemoteFeatureAssembly()
+        let remote = RemoteFeatureAssembly(usage: usage)
         let deepSeek = DeepSeekAssembly()
         let tasks = TasksFeatureAssembly()
         // Hesap değişince Claude göstergesi yeni hesabın kotasını göstermeli.

@@ -404,10 +404,13 @@ public struct Welcome: Decodable, Sendable, Equatable {
     public let looseLocations: [LooseLocation]?
     /// Mac display settings (additive; nil if omitted by an older Mac/relay).
     public let display: MacDisplay?
+    /// Quota indicators cached by the relay (additive; nil until the Mac reports).
+    public let usage: UsageReport?
 
     public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil,
                 projects: [ProjectNode]? = nil, addable: [Repo]? = nil, others: [OtherGroupNode]? = nil,
-                looseLocations: [LooseLocation]? = nil, display: MacDisplay? = nil) {
+                looseLocations: [LooseLocation]? = nil, display: MacDisplay? = nil,
+                usage: UsageReport? = nil) {
         self.macOnline = macOnline
         self.lastSeenAt = lastSeenAt
         self.sessions = sessions
@@ -417,10 +420,11 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.others = others
         self.looseLocations = looseLocations
         self.display = display
+        self.usage = usage
     }
 
     private enum CodingKeys: String, CodingKey {
-        case macOnline, lastSeenAt, sessions, repos, projects, addable, others, looseLocations, display
+        case macOnline, lastSeenAt, sessions, repos, projects, addable, others, looseLocations, display, usage
     }
 
     public init(from decoder: Decoder) throws {
@@ -434,6 +438,7 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.others = try c.decodeIfPresent([OtherGroupNode].self, forKey: .others)
         self.looseLocations = try? c.decodeIfPresent([LooseLocation].self, forKey: .looseLocations)
         self.display = try? c.decodeIfPresent(MacDisplay.self, forKey: .display)
+        self.usage = try? c.decodeIfPresent(UsageReport.self, forKey: .usage)
     }
 }
 

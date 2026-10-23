@@ -66,6 +66,8 @@ public final class AppModel {
 
     /// Latest projects tree snapshot (favorites mirror from the Mac).
     public private(set) var projectsSnapshot = ProjectsSnapshot(projects: [], addable: [])
+    /// Mac quota indicators (decision 128); nil until the Mac reports.
+    public private(set) var usage: UsageReport?
     /// Last add_project failure (surfaced by the add sheet).
     public private(set) var addProjectError: String?
     private var addProjectCommandIds: Set<String> = []
@@ -193,6 +195,7 @@ public final class AppModel {
         branchesError = nil
         startState = .idle
         projectsSnapshot = ProjectsSnapshot(projects: [], addable: [])
+        usage = nil
         addProjectError = nil
         addProjectCommandIds = []
     }
@@ -209,6 +212,7 @@ public final class AppModel {
             lastSeenAt = welcome.lastSeenAt.map { Date(timeIntervalSince1970: $0 / 1000) }
             if let metas = welcome.sessions { applySessions(metas) }
             if let repos = welcome.repos { self.repos = repos }
+            if let report = welcome.usage { usage = report }
             if let projects = welcome.projects {
                 projectsSnapshot = ProjectsSnapshot(
                     projects: projects, others: welcome.others ?? [], addable: welcome.addable ?? [],
@@ -312,6 +316,10 @@ public final class AppModel {
         case .projects(let snap):
             macOnline = true
             projectsSnapshot = snap
+
+        case .usage(let report):
+            macOnline = true
+            usage = report
         }
     }
 
@@ -342,6 +350,8 @@ public final class AppModel {
             "prompt \(sessionId.prefix(8)) \(p.kind.rawValue) \(p.state.rawValue)"
         case .projects(let snap):
             "projects projects=\(snap.projects.count) addable=\(snap.addable.count)"
+        case .usage(let report):
+            "usage providers=\(report.providers.count) deepseek=\(report.deepSeek != nil)"
         }
     }
 

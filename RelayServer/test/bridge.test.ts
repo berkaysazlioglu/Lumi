@@ -340,3 +340,14 @@ test('telefon hello → welcome serbest konumları ve display bilgisini de taş�
   expect(phone.last().payload.looseLocations).toEqual(looseLocations)
   expect(phone.last().payload.display).toEqual(display)
 })
+
+test('mac usage → telefonlara yayınlanır ve sonraki welcome\'a iliştirilir', () => {
+  const { bridge, phone, macSession } = paired()
+  const usage = { providers: [{ id: 'claude', enabled: true, limits: [] }] }
+  bridge.handleMessage(macSession, env('usage', usage))
+  expect(phone.last().type).toBe('usage')
+
+  const late = new FakeClient()
+  bridge.handleHello(late, env('hello', { role: 'phone', token: TOKEN }))
+  expect(late.last().payload.usage).toEqual(usage)
+})

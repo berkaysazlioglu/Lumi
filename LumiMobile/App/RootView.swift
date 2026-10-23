@@ -17,6 +17,7 @@ struct RootView: View {
         }
         .tint(LumiPalette.accent)
         .preferredColorScheme(appearance.colorScheme)
+        .environment(\.isLumiTheme, appearance.isLumi)
         .environment(\.tuiStyle, TUIStyle(
             macFamily: model.projectsSnapshot.display.terminalFontFamily, size: textSize))
     }

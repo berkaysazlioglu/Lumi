@@ -75,6 +75,8 @@ public final class RemoteService: RemoteServicing {
     private var modelCache: [TerminalID: String] = [:]
     /// Karar 105: "karar bekliyor" (izin/soru promptu) olan terminaller — `sessions`'a yansır.
     private var awaitingDecision: Set<TerminalID> = []
+    /// Son kota raporu (karar 128) — değişince yayınlanır, telefon bağlanınca tekrar gider.
+    private var lastUsage: RemoteUsageReport?
 
     public init(
         paths: LumiPaths,
@@ -156,6 +158,18 @@ public final class RemoteService: RemoteServicing {
         Task { await self.shutdown() }
     }
 
+    /// Kota göstergelerinin yeni hâli (karar 128). Aynı rapor tekrar yayınlanmaz.
+    public func publishUsage(_ report: RemoteUsageReport) async {
+        guard report != lastUsage else { return }
+        lastUsage = report
+        await sendUsage()
+    }
+
+    private func sendUsage() async {
+        guard running, let lastUsage else { return }
+        await connection.send(type: "usage", payload: lastUsage.payload())
+    }
+
     /// `projects` anlık görüntüsünü değiştiren config alanları: ağaç (favoriler,
     /// workspace'ler), görünüm (karar 120), serbest konum kökleri ve terminal fontu.
     static func projectsInputsChanged(_ old: AppConfig, _ new: AppConfig) -> Bool {
@@ -220,6 +234,7 @@ public final class RemoteService: RemoteServicing {
                 await sendSessions()
                 await sendRepos()
                 await sendProjects()
+                await sendUsage()
             case "subscribe":
                 await handleSubscribe(payload)
             case "unsubscribe":
