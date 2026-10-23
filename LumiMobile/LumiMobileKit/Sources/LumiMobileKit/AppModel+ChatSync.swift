@@ -44,17 +44,42 @@ extension AppModel {
         return id
     }
 
-    /// A `chat_append` carrying `afterId` answers a delta subscribe. It applies only to a
-    /// list that holds `afterId` (then it is complete); another phone's reply, or one
-    /// for a list replaced meanwhile, is ignored — no automatic resubscribe, so phones
-    /// never ping-pong each other.
-    func applyDeltaReply(_ sessionId: String, afterId: String) -> Bool {
-        guard chatBySession[sessionId]?.contains(where: { $0.id == afterId }) == true else {
+    /// A `chat_append` carrying `afterId` answers a delta subscribe: the Mac's rows after
+    /// `afterId`, so they replace whatever the list holds past it. It applies only to a
+    /// list that holds `afterId` — its prefix is contiguous because plain appends never
+    /// land on a list that is not live. Another phone's reply, or one for a list replaced
+    /// meanwhile, is ignored (nil) — no automatic resubscribe, so phones never ping-pong.
+    func deltaReplyList(_ sessionId: String, afterId: String, messages: [ChatMessage]) -> [ChatMessage]? {
+        guard let current = chatBySession[sessionId],
+              let anchor = current.firstIndex(where: { $0.id == afterId }) else {
             DiagLog.shared.log("model", "delta reply ignored sid=\(sessionId.prefix(8)) afterId=\(afterId.prefix(8))")
-            return false
+            return nil
         }
         finishChatSync(sessionId)
-        return true
+        liveChats.insert(sessionId)
+        return Array(current[...anchor]) + messages
+    }
+
+    /// A plain `chat_append` upserts by id, but only into a live list. Without an anchor
+    /// (no snapshot yet — e.g. the tail of a subscribe made by an earlier app run, or
+    /// rows after a disconnect) it is dropped (nil): kept, it would make the list look
+    /// complete to the next delta subscribe and hide everything before it.
+    func liveAppendList(_ sessionId: String, messages: [ChatMessage]) -> [ChatMessage]? {
+        guard liveChats.contains(sessionId) else {
+            if !messages.isEmpty {
+                DiagLog.shared.log("model", "append ignored (not live) sid=\(sessionId.prefix(8)) count=\(messages.count)")
+            }
+            return nil
+        }
+        var current = chatBySession[sessionId] ?? []
+        for message in messages {
+            if let idx = current.firstIndex(where: { $0.id == message.id }) {
+                current[idx] = message
+            } else {
+                current.append(message)
+            }
+        }
+        return current
     }
 
     /// The Mac answered the subscribe (or the session went away).

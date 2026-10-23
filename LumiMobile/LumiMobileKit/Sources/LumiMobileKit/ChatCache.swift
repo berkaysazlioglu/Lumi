@@ -38,7 +38,9 @@ public struct NoChatCache: ChatCaching {
 public final class FileChatCache: ChatCaching, @unchecked Sendable {
     /// Newest messages kept per chat.
     public static let maxMessages = 200
-    private static let formatVersion = 1
+    /// 2: build 495 could cache a list built from unanchored appends (no history before
+    /// them); bumping drops those files once, and the next subscribe fetches in full.
+    private static let formatVersion = 2
 
     private let directory: URL
     private let queue = DispatchQueue(label: "com.lumi.mobile.chat-cache", qos: .utility)

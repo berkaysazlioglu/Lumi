@@ -815,6 +815,7 @@ final class AppModelTests: XCTestCase {
     /// list (not deleted).
     func testStreamingReplacedByRealMessageNoVanish() {
         let (model, _, _) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: []))
         // Streaming starts.
         model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(
             working: true, startedAtMs: 1, tool: nil, streamingText: "Response")))

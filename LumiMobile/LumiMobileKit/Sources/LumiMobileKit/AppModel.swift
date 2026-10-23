@@ -118,6 +118,10 @@ public final class AppModel {
     public internal(set) var chatSyncing: Set<String> = []
     /// Chats whose snapshot left older rows on the Mac (frame size cap).
     public internal(set) var chatHasEarlier: Set<String> = []
+    /// Chats whose list is contiguous with the Mac's tail: anchored by a snapshot or an
+    /// accepted delta reply, with no disconnect or unsubscribe since. Plain appends only
+    /// apply to these — anything else would leave a hole the next delta cannot see.
+    var liveChats: Set<String> = []
     /// Per-session retry timer: re-sends the subscribe if no snapshot arrives in time.
     var syncWatchdogs: [String: Task<Void, Never>] = [:]
     /// Sessions whose sync retries ran out (Mac offline: the relay drops the subscribe).
@@ -158,6 +162,8 @@ public final class AppModel {
                 case .stateChanged(let state):
                     self.connection = state
                     if state == .disconnected { self.macOnline = false }
+                    // Appends sent while the socket was down are lost: no list is live anymore.
+                    if state != .connected { self.liveChats = [] }
                     // Task 11: Reconnect subscription replay.
                     // When the connection is re-established and there is an active session,
                     // send a re-subscribe to the Mac; the Mac restarts fresh scrollback + live data stream.
@@ -220,6 +226,7 @@ public final class AppModel {
         pendingReleases = [:]
         chatSyncing = []
         chatHasEarlier = []
+        liveChats = []
         for task in cacheSaves.values { task.cancel() }
         cacheSaves = [:]
         chatCache.clear()
@@ -321,6 +328,7 @@ public final class AppModel {
         case .chat(let sessionId, let messages, let hasEarlier):
             macOnline = true
             finishChatSync(sessionId)
+            liveChats.insert(sessionId)
             chatBySession[sessionId] = messages
             if hasEarlier { chatHasEarlier.insert(sessionId) } else { chatHasEarlier.remove(sessionId) }
             scheduleChatCacheSave(sessionId)
@@ -330,15 +338,9 @@ public final class AppModel {
 
         case .chatAppend(let sessionId, let messages, let afterId):
             macOnline = true
-            if let afterId, !applyDeltaReply(sessionId, afterId: afterId) { return }
-            var current = chatBySession[sessionId] ?? []
-            for message in messages {
-                if let idx = current.firstIndex(where: { $0.id == message.id }) {
-                    current[idx] = message
-                } else {
-                    current.append(message)
-                }
-            }
+            let updated = afterId.map { deltaReplyList(sessionId, afterId: $0, messages: messages) }
+                ?? liveAppendList(sessionId, messages: messages)
+            guard let current = updated else { return }
             chatBySession[sessionId] = current
             pendingBySession[sessionId] = chatRetireLandedPending(
                 messages: current, current: pendingBySession[sessionId] ?? [])
@@ -473,6 +475,7 @@ public final class AppModel {
     /// sends an `unsubscribe` frame, and terminates the live stream.
     public func unsubscribe(_ sessionId: String) {
         if activeSessionId == sessionId { activeSessionId = nil; activeChatMode = false }
+        liveChats.remove(sessionId)
         terminalSinks[sessionId]?.finish()
         terminalSinks[sessionId] = nil
         replayBuffers[sessionId] = nil
@@ -705,6 +708,7 @@ public final class AppModel {
         replayBuffers[id] = nil
         chatBySession[id] = nil
         chatHasEarlier.remove(id)
+        liveChats.remove(id)
         cacheSaves[id]?.cancel()
         cacheSaves[id] = nil
         chatCache.remove(id)

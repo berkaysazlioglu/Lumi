@@ -147,6 +147,55 @@ final class AppModelChatSyncTests: XCTestCase {
         XCTAssertTrue(model.chatSyncing.contains("s1"))
     }
 
+    /// Field bug (build 495): a fresh app run received the tail of a subscribe made by an
+    /// earlier run, built a list from it, and the delta subscribe then called it complete.
+    func testAppendWithoutSnapshotIsDroppedSoSubscribeFetchesInFull() async {
+        let (model, client) = makeModel()
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u7"), msg("u8")]))
+        XCTAssertTrue(model.chatMessages("s1").isEmpty, "an unanchored append must not seed the list")
+        model.subscribeChat("s1")
+        await waitUntil { subscribeCount(client, "s1") > 0 }
+        XCTAssertFalse(client.sentFrames.contains { $0.contains("afterId") }, "no cursor → full snapshot")
+    }
+
+    func testAppendsAfterDisconnectWaitForTheDeltaReply() async {
+        let (model, client) = makeModel()
+        await model.start()
+        client.emit(.stateChanged(.connected))
+        await waitUntil { model.connection == .connected }
+        model.subscribeChat("s1")
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1")]))
+        client.emit(.stateChanged(.disconnected))
+        await waitUntil { model.connection == .disconnected }
+        client.emit(.stateChanged(.connected))
+        await waitUntil { model.connection == .connected }
+        // u2 went out while the socket was down; u3 arrives before the delta reply.
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u3")]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1"], "a post-gap append would hide u2")
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u2"), msg("u3")], afterId: "u1"))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1", "u2", "u3"])
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u4")]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1", "u2", "u3", "u4"], "live again")
+    }
+
+    func testDeltaReplyReplacesRowsPastTheCursorInOrder() {
+        let (model, _) = makeModel()
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1"), msg("u3")]))
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u2"), msg("u3")], afterId: "u1"))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1", "u2", "u3"])
+    }
+
+    func testUnsubscribedChatStopsTakingAppends() async {
+        let (model, client) = makeModel()
+        model.handle(.sessions([chatMeta("s1")]))
+        model.subscribeChat("s1")
+        model.handle(.chat(sessionId: "s1", messages: [msg("u1")]))
+        model.leaveSession("s1")
+        await waitUntil { client.sentFrames.contains { $0.contains(#""type":"unsubscribe""#) } }
+        model.handle(.chatAppend(sessionId: "s1", messages: [msg("u2")]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["u1"])
+    }
+
     func testDeltaFrameDecodesAfterId() {
         let frame = #"{"v":1,"type":"chat_append","payload":{"sessionId":"s1","afterId":"u1","messages":[]}}"#
         guard case let .chatAppend(sid, messages, afterId)? = PhoneProtocol.decodeServerMessage(frame) else {

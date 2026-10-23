@@ -50,6 +50,16 @@ final class FileChatCacheTests: XCTestCase {
         XCTAssertEqual(loaded?.hasEarlier, true)
     }
 
+    func testOlderFormatFileIsDropped() throws {
+        let cache = FileChatCache(directory: directory)
+        let id = UUID().uuidString
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent(id + ".json")
+        try Data(#"{"v":1,"hasEarlier":false,"messages":[]}"#.utf8).write(to: file)
+        XCTAssertNil(cache.load(id), "a v1 file may hold an unanchored list")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
     func testPruneDropsSessionsNotKept() {
         let cache = FileChatCache(directory: directory)
         let keep = UUID().uuidString, drop = UUID().uuidString
