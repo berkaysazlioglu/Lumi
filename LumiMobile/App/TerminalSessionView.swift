@@ -69,19 +69,11 @@ struct TerminalSessionView: View {
                 }
             }
         }
-        .confirmationDialog(
-            "Delete this chat?",
-            isPresented: $confirmDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                // Pop back to home first, then end the session on the Mac.
-                dismiss()
-                Task { await model.deleteSession(sessionId: sessionId) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This session will be ended on the Mac.")
+        .confirmDeleteChat(isPresented: $confirmDelete,
+                           title: model.session(sessionId)?.title ?? model.session(sessionId)?.repoName ?? "This chat") {
+            // Pop back to home first, then end the session on the Mac.
+            dismiss()
+            Task { await model.deleteSession(sessionId: sessionId) }
         }
     }
 
