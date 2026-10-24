@@ -63,8 +63,10 @@ private struct UsageChipButton<Popover: View>: View {
         // carrying the arrow, so `.top` (arrow up) places it underneath. Left to
         // the system, each chip's bubble picked a different side.
         .popover(isPresented: $showing, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            // The system's own popover surface only: a custom background drew a
+            // second shape whose corners didn't match the bubble's (the corner
+            // beside the arrow is tighter) and the system layer showed through.
             popover()
-                .presentationBackground(LumiPalette.background)
                 .presentationCompactAdaptation(.popover)
                 .lumiThemed()
         }

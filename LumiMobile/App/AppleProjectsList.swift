@@ -75,15 +75,19 @@ struct AppleProjectsList: View {
 
     /// Usage indicators over the look controls as one header block (not while
     /// searching — only results then) and, when the Mac is away, its status.
+    /// The block is a section header, not a row: a row is clipped to the
+    /// card's rounded corners, which shaved the leading chips' edges.
     @ViewBuilder private func topSection(isSearching: Bool) -> some View {
-        if !isSearching {
-            ProjectsListHeader(usage: model.usage, isStale: !model.macOnline)
-                .listRowInsets(Self.headerInsets)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-        }
-        if !model.macOnline {
-            Section { offlineRow }
+        if isSearching {
+            if !model.macOnline { Section { offlineRow } }
+        } else {
+            Section {
+                if !model.macOnline { offlineRow }
+            } header: {
+                ProjectsListHeader(usage: model.usage, isStale: !model.macOnline)
+                    .textCase(nil)
+                    .listRowInsets(Self.headerInsets)
+            }
         }
     }
 

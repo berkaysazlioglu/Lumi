@@ -13,7 +13,8 @@ enum AppleProjectsMetrics {
     /// Project badge (Reminders' "My Lists" icon): a filled circle with a white glyph.
     static let projectBadgeSize: CGFloat = 22
     static let projectGlyphScale: CGFloat = 0.5
-    static let projectEmojiScale: CGFloat = 0.7
+    /// Bare emoji fills its slot like the symbol badges fill theirs.
+    static let projectEmojiScale: CGFloat = 0.85
     static let rowSpacing: CGFloat = 10
     static let subtitleSpacing: CGFloat = 2
     static let minRowHeight: CGFloat = 34
@@ -137,7 +138,8 @@ struct AppleGroupHeaderRow<Title: View>: View {
 }
 
 /// A project's identity (Mac decision 120) the Reminders way: its SF Symbol
-/// white on a circle of its color, or its emoji on a soft fill.
+/// white on a circle of its color, or its emoji on its own — a fill behind it
+/// read as a grey disc on the colored band.
 struct AppleProjectBadge: View {
     let appearance: ProjectAppearance
     /// Unscaled diameter; the A− / A+ scale applies on top.
@@ -152,7 +154,6 @@ struct AppleProjectBadge: View {
             Text(value)
                 .font(.system(size: size * AppleProjectsMetrics.projectEmojiScale))
                 .frame(width: size, height: size)
-                .background(Color(.tertiarySystemFill), in: Circle())
         case let .symbol(name)?:
             symbol(name)
         case nil:
