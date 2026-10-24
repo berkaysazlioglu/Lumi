@@ -25,3 +25,16 @@ public struct CustomViewRouteView: View {
         }
     }
 }
+
+/// Top bar'daki route başlığı: view'ın adı (yeniden adlandırınca canlı değişir).
+public struct CustomViewTitleToolbarItem: View {
+    @Shell private var shell
+
+    public init() {}
+
+    public var body: some View {
+        if let name = shell.activeCustomViewName {
+            RouteTitleToolbarItem(title: name, icon: CustomViewRoute.icon)
+        }
+    }
+}

@@ -347,6 +347,9 @@ struct AgentRow: View {
         .flightAnchor(.agentRow(agent.meta.id))
         .contextMenu {
             Button("Focus Session", action: onSelect)
+            // Karar 135
+            CustomViewMenuItems(terminalID: agent.meta.id)
+            Divider()
             Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }
         }
     }

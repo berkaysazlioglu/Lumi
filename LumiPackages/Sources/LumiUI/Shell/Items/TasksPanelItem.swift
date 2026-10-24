@@ -11,7 +11,8 @@ import SwiftUI
 /// panelinden bir proje/workspace/ajan seçmek repo route'unu geri açar.
 ///
 /// Karar 103: en üstte All Terminals satırı — tüm projelerin terminalleri tek
-/// ızgarada; yanında toplam terminal sayısı.
+/// ızgarada; yanında toplam terminal sayısı. Karar 135: hemen altında
+/// kullanıcının Custom View'ları.
 public struct TasksPanelItem: View {
     /// Öğenin en küçük yüksekliği — eski Sessions bölümünün (başlık + 180pt
     /// sabit liste) kapladığı alan. İki satır bu alanı doldurmaz; yuvanın
@@ -31,6 +32,7 @@ public struct TasksPanelItem: View {
                 route: AllTerminalsRoute.route,
                 count: shell.terminals.totalCount
             )
+            CustomViewsSection()
             ForEach(TasksPanelSection.allCases, id: \.self) { section in
                 row(title: section.title, icon: section.icon, route: .content(section.routeID))
             }

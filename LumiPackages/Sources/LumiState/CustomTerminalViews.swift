@@ -89,6 +89,14 @@ public struct CustomTerminalViews: Equatable, Sendable {
         return (true, dropEmpty())
     }
 
+    /// View'ı siler; terminallere dokunmaz. Dönüş: silindi mi.
+    @discardableResult
+    public mutating func delete(_ id: CustomViewID) -> Bool {
+        guard let index = views.firstIndex(where: { $0.id == id }) else { return false }
+        views.remove(at: index)
+        return true
+    }
+
     /// Dönüş: ad değişti mi. Geçersiz ad (`CustomViewName.sanitized`) reddedilir.
     @discardableResult
     public mutating func rename(_ id: CustomViewID, to raw: String) -> Bool {

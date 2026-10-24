@@ -37,6 +37,13 @@ extension TerminalListStore {
         onOrderChanged?()
     }
 
+    /// View'ı siler; üyeleri kapatmaz (karar 135).
+    public func deleteCustomView(_ view: CustomViewID) {
+        guard customViews.delete(view) else { return }
+        customViewsRemoved([view])
+        onOrderChanged?()
+    }
+
     public func renameCustomView(_ view: CustomViewID, to name: String) {
         guard customViews.rename(view, to: name) else { return }
         onOrderChanged?()

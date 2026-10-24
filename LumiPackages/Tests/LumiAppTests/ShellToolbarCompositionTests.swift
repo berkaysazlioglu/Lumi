@@ -225,6 +225,31 @@ final class ShellToolbarCompositionTests: XCTestCase {
         )
     }
 
+    /// Karar 135: her view kendi route'udur; registry önekli id'yi aile
+    /// descriptor'ına çözer. Başlık view'ın adıdır; repo eylemleri düşer.
+    func testCustomViewRouteResolvesToItsFamilyAndShowsTheViewName() async throws {
+        XCTAssertEqual(
+            registries.routes.resolve(.customView(CustomViewID(rawValue: "x")))?.id,
+            .customViewFamily
+        )
+        fixture.openRepo()
+        let terminals = fixture.context.terminals
+        terminals.start() // idempotent; fixture.stop() susturur
+        let meta = try XCTUnwrap(terminals.spawn(in: "/r/alpha"))
+        let deadline = Date().addingTimeInterval(2)
+        while terminals.meta(for: meta.id) == nil, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let view = try XCTUnwrap(terminals.createCustomView(with: meta.id))
+
+        fixture.context.navigation.setRoute(CustomViewRoute.route(view))
+
+        XCTAssertEqual(
+            ids(.center),
+            [.arrangeTerminals, .gridSettings, .newTerminal, ToolbarItemID("route.customView")]
+        )
+    }
+
     func testAllTerminalsRouteIsRegistered() {
         XCTAssertEqual(registries.routes.resolve(.allTerminals)?.id, .allTerminals)
     }

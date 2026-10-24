@@ -47,6 +47,9 @@ enum NewTerminalMenu {
     /// terminal ana butonla ya da yukarıdaki satırlarla açılır. Repo yüzeyinde
     /// boştur (spawn checkout'ta olur).
     static func locationItems(shell: ShellContext, scope: TerminalScope) -> [NewTerminalMenuItem] {
+        if let view = scope.customViewID {
+            return customViewItems(shell: shell, view: view)
+        }
         guard scope == .all else { return [] }
         let store = shell.looseTerminals
         let current = store.currentLocation
@@ -68,9 +71,27 @@ enum NewTerminalMenu {
         return items
     }
 
-    /// All Terminals'ta ana butonun yanında görünen konum etiketi.
+    /// Karar 135: Custom View'da hedef checkout seçimi — view'daki checkout'lar;
+    /// satır o checkout'un üyesini odaklar ve çapa o olur (ayrı bir durum
+    /// tutulmaz). Terminal yine ana butonla ya da sağlayıcı satırlarıyla açılır.
+    private static func customViewItems(shell: ShellContext, view: CustomViewID) -> [NewTerminalMenuItem] {
+        let anchor = shell.terminals.spawnAnchor(in: view)?.repoPath
+        return shell.customViewCheckouts(view).map { checkout in
+            NewTerminalMenuItem(
+                label: shell.checkoutLabel(for: checkout.path),
+                glyph: .symbol("arrow.triangle.branch"),
+                isSelected: checkout.path == anchor
+            ) {
+                shell.terminals.restoreAndFocus(checkout.member)
+            }
+        }
+    }
+
+    /// All Terminals'ta ana butonun yanında görünen konum etiketi; Custom
+    /// View'da terminalin açılacağı checkout (karar 135).
     static func locationLabel(shell: ShellContext, scope: TerminalScope) -> String? {
-        scope == .all ? shell.looseTerminals.currentLocationLabel : nil
+        if let view = scope.customViewID { return shell.customViewSpawnLabel(view) }
+        return scope == .all ? shell.looseTerminals.currentLocationLabel : nil
     }
 
     private static func symbol(for kind: LooseTerminalLocation.Kind) -> String {

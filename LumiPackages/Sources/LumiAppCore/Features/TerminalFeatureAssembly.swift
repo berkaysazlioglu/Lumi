@@ -73,6 +73,14 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
                 AnyView(RouteTitleToolbarItem(title: AllTerminalsRoute.title, icon: AllTerminalsRoute.icon))
             }
         ))
+        // Karar 135: Custom View route'unun başlığı view'ın adıdır.
+        registries.toolbar.register(ToolbarItemDescriptor(
+            id: ToolbarItemID("route.customView"),
+            region: .center,
+            order: ShellToolbarItems.Order.routeTitle,
+            isVisible: { $0.activeCustomViewName != nil },
+            makeView: { AnyView(CustomViewTitleToolbarItem()) }
+        ))
         // Üretim bölgesi (Faz 6.4): grid ayarı, Edit ve birincil CTA her
         // terminal yüzeyinde (repo ya da All Terminals — CTA orada serbest
         // terminal açar, karar 108). Repo-dışı bir route'ta (Tasks/Remote)

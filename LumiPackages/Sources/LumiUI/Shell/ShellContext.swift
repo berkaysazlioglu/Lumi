@@ -404,7 +404,10 @@ public final class ShellContext {
     /// Karar 108: serbest terminal repo tab'ı açmaz, All Terminals'ta öne gelir
     /// (`NavigationStore.openTerminalSurface`).
     public func focusAgent(_ meta: TerminalMeta) {
-        navigation.openTerminalSurface(for: meta.repoPath)
+        // Karar 135: açık Custom View'ın üyesi view'dan çıkmadan öne gelir.
+        if activeCustomView(containing: meta.id) == nil {
+            navigation.openTerminalSurface(for: meta.repoPath)
+        }
         guard let scope = navigation.activeRoute.terminalScope else { return }
         let shouldSwitchMaximizedTerminal = layout.maximizedTerminal(in: scope) != nil
         terminals.restoreAndFocus(meta.id)

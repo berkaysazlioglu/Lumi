@@ -214,6 +214,12 @@ struct TerminalCardHeader: View {
                 .frame(height: Theme.Stroke.hairline)
         }
         .contentShape(Rectangle())
+        // Karar 135: başlığa sağ tık — Edit modunda jestler çekildiği gibi menü de yok.
+        .contextMenu {
+            if !isArranging {
+                CustomViewMenuItems(terminalID: meta.id)
+            }
+        }
         .onTapGesture { if !isArranging { onTap?() } }
         // Başlığa çift tık zoom'u çevirir (grid → maximize, maximize → grid)
         .simultaneousGesture(TapGesture(count: 2).onEnded { if !isArranging { onZoom() } })
