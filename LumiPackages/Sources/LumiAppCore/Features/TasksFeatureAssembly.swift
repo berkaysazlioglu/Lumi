@@ -93,6 +93,9 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
         registerSheet(.taskFailureLog, into: registries, isPresented: { $0.isFailureLogPresented }) {
             AnyView(TaskFailureLogOverlay(store: $0))
         }
+        registerSheet(.taskPromptTemplate, into: registries, isPresented: { $0.editingPromptTemplate != nil }) {
+            AnyView(TaskPromptTemplateOverlay(store: $0))
+        }
     }
 
     private func registerSheet(

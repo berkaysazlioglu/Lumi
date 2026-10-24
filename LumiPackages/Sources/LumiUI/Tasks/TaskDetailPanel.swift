@@ -258,10 +258,7 @@ struct TaskDetailPanel: View {
     }
 
     private func copyAsPrompt() {
-        var text = "\(item.title) (\(item.id))"
-        if info?.canRead(.body) == true, let body = item.body, !body.isEmpty {
-            text += "\n\n" + body
-        }
+        let text = store.copyPrompt(for: entry.key)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         shell.toasts.show(.success, title: "Copied task as prompt")

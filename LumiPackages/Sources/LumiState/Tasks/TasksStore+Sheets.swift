@@ -113,7 +113,10 @@ extension TasksStore {
         named.name = Self.defaultName(for: flow, info: info)
         let token = flow.kind.needsEndpoint ? flow.token.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         if let reconnecting = flow.reconnecting {
-            named = TaskSource(id: reconnecting, name: named.name, kind: named.kind, baseURL: named.baseURL)
+            named = TaskSource(
+                id: reconnecting, name: named.name, kind: named.kind, baseURL: named.baseURL,
+                promptTemplate: state(of: reconnecting)?.source.promptTemplate ?? TaskPromptTemplate()
+            )
         }
         if let token {
             do {

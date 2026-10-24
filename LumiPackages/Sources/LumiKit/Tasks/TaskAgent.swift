@@ -159,15 +159,23 @@ public enum TaskAgentPrompt {
     /// MCP aracının adı — prompt ve sunucu aynı kaynaktan okur.
     public static let submitTool = "submit_for_review"
 
-    public static func make(task: TaskItem, includeBody: Bool) -> String {
+    /// Ajan prompt'u: task + teslim talimatı, kaynağın şablonuyla sarılmış.
+    /// Son ek teslim talimatından ÖNCE gelir — talimat her zaman son sözdür.
+    public static func make(task: TaskItem, includeBody: Bool, template: TaskPromptTemplate = TaskPromptTemplate()) -> String {
+        let submit = "When the work is complete and verified (builds, tests), call the `\(submitTool)` tool from the lumi MCP server with a short summary of what you changed. That moves the task to In Review. Never mark it done yourself."
+        return [template.wrap(core(task: task, includeBody: includeBody)), submit].joined(separator: "\n\n")
+    }
+
+    /// `Copy as Prompt`: teslim talimatı yok (Lumi dışında yapıştırılır).
+    public static func copyText(task: TaskItem, includeBody: Bool, template: TaskPromptTemplate = TaskPromptTemplate()) -> String {
+        template.wrap(core(task: task, includeBody: includeBody))
+    }
+
+    private static func core(task: TaskItem, includeBody: Bool) -> String {
         var lines = ["Work on task \(task.id): \(task.title)"]
         if includeBody, let body = task.body?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty {
             lines += ["", body]
         }
-        lines += [
-            "",
-            "When the work is complete and verified (builds, tests), call the `\(submitTool)` tool from the lumi MCP server with a short summary of what you changed. That moves the task to In Review. Never mark it done yourself.",
-        ]
         return lines.joined(separator: "\n")
     }
 

@@ -89,6 +89,37 @@ extension TasksStore {
         }
     }
 
+    /// Kaynağın prompt şablonu (ön ek / son ek).
+    public func setPromptTemplate(_ template: TaskPromptTemplate, for id: TaskSourceID) {
+        update(id) { $0.source.promptTemplate = template }
+        Task {
+            await persist { config in
+                guard let index = config.taskSources.firstIndex(where: { $0.id == id }) else { return }
+                config.taskSources[index].promptTemplate = template
+            }
+        }
+    }
+
+    public func beginEditingPromptTemplate(_ id: TaskSourceID) {
+        guard state(of: id) != nil else { return }
+        editingPromptTemplate = id
+    }
+
+    /// Ajan prompt'u ve kopyalanan metin — kaynağın şablonu uygulanmış.
+    public func agentPrompt(for key: TaskKey) -> String {
+        guard let entry = entry(key) else { return "" }
+        return TaskAgentPrompt.make(task: entry.item, includeBody: info(of: key.source)?.canRead(.body) == true, template: template(of: key.source))
+    }
+
+    public func copyPrompt(for key: TaskKey) -> String {
+        guard let entry = entry(key) else { return "" }
+        return TaskAgentPrompt.copyText(task: entry.item, includeBody: info(of: key.source)?.canRead(.body) == true, template: template(of: key.source))
+    }
+
+    private func template(of id: TaskSourceID) -> TaskPromptTemplate {
+        state(of: id)?.source.promptTemplate ?? TaskPromptTemplate()
+    }
+
     private func persist(_ change: @escaping @Sendable (inout AppConfig) -> Void) async {
         do {
             try await config.updateConfig(change)

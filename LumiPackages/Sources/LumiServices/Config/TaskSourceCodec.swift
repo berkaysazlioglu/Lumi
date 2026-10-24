@@ -22,7 +22,11 @@ enum TaskSourceCodec {
                       case .success(let url) = TaskEndpoint.normalize(address) else { return nil }
                 baseURL = url.absoluteString
             }
-            return TaskSource(id: TaskSourceID(id), name: name, kind: kind, baseURL: baseURL)
+            let template = TaskPromptTemplate(
+                prefix: raw["promptPrefix"] as? String ?? "",
+                suffix: raw["promptSuffix"] as? String ?? ""
+            )
+            return TaskSource(id: TaskSourceID(id), name: name, kind: kind, baseURL: baseURL, promptTemplate: template)
         }
     }
 
@@ -30,6 +34,9 @@ enum TaskSourceCodec {
         sources.map { source in
             var entry: [String: Any] = ["id": source.id.rawValue, "name": source.name, "kind": source.kind.rawValue]
             if let baseURL = source.baseURL { entry["baseURL"] = baseURL }
+            // Additive: yalnız doluyken yazılır.
+            if !source.promptTemplate.prefix.isEmpty { entry["promptPrefix"] = source.promptTemplate.prefix }
+            if !source.promptTemplate.suffix.isEmpty { entry["promptSuffix"] = source.promptTemplate.suffix }
             return entry
         }
     }

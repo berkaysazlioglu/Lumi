@@ -203,3 +203,30 @@ final class TaskSupportTests: XCTestCase {
         XCTAssertEqual(TaskImage(url: URL(string: "https://x.dev/a/shot.png")!, name: "Mockup").displayName, "Mockup")
     }
 }
+
+/// Kaynak başına prompt şablonu (karar 137 eki).
+final class TaskPromptTemplateTests: XCTestCase {
+    private var task: TaskItem {
+        var item = TaskItem.fake(id: "7", title: "Fix login")
+        item.body = "Details"
+        return item
+    }
+
+    func testWrapSkipsEmptyPartsAndTrims() {
+        XCTAssertEqual(TaskPromptTemplate().wrap("core"), "core")
+        XCTAssertEqual(TaskPromptTemplate(prefix: "  pre \n", suffix: "").wrap("core"), "pre\n\ncore")
+        XCTAssertEqual(TaskPromptTemplate(prefix: "pre", suffix: "post").wrap("core"), "pre\n\ncore\n\npost")
+        XCTAssertTrue(TaskPromptTemplate(prefix: " \n", suffix: "").isEmpty)
+    }
+
+    func testAgentPromptKeepsSubmitInstructionLast() {
+        let prompt = TaskAgentPrompt.make(task: task, includeBody: true, template: TaskPromptTemplate(prefix: "PRE", suffix: "POST"))
+        XCTAssertTrue(prompt.hasPrefix("PRE\n\nWork on task 7: Fix login\n\nDetails\n\nPOST\n\n"))
+        XCTAssertTrue(prompt.hasSuffix("Never mark it done yourself."))
+    }
+
+    func testCopyTextHasNoSubmitInstruction() {
+        let text = TaskAgentPrompt.copyText(task: task, includeBody: false, template: TaskPromptTemplate(suffix: "POST"))
+        XCTAssertEqual(text, "Work on task 7: Fix login\n\nPOST")
+    }
+}

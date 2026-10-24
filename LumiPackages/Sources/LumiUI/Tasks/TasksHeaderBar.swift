@@ -15,6 +15,9 @@ struct TasksHeaderBar: View {
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
             sourceMenu
+            if let target = templateTarget {
+                promptTemplateButton(target)
+            }
             LumiTextInput(text: $store.filter.query, placeholder: "Search tasks", width: Self.searchWidth)
             if store.anyVisibleSourceCanRead(.project), !store.knownProjects.isEmpty {
                 projectFilter
@@ -65,6 +68,27 @@ struct TasksHeaderBar: View {
         }
     }
 
+    /// Şablonu düzenlenecek kaynak: seçili kaynak, tek kaynak varsa o.
+    private var templateTarget: TasksStore.SourceState? {
+        selectedState ?? (store.sources.count == 1 ? store.sources.first : nil)
+    }
+
+    private func promptTemplateButton(_ target: TasksStore.SourceState) -> some View {
+        let isSet = !target.source.promptTemplate.isEmpty
+        return IconButton(
+            systemName: "text.append",
+            label: isSet ? "Prompt template (prefix/suffix set)" : "Prompt template",
+            size: .body,
+            weight: .regular,
+            side: Theme.scaled(26),
+            cornerRadius: Theme.Radius.md,
+            role: .toggle,
+            isActive: isSet
+        ) {
+            store.beginEditingPromptTemplate(target.id)
+        }
+    }
+
     private func sourceItems() -> [PopoverMenu.Item] {
         var items: [PopoverMenu.Item] = []
         if store.sources.count > 1 {
@@ -85,6 +109,7 @@ struct TasksHeaderBar: View {
                     items.append(.submenu("Simulate Errors", icon: "exclamationmark.triangle", items: errorToggles(target)))
                 }
             }
+            items.append(.action("Prompt Template…", icon: "text.append") { store.beginEditingPromptTemplate(target.id) })
             if target.source.kind.needsEndpoint {
                 items.append(.action("Reconnect \(target.source.name)…", icon: "key") { store.beginReconnect(target.id) })
             }

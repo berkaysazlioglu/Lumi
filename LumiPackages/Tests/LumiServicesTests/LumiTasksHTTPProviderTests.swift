@@ -234,6 +234,19 @@ final class TaskSourceCodecTests: XCTestCase {
         XCTAssertTrue(TaskSourceCodec.decodeList(nil).isEmpty)
     }
 
+    func testPromptTemplateRoundTripsAndIsOnlyWrittenWhenSet() {
+        let plain = TaskSource(id: TaskSourceID("a"), name: "A", kind: .demo)
+        let templated = TaskSource(
+            id: TaskSourceID("b"), name: "B", kind: .demo,
+            promptTemplate: TaskPromptTemplate(prefix: "pre", suffix: "")
+        )
+        let overlay = TaskSourceCodec.overlayList([plain, templated])
+        XCTAssertNil(overlay[0]["promptPrefix"])
+        XCTAssertEqual(overlay[1]["promptPrefix"] as? String, "pre")
+        XCTAssertNil(overlay[1]["promptSuffix"])
+        XCTAssertEqual(TaskSourceCodec.decodeList(overlay), [plain, templated])
+    }
+
     func testOverlayNeverContainsTokens() {
         let overlay = TaskSourceCodec.overlayList([TaskSource(id: TaskSourceID("x"), name: "n", kind: .custom, baseURL: "https://x.dev")])
         XCTAssertEqual(Set(overlay[0].keys), ["id", "name", "kind", "baseURL"])

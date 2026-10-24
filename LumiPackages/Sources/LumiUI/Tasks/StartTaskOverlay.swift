@@ -210,7 +210,7 @@ public struct StartTaskOverlay: View {
             ?? projectPaths.first ?? ""
         branch = TaskAgentPrompt.branchName(for: entry.item)
         checkout = isGitProject ? .newWorkspace : .existing(projectPath)
-        prompt = TaskAgentPrompt.make(task: entry.item, includeBody: info?.canRead(.body) == true)
+        prompt = store.agentPrompt(for: entry.key)
         assignToMe = canAssignToMe(entry)
     }
 

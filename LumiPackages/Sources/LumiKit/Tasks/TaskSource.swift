@@ -49,6 +49,32 @@ public enum TaskProviderKind: String, CaseIterable, Sendable, Hashable {
     public var needsEndpoint: Bool { self == .custom }
 }
 
+/// Kaynağın task'lerinden üretilen prompt'ların ön eki ve son eki (karar 137
+/// eki): ör. "Bu repo'da Swift 6 strict concurrency kullan" ya da "Bitince
+/// CHANGELOG'u güncelle". Ajan prompt'u da `Copy as Prompt` da bununla sarılır.
+public struct TaskPromptTemplate: Sendable, Hashable {
+    public var prefix: String
+    public var suffix: String
+
+    public init(prefix: String = "", suffix: String = "") {
+        self.prefix = prefix
+        self.suffix = suffix
+    }
+
+    public var isEmpty: Bool {
+        prefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && suffix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Boş parçalar atlanır; parçalar arasında bir boş satır.
+    public func wrap(_ core: String) -> String {
+        [prefix, core, suffix]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
+}
+
 /// Kullanıcının bağladığı tek bir kaynak. Token burada DURMAZ — Keychain'dedir
 /// (Faz 2); adapter kurulurken ayrıca verilir.
 public struct TaskSource: Sendable, Hashable, Identifiable {
@@ -56,12 +82,17 @@ public struct TaskSource: Sendable, Hashable, Identifiable {
     public var name: String
     public let kind: TaskProviderKind
     public var baseURL: String?
+    public var promptTemplate: TaskPromptTemplate
 
-    public init(id: TaskSourceID = .make(), name: String, kind: TaskProviderKind, baseURL: String? = nil) {
+    public init(
+        id: TaskSourceID = .make(), name: String, kind: TaskProviderKind, baseURL: String? = nil,
+        promptTemplate: TaskPromptTemplate = TaskPromptTemplate()
+    ) {
         self.id = id
         self.name = name
         self.kind = kind
         self.baseURL = baseURL
+        self.promptTemplate = promptTemplate
     }
 }
 

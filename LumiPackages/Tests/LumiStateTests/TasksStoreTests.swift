@@ -670,6 +670,33 @@ final class TasksStoreTests: XCTestCase {
         await fresh.load()
         while fresh.agentLink(for: key) != nil { await Task.yield() }
     }
+
+    // MARK: - Prompt şablonu
+
+    func testPromptTemplateIsPersistedAndAppliedToPrompts() async {
+        let config = FakeConfigService()
+        let store = persistentStore(FakeTaskProvider(tasks: [.fake(id: "1", title: "Fix")]), config: config, credentials: FakeTaskCredentialStore())
+        await connectCustom(store)
+        let id = store.sources[0].id
+        let key = store.entries[0].key
+
+        store.beginEditingPromptTemplate(id)
+        XCTAssertEqual(store.editingPromptTemplate, id)
+        store.setPromptTemplate(TaskPromptTemplate(prefix: "PRE", suffix: "POST"), for: id)
+
+        XCTAssertTrue(store.agentPrompt(for: key).hasPrefix("PRE\n\nWork on task 1: Fix\n\nPOST"))
+        XCTAssertEqual(store.copyPrompt(for: key), "PRE\n\nWork on task 1: Fix\n\nPOST")
+        var saved = await config.config().taskSources.first?.promptTemplate
+        while saved?.prefix != "PRE" { await Task.yield(); saved = await config.config().taskSources.first?.promptTemplate }
+        XCTAssertEqual(saved?.suffix, "POST")
+
+        // Yeniden bağlanma şablonu korur.
+        store.beginReconnect(id)
+        store.connectFlow?.token = "new"
+        await store.verifyConnect()
+        await store.finishConnect()
+        XCTAssertEqual(store.sources[0].source.promptTemplate.prefix, "PRE")
+    }
 }
 
 /// `keepFresh`'in uykusunu kaydeder; iptal edilene kadar hemen döner ama her

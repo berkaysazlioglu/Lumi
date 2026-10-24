@@ -90,6 +90,8 @@ public final class TasksStore {
     public var startingTask: TaskKey?
     /// Hata kaydı sheet'i.
     public var isFailureLogPresented = false
+    /// Prompt şablonu düzenlenen kaynak (nil = sheet kapalı).
+    public var editingPromptTemplate: TaskSourceID?
     /// Başarısız isteklerin kaydı — en yeni başta (bkz. `TasksStore+Failures`).
     public internal(set) var failureLog: [TaskFailureEntry] = []
     /// Task ↔ ajan bağlantıları (bkz. `TasksStore+Agents`).
