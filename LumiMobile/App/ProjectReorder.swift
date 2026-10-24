@@ -12,6 +12,9 @@ enum ProjectReorder {
     /// Header frames and the finger are both global: a named space set on the
     /// `List` doesn't reach a gesture inside its cells (it reported row-local points).
     static let liftDelay = 0.35
+    /// After a drop, how long the header ignores its own tap (the lifting
+    /// finger reaches the fold button too).
+    static let foldLockAfterDrop = 0.4
 
     /// The card whose header is the last one above `y`; above the first header,
     /// the first card. `nil` over the dragged project itself.

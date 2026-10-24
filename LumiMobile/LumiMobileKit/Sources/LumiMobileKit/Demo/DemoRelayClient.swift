@@ -115,7 +115,7 @@ public actor DemoRelayClient: RelayClienting {
     private func handle(_ command: OutgoingCommand) {
         let id = command.commandId
         switch command.action {
-        case let .startSession(repoPath, _, prompt, _, branchMode, branchName, _, workspaceName):
+        case let .startSession(repoPath, _, prompt, _, branchMode, branchName, _, workspaceName, _):
             startSession(id, repoPath: repoPath, prompt: prompt, branchMode: branchMode,
                          branchName: branchName, workspaceName: workspaceName)
         case .deleteSession(let sessionId):

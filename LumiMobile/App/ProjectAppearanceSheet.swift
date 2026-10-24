@@ -29,7 +29,8 @@ struct ProjectAppearanceSheet: View {
     private static let gridSpacing: CGFloat = 12
     private static let selectionRingWidth: CGFloat = 2.5
     private static let selectionRingGap: CGFloat = 3
-    private static let emojiFieldFont = Font.system(size: 28)
+    private static let emojiFieldFont = UIFont.systemFont(ofSize: 28)
+    private static let emojiFieldHeight: CGFloat = 44
 
     init(project: ProjectNode, isOnline: Bool, onSave: @escaping (ProjectAppearance) -> Void) {
         self.project = project
@@ -153,17 +154,20 @@ struct ProjectAppearanceSheet: View {
                 }
                 .padding(.vertical, Self.gridSpacing / 2)
             case .emoji:
-                TextField("😀", text: $emoji)
-                    .font(Self.emojiFieldFont)
-                    .multilineTextAlignment(.center)
-                    .autocorrectionDisabled()
+                EmojiField(text: $emoji, font: Self.emojiFieldFont)
+                    .frame(height: Self.emojiFieldHeight)
+                    .overlay {
+                        if emoji.isEmpty {
+                            Text("Tap to pick an emoji").foregroundStyle(.tertiary).allowsHitTesting(false)
+                        }
+                    }
                     .accessibilityLabel("Emoji")
             }
         } header: {
             Text("Icon")
         } footer: {
             if iconKind == .emoji {
-                Text(emoji.isEmpty || validEmoji != nil ? "Use the emoji keyboard — exactly one emoji."
+                Text(emoji.isEmpty || validEmoji != nil ? "Pick one emoji; picking again replaces it."
                                                         : "That isn't a single emoji.")
                     .foregroundStyle(emoji.isEmpty || validEmoji != nil ? Color.secondary : Color.red)
             }

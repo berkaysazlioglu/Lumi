@@ -1,6 +1,7 @@
 /// New Claude dropdown'unun model kısayolları (karar 121). Yalnız Claude
 /// Code'un takma adları kullanılır — tam model ID'si yazılmaz; takma ad her
-/// zaman o ailenin en güncel modeline gider.
+/// zaman o ailenin en güncel modeline gider. Telefonun `+` menüsü de aynı
+/// listeyi gösterir ve `start_session`'a additive `model` olarak yollar (karar 133).
 public enum ClaudeModelAlias: String, Sendable, Equatable, CaseIterable {
     // Sıra dropdown sırasıdır.
     case fable
@@ -15,11 +16,5 @@ public enum ClaudeModelAlias: String, Sendable, Equatable, CaseIterable {
         case .sonnet: "Sonnet"
         case .haiku: "Haiku"
         }
-    }
-
-    /// `--session-id` enjeksiyonu (karar 23) bu komutun üstüne eklenir — ilk
-    /// token `claude` kaldığı sürece resume zinciri bozulmaz.
-    public var launchCommand: String {
-        "\(AgentProvider.claude.launchCommand) --model \(rawValue)"
     }
 }

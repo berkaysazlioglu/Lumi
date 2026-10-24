@@ -115,6 +115,15 @@ final class RemoteCommandHandler {
         let repoPath = payload["repoPath"] as? String ?? ""
         let prompt = payload["prompt"] as? String ?? ""
         let kind = payload["kind"] as? String
+        // Karar 133: telefonun `+` menüsündeki model seçimi (additive; yoksa düz `claude`).
+        let model: ClaudeModelAlias?
+        if let raw = payload["model"] as? String {
+            guard let alias = ClaudeModelAlias(rawValue: raw) else { return .failure(commandId, "invalid_model") }
+            model = alias
+        } else {
+            model = nil
+        }
+        let launch = model?.launchCommand ?? AgentProvider.claude.launchCommand
 
         if kind == "chat" {
             // Karar 80: telefon-başlatılan chat, başsız stream-json alt-süreci DEĞİL,
@@ -145,7 +154,7 @@ final class RemoteCommandHandler {
             }
             // İlk-açılış güven menüsünde takılmasın diye spawn'dan ÖNCE güvenli işaretle.
             trust.markTrusted(repoPath: chatRepoPath)
-            let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
+            let command = prompt.isEmpty ? launch : launch + " " + shellQuoted(prompt)
             do {
                 // sessionId = spawn edilen terminalin id'si → telefon subscribeChat için.
                 let meta = try terminal.spawn(repoPath: chatRepoPath, task: nil, command: command)
@@ -161,7 +170,7 @@ final class RemoteCommandHandler {
             // çalışma alanını spawn'dan ÖNCE güvenli işaretle (telefon chat modu bu
             // menüyü göremez → transcript yazılmaz → chat "yükleniyor"da kalır).
             trust.markTrusted(repoPath: repoPath)
-            let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
+            let command = prompt.isEmpty ? launch : launch + " " + shellQuoted(prompt)
             _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)
             return .ok(commandId)
         } catch {

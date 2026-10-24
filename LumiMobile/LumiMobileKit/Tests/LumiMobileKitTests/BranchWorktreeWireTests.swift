@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import LumiMobileKit
+import LumiWire
 
 @Suite @MainActor struct BranchWorktreeWireTests {
     @Test func startSessionEncodesWorkspaceFields() throws {
@@ -15,6 +16,19 @@ import Foundation
         #expect(payload["branchName"] as? String == "feat")
         #expect(payload["baseBranch"] as? String == "main")
         #expect(payload["workspaceName"] as? String == "ws1")
+    }
+
+    /// Decision 133: the `+` menu's model rides along; absent → no `model` key.
+    @Test func startSessionEncodesModelOnlyWhenChosen() throws {
+        func payload(_ model: ClaudeModelAlias?) throws -> [String: Any] {
+            let cmd = OutgoingCommand(commandId: "c3", action: .startSession(
+                repoPath: "/tmp/r", personaId: nil, prompt: "", kind: "chat", model: model))
+            let text = PhoneProtocol.commandFrame(cmd)
+            let obj = try JSONSerialization.jsonObject(with: text.data(using: .utf8)!) as! [String: Any]
+            return obj["payload"] as! [String: Any]
+        }
+        #expect(try payload(.sonnet)["model"] as? String == "sonnet")
+        #expect(try payload(nil)["model"] == nil)
     }
 
     @Test func listBranchesEncodes() throws {

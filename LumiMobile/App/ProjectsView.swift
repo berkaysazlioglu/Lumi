@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
 import LumiMobileKit
+import LumiWire
 
 struct ProjectsView: View {
     let model: AppModel
     @State private var showAdd = false
-    @State private var confirmUnpair = false
+    @State private var showSettings = false
     // Single-selection navigation. Replaces per-agent NavigationLink(value:) — when
     // multiple NavigationLinks live in one List cell, SwiftUI activates ALL of them,
     // so tapping one checkout pushed the whole group and Back walked through each chat
@@ -17,9 +18,6 @@ struct ProjectsView: View {
     @State private var startError: String?
     /// Long-press "New branch from …" → NewSessionView preset for that checkout.
     @State private var newBranchPreset: NewBranchPreset?
-    @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
-    @AppStorage(TUIStyle.sizeKey) private var textSize = TUIStyle.defaultSize
-    @AppStorage(DemoMode.storageKey) private var demoMode = false
     /// Project whose appearance editor is open (decision 132).
     @State private var editingProject: ProjectNode?
 
@@ -36,9 +34,10 @@ struct ProjectsView: View {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                         .disabled(!model.macOnline || model.projectsSnapshot.addable.isEmpty)
                 }
-                ToolbarItem(placement: .topBarTrailing) { settingsMenu }
+                ToolbarItem(placement: .topBarTrailing) { settingsButton }
             }
             .sheet(isPresented: $showAdd) { AddProjectSheet(model: model) }
+            .sheet(isPresented: $showSettings) { SettingsView(model: model) }
             .sheet(item: $editingProject) { project in
                 ProjectAppearanceSheet(project: project, isOnline: model.macOnline) { appearance in
                     Task { await model.setProjectAppearance(path: project.path, appearance: appearance) }
@@ -83,18 +82,6 @@ struct ProjectsView: View {
             } message: {
                 Text(startError ?? "")
             }
-            .confirmationDialog(
-                "Disconnect from this Mac?",
-                isPresented: $confirmUnpair,
-                titleVisibility: .visible
-            ) {
-                Button("Disconnect", role: .destructive) {
-                    Task { await model.unpair() }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("You'll return to the pairing screen and can scan a new QR code.")
-            }
         }
     }
 
@@ -106,7 +93,7 @@ struct ProjectsView: View {
             isOnline: model.macOnline,
             startingPath: startingCheckout,
             open: { openSession = $0 },
-            start: { startAgent(at: $0) },
+            start: { startAgent(at: $0, model: $1) },
             newBranch: { newBranchPreset = NewBranchPreset(repoPath: $0, baseBranch: $1) },
             delete: { sessionId in Task { await model.deleteSession(sessionId: sessionId) } },
             edit: { editingProject = $0 },
@@ -116,10 +103,10 @@ struct ProjectsView: View {
 
     /// Current-branch start at `path`: the Mac spawns `claude` right there
     /// (checkout, worktree/workspace or a loose folder) — no workspace creation.
-    private func startAgent(at path: String) {
+    private func startAgent(at path: String, model alias: ClaudeModelAlias?) {
         startingCheckout = path
         model.resetStartState()
-        Task { await model.startChatSession(repoPath: path) }
+        Task { await model.startChatSession(repoPath: path, model: alias) }
     }
 
     // MARK: - Chrome
@@ -132,48 +119,9 @@ struct ProjectsView: View {
             .accessibilityLabel("Relay connection")
     }
 
-    // Always reachable — even while offline or stuck on a stale pairing —
-    // so a dead relay connection can be recovered by disconnecting and
-    // re-pairing. (Ported from the retired SessionListView gear menu.)
-    private var settingsMenu: some View {
-        Menu {
-            Toggle("Notifications", isOn: Binding(
-                get: { model.notificationsEnabled },
-                set: { isOn in
-                    Task {
-                        if isOn {
-                            if await model.enableNotifications() == .needsSettings,
-                               let url = URL(string: UIApplication.openSettingsURLString) {
-                                await UIApplication.shared.open(url)
-                            }
-                        } else {
-                            await model.disableNotifications()
-                        }
-                    }
-                }
-            ))
-            Picker(selection: $appearance) {
-                ForEach(AppearanceMode.allCases) { Text($0.title).tag($0) }
-            } label: {
-                Label("Appearance", systemImage: "circle.lefthalf.filled")
-            }
-            .pickerStyle(.menu)
-            Picker(selection: $textSize) {
-                ForEach(Int(TUIStyle.sizeRange.lowerBound)...Int(TUIStyle.sizeRange.upperBound), id: \.self) {
-                    Text("\($0) pt").tag(Double($0))
-                }
-            } label: {
-                Label("Text Size", systemImage: "textformat.size")
-            }
-            .pickerStyle(.menu)
-            if demoMode {
-                Button("Exit Demo Data", role: .destructive) { demoMode = false }
-            } else {
-                Button("Disconnect", role: .destructive) { confirmUnpair = true }
-            }
-        } label: {
-            Image(systemName: "gearshape")
-        }
+    private var settingsButton: some View {
+        Button { showSettings = true } label: { Image(systemName: "gearshape") }
+            .accessibilityLabel("Settings")
     }
 }
 

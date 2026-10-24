@@ -772,13 +772,13 @@ public final class AppModel {
     /// in commandResult; the `commandResult` handler automatically calls `subscribeChat`.
     public func startChatSession(repoPath: String, branchMode: String? = nil,
                                  branchName: String? = nil, baseBranch: String? = nil,
-                                 workspaceName: String? = nil) async {
+                                 workspaceName: String? = nil, model: ClaudeModelAlias? = nil) async {
         startState = .sending
         lastStartedSessionId = nil
         await dispatch(target: "", action: .startSession(
             repoPath: repoPath, personaId: nil, prompt: "", kind: "chat",
             branchMode: branchMode, branchName: branchName,
-            baseBranch: baseBranch, workspaceName: workspaceName))
+            baseBranch: baseBranch, workspaceName: workspaceName, model: model))
     }
 
     /// Loads the branch list (list_branches command). The response is processed into branchesForRepo via commandResult.

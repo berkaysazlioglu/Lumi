@@ -33,7 +33,8 @@ public enum CommandAction: Sendable, Equatable {
     case pressKey(sessionId: String, key: String)
     case startSession(repoPath: String, personaId: String?, prompt: String, kind: String? = nil,
                       branchMode: String? = nil, branchName: String? = nil,
-                      baseBranch: String? = nil, workspaceName: String? = nil)
+                      baseBranch: String? = nil, workspaceName: String? = nil,
+                      model: ClaudeModelAlias? = nil)
     case listBranches(repoPath: String)
     case getHistory(sessionId: String)
     case deleteSession(sessionId: String)
@@ -203,7 +204,7 @@ public enum PhoneProtocol {
             payload["sessionId"] = sessionId
             payload["key"] = key
         case .startSession(let repoPath, let personaId, let prompt, let kind,
-                           let branchMode, let branchName, let baseBranch, let workspaceName):
+                           let branchMode, let branchName, let baseBranch, let workspaceName, let model):
             payload["action"] = "start_session"
             payload["repoPath"] = repoPath
             payload["prompt"] = prompt
@@ -213,6 +214,7 @@ public enum PhoneProtocol {
             if let branchName { payload["branchName"] = branchName }
             if let baseBranch { payload["baseBranch"] = baseBranch }
             if let workspaceName { payload["workspaceName"] = workspaceName }
+            if let model { payload["model"] = model.rawValue }
         case .listBranches(let repoPath):
             payload["action"] = "list_branches"
             payload["repoPath"] = repoPath

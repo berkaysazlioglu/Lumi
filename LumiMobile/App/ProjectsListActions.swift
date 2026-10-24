@@ -1,5 +1,6 @@
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 
 /// What the Projects list can ask of its screen (`ProjectsView`): the list reads
 /// the model and calls these; navigation, sheets, confirmations and the
@@ -11,8 +12,9 @@ struct ProjectsListActions {
     let startingPath: String?
     /// Opens an agent's chat/terminal.
     let open: (_ sessionId: String) -> Void
-    /// Starts a Claude right in `path` (checkout, worktree or loose folder) and opens it.
-    let start: (_ path: String) -> Void
+    /// Starts a Claude right in `path` (checkout, worktree or loose folder) and
+    /// opens it; `model` picks `claude --model <alias>` (decision 133), `nil` the default.
+    let start: (_ path: String, _ model: ClaudeModelAlias?) -> Void
     /// "New branch from …" sheet for a project, preset to `baseBranch`.
     let newBranch: (_ repoPath: String, _ baseBranch: String) -> Void
     /// Ends an agent on the Mac. Rows ask first with `confirmDeleteChat`.

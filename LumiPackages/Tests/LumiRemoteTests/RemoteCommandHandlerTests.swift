@@ -97,6 +97,29 @@ struct RemoteCommandHandlerTests {
         #expect(term.spawnCalls.last?.command == "claude")
     }
 
+    /// Karar 133: telefonun `+` menüsünden seçilen model `claude --model <takma ad>` olur.
+    @Test func startSessionKindChatWithModelUsesAlias() async throws {
+        let term = FakeTerminalService()
+        let handler = RemoteCommandHandler(terminal: term, trust: FakeClaudeWorkspaceTrust(), config: FakeConfigService())
+        let result = await handler.handle([
+            "action": "start_session", "kind": "chat", "repoPath": "/repo",
+            "model": "opus", "commandId": "cmd-model-1"
+        ])
+        #expect(result.ok)
+        #expect(term.spawnCalls.last?.command == "claude --model opus")
+    }
+
+    @Test func startSessionRejectsUnknownModel() async throws {
+        let term = FakeTerminalService()
+        let handler = RemoteCommandHandler(terminal: term, trust: FakeClaudeWorkspaceTrust(), config: FakeConfigService())
+        let result = await handler.handle([
+            "action": "start_session", "kind": "chat", "repoPath": "/repo",
+            "model": "gpt; rm -rf ~", "commandId": "cmd-model-2"
+        ])
+        #expect(!result.ok)
+        #expect(term.spawnCalls.isEmpty)
+    }
+
     // MARK: - delete_session (chat oturumu)
 
     /// REGRESYON ("chatte silemiyorum"): chat oturumu terminal PTY kaydında yok;

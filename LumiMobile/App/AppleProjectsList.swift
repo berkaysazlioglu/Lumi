@@ -23,6 +23,9 @@ struct AppleProjectsList: View {
     @State private var headerFrames: [String: CGRect] = [:]
     /// The list's global origin — turns the global finger into the preview's position.
     @State private var listOrigin: CGPoint = .zero
+    /// The header's tap lands as the finger lifts after a drag (or a hold);
+    /// fold toggles are ignored while a project is lifted and until then.
+    @State private var foldLockedUntil = Date.distantPast
     // Test controls (shared with the Lumi layout): Group Color + A− / A+.
     @AppStorage(ProjectsLookControls.tintKey) private var tintsGroups = false
     @AppStorage(ProjectsRowMetrics.scaleKey) private var rowScale = 1.0
@@ -145,6 +148,7 @@ struct AppleProjectsList: View {
     private func dragEnded() {
         guard let drag else { return }
         self.drag = nil
+        foldLockedUntil = Date().addingTimeInterval(ProjectReorder.foldLockAfterDrop)
         if let target = drag.target { actions.move(drag.path, target) }
     }
 
@@ -195,7 +199,7 @@ struct AppleProjectsList: View {
         Binding(
             get: { isSearching || !collapsed.contains(id) },
             set: { isExpanded in
-                guard !isSearching else { return }
+                guard !isSearching, drag == nil, Date() >= foldLockedUntil else { return }
                 var ids = collapsed
                 if isExpanded { ids.remove(id) } else { ids.insert(id) }
                 withAnimation(ProjectsMotion.fold) { collapsedIDs = ids }
@@ -223,11 +227,7 @@ private struct AppleFolderRow: View {
                 .lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 0)
             AppleStartMenu(path: group.path, actions: actions,
-                           accessibilityLabel: "New Claude in \(group.label)") {
-                Button { actions.start(group.path) } label: {
-                    Label("New Claude in \(group.label)", systemImage: "plus.bubble")
-                }
-            }
+                           accessibilityLabel: "New agent in \(group.label)")
         }
         .appleProjectsRow(scale: scale)
     }
@@ -249,7 +249,7 @@ private struct AppleLooseStartRow: View {
         Menu {
             Section("New Claude in…") {
                 ForEach(locations) { location in
-                    Button { actions.start(location.path) } label: {
+                    Button { actions.start(location.path, nil) } label: {
                         Label(location.label, systemImage: location.label == "~" ? "house" : "folder")
                     }
                 }

@@ -333,7 +333,7 @@ final class AppModelTests: XCTestCase {
 
         await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "hello")
         XCTAssertEqual(model.startState, .sending)
-        guard case .startSession(let repoPath, let personaId, let prompt, _, _, _, _, _) = client.commands[0].action else { return XCTFail() }
+        guard case .startSession(let repoPath, let personaId, let prompt, _, _, _, _, _, _) = client.commands[0].action else { return XCTFail() }
         XCTAssertEqual(repoPath, "/r/lumi")
         XCTAssertNil(personaId)
         XCTAssertEqual(prompt, "hello")
@@ -352,7 +352,7 @@ final class AppModelTests: XCTestCase {
     func testStartChatSessionRecordsReturnedSessionId() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r/lumi/.worktrees/feat-x")
-        guard case .startSession(let repoPath, _, _, let kind, let mode, _, _, _) = client.commands[0].action
+        guard case .startSession(let repoPath, _, _, let kind, let mode, _, _, _, _) = client.commands[0].action
         else { return XCTFail() }
         XCTAssertEqual(repoPath, "/r/lumi/.worktrees/feat-x")
         XCTAssertEqual(kind, "chat")
@@ -699,7 +699,7 @@ final class AppModelTests: XCTestCase {
         await model.startChatSession(repoPath: "/r/lumi")
         XCTAssertEqual(model.startState, .sending)
         XCTAssertEqual(client.commands.count, 1)
-        guard case .startSession(let repoPath, _, _, _, _, _, _, _) = client.commands[0].action else {
+        guard case .startSession(let repoPath, _, _, _, _, _, _, _, _) = client.commands[0].action else {
             return XCTFail("startChatSession should send a startSession action")
         }
         XCTAssertEqual(repoPath, "/r/lumi")

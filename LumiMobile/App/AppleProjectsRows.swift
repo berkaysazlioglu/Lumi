@@ -1,5 +1,6 @@
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 
 /// Shared metrics of the Apple Projects rows (compact: one text line per row).
 enum AppleProjectsMetrics {
@@ -24,8 +25,12 @@ enum AppleProjectsMetrics {
     /// Group Color test toggle: the project color fading over its checkouts / agents.
     static let checkoutTintOpacity = 0.12
     static let agentTintOpacity = 0.07
-    /// Outline of the project header a dragged project hovers (decision 132).
+    /// Outline of the project header a dragged project hovers (decision 132),
+    /// inset and rounded so the card's own rounded clip doesn't cut its corners.
     static let dropTargetLineWidth: CGFloat = 2
+    static let dropTargetInset: CGFloat = 3
+    /// At least the card's corner radius (~11pt) minus the inset, with headroom.
+    static let dropTargetRadius: CGFloat = 12
     private static let titlePoints: CGFloat = 15   // .subheadline
     private static let detailPoints: CGFloat = 12  // .caption
 
@@ -123,7 +128,9 @@ struct AppleGroupHeaderRow<Title: View>: View {
             tint.opacity(AppleProjectsMetrics.bandOpacity)
             if isDropTarget {
                 Color.accentColor.opacity(AppleProjectsMetrics.bandOpacity)
-                Rectangle().strokeBorder(Color.accentColor, lineWidth: AppleProjectsMetrics.dropTargetLineWidth)
+                RoundedRectangle(cornerRadius: AppleProjectsMetrics.dropTargetRadius, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: AppleProjectsMetrics.dropTargetLineWidth)
+                    .padding(AppleProjectsMetrics.dropTargetInset)
             }
         }
     }
@@ -222,21 +229,23 @@ struct AppleCheckoutRow: View {
             Spacer(minLength: 0)
             AppleStartMenu(path: checkout.node.path, actions: actions,
                            accessibilityLabel: "New agent on \(branch ?? title)") {
-                startItems
+                newBranchItem
             }
         }
         .appleProjectsRow(scale: scale)
         .appleRowBackground(tint: tint, opacity: AppleProjectsMetrics.checkoutTintOpacity)
-        .contextMenu { startItems }
+        .contextMenu {
+            Button { actions.start(checkout.node.path, nil) } label: {
+                Label("New Claude on \(branch ?? title)", systemImage: "plus.bubble")
+            }
+            // Same guard as the `+`: one start in flight at a time (AppModel can't
+            // tell two concurrent start results apart).
+            .disabled(!actions.isOnline || actions.startingPath != nil)
+            newBranchItem
+        }
     }
 
-    @ViewBuilder private var startItems: some View {
-        Button { actions.start(checkout.node.path) } label: {
-            Label("New Claude on \(branch ?? title)", systemImage: "plus.bubble")
-        }
-        // Same guard as the `+`: one start in flight at a time (AppModel can't
-        // tell two concurrent start results apart).
-        .disabled(!actions.isOnline || actions.startingPath != nil)
+    private var newBranchItem: some View {
         Button { actions.newBranch(project.path, branch ?? "") } label: {
             Label("New Branch from \(branch ?? "Current")…", systemImage: "arrow.triangle.branch")
         }
@@ -244,31 +253,53 @@ struct AppleCheckoutRow: View {
     }
 }
 
-/// Trailing `+` of a start row: tap starts a Claude at `path`, long-press opens
-/// `items`; a spinner while that start is in flight.
-struct AppleStartMenu<Items: View>: View {
+/// Trailing `+` of a start row (decision 133): tap opens the Mac's New Claude
+/// menu — Claude, then Codex / Bash (not on the phone yet, shown disabled), a
+/// separator and Claude's model shortcuts (Mac decision 121; Settings ▸ Claude
+/// Models, off by default), then the row's own `extras`. A spinner while that start is in flight.
+struct AppleStartMenu<Extras: View>: View {
     let path: String
     let actions: ProjectsListActions
     let accessibilityLabel: String
-    @ViewBuilder let items: () -> Items
+    @ViewBuilder var extras: () -> Extras
+    @AppStorage(ClaudeModelShortcuts.storageKey) private var showsModels = ClaudeModelShortcuts.defaultValue
 
     var body: some View {
         if actions.startingPath == path {
             ProgressView()
         } else {
             Menu {
-                items()
+                Section {
+                    Button { actions.start(path, nil) } label: { Label("Claude", image: "ProviderClaude") }
+                    Button {} label: { Label("Codex", image: "ProviderCodex") }.disabled(true)
+                    Button {} label: { Label("Bash", systemImage: "terminal") }.disabled(true)
+                }
+                if showsModels {
+                    Section {
+                        ForEach(ClaudeModelAlias.allCases, id: \.self) { alias in
+                            Button { actions.start(path, alias) } label: {
+                                Label("Claude \(alias.displayName)", image: "ProviderClaude")
+                            }
+                        }
+                    }
+                }
+                Section { extras() }
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.body)
                     .symbolRenderingMode(.hierarchical)
-            } primaryAction: {
-                actions.start(path)
             }
+            .menuOrder(.fixed)
             .buttonStyle(.borderless)
             .disabled(!actions.isOnline || actions.startingPath != nil)
             .accessibilityLabel(accessibilityLabel)
         }
+    }
+}
+
+extension AppleStartMenu where Extras == EmptyView {
+    init(path: String, actions: ProjectsListActions, accessibilityLabel: String) {
+        self.init(path: path, actions: actions, accessibilityLabel: accessibilityLabel) { EmptyView() }
     }
 }
 

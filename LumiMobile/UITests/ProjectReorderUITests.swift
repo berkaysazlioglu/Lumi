@@ -1,7 +1,8 @@
 import XCTest
 
 /// Decision 132 on demo data: press and hold a project header and drag it onto
-/// another card; a tap still folds; `⋯` opens the editor.
+/// another card; a tap still folds; `⋯` opens the editor; `+` opens the
+/// agent menu (decision 133).
 @MainActor
 final class ProjectReorderUITests: XCTestCase {
     func testDragProjectHeaderOntoAnother() throws {
@@ -25,6 +26,50 @@ final class ProjectReorderUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         XCTAssertGreaterThan(first.frame.minY, second.frame.minY, "dropped project should take the target's place")
+        // The lifting finger must not fold the dropped card.
+        let agent = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fix tile drop animation")).firstMatch
+        XCTAssertTrue(agent.exists, "dropped project should stay expanded")
+    }
+
+    /// Decision 133: the checkout `+` opens a menu instead of starting at once.
+    func testPlusOpensAgentMenu() throws {
+        let app = XCUIApplication()
+        // The argument domain pins the setting off whatever an earlier run saved.
+        app.launchArguments += ["-demoMode", "YES", "-showsClaudeModelShortcuts", "NO"]
+        app.launch()
+
+        let plus = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New agent on")).firstMatch
+        guard plus.waitForExistence(timeout: 10) else { throw XCTSkip("demo projects not shown") }
+        plus.tap()
+        XCTAssertTrue(app.buttons["Claude"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Codex"].isEnabled)
+        XCTAssertFalse(app.buttons["Bash"].isEnabled)
+        // Model shortcuts are off by default (Settings ▸ Claude Models).
+        XCTAssertFalse(app.buttons["Claude Opus"].exists)
+    }
+
+    func testClaudeModelsSettingShowsShortcutsInPlusMenu() throws {
+        let app = XCUIApplication()
+        // No argument for the setting itself: it would shadow the toggle's write.
+        app.launchArguments += ["-demoMode", "YES"]
+        app.launch()
+
+        app.buttons["Settings"].tap()
+        let toggle = app.switches.matching(NSPredicate(format: "label CONTAINS %@", "Claude Models")).firstMatch
+        guard toggle.waitForExistence(timeout: 5) else { return XCTFail("settings screen should open") }
+        if toggle.value as? String != "1" {
+            // The switch sits at the cell's trailing edge; the label alone doesn't flip it.
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        XCTAssertEqual(toggle.value as? String, "1")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 3))
+
+        let plus = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New agent on")).firstMatch
+        XCTAssertTrue(plus.waitForExistence(timeout: 5))
+        plus.tap()
+        XCTAssertTrue(app.buttons["Claude Opus"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Claude Opus"].isEnabled)
     }
 
     func testHeaderTapStillFoldsAndMenuOpensEditor() throws {
