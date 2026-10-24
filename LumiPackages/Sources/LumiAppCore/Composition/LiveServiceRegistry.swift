@@ -23,6 +23,8 @@ final class LiveServiceRegistry: ServiceRegistry {
     let deepSeek: any DeepSeekEnvironmentServicing
     let deepSeekBalance: any DeepSeekBalanceServicing
     let taskProviders: any TaskProviderMaking = LiveTaskProviderFactory()
+    let taskImages: any TaskImageLoading
+    let taskAgents: any TaskAgentRunning = PreviewTaskAgentRunner()
     let appReleases: any AppReleaseChecking
     let appUpdateInstaller: any AppUpdateInstalling
     let claudeAccounts: any ClaudeAccountServicing
@@ -97,6 +99,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         deepSeek = deepSeekEnvironment
         // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
         deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
+        taskImages = TaskImageCache(directory: paths.configDir.appendingPathComponent("tasks/images"))
         appReleases = GitHubReleaseService()
         appUpdateInstaller = AppUpdateInstaller(root: paths.configDir.appendingPathComponent("updates"))
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)

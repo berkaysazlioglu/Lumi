@@ -22,6 +22,9 @@ fi
 set -euo pipefail
 
 BUNDLE_ID="com.lumi.app"
+# make-rework-app.sh'in yan yana kurulan build'i de aynı aileden sayılır.
+typeset -a BUNDLE_IDS
+BUNDLE_IDS=("$BUNDLE_ID" "com.lumi.rework")
 LIST_ONLY=0
 SELECT_ALL=0
 PURGE=0
@@ -42,11 +45,14 @@ echo "▸ Lumi.app kopyaları aranıyor…"
 typeset -a found
 found=()
 
-while IFS= read -r p; do
-  [ -n "$p" ] && found+=("$p")
-done < <(mdfind "kMDItemCFBundleIdentifier == '$BUNDLE_ID'" 2>/dev/null || true)
+for id in "${BUNDLE_IDS[@]}"; do
+  while IFS= read -r p; do
+    [ -n "$p" ] && found+=("$p")
+  done < <(mdfind "kMDItemCFBundleIdentifier == '$id'" 2>/dev/null || true)
+done
 
-# Spotlight'ın atladığı yerler (indekslenmeyen build çıktıları, harici diskler).
+# Spotlight'ın atladığı yerler (indekslenmeyen build çıktıları, gizli
+# ~/.lumi/updates altında bekleyen güncelleme, harici diskler).
 typeset -a roots
 roots=(
   "/Applications"
@@ -54,25 +60,30 @@ roots=(
   "$HOME/Desktop"
   "$HOME/Downloads"
   "$HOME/wkspaces"
+  "$HOME/lumi"
+  "$HOME/.lumi/updates"
   "/Volumes"
 )
 for root in "${roots[@]}"; do
   [ -d "$root" ] || continue
   while IFS= read -r p; do
     [ -n "$p" ] && found+=("$p")
-  done < <(find "$root" -maxdepth 6 -name "Lumi.app" -type d -prune 2>/dev/null || true)
+  done < <(find "$root" -maxdepth 6 -name "Lumi*.app" -type d -prune 2>/dev/null || true)
 done
 
-# Tekilleştir + gerçekten Lumi bundle'ı olduğunu doğrula.
+# Tekilleştir + gerçekten Lumi bundle'ı olduğunu doğrula. /Volumes/Data altındaki
+# firmlink kopyaları (aynı bundle'ın ikinci yolu) gerçek yola indirgenir.
 typeset -a apps
 apps=()
 for p in "${(@u)found}"; do
+  p="${p#/System/Volumes/Data}"
   [ -d "$p" ] || continue
   [[ "$p" == *.app ]] || continue
   id="$(defaults read "$p/Contents/Info" CFBundleIdentifier 2>/dev/null || echo "")"
-  [ "$id" = "$BUNDLE_ID" ] || continue
+  (( ${BUNDLE_IDS[(Ie)$id]} )) || continue
   apps+=("$p")
 done
+apps=("${(@u)apps}")
 
 if [ ${#apps[@]} -eq 0 ]; then
   echo "Hiç Lumi.app bulunamadı."
@@ -86,7 +97,10 @@ for p in "${apps[@]}"; do
   ver="$(defaults read "$p/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo "?")"
   size="$(du -sh "$p" 2>/dev/null | cut -f1 || echo "?")"
   mtime="$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$p" 2>/dev/null || echo "?")"
-  printf "  %2d) %s\n      v%s · %s · %s\n" "$i" "$p" "$ver" "$size" "$mtime"
+  note=""
+  [[ "$p" == "$HOME/.lumi/updates/"* ]] && note=" · bekleyen güncelleme"
+  pgrep -f "$p/Contents/MacOS/" >/dev/null 2>&1 && note="$note · ÇALIŞIYOR"
+  printf "  %2d) %s\n      v%s · %s · %s%s\n" "$i" "$p" "$ver" "$size" "$mtime" "$note"
   i=$((i + 1))
 done
 echo ""
@@ -131,7 +145,13 @@ fi
 
 echo ""
 echo "Şunlar $action:"
-for p in "${targets[@]}"; do echo "  • $p"; done
+for p in "${targets[@]}"; do
+  if pgrep -f "$p/Contents/MacOS/" >/dev/null 2>&1; then
+    echo "  • $p  ⚠ şu an çalışıyor — önce kapatman önerilir"
+  else
+    echo "  • $p"
+  fi
+done
 echo "(Ayarlar ~/.lumi ve ~/Library/Preferences altında; bunlara dokunulmaz.)"
 printf "Onaylıyor musun? [y/N] "
 read -r confirm || confirm=""

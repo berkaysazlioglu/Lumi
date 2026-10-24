@@ -81,6 +81,9 @@ struct TasksHeaderBar: View {
         if let target {
             if target.source.kind == .demo {
                 items.append(.submenu("Simulate Missing", icon: "slider.horizontal.3", items: demoToggles(target)))
+                if store.canSimulateFailures(in: target.id) {
+                    items.append(.submenu("Simulate Errors", icon: "exclamationmark.triangle", items: errorToggles(target)))
+                }
             }
             items.append(.divider)
             items.append(.action("Disconnect \(target.source.name)", icon: "xmark.circle", isDestructive: true) {
@@ -107,6 +110,16 @@ struct TasksHeaderBar: View {
             })
         }
         return items
+    }
+
+    /// Demo kaynağın hata taklidi: tek seçim, işaretliye tekrar basmak kapatır.
+    private func errorToggles(_ state: TasksStore.SourceState) -> [PopoverMenu.Item] {
+        TaskSimulatedFailure.allCases.map { failure in
+            let isOn = state.simulatedFailure == failure
+            return .toggle(failure.title, isOn: isOn) {
+                store.setSimulatedFailure(isOn ? nil : failure, in: state.id)
+            }
+        }
     }
 
     // MARK: - Filtreler
@@ -172,7 +185,20 @@ struct TasksHeaderBar: View {
     private var freshness: some View {
         TimelineView(.periodic(from: .now, by: Self.tickSeconds)) { context in
             HStack(spacing: Theme.Spacing.sm) {
-                if store.isRefreshing {
+                if !store.failureLog.isEmpty {
+                    Button { store.presentFailureLog() } label: {
+                        Label("\(store.failureLog.count)", systemImage: "exclamationmark.triangle.fill")
+                            .font(Theme.Typography.mono(.caption, weight: .semibold))
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(HoverButtonStyle(foreground: Theme.error, hoverForeground: Theme.error))
+                    .help("Request errors — see what failed and copy a report for your agent")
+                }
+                if store.hasPendingWrites {
+                    Text("Saving…")
+                        .font(Theme.Typography.mono(.caption))
+                        .foregroundStyle(Theme.textMuted)
+                } else if store.isRefreshing {
                     ProgressView().controlSize(.mini)
                 } else if let oldest = store.visibleSources.compactMap(\.lastUpdated).min() {
                     Text("Updated \(TaskPresentation.relative(oldest, now: context.date))")

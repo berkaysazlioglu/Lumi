@@ -19,7 +19,12 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var tasks: TasksStore?
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
-        tasks = TasksStore(factory: services.taskProviders, toasts: shared.toasts)
+        tasks = TasksStore(
+            factory: services.taskProviders,
+            images: services.taskImages,
+            agents: services.taskAgents,
+            toasts: shared.toasts
+        )
     }
 
     func registerShellItems(into registries: ShellRegistries) {
@@ -52,25 +57,40 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
                 makeView: { AnyView(TasksRouteToolbarItem(section: section)) }
             ))
         }
+        registerSheet(.taskConnect, into: registries, isPresented: { $0.connectFlow != nil }) {
+            AnyView(TaskConnectOverlay(store: $0))
+        }
+        registerSheet(.newTask, into: registries, isPresented: { $0.newTaskForm != nil }) {
+            AnyView(NewTaskOverlay(store: $0))
+        }
+        registerSheet(.startTask, into: registries, isPresented: { $0.startingTask != nil }) {
+            AnyView(StartTaskOverlay(store: $0))
+        }
+        registerSheet(.taskFailureLog, into: registries, isPresented: { $0.isFailureLogPresented }) {
+            AnyView(TaskFailureLogOverlay(store: $0))
+        }
+    }
+
+    private func registerSheet(
+        _ id: OverlayID,
+        into registries: ShellRegistries,
+        isPresented: @escaping @MainActor (TasksStore) -> Bool,
+        makeView: @escaping @MainActor (TasksStore) -> AnyView
+    ) {
         registries.overlays.register(OverlayDescriptor(
-            id: .taskConnect,
-            isPresented: { [weak self] _ in self?.tasks?.connectFlow != nil },
+            id: id,
+            isPresented: { [weak self] _ in self?.tasks.map(isPresented) ?? false },
             makeView: { [weak self] in
                 guard let store = self?.tasks else { return AnyView(EmptyView()) }
-                return AnyView(TaskConnectOverlay(store: store))
-            }
-        ))
-        registries.overlays.register(OverlayDescriptor(
-            id: .newTask,
-            isPresented: { [weak self] _ in self?.tasks?.newTaskForm != nil },
-            makeView: { [weak self] in
-                guard let store = self?.tasks else { return AnyView(EmptyView()) }
-                return AnyView(NewTaskOverlay(store: store))
+                return makeView(store)
             }
         ))
     }
 
     func start() async {}
 
-    func shutdown() async {}
+    /// Kapanışta bekleyen birleşik yazımlar kaybolmasın.
+    func shutdown() async {
+        await tasks?.flushAll()
+    }
 }

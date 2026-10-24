@@ -12,13 +12,25 @@ final class TasksStoreTests: XCTestCase {
     private let me = TaskUser(id: "me", name: "Me")
     private let ada = TaskUser(id: "ada", name: "Ada")
 
+    /// Varsayılan erteleme hiç dolmaz: testler gönderimi `flushAll` ile tetikler.
+    static let neverFires: @Sendable (Duration) async throws -> Void = { _ in
+        try await Task.sleep(for: .seconds(3600))
+    }
+
     private func makeStore(
         _ provider: FakeTaskProvider,
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in throw CancellationError() }
+        agents: any TaskAgentRunning = FakeTaskAgentRunner(),
+        images: any TaskImageLoading = FakeTaskImageLoader(),
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in throw CancellationError() },
+        debounce: @escaping @Sendable (Duration) async throws -> Void = TasksStoreTests.neverFires
     ) -> (TasksStore, ToastStore) {
         let toasts = ToastStore(autoDismissAfter: 60)
         let factory = FakeTaskProviderFactory(providers: [.demo: provider, .custom: provider])
-        return (TasksStore(factory: factory, toasts: toasts, now: { Date(timeIntervalSince1970: 500) }, sleep: sleep), toasts)
+        let store = TasksStore(
+            factory: factory, images: images, agents: agents, toasts: toasts,
+            now: { Date(timeIntervalSince1970: 500) }, sleep: sleep, debounce: debounce
+        )
+        return (store, toasts)
     }
 
     /// Demo adapter'ıyla bağlama akışını uçtan uca koşar.
@@ -181,8 +193,12 @@ final class TasksStoreTests: XCTestCase {
         let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
         let key = store.entries[0].key
         let before = await provider.updates.count
-        await store.move(key, to: .done)
+        store.move(key, to: .done)
+        XCTAssertEqual(store.entry(key)?.item.status, .done, "ekranda hemen")
+        XCTAssertTrue(store.hasPendingWrites)
+        await store.flushAll()
 
+        XCTAssertFalse(store.hasPendingWrites)
         XCTAssertEqual(store.entry(key)?.item.status, .done)
         let updates = await provider.updates
         XCTAssertEqual(updates.dropFirst(before).map(\.id), ["1"])
@@ -193,10 +209,13 @@ final class TasksStoreTests: XCTestCase {
         let (store, provider, toasts) = await connectedStore(tasks: [.fake(id: "1")])
         await provider.setUpdateError(.unreachable("down"))
         let key = store.entries[0].key
-        await store.move(key, to: .done)
+        store.move(key, to: .done)
+        await store.flushAll()
 
         XCTAssertEqual(store.entry(key)?.item.status, .todo)
-        XCTAssertEqual(toasts.toasts.last?.title, "Couldn't update task")
+        XCTAssertEqual(toasts.toasts.last?.title, "Couldn't save 1")
+        XCTAssertEqual(store.failureLog.first?.failure.operation, .update)
+        XCTAssertEqual(store.failureLog.first?.failure.taskID, "1")
     }
 
     func testRefreshDuringInFlightWriteDoesNotClobberIt() async {
@@ -204,8 +223,10 @@ final class TasksStoreTests: XCTestCase {
         let key = store.entries[0].key
         await provider.holdUpdates()
 
-        let write = Task { await store.move(key, to: .done) }
-        while await provider.updates.isEmpty { await Task.yield() }
+        let before = await provider.updates.count
+        store.move(key, to: .done)
+        let write = Task { await store.flushAll() }
+        while await provider.updates.count == before { await Task.yield() }
         XCTAssertEqual(store.entry(key)?.item.status, .done, "iyimser")
 
         await store.refreshAll()
@@ -234,9 +255,10 @@ final class TasksStoreTests: XCTestCase {
         let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")], info: info)
         let key = store.entries[0].key
 
-        await store.assign(key, to: ada)
-        await store.setPriority(key, to: .high)
+        store.assign(key, to: ada)
+        store.setPriority(key, to: .high)
         await store.delete(key)
+        await store.flushAll()
 
         let updates = await provider.updates
         let deleted = await provider.deleted
@@ -295,6 +317,146 @@ final class TasksStoreTests: XCTestCase {
         XCTAssertTrue(store.sources.isEmpty)
         XCTAssertTrue(store.entries.isEmpty)
         XCTAssertNil(store.filter.source)
+    }
+
+    // MARK: - Birleşik yazım
+
+    func testEditsToOneTaskCoalesceIntoOnePatch() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let key = store.entries[0].key
+        let before = await provider.updates.count
+        store.move(key, to: .inProgress)
+        store.move(key, to: .inReview)
+        store.setPriority(key, to: .urgent)
+        store.assign(key, to: ada)
+        await store.flushAll()
+
+        let updates = Array(await provider.updates.dropFirst(before))
+        XCTAssertEqual(updates.count, 1, "tek PATCH")
+        XCTAssertEqual(updates[0].patch, TaskPatch(status: .inReview, priority: .urgent, assignee: .assign(ada)))
+        XCTAssertEqual(store.entry(key)?.item.status, .inReview)
+    }
+
+    func testDebounceSendsAutomaticallyWhenItElapses() async {
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        let (store, _) = makeStore(provider, debounce: { _ in })
+        await connect(store)
+        let key = store.entries[0].key
+        let before = await provider.updates.count
+
+        store.move(key, to: .done)
+        while await provider.updates.count == before { await Task.yield() }
+        while store.hasPendingWrites { await Task.yield() }
+        let updates = await provider.updates
+        XCTAssertEqual(updates.last?.patch.status, .done)
+    }
+
+    func testRefreshWhilePendingKeepsLocalEdit() async {
+        let (store, _, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let key = store.entries[0].key
+        store.move(key, to: .done)
+        await store.refreshAll()
+        XCTAssertEqual(store.entry(key)?.item.status, .done, "gönderilmemiş düzenleme ezilmez")
+    }
+
+    func testDeleteDropsPendingEdit() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let key = store.entries[0].key
+        let before = await provider.updates.count
+        store.move(key, to: .done)
+        await store.delete(key)
+        await store.flushAll()
+        let after = await provider.updates.count
+        XCTAssertEqual(after, before, "silinen task'e PATCH gitmez")
+        XCTAssertFalse(store.hasPendingWrites)
+    }
+
+    // MARK: - Hata kaydı
+
+    func testRepeatedRefreshFailureIsCountedOnOneLine() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        await provider.setListError(.invalidResponse("not JSON"))
+        await store.refreshAll()
+        await store.refreshAll()
+
+        guard case .failing = store.sources[0].phase else { return XCTFail("bozuk yanıt offline değil, failing") }
+        XCTAssertEqual(store.failureLog.count, 1)
+        XCTAssertEqual(store.failureLog[0].count, 2)
+        XCTAssertEqual(store.failureLog[0].failure.operation, .listTasks)
+        XCTAssertEqual(store.lastFailure(in: store.sources[0].id)?.id, store.failureLog[0].id)
+    }
+
+    func testRemovingSourceClearsItsFailures() async {
+        let (store, provider, _) = await connectedStore(tasks: [])
+        await provider.setListError(.unreachable("down"))
+        await store.refreshAll()
+        XCTAssertFalse(store.failureLog.isEmpty)
+        store.removeSource(store.sources[0].id)
+        XCTAssertTrue(store.failureLog.isEmpty)
+    }
+
+    func testImageLoadFailureIsRecorded() async {
+        let loader = FakeTaskImageLoader()
+        await loader.setError(.notFound)
+        let provider = FakeTaskProvider()
+        let (store, _) = makeStore(provider, images: loader)
+        await connect(store)
+
+        let file = await store.imageFile(for: URL(string: "https://x.dev/a.png")!, in: store.sources[0].id, task: "1")
+        XCTAssertNil(file)
+        XCTAssertEqual(store.failureLog.first?.failure.operation, .loadImage)
+    }
+
+    // MARK: - Ajan
+
+    func testStartingAgentMovesToInProgressAssignsAndSubmitsToReview() async {
+        let runner = FakeTaskAgentRunner(script: [
+            .started(nil), .state(.working), .state(.submitted(summary: "done")),
+        ])
+        let provider = FakeTaskProvider(info: .fakeFull(me: me), tasks: [.fake(id: "1")], users: [me])
+        let (store, _) = makeStore(provider, agents: runner)
+        await connect(store)
+        let key = store.entries[0].key
+        store.beginStart(key)
+        XCTAssertEqual(store.startingTask, key)
+
+        let request = TaskAgentRequest(
+            task: key, taskTitle: "Task 1", checkout: .existing(path: "/p"), agent: TaskAgentChoice(model: .opus), prompt: "go"
+        )
+        store.start(request, moveToInProgress: true, assignToMe: true)
+        XCTAssertNil(store.startingTask)
+        XCTAssertEqual(store.entry(key)?.item.status, .inProgress)
+        XCTAssertEqual(store.entry(key)?.item.assignee, me)
+
+        while store.agentLink(for: key)?.state != .submitted(summary: "done") { await Task.yield() }
+        while store.hasPendingWrites { await Task.yield() }
+        XCTAssertEqual(store.entry(key)?.item.status, .inReview)
+        XCTAssertEqual(runner.requests.map(\.prompt), ["go"])
+        let last = await provider.updates.last
+        XCTAssertEqual(last?.patch.status, .inReview, "teslim beklemeden gönderilir")
+    }
+
+    func testStoppingAgentMarksExitedAndDismissRemovesLink() async {
+        let (store, _, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let key = store.entries[0].key
+        store.start(
+            TaskAgentRequest(task: key, taskTitle: "t", checkout: .existing(path: "/p"), agent: TaskAgentChoice(), prompt: "p"),
+            moveToInProgress: false, assignToMe: false
+        )
+        store.stopAgent(key)
+        XCTAssertEqual(store.agentLink(for: key)?.state, .exited)
+        store.beginStart(key)
+        XCTAssertEqual(store.startingTask, key, "bitmiş ajan yeniden başlatılabilir")
+        store.dismissAgent(key)
+        XCTAssertNil(store.agentLink(for: key))
+    }
+
+    func testSimulatedFailureIsForwardedOnlyToSimulatingProviders() async {
+        let (store, _, _) = await connectedStore(tasks: [])
+        let id = store.sources[0].id
+        XCTAssertFalse(store.canSimulateFailures(in: id), "fake sağlayıcı taklit etmez")
+        store.setSimulatedFailure(.offline, in: id)
+        XCTAssertNil(store.sources[0].simulatedFailure)
     }
 }
 

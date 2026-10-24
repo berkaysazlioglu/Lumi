@@ -28,6 +28,8 @@ struct TaskDetailPanel: View {
                     titleField
                     if item.needsAttention { TaskAttentionBadge() }
                     properties
+                    TaskAgentSection(store: store, entry: entry)
+                    images
                     description
                 }
                 .padding(Theme.Spacing.xl)
@@ -78,7 +80,7 @@ struct TaskDetailPanel: View {
     private func commitTitle() {
         let key = entry.key
         let draft = titleDraft
-        Task { await store.rename(key, to: draft) }
+        store.rename(key, to: draft)
     }
 
     // MARK: - Özellikler
@@ -139,7 +141,7 @@ struct TaskDetailPanel: View {
             TaskStatus.allCases.map { status in
                 .action(status.title, icon: TaskPresentation.icon(status), isEnabled: status != item.status || item.needsAttention) {
                     let key = entry.key
-                    Task { await store.move(key, to: status) }
+                    store.move(key, to: status)
                 }
             }
         }) {
@@ -155,13 +157,13 @@ struct TaskDetailPanel: View {
             var items: [PopoverMenu.Item] = options.map { option in
                 .action(option.title, icon: option.user.id == item.assignee?.id ? "checkmark" : nil) {
                     let key = entry.key
-                    Task { await store.assign(key, to: option.user) }
+                    store.assign(key, to: option.user)
                 }
             }
             items.append(.divider)
             items.append(.action("Unassigned", icon: item.assignee == nil ? "checkmark" : nil) {
                 let key = entry.key
-                Task { await store.assign(key, to: nil) }
+                store.assign(key, to: nil)
             })
             return items
         }, isEnabled: info?.canAssign == true) {
@@ -183,12 +185,26 @@ struct TaskDetailPanel: View {
             TaskPriority.allCases.reversed().map { option in
                 .action(option.title, icon: TaskPresentation.icon(option), isEnabled: option != priority) {
                     let key = entry.key
-                    Task { await store.setPriority(key, to: option) }
+                    store.setPriority(key, to: option)
                 }
             }
         }, isEnabled: info?.canWrite(.priority) == true) {
             TaskPriorityIcon(priority: priority)
             Text(priority.title).font(Theme.Typography.labelMono)
+        }
+    }
+
+    // MARK: - Görseller
+
+    @ViewBuilder
+    private var images: some View {
+        if info?.canRead(.images) == true, !item.images.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                Text("IMAGES · \(item.images.count)")
+                    .font(Theme.Typography.ui(.caption, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+                TaskImageStrip(store: store, entry: entry)
+            }
         }
     }
 

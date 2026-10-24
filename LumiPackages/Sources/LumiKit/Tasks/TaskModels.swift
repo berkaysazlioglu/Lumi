@@ -84,6 +84,35 @@ public struct TaskProjectRef: Sendable, Hashable {
     public var displayName: String { name ?? key }
 }
 
+/// Task'e iliştirilmiş görsel (protokolde `images`). Sunucu yalnız adres
+/// verir; Lumi görseli detay açılınca indirir ve önbelleğe alır.
+public struct TaskImage: Sendable, Hashable, Identifiable {
+    public let url: URL
+    /// Varsa küçük önizleme — detaydaki şerit bunu indirir, tam boyut yalnız
+    /// tıklanınca iner.
+    public let thumbnailURL: URL?
+    public let name: String?
+    public let width: Int?
+    public let height: Int?
+
+    public init(url: URL, thumbnailURL: URL? = nil, name: String? = nil, width: Int? = nil, height: Int? = nil) {
+        self.url = url
+        self.thumbnailURL = thumbnailURL
+        self.name = name
+        self.width = width
+        self.height = height
+    }
+
+    public var id: URL { url }
+
+    /// Dosya adı: sunucunun verdiği ad, yoksa adresin son parçası.
+    public var displayName: String {
+        if let name, !name.isEmpty { return name }
+        let last = url.lastPathComponent
+        return last.isEmpty ? "image" : last
+    }
+}
+
 /// Adapter'dan bağımsız ortak task modeli — UI yalnız bunu görür.
 ///
 /// Zorunlu alanlar `id`, `title`, `status`, `updatedAt`; gerisi kaynak
@@ -101,6 +130,7 @@ public struct TaskItem: Sendable, Hashable, Identifiable {
     public var assignee: TaskUser?
     public var dueDate: Date?
     public var url: URL?
+    public var images: [TaskImage]
     /// Sunucu dört durumdan biri olmayan bir değer döndürdü (ya da zorunlu bir
     /// alan bozuktu): task atılmaz, `Needs attention` rozetiyle Todo'da durur.
     public var needsAttention: Bool
@@ -118,6 +148,7 @@ public struct TaskItem: Sendable, Hashable, Identifiable {
         assignee: TaskUser? = nil,
         dueDate: Date? = nil,
         url: URL? = nil,
+        images: [TaskImage] = [],
         needsAttention: Bool = false
     ) {
         self.id = id
@@ -132,6 +163,7 @@ public struct TaskItem: Sendable, Hashable, Identifiable {
         self.assignee = assignee
         self.dueDate = dueDate
         self.url = url
+        self.images = images
         self.needsAttention = needsAttention
     }
 }
@@ -159,6 +191,19 @@ public struct TaskPatch: Sendable, Hashable {
         self.title = title
         self.priority = priority
         self.assignee = assignee
+    }
+
+    public var isEmpty: Bool { status == nil && title == nil && priority == nil && assignee == nil }
+
+    /// Aynı task'e art arda yapılan iki düzenlemenin tek yamaya inmesi: sonraki
+    /// düzenlemenin dolu alanları öncekini ezer (birleşik yazım — Tasks planı).
+    public func merging(_ later: TaskPatch) -> TaskPatch {
+        TaskPatch(
+            status: later.status ?? status,
+            title: later.title ?? title,
+            priority: later.priority ?? priority,
+            assignee: later.assignee ?? assignee
+        )
     }
 
     /// Yamanın yerel kopyaya uygulanmış hâli — iyimser güncelleme için.

@@ -2,7 +2,7 @@ import Foundation
 
 /// Bir adapter'ın hataları — UI bunlardan kaynağın durumunu türetir
 /// (`Reconnect`, `Offline`, `Unsupported`…).
-public enum TaskProviderError: Error, Sendable, Equatable, LocalizedError {
+public enum TaskProviderError: Error, Sendable, Hashable, LocalizedError {
     /// 401 — token geçersiz ya da iptal edilmiş.
     case unauthorized
     /// 404 — task (artık) yok.

@@ -12,6 +12,10 @@ Kullanıcı isteği: "Tasks sekmesini canlandırmak istiyorum … herkes kendi s
 4. **Yorum yok** — `comments` capability'si ve uçları plandan çıktı.
 5. **Atama:** kaynak `users` capability'sini beyan ederse kullanıcı listesi gelir ve task herhangi birine atanabilir; seçicide **`You` en üsttedir** (token'ın sahibi — discovery'deki `me`).
 6. **Tazeleme:** Tasks route'u kapalıyken istek atılmaz; route açıldığı an güncel hâl çekilir ve açık kaldığı sürece periyodik olarak güncel tutulur.
+7. **Asıl amaç task'i ajana vermek** (2026-10-24 ikinci tur): "bu task'leri görmek için eklemiyorum, bir task'i ai agent'a verebilmek için ekliyorum … direkt claude gibi düşünebiliriz". Görünürlük ve kendini In Review'a taşıma kararı bana bırakıldı — aşağıda "Task → ajan".
+8. **Birleşik yazım:** her düzenleme ayrı istek olmasın; kısa bir gecikmeyle birleşsin (kullanıcı önerisi 2–3 sn; protokol tarafı bana bırakıldı).
+9. **Görseller:** API'da link listesi olarak `images`; task sayfasında gösterilir, optimize yüklenir, tıklanınca Lumi viewer'ında açılır.
+10. **Hatalar:** API hata verdiğinde Lumi bunu düzeltmeyi kolaylaştıracak ayrıntıda göstermeli.
 
 ## Terimler
 
@@ -42,6 +46,7 @@ Adapter ne olursa olsun UI yalnız bunu görür. **Zorunlu** alanlar az tutulur 
 | `assignee` | `{ id, name, email? }` | | Tek kişi. Yazılabilirse (`rw`) atama `assigneeId` ile yapılır. |
 | `dueDate` | `YYYY-MM-DD` | | |
 | `url` | string | | Sunucunun kendi web arayüzü varsa `Open in Browser`. |
+| `images` | `[{ url, thumbnailUrl?, name?, width?, height? }]` | | Yalnız adresler; v1'de salt okunur (yükleme sonraki sürüm). Bkz. "Görseller". |
 | `lumi` | `{ sessionId?, checkoutPath?, branch?, agent? }` | | Lumi'nin task'e iliştirdiği bağlantı; sunucu yalnız saklar ve geri döner (capability `lumiMetadata`). |
 
 ## Lumi Tasks Protocol v1 (taslak)
@@ -110,6 +115,48 @@ Tek ilke: **UI, kaynağın beyan ettiği kadardır.** Desteklenmeyen şey boş y
 
 Gelecek adapter'lar aynı tabloya oturur: ör. GitHub'da `in_review` doğal olarak yoktur — adapter bunu etiket/Project kolonu eşlemesiyle sağlar ya da sağlayamıyorsa capability'de söyler; UI aynı kuralı uygular.
 
+## Birleşik yazım (kullanıcı kararı 8)
+
+- Düzenleme ekranda **anında** görünür (iyimser); sunucuya gidiş **task başına 2 sn** ertelenir. O sürede aynı task'e yapılan her düzenleme (durum, öncelik, atama, başlık) tek yamada birleşir (`TaskPatch.merging` — sonraki dolu alan kazanır) ve **tek `PATCH`** olarak gider. Farklı task'ler birbirini beklemez.
+- **Protokol değişmez:** toplu uç (`PATCH /tasks` dizi) yok. Gerekçe: her ajanın doğru yazması gereken yüzeyi büyütür, birleşmenin asıl kazancı (aynı task'e art arda düzenleme) istemci tarafında zaten alınır; farklı task'lere yapılan düzenlemeler zaten seyrek.
+- **Kaybolmama:** route'tan çıkınca (`onDisappear`) ve uygulama kapanırken (`TasksFeatureAssembly.shutdown`) bekleyenler hemen gönderilir (`flushAll`). Başlıkta bekleyen yazım varken `Saving…`.
+- **Tutarlılık:** bekleyen ya da uçuştaki yazımın task'i tazelemeyle ezilmez; gönderim sürerken yeni düzenleme gelirse sunucunun cevabı yalnız yeni taban olur. Sunucu reddederse task **son onaylı hâline** döner, hata kaydı + toast.
+- **Ertelenmeyenler:** silme, oluşturma ve ajanın teslimi (In Review'a taşıma hemen gider).
+
+## Görseller (kullanıcı kararı 9)
+
+- **Kart hiçbir şey indirmez**, yalnız `📷 3` sayısını gösterir.
+- Detay açılınca şerit görünür hücrelerin önizlemesini ister: önce `thumbnailUrl`, yoksa asıl görsel. Görsel **disk önbelleğine** iner (`~/.lumi/tasks/images/<sha256(url)>.<ext>`, 200 MB'ı aşınca en eski silinir, aynı adrese eşzamanlı istekler tek indirmeye bağlanır) ve **ImageIO ile hücre boyutuna küçültülerek** çözülür (büyük görsel asla tam belleğe alınmaz); küçük önizlemeler oturumluk bellek önbelleğindedir.
+- Tıklanınca tam görsel (önbellekten) **Lumi viewer'ında** (FileViewer görsel önizlemesi) açılır.
+- Yetki (Faz 2): `Authorization` başlığı **yalnız kaynağın kendi sunucusundaki** adreslere eklenir; S3/CDN gibi başka hostlara token gitmez (oralar için imzalı URL beklenir).
+- Görsel yüklenemezse hücrede uyarı ikonu, hata kaydına `Load image` satırı.
+
+## Hatalar (kullanıcı kararı 10)
+
+- HTTP adapter'ı her başarısız isteği **`TaskRequestFailure`** olarak fırlatır: işlem (`Update task`…), istek satırı (`PATCH /lumi/v1/tasks/DEMO-1`), HTTP durumu, sunucunun hata zarfındaki `code` + `message`, yanıt gövdesinin ilk 600 karakteri (zarf bozuksa — ör. Heroku'nun HTML hata sayfası — tek ipucu budur), task kimliği, zaman. **Token asla girmez.**
+- **Toast** kısa özettir: `Couldn't save DEMO-1 — HTTP 422 · validation_failed — status must be one of …`.
+- **Hata kaydı** (`Request Errors` sheet'i; başlıkta kırmızı `⚠ 3` butonu ve bandın `Details…`'ı açar): solda istekler (aynı hata art arda tekrar ederse tek satırda `×N`), sağda tüm ayrıntı + **"What Lumi expected"** (protokolün o durumda beklediği, hata türüne göre) + yanıt gövdesi + **`Copy for Agent`** (sunucuyu yazan ajana yapıştırılacak hazır rapor). Kayıt oturumluk, en çok 50 satır.
+- Bant durumları ayrıldı: ulaşılamıyor → `offline` (sarı); ulaşıldı ama 5xx/bozuk yanıt → `failing` (kırmızı, "answered with an error"); 401 → `reconnect`; sürüm → `unsupported`. Hepsinde son liste ekranda kalır.
+- Demo kaynağın `Simulate Errors` menüsü (422 / 500 / 401 / offline) bu yüzeyleri gerçek ayrıntı düzeyinde gösterir.
+
+## Task → ajan (kullanıcı kararı 7)
+
+**Task bir prompt'tur.** Kartta hover'da `▶`, detayda `Start with Claude…` → Start sheet'i:
+
+- **Project:** task'in `project`'i Lumi projesiyle eşleşirse seçili gelir (Faz 3'te git origin'i de), yoksa kullanıcı seçer.
+- **Where:** git projesinde varsayılan **task'e özel yeni workspace** (`task/<id>-<slug>` dalı, karar 48–50 workspace'leri) — paralel task'ler birbirine dokunmaz; ya da mevcut bir checkout.
+- **Model:** Default / Fable / Opus / Sonnet / Haiku (karar 121 takma adları).
+- **Prompt:** düzenlenebilir; şablon task başlığı + açıklaması + teslim talimatı.
+- `Move to In Progress` (varsayılan açık), `Assign to me` (atanabiliyorsa ve bana atanmamışsa).
+
+**Ajan normal, görünür bir terminaldir — gizli değil.** Gerekçe: Claude izin ister, soru sorar; gizli terminalde ajan sessizce takılır. Görünür terminal Projects'te checkout altında, ızgarada kart, telefonda chat olarak durur; resume (karar 90) ve dikkat vurgusu (karar 77) bedavaya gelir. Orchestrator'ın gizli terminali (karar 123) bilinçli bir istisnadır, örnek değildir. Terminal kartının başlığında task çipi (`DEMO-1`), task kartında ajanın durum çipi (`✦ Claude Opus · Working` / `Needs input` / `Waiting` / `Submitted for review`) ve `Open Terminal` vardır.
+
+**Kendini In Review'a taşıma:** ajan, Lumi'nin loopback MCP sunucusundaki (karar 114'ün `LumiMCPServer`'ı) **`submit_for_review(summary)`** aracını çağırır. Araç yalnız o terminale verilen, o task'e kapsamlı bir token'la çalışır (`--mcp-config` ile yalnız bu terminale eklenir; kullanıcının diğer MCP'leri korunur). Lumi task'i hemen In Review'a taşır, özeti kartta gösterir ve `lumiMetadata` destekleniyorsa sunucuya yazar. Prompt şablonu aracı ve "Done'a sen taşıma" kuralını söyler.
+
+**Yedekler:** ajan teslim etmeden turn'ünü bitirirse (hook `Stop`, karar 45) çip `Waiting` olur ve detayda `Move to In Review` butonu çıkar; terminal kapanırsa `Exited`. **Done'a yalnız insan taşır.** Ajan → In Review taşıması sunucuda başarısız olursa hata kaydı + aynı buton.
+
+**Faz 3 işi:** gerçek `TaskAgentRunning` (workspace oluşturma → `terminals.spawn(command: "claude --model … --mcp-config …", environment: LUMI_TASK_*)` → prompt'un ilk mesaj olarak verilmesi → hook durumlarının (`AgentActivityState`) `TaskAgentState`'e çevrilmesi), MCP aracı + task kapsamlı token, bağlantının kalıcılığı (`ui-state` additive `taskLinks` + `lumi` metadata), terminal kartında task çipi, `Open Terminal`. Şimdilik `PreviewTaskAgentRunner` akışı taklit eder (UI'da `Preview` rozeti).
+
 ## Proje eşleşmesi
 
 Task'in `project`'i Lumi'nin Projects listesine şu sırayla bağlanır:
@@ -138,7 +185,7 @@ Eşleşmeyen task da gösterilir; yalnız `Start` eşleme ister. Kartlarda eşle
 - **List:** aynı veri tablo hâlinde, kolon başlığıyla sıralanır.
 - **Detay** (sağdan açılan çekmece): başlık, durum menüsü, atama seçicisi (`You` en üstte), öncelik menüsü, markdown gövde, metadata, eylemler: `Start in Lumi` (Faz 3), `Open in Browser` (url varsa), `Copy as Prompt`, `Delete` (varsa).
 
-**Start in Lumi** (Faz 3): checkout seçimi (eşleşen projenin mevcut checkout'ları ya da karar 58 dialoguyla yeni workspace — dal adı önerisi `task/<id>-<slug>`), ajan (New Claude modelleri dahil — karar 121), prompt şablonu ön izlemesi → terminal açılır, task `in_progress`'e çekilir (ayar), `lumi` metadata'sı yazılır. Ajanın turn'ü bitince kartta `waiting` görünür; `Move to In Review` önerisi kartta tek tıkla — **otomatik taşıma yok** (ajan bitti ≠ iş bitti).
+**Start with Claude:** bkz. "Task → ajan" (ajan `submit_for_review` ile kendini In Review'a taşır; teslim etmeden durursa `Move to In Review` butonu; Done her zaman insanda).
 
 **Tazeleme (kullanıcı kararı 6):** route görünür olduğu sürece yaşayan tek bir döngü — açılışta hemen istek, sonra 15 sn'de bir; route'tan çıkılınca döngü iptal olur ve hiçbir istek atılmaz (SwiftUI `.task` ömrü). Kendi düzenlemesi yoldayken gelen liste o task'i ezmez (bekleyen yazımlar korunur). Sol paneldeki satırda sayı rozeti yoktur — kapalıyken veri tazelenmediği için bayat sayı gösterilmez.
 
@@ -156,9 +203,10 @@ Mobil ve orchestrator v1 kapsamı dışında; mimari onları engellemez (Faz 4).
 
 ## Fazlar (her biri derlenir, testler yeşil, faz sonu onay)
 
-1. **UI, sahte veriyle.** LumiKit modeli + `TasksStore` + tüm görünümler + `DemoTaskProvider` (bellek içi, gecikme simülasyonlu). Bağlama sheet'inde `Demo data` adapter'ı gerçekten bağlanır ve Verify kontrol listesi ona karşı koşar; `Custom` akışı (URL + token) görünür ama adapter'ı Faz 2'ye kadar "not available yet" hatası döner. Demo kaynağın menüsünde capability/alan anahtarları vardır ki "X yoksa" kuralları gözle denensin. Kaynaklar bu fazda kalıcı değildir (yeniden başlatınca gider). → **Gözden geçirme, görsel onay.**
+1. ✅ **UI, sahte veriyle.** LumiKit modeli + `TasksStore` + tüm görünümler + `DemoTaskProvider` (bellek içi, gecikme simülasyonlu). Bağlama sheet'inde `Demo data` adapter'ı gerçekten bağlanır ve Verify kontrol listesi ona karşı koşar; `Custom` akışı (URL + token) görünür ama adapter'ı Faz 2'ye kadar "not available yet" hatası döner. Demo kaynağın menüsünde capability/alan anahtarları vardır ki "X yoksa" kuralları gözle denensin. Kaynaklar bu fazda kalıcı değildir (yeniden başlatınca gider). → **Gözden geçirme, görsel onay.**
+1b. ✅ **İkinci tur (kullanıcı kararları 7–10), sahte veriyle:** birleşik yazım (`TasksStore+Writes`), hata kaydı + `Request Errors` sheet'i + `failing` bandı + demo hata taklidi, `images` alanı + disk önbelleği (`TaskImageCache`) + küçültülmüş önizleme şeridi + viewer'da açma, Start sheet'i + ajan çipi/bölümü + `PreviewTaskAgentRunner`.
 2. **Protokol.** `docs/design/06-tasks-protocol.md` (+ OpenAPI dosyası), setup prompt metni, HTTP adapter, Keychain, codec, cache, gerçek Verify. Doğrulama: setup prompt'u boş bir Node projesinde gerçekten bir ajana koşturup çıkan sunucuyu Lumi'ye bağlamak (dogfood). Setup prompt'ta Heroku/Railway uyarısı: dosya sistemi geçicidir, kalıcılık için Postgres vb. kullanılmalı.
-3. **Lumi entegrasyonu.** Proje eşleşmesi, `Start in Lumi`, ajan ↔ task bağlantısı (`lumi` metadata ya da yerel `taskLinks`), kartta ajan durumu, `Move to In Review` önerisi.
+3. **Gerçek ajan.** "Task → ajan" bölümündeki Faz 3 işi: gerçek koşucu, `submit_for_review` MCP aracı, git origin'li proje eşleşmesi, bağlantı kalıcılığı, terminal kartında task çipi.
 4. **Genişleme (ayrı onay).** Orchestrator MCP araçları (`list_tasks`, `update_task`), telefonda Tasks, GitHub/Linear adapter'ları, artımlı senkron.
 
 ## Riskler

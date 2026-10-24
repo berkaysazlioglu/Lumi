@@ -142,3 +142,43 @@ public extension TaskItem {
         )
     }
 }
+
+/// Görsel yükleyici ikamesi: adresi olduğu gibi döner, istekleri sayar.
+public actor FakeTaskImageLoader: TaskImageLoading {
+    public private(set) var requests: [URL] = []
+    public var error: TaskProviderError?
+
+    public init() {}
+
+    public func setError(_ error: TaskProviderError?) { self.error = error }
+
+    public func localFile(for url: URL, authorization: String?) async throws -> URL {
+        requests.append(url)
+        if let error { throw error }
+        return url
+    }
+}
+
+/// Ajan koşucusu ikamesi: verilen olayları sırayla yayınlar.
+public final class FakeTaskAgentRunner: TaskAgentRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var script: [TaskAgentEvent]
+    public private(set) var requests: [TaskAgentRequest] = []
+
+    public init(script: [TaskAgentEvent] = [.started(nil), .state(.working)]) {
+        self.script = script
+    }
+
+    public var isPreview: Bool { false }
+
+    public func start(_ request: TaskAgentRequest) -> AsyncStream<TaskAgentEvent> {
+        lock.lock()
+        requests.append(request)
+        let events = script
+        lock.unlock()
+        return AsyncStream { continuation in
+            for event in events { continuation.yield(event) }
+            continuation.finish()
+        }
+    }
+}

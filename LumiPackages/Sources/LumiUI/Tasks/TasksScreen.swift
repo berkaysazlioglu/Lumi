@@ -25,6 +25,8 @@ public struct TasksScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bgDeep)
         .task { await store.keepFresh() }
+        // Route'tan çıkarken bekleyen birleşik yazımlar beklemeden gider.
+        .onDisappear { Task { await store.flushAll() } }
     }
 
     private var board: some View {
@@ -126,7 +128,7 @@ private struct TaskSourceBanner: View {
             return Content(
                 icon: "wifi.exclamationmark", color: Theme.warning,
                 message: "\(name) is offline\(age). \(message)",
-                action: .init(title: "Retry") { Task { await store.refreshAll() } }
+                action: .init(title: "Details…") { store.presentFailureLog() }
             )
         case .reconnect:
             return Content(
@@ -134,8 +136,18 @@ private struct TaskSourceBanner: View {
                 message: "\(name) rejected the token. Reconnect with a new token.",
                 action: .init(title: "Reconnect…") { store.beginConnect() }
             )
+        case .failing(let message):
+            let age = state.lastUpdated.map { " · showing data from \(TaskPresentation.relative($0))" } ?? ""
+            return Content(
+                icon: "exclamationmark.octagon", color: Theme.error,
+                message: "\(name) answered with an error\(age). \(message)",
+                action: .init(title: "Details…") { store.presentFailureLog() }
+            )
         case .unsupported(let message):
-            return Content(icon: "exclamationmark.triangle", color: Theme.error, message: "\(name): \(message)", action: nil)
+            return Content(
+                icon: "exclamationmark.triangle", color: Theme.error, message: "\(name): \(message)",
+                action: .init(title: "Details…") { store.presentFailureLog() }
+            )
         }
     }
 }

@@ -32,6 +32,8 @@ public enum TaskField: String, CaseIterable, Sendable, Hashable {
     case assignee
     case dueDate
     case url
+    /// Görsel adresleri (v1'de salt okunur — yükleme sonraki sürüm).
+    case images
 
     public var title: String {
         switch self {
@@ -42,6 +44,7 @@ public enum TaskField: String, CaseIterable, Sendable, Hashable {
         case .assignee: "Assignee"
         case .dueDate: "Due date"
         case .url: "Link"
+        case .images: "Images"
         }
     }
 }

@@ -24,6 +24,8 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var claudeAccounts: any ClaudeAccountServicing = FakeClaudeAccountService()
     public var codexAccounts: any CodexAccountServicing = FakeCodexAccountService()
     public var taskProviders: any TaskProviderMaking = FakeTaskProviderFactory()
+    public var taskImages: any TaskImageLoading = FakeTaskImageLoader()
+    public var taskAgents: any TaskAgentRunning = FakeTaskAgentRunner()
     public var git: any GitServicing
     public var plastic: any PlasticServicing = FakePlasticService()
     public var commitMessages: any CommitMessageGenerating = FakeCommitMessageGenerator()

@@ -46,6 +46,10 @@ public protocol ServiceRegistry: AnyObject {
     var codexAccounts: any CodexAccountServicing { get }
     /// Tasks planı: bağlı task kaynağı → adapter.
     var taskProviders: any TaskProviderMaking { get }
+    /// Task görsellerinin indirme/önbelleği.
+    var taskImages: any TaskImageLoading { get }
+    /// Task'i ajana veren koşucu (Faz 3'e kadar önizleme).
+    var taskAgents: any TaskAgentRunning { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

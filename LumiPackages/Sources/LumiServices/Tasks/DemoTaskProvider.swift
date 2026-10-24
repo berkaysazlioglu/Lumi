@@ -6,7 +6,7 @@ import LumiKit
 /// Board'u gerçek bir sunucu olmadan denemek içindir: tüm yetenekleri ve
 /// alanları beyan eder, her çağrıda kısa bir ağ gecikmesi taklit eder. Veri
 /// uygulama kapanınca gider.
-public actor DemoTaskProvider: TaskProviding {
+public actor DemoTaskProvider: TaskProviding, TaskProviderSimulating {
     /// Ağ gecikmesi taklidi — iyimser güncellemenin ve yükleme durumlarının
     /// gözle görülebilmesi için.
     private let latency: Duration
@@ -15,6 +15,8 @@ public actor DemoTaskProvider: TaskProviding {
     private let projects: [TaskProjectRef]
     private var tasks: [TaskItem]
     private var nextID: Int
+    /// "Simulate" menüsünden açılan hata taklidi.
+    private var simulatedFailure: TaskSimulatedFailure?
 
     public init(latency: Duration = .milliseconds(350), meName: String = NSFullUserName(), now: Date = Date()) {
         self.latency = latency
@@ -33,18 +35,23 @@ public actor DemoTaskProvider: TaskProviding {
         self.me = me
         self.users = users
         self.projects = projects
-        tasks = Self.sampleTasks(users: users, projects: projects, now: now)
+        tasks = Self.sampleTasks(users: users, projects: projects, images: DemoTaskImages.make(), now: now)
         nextID = tasks.count + 1
+    }
+
+    public func setSimulatedFailure(_ failure: TaskSimulatedFailure?) {
+        simulatedFailure = failure
     }
 
     public func discover() async throws -> TaskSourceInfo {
         try await simulateLatency()
+        try failIfSimulated(.discover, request: "GET /lumi/v1")
         return TaskSourceInfo(
             name: "Demo board",
             capabilities: Set(TaskCapability.allCases),
             fields: [
                 .body: .readWrite, .project: .readWrite, .priority: .readWrite, .labels: .read,
-                .assignee: .readWrite, .dueDate: .read, .url: .read,
+                .assignee: .readWrite, .dueDate: .read, .url: .read, .images: .read,
             ],
             me: me
         )
@@ -52,11 +59,13 @@ public actor DemoTaskProvider: TaskProviding {
 
     public func listTasks() async throws -> [TaskItem] {
         try await simulateLatency()
+        try failIfSimulated(.listTasks, request: "GET /lumi/v1/tasks")
         return tasks
     }
 
     public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem {
         try await simulateLatency()
+        try failIfSimulated(.update, request: "PATCH /lumi/v1/tasks/\(taskID)", taskID: taskID)
         guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { throw TaskProviderError.notFound }
         tasks[index] = patch.applied(to: tasks[index], now: Date())
         return tasks[index]
@@ -64,6 +73,7 @@ public actor DemoTaskProvider: TaskProviding {
 
     public func create(_ draft: TaskDraft) async throws -> TaskItem {
         try await simulateLatency()
+        try failIfSimulated(.create, request: "POST /lumi/v1/tasks")
         let now = Date()
         let item = TaskItem(
             id: "DEMO-\(nextID)",
@@ -83,6 +93,7 @@ public actor DemoTaskProvider: TaskProviding {
 
     public func delete(taskID: String) async throws {
         try await simulateLatency()
+        try failIfSimulated(.delete, request: "DELETE /lumi/v1/tasks/\(taskID)", taskID: taskID)
         guard tasks.contains(where: { $0.id == taskID }) else { throw TaskProviderError.notFound }
         tasks.removeAll { $0.id == taskID }
     }
@@ -97,6 +108,40 @@ public actor DemoTaskProvider: TaskProviding {
         return projects
     }
 
+    /// Gerçek HTTP adapter'ının fırlatacağı ayrıntı düzeyinde sahte hata —
+    /// hata görünümleri demo'da gerçeğiyle aynı görünsün.
+    private func failIfSimulated(_ operation: TaskOperation, request: String, taskID: String? = nil) throws {
+        switch simulatedFailure {
+        case nil:
+            return
+        case .rejectWrites:
+            guard [.update, .create, .delete].contains(operation) else { return }
+            throw TaskRequestFailure(
+                kind: .invalidResponse("validation failed"), operation: operation, request: request,
+                httpStatus: 422, serverCode: "validation_failed",
+                serverMessage: "status must be one of todo, in_progress, in_review, done",
+                responseExcerpt: #"{"error":{"code":"validation_failed","message":"status must be one of todo, in_progress, in_review, done"}}"#,
+                taskID: taskID
+            )
+        case .serverErrorOnList:
+            guard operation == .listTasks else { return }
+            throw TaskRequestFailure(
+                kind: .invalidResponse("server error"), operation: operation, request: request,
+                httpStatus: 500, serverMessage: "Internal Server Error",
+                responseExcerpt: "<html><body><h1>Application Error</h1><p>TypeError: Cannot read properties of undefined (reading 'map') at routes/tasks.js:42</p></body></html>"
+            )
+        case .unauthorized:
+            throw TaskRequestFailure(
+                kind: .unauthorized, operation: operation, request: request, httpStatus: 401,
+                serverCode: "unauthorized", serverMessage: "invalid token", taskID: taskID
+            )
+        case .offline:
+            throw TaskRequestFailure(
+                kind: .unreachable("The request timed out."), operation: operation, request: request, taskID: taskID
+            )
+        }
+    }
+
     private func simulateLatency() async throws {
         guard latency > .zero else { return }
         try await Task.sleep(for: latency)
@@ -104,7 +149,7 @@ public actor DemoTaskProvider: TaskProviding {
 
     // MARK: - Örnek veri
 
-    private static func sampleTasks(users: [TaskUser], projects: [TaskProjectRef], now: Date) -> [TaskItem] {
+    private static func sampleTasks(users: [TaskUser], projects: [TaskProjectRef], images: [TaskImage], now: Date) -> [TaskItem] {
         let me = users[0], ada = users[1], linus = users[2], grace = users[3]
         let lumi = projects[0], api = projects[1], web = projects[2]
         func ago(_ hours: Double) -> Date { now.addingTimeInterval(-hours * 3600) }
@@ -119,7 +164,7 @@ public actor DemoTaskProvider: TaskProviding {
                 - Keep the card's position stable while the request is in flight
                 """,
                 project: lumi, priority: .high, labels: ["ui", "tasks"], assignee: me, dueDate: ahead(2),
-                url: URL(string: "https://example.com/tasks/DEMO-1")
+                url: URL(string: "https://example.com/tasks/DEMO-1"), images: images
             ),
             TaskItem(
                 id: "DEMO-2", title: "Rate limit the public tasks endpoint", status: .todo, updatedAt: ago(5),
@@ -134,7 +179,7 @@ public actor DemoTaskProvider: TaskProviding {
             TaskItem(
                 id: "DEMO-4", title: "Pricing page copy review", status: .inReview, updatedAt: ago(3),
                 project: web, priority: .low, labels: ["copy"], assignee: grace,
-                url: URL(string: "https://example.com/tasks/DEMO-4")
+                url: URL(string: "https://example.com/tasks/DEMO-4"), images: Array(images.prefix(1))
             ),
             TaskItem(
                 id: "DEMO-5", title: "Paginate GET /tasks", status: .inReview, updatedAt: ago(7),
@@ -170,38 +215,4 @@ public actor DemoTaskProvider: TaskProviding {
         }
         return items
     }
-}
-
-/// Canlı adapter fabrikası. `custom` adapter'ı protokol fazında (Faz 2) gelir;
-/// o zamana kadar bağlanmayı açık bir mesajla reddeder.
-public struct LiveTaskProviderFactory: TaskProviderMaking {
-    public init() {}
-
-    public func makeProvider(for source: TaskSource, token: String?) -> any TaskProviding {
-        switch source.kind {
-        case .demo: DemoTaskProvider()
-        case .custom, .github, .linear: UnavailableTaskProvider(kind: source.kind)
-        }
-    }
-}
-
-/// Henüz yazılmamış adapter: her çağrı aynı açıklayıcı hatayı fırlatır.
-public struct UnavailableTaskProvider: TaskProviding {
-    let kind: TaskProviderKind
-
-    public init(kind: TaskProviderKind) {
-        self.kind = kind
-    }
-
-    private var error: TaskProviderError {
-        .unsupported("\(kind.title) connections in this build — protocol support arrives in the next phase")
-    }
-
-    public func discover() async throws -> TaskSourceInfo { throw error }
-    public func listTasks() async throws -> [TaskItem] { throw error }
-    public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem { throw error }
-    public func create(_ draft: TaskDraft) async throws -> TaskItem { throw error }
-    public func delete(taskID: String) async throws { throw error }
-    public func listUsers() async throws -> [TaskUser] { throw error }
-    public func listProjects() async throws -> [TaskProjectRef] { throw error }
 }

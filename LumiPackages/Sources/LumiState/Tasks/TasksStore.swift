@@ -33,6 +33,9 @@ public final class TasksStore {
         case ready
         /// Ulaşılamadı; son liste ekranda kalır.
         case offline(String)
+        /// Sunucuya ulaşıldı ama hata/bozuk yanıt döndü (5xx, geçersiz JSON);
+        /// son liste ekranda kalır. "Offline"dan ayrı: düzeltilecek yer sunucu kodu.
+        case failing(String)
         /// Token reddedildi (401).
         case reconnect
         /// Protokol sürümü desteklenmiyor ya da adapter yok.
@@ -50,6 +53,8 @@ public final class TasksStore {
         /// Demo kaynağın "X yoksa" anahtarları: kapatılan yetenek/alanlar.
         public var hiddenCapabilities: Set<TaskCapability> = []
         public var hiddenFields: Set<TaskField> = []
+        /// Demo kaynağın hata taklidi (yalnız `TaskProviderSimulating`).
+        public var simulatedFailure: TaskSimulatedFailure?
 
         public var id: TaskSourceID { source.id }
 
@@ -65,6 +70,9 @@ public final class TasksStore {
 
     /// Route görünürken tazeleme aralığı.
     public static let refreshInterval: Duration = .seconds(15)
+    /// Birleşik yazım gecikmesi: bir task'e yapılan düzenlemeler son
+    /// düzenlemeden bu kadar sonra TEK `PATCH` olarak gider.
+    public static let writeDelay: Duration = .seconds(2)
 
     public internal(set) var sources: [SourceState] = []
     public internal(set) var entries: [TaskEntry] = []
@@ -78,11 +86,27 @@ public final class TasksStore {
     public var connectFlow: TaskConnectFlow?
     /// Yeni task sheet'i (nil = kapalı).
     public var newTaskForm: NewTaskForm?
+    /// Start sheet'inin task'i (nil = kapalı).
+    public var startingTask: TaskKey?
+    /// Hata kaydı sheet'i.
+    public var isFailureLogPresented = false
+    /// Başarısız isteklerin kaydı — en yeni başta (bkz. `TasksStore+Failures`).
+    public internal(set) var failureLog: [TaskFailureEntry] = []
+    /// Task ↔ ajan bağlantıları (bkz. `TasksStore+Agents`).
+    public internal(set) var agentLinks: [TaskKey: TaskAgentLink] = [:]
+    /// Gönderilmeyi bekleyen birleşik yazım var mı — başlıkta `Saving…`.
+    public internal(set) var pendingWriteCount = 0
 
     @ObservationIgnored let factory: any TaskProviderMaking
+    @ObservationIgnored let images: any TaskImageLoading
+    @ObservationIgnored let agents: any TaskAgentRunning
     @ObservationIgnored let toasts: ToastStore
     @ObservationIgnored let now: @MainActor () -> Date
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored let debounce: @Sendable (Duration) async throws -> Void
+    /// Gecikmesi süren birleşik yazımlar.
+    @ObservationIgnored var pendingWrites: [TaskKey: PendingWrite] = [:]
+    @ObservationIgnored var agentRuns: [TaskKey: Task<Void, Never>] = [:]
     @ObservationIgnored var providers: [TaskSourceID: any TaskProviding] = [:]
     /// Yazım sıra numarası: her yerel yazım bir artırır. Uçuştaki ya da
     /// tazeleme başladıktan sonra yapılan yazımın task'i, tazelemenin getirdiği
@@ -97,14 +121,20 @@ public final class TasksStore {
 
     public init(
         factory: any TaskProviderMaking,
+        images: any TaskImageLoading,
+        agents: any TaskAgentRunning,
         toasts: ToastStore,
         now: @escaping @MainActor () -> Date = { Date() },
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        debounce: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.factory = factory
+        self.images = images
+        self.agents = agents
         self.toasts = toasts
         self.now = now
         self.sleep = sleep
+        self.debounce = debounce
     }
 
     // MARK: - Türevler
@@ -216,6 +246,7 @@ public final class TasksStore {
         guard let provider = providers[id], let current = state(of: id) else { return }
         let sequenceAtStart = writeSequence
         let needsDiscovery = current.declaredInfo == nil || current.phase == .reconnect
+        var operation = TaskOperation.discover
         do {
             if needsDiscovery {
                 let info = try await provider.discover()
@@ -225,6 +256,7 @@ public final class TasksStore {
                 await loadDirectories(id, provider: provider, info: info)
                 update(id) { $0.declaredInfo = info }
             }
+            operation = .listTasks
             let items = try await provider.listTasks()
             merge(items, from: id, sequenceAtStart: sequenceAtStart)
             update(id) {
@@ -233,6 +265,7 @@ public final class TasksStore {
             }
         } catch {
             update(id) { $0.phase = Self.phase(for: error) }
+            record(error, operation: operation, source: id)
         }
     }
 
@@ -270,14 +303,16 @@ public final class TasksStore {
     }
 
     private func isProtected(_ key: TaskKey, since sequence: Int) -> Bool {
-        inFlightWrites[key, default: 0] > 0 || lastWrite[key, default: 0] > sequence
+        pendingWrites[key] != nil || inFlightWrites[key, default: 0] > 0 || lastWrite[key, default: 0] > sequence
     }
 
     static func phase(for error: any Error) -> Phase {
-        switch error as? TaskProviderError {
+        let kind: TaskProviderError? = (error as? TaskRequestFailure)?.kind ?? (error as? TaskProviderError)
+        return switch kind {
         case .unauthorized: .reconnect
         case .unsupportedVersion, .unsupported: .unsupported(message(error))
-        default: .offline(message(error))
+        case .unreachable, nil: .offline(message(error))
+        case .invalidResponse, .conflict, .notFound: .failing(message(error))
         }
     }
 
@@ -293,6 +328,12 @@ public final class TasksStore {
     // MARK: - Kaynak yönetimi
 
     public func removeSource(_ id: TaskSourceID) {
+        for key in pendingWrites.keys where key.source == id {
+            pendingWrites.removeValue(forKey: key)?.timer?.cancel()
+        }
+        pendingWriteCount = pendingWrites.count
+        for key in agentLinks.keys where key.source == id { stopAgent(key) }
+        failureLog.removeAll { $0.source == id }
         sources.removeAll { $0.id == id }
         entries.removeAll { $0.source == id }
         providers[id] = nil
@@ -317,6 +358,17 @@ public final class TasksStore {
         update(id) { state in
             if hidden { state.hiddenFields.insert(field) } else { state.hiddenFields.remove(field) }
         }
+    }
+
+    /// Demo kaynağın hata taklidi — adapter `TaskProviderSimulating` değilse no-op.
+    public func setSimulatedFailure(_ failure: TaskSimulatedFailure?, in id: TaskSourceID) {
+        guard let simulator = providers[id] as? any TaskProviderSimulating else { return }
+        update(id) { $0.simulatedFailure = failure }
+        Task { await simulator.setSimulatedFailure(failure) }
+    }
+
+    public func canSimulateFailures(in id: TaskSourceID) -> Bool {
+        providers[id] is any TaskProviderSimulating
     }
 
     /// Bağlama akışının sonu: doğrulanmış adapter ve beyanıyla kaynak eklenir.

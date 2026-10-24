@@ -178,7 +178,8 @@ extension TasksStore {
             selectedTask = key
         } catch {
             newTaskForm?.isSubmitting = false
-            report(error, title: "Couldn't create task")
+            let failure = record(error, operation: .create, source: form.source)
+            toasts.show(.error, title: "Couldn't create task", message: failure.summary)
         }
     }
 }

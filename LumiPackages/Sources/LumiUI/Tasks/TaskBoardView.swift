@@ -62,7 +62,7 @@ private struct TaskBoardColumn: View {
             let keys = payloads.compactMap(TaskKey.init(transferValue:))
             guard !keys.isEmpty else { return false }
             for key in keys {
-                Task { await store.move(key, to: column.status) }
+                store.move(key, to: column.status)
             }
             return true
         } isTargeted: { isTargeted = $0 }
@@ -127,6 +127,9 @@ struct TaskCardView: View {
                 if info?.canRead(.labels) == true, !item.labels.isEmpty {
                     labels
                 }
+                if let link = store.agentLink(for: entry.key) {
+                    TaskAgentChip(link: link)
+                }
                 footer
             }
             .padding(Theme.Spacing.lg)
@@ -136,6 +139,16 @@ struct TaskCardView: View {
                     .stroke(isSelected ? Theme.accentVivid : Theme.border.opacity(0.6), lineWidth: Theme.Stroke.hairline)
             )
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+            .overlay(alignment: .topTrailing) {
+                if isHovering, store.agentLink(for: entry.key)?.state.isActive != true, item.status != .done {
+                    IconButton(systemName: "play.fill", label: "Start with Claude", side: Theme.scaled(22)) {
+                        store.beginStart(entry.key)
+                    }
+                    .background(Theme.bgElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    .padding(Theme.Spacing.sm)
+                }
+            }
             .contentShape(Rectangle())
             .onTapGesture { store.selectedTask = isSelected ? nil : entry.key }
             .draggable(entry.key.transferValue) {
@@ -175,6 +188,13 @@ struct TaskCardView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if info?.canRead(.images) == true, !item.images.isEmpty {
+                Label("\(item.images.count)", systemImage: "photo")
+                    .font(Theme.Typography.mono(.caption))
+                    .foregroundStyle(Theme.textMuted)
+                    .labelStyle(.titleAndIcon)
+                    .help("\(item.images.count) image(s) — open the task to see them")
+            }
             if info?.canRead(.dueDate) == true, let due = item.dueDate {
                 Label(TaskPresentation.day(due), systemImage: "calendar")
                     .font(Theme.Typography.mono(.caption))

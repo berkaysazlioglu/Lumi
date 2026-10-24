@@ -144,3 +144,62 @@ final class TaskModelTests: XCTestCase {
         XCTAssertEqual(TaskEndpoint.normalize("ftp://example.com"), .failure(.invalid))
     }
 }
+
+/// Birleşik yazım, hata kaydı ve ajan yardımcıları.
+final class TaskSupportTests: XCTestCase {
+    func testPatchMergingLaterFieldsWin() {
+        let merged = TaskPatch(status: .inProgress, priority: .low)
+            .merging(TaskPatch(status: .done, assignee: .unassign))
+        XCTAssertEqual(merged, TaskPatch(status: .done, priority: .low, assignee: .unassign))
+        XCTAssertTrue(TaskPatch().isEmpty)
+        XCTAssertFalse(merged.isEmpty)
+    }
+
+    func testFailureSummaryAndAgentReportCarryDetails() {
+        let failure = TaskRequestFailure(
+            kind: .invalidResponse("validation"), operation: .update, request: "PATCH /lumi/v1/tasks/7",
+            httpStatus: 422, serverCode: "validation_failed", serverMessage: "bad status",
+            responseExcerpt: String(repeating: "x", count: 2000), taskID: "7"
+        )
+        XCTAssertEqual(failure.summary, "HTTP 422 · validation_failed — bad status")
+        XCTAssertEqual(failure.responseExcerpt?.count, TaskRequestFailure.excerptLimit)
+        let report = failure.agentReport
+        XCTAssertTrue(report.contains("PATCH /lumi/v1/tasks/7"))
+        XCTAssertTrue(report.contains("Server error code: validation_failed"))
+        XCTAssertTrue(report.contains("Expected:"))
+    }
+
+    func testFromWrapsPlainErrorsAndKeepsRichOnes() {
+        let wrapped = TaskRequestFailure.from(TaskProviderError.unauthorized, operation: .listTasks)
+        XCTAssertEqual(wrapped.kind, .unauthorized)
+        XCTAssertEqual(wrapped.operation, .listTasks)
+        let rich = TaskRequestFailure(kind: .conflict, operation: .update, httpStatus: 409)
+        XCTAssertEqual(TaskRequestFailure.from(rich, operation: .delete).id, rich.id)
+    }
+
+    func testBranchNameIsSlugged() {
+        let task = TaskItem.fake(id: "DEMO-12", title: "Fix: login (OAuth) — redirect!!")
+        XCTAssertEqual(TaskAgentPrompt.branchName(for: task), "task/demo-12-fix-login-oauth-redirect")
+    }
+
+    func testPromptMentionsSubmitToolAndOptionalBody() {
+        var task = TaskItem.fake(id: "1", title: "Do it")
+        task.body = "Details here"
+        XCTAssertTrue(TaskAgentPrompt.make(task: task, includeBody: true).contains("Details here"))
+        XCTAssertFalse(TaskAgentPrompt.make(task: task, includeBody: false).contains("Details here"))
+        XCTAssertTrue(TaskAgentPrompt.make(task: task, includeBody: false).contains(TaskAgentPrompt.submitTool))
+    }
+
+    func testProjectMatcherNeedsSingleCandidate() {
+        let paths = ["/w/api", "/w/web", "/other/API"]
+        XCTAssertEqual(TaskProjectMatcher.match(TaskProjectRef(key: "web"), in: paths), "/w/web")
+        XCTAssertNil(TaskProjectMatcher.match(TaskProjectRef(key: "api"), in: paths), "iki aday — kullanıcı seçer")
+        XCTAssertNil(TaskProjectMatcher.match(TaskProjectRef(key: "nope"), in: paths))
+        XCTAssertEqual(TaskProjectMatcher.match(TaskProjectRef(key: "x", name: "Web"), in: paths), "/w/web")
+    }
+
+    func testImageDisplayNameFallsBackToPath() {
+        XCTAssertEqual(TaskImage(url: URL(string: "https://x.dev/a/shot.png")!).displayName, "shot.png")
+        XCTAssertEqual(TaskImage(url: URL(string: "https://x.dev/a/shot.png")!, name: "Mockup").displayName, "Mockup")
+    }
+}
