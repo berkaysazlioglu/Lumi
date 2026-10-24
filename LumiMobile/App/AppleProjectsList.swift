@@ -1,11 +1,12 @@
 import SwiftUI
 import LumiMobileKit
 
-/// Apple-standard Projects list (Settings ▸ Apple Layout): a compact inset-grouped
-/// list — one card per project whose first row is the project itself on a band
-/// of its color (tap collapses the card), checkouts as rows with a `+`, agents
-/// as single-line rows under them, `Other` for loose terminals, search, swipe /
-/// context-menu delete and system colors throughout.
+/// The Projects list: a compact inset-grouped list — one card per project whose
+/// first row is the project itself on a band of its color (tap collapses the
+/// card; press and hold drags it to a new place or opens Edit Project…, decision
+/// 132), checkouts as rows with a `+`, agents as single-line rows under them,
+/// `Other` for loose terminals, search, swipe / context-menu delete and system
+/// colors throughout.
 struct AppleProjectsList: View {
     let model: AppModel
     let actions: ProjectsListActions
@@ -17,8 +18,13 @@ struct AppleProjectsList: View {
     /// and only mirrors it to storage; seeded from storage on first appear.
     @State private var collapsedIDs: Set<String>?
     @State private var query = ""
+    // Decision 132 reorder: the lifted project and where each header sits.
+    @State private var drag: ProjectDragState?
+    @State private var headerFrames: [String: CGRect] = [:]
+    /// The list's global origin — turns the global finger into the preview's position.
+    @State private var listOrigin: CGPoint = .zero
     // Test controls (shared with the Lumi layout): Group Color + A− / A+.
-    @AppStorage(ProjectsDebugControls.tintKey) private var tintsGroups = false
+    @AppStorage(ProjectsLookControls.tintKey) private var tintsGroups = false
     @AppStorage(ProjectsRowMetrics.scaleKey) private var rowScale = 1.0
 
     /// Collapse key for the Other section; NUL keeps it apart from project paths.
@@ -26,8 +32,8 @@ struct AppleProjectsList: View {
     private static let collapsedKey = "appleProjectsCollapsed"
     /// Paths never hold a newline, so it separates the stored section ids.
     private static let collapsedSeparator: Character = "\n"
-    /// The usage strip lines up with the section headers (row content is clipped at 0).
-    private static let stripInset: CGFloat = 16
+    /// The header block lines up with the cards' edges.
+    private static let headerInsets = EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0)
 
     var body: some View {
         let filter = AppleProjectsFilter(query: query)
@@ -47,6 +53,16 @@ struct AppleProjectsList: View {
         .environment(\.defaultMinListRowHeight, AppleProjectsMetrics.minRowHeight * rowScale)
         .navigationTitle("Projects")
         .searchable(text: $query, prompt: "Projects, Branches, Chats")
+        // A drop (or the Mac's reorder) slides the cards into place.
+        .animation(ProjectsMotion.fold, value: projects.map(\.id))
+        .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { listOrigin = $0 }
+        .onPreferenceChange(ProjectHeaderFramesKey.self) { headerFrames = $0 }
+        .overlay(alignment: .topLeading) { dragPreview(projects) }
+        // A lifted project pins the list: otherwise it scrolls (or rubber-bands)
+        // with the finger and the finger never reaches the other cards.
+        .scrollDisabled(drag != nil)
+        .sensoryFeedback(.impact, trigger: drag?.path)
+        .sensoryFeedback(.selection, trigger: drag?.target)
         .overlay {
             if filter.isActive && projects.isEmpty && others.isEmpty { ContentUnavailableView.search(text: query) }
         }
@@ -54,18 +70,14 @@ struct AppleProjectsList: View {
 
     // MARK: - Sections
 
-    /// Usage indicators (not while searching — only results then) and, when
-    /// the Mac is away, its status.
+    /// Usage indicators over the look controls as one header block (not while
+    /// searching — only results then) and, when the Mac is away, its status.
     @ViewBuilder private func topSection(isSearching: Bool) -> some View {
-        if !isSearching, model.usage?.isEmpty == false {
-            ProjectsUsageStrip(report: model.usage, isStale: !model.macOnline)
-                .listRowInsets(EdgeInsets(top: 0, leading: Self.stripInset, bottom: 0, trailing: Self.stripInset))
-                .listRowBackground(Color.clear)
-        }
         if !isSearching {
-            ProjectsDebugControls()
-                .listRowInsets(EdgeInsets(top: 0, leading: Self.stripInset, bottom: 0, trailing: Self.stripInset))
+            ProjectsListHeader(usage: model.usage, isStale: !model.macOnline)
+                .listRowInsets(Self.headerInsets)
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
         if !model.macOnline {
             Section { offlineRow }
@@ -76,13 +88,20 @@ struct AppleProjectsList: View {
     /// with its checkouts and agents.
     private func projectSection(_ slice: AppleProjectSlice, isSearching: Bool) -> some View {
         let isExpanded = expansion(slice.id, isSearching: isSearching)
+        let node = slice.project.node
         return Section {
-            AppleGroupHeaderRow(tint: AppleProjectBadge.color(slice.project.node.appearance.color),
+            AppleGroupHeaderRow(tint: AppleProjectBadge.color(node.appearance.color),
                                 isExpanded: isExpanded,
-                                collapsedCount: slice.agentCount) {
-                AppleProjectBadge(appearance: slice.project.node.appearance)
-                Text(slice.project.node.name)
+                                collapsedCount: slice.agentCount,
+                                isDropTarget: drag?.target == node.path,
+                                onEdit: { actions.edit(node) },
+                                isEditEnabled: actions.isOnline) {
+                AppleProjectBadge(appearance: node.appearance)
+                Text(node.name)
             }
+            .projectDragSource(node, isEnabled: !isSearching, onChanged: dragChanged, onEnded: dragEnded)
+            .opacity(drag?.path == node.path ? Self.liftedOpacity : 1)
+            .projectEditable(node, actions: actions)
             if isExpanded.wrappedValue {
                 let tint = groupTint(slice.project.node)
                 ForEach(slice.checkouts) { checkout in
@@ -111,6 +130,28 @@ struct AppleProjectsList: View {
                 }
                 if !locations.isEmpty { AppleLooseStartRow(locations: locations, actions: actions) }
             }
+        }
+    }
+
+    // MARK: - Reorder (decision 132)
+
+    private static let liftedOpacity = 0.4
+
+    private func dragChanged(_ path: String, _ location: CGPoint) {
+        drag = ProjectDragState(path: path, location: location,
+                                target: ProjectReorder.target(at: location.y, headers: headerFrames, dragging: path))
+    }
+
+    private func dragEnded() {
+        guard let drag else { return }
+        self.drag = nil
+        if let target = drag.target { actions.move(drag.path, target) }
+    }
+
+    @ViewBuilder private func dragPreview(_ projects: [AppleProjectSlice]) -> some View {
+        if let drag, let project = projects.first(where: { $0.id == drag.path })?.project.node {
+            ProjectDragPreview(project: project)
+                .position(x: drag.location.x - listOrigin.x, y: drag.location.y - listOrigin.y)
         }
     }
 

@@ -102,6 +102,10 @@ final class RemoteCommandHandler {
             return await listBranches(payload, commandId: commandId)
         case "add_project":
             return await addProject(payload, commandId: commandId)
+        case "reorder_projects":
+            return await reorderProjects(payload, commandId: commandId)
+        case "set_project_appearance":
+            return await setProjectAppearance(payload, commandId: commandId)
         default:
             return .failure(commandId, "unknown_action")
         }
@@ -190,6 +194,51 @@ final class RemoteCommandHandler {
         do {
             try await config.updateConfig { c in
                 if !c.sidebarProjectPaths.contains(path) { c.sidebarProjectPaths.append(path) }
+            }
+            return .ok(commandId)
+        } catch {
+            return .failure(commandId, "\(error)")
+        }
+    }
+
+    /// Karar 132: telefon görünen projelerin yeni sırasını gönderir; favori
+    /// listesinde telefonun görmediği kayıtlar yerinde kalır.
+    private func reorderProjects(_ payload: [String: Any], commandId: String?) async -> CommandResult {
+        guard let paths = payload["paths"] as? [String], !paths.isEmpty else {
+            return .failure(commandId, "invalid_order")
+        }
+        do {
+            try await config.updateConfig { c in
+                c.sidebarProjectPaths = ProjectOrder.applying(paths, to: c.sidebarProjectPaths)
+            }
+            return .ok(commandId)
+        } catch {
+            return .failure(commandId, "\(error)")
+        }
+    }
+
+    /// Karar 132: projenin görünümünü toptan yazar (gelmeyen alan varsayılandır).
+    /// Değerler Appearance modalıyla aynı kurallardan geçer; geçersiz değer
+    /// sessizce düşürülmez, komut reddedilir.
+    private func setProjectAppearance(_ payload: [String: Any], commandId: String?) async -> CommandResult {
+        let path = payload["path"] as? String ?? ""
+        guard !path.isEmpty, await config.config().sidebarProjectPaths.contains(path) else {
+            return .failure(commandId, "unknown_project")
+        }
+        var appearance = ProjectAppearance()
+        if let raw = payload["color"] as? String {
+            guard let color = ProjectColor(rawValue: raw) else { return .failure(commandId, "invalid_color") }
+            appearance.color = color
+        }
+        if let raw = payload["icon"] as? String {
+            guard let icon = ProjectIcon(persisted: raw) else { return .failure(commandId, "invalid_icon") }
+            appearance.setIcon(icon)
+        }
+        appearance.setRootTitle(payload["rootTitle"] as? String)
+        let result = appearance
+        do {
+            try await config.updateConfig { c in
+                c.projectAppearance[path] = result.isEmpty ? nil : result
             }
             return .ok(commandId)
         } catch {

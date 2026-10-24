@@ -26,17 +26,3 @@ struct ProjectIconView: View {
             .foregroundStyle(LumiPalette.accent)
     }
 }
-
-/// The 6pt project color dot (Mac `ProjectColorDot`).
-struct ProjectColorDot: View {
-    let color: ProjectColorID
-
-    static let size: CGFloat = 7
-
-    var body: some View {
-        Circle()
-            .fill(LumiPalette.projectColor(color))
-            .frame(width: Self.size, height: Self.size)
-            .accessibilityLabel("\(color.rawValue) project")
-    }
-}

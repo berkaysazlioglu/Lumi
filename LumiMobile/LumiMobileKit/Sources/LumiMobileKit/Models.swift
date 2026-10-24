@@ -248,6 +248,14 @@ public enum ProjectIconID: Sendable, Equatable {
             return nil
         }
     }
+
+    /// Wire form sent back to the Mac (decision 132).
+    public var wire: String {
+        switch self {
+        case .symbol(let name): "sf:\(name)"
+        case .emoji(let value): "emoji:\(value)"
+        }
+    }
 }
 
 /// Project identity mirrored from the Mac's Appearance… modal (decision 120).

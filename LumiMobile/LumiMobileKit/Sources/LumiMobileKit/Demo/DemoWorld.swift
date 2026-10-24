@@ -106,6 +106,21 @@ struct DemoWorld: Sendable {
         return true
     }
 
+    /// Decision 132 on the fake Mac: same slot rule as the real one.
+    mutating func reorderProjects(_ paths: [String]) {
+        let order = ProjectOrder.applying(paths, to: projects.map(\.path))
+        let byPath = Dictionary(projects.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        projects = order.compactMap { byPath[$0] }
+    }
+
+    mutating func setAppearance(_ appearance: ProjectAppearance, of path: String) -> Bool {
+        guard let index = projects.firstIndex(where: { $0.path == path }) else { return false }
+        let project = projects[index]
+        projects[index] = ProjectNode(name: project.name, path: project.path,
+                                      checkouts: project.checkouts, appearance: appearance)
+        return true
+    }
+
     mutating func update(_ id: String, status: String? = nil, awaitingDecision: Bool? = nil,
                          model: String? = nil, nowMs: Double) {
         guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }

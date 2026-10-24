@@ -39,6 +39,10 @@ public enum CommandAction: Sendable, Equatable {
     case deleteSession(sessionId: String)
     case setModel(sessionId: String, model: String)
     case addProject(path: String)
+    /// Decision 132: the new order of the projects the phone shows.
+    case reorderProjects(paths: [String])
+    /// Decision 132: replaces the project's whole appearance (absent field = default).
+    case setProjectAppearance(path: String, appearance: ProjectAppearance)
 }
 
 public struct OutgoingCommand: Sendable, Equatable {
@@ -225,6 +229,15 @@ public enum PhoneProtocol {
         case .addProject(let path):
             payload["action"] = "add_project"
             payload["path"] = path
+        case .reorderProjects(let paths):
+            payload["action"] = "reorder_projects"
+            payload["paths"] = paths
+        case .setProjectAppearance(let path, let appearance):
+            payload["action"] = "set_project_appearance"
+            payload["path"] = path
+            if let color = appearance.color { payload["color"] = color.rawValue }
+            if let icon = appearance.icon { payload["icon"] = icon.wire }
+            if let rootTitle = appearance.rootTitle { payload["rootTitle"] = rootTitle }
         }
         return frame(type: "command", payload: payload)
     }

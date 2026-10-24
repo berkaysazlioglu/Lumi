@@ -71,6 +71,11 @@ public final class AppModel {
     /// Last add_project failure (surfaced by the add sheet).
     public private(set) var addProjectError: String?
     private var addProjectCommandIds: Set<String> = []
+    /// Reorder / appearance edits not yet reflected by a `projects` snapshot (decision 132).
+    public private(set) var pendingProjectEdits = PendingProjectEdits()
+    /// Last rejected project edit (reorder / appearance), surfaced by the Projects screen.
+    public private(set) var projectEditError: String?
+    private var projectEditCommandIds: Set<String> = []
 
     // MARK: Terminal byte-routing
 
@@ -248,6 +253,9 @@ public final class AppModel {
         usage = nil
         addProjectError = nil
         addProjectCommandIds = []
+        pendingProjectEdits = PendingProjectEdits()
+        projectEditError = nil
+        projectEditCommandIds = []
     }
 
     // MARK: Incoming messages
@@ -268,6 +276,7 @@ public final class AppModel {
                     projects: projects, others: welcome.others ?? [], addable: welcome.addable ?? [],
                     looseLocations: welcome.looseLocations ?? [], display: welcome.display ?? .default
                 )
+                pendingProjectEdits.reconcile(with: projectsSnapshot)
             }
 
         case .sessions(let metas):
@@ -293,6 +302,11 @@ public final class AppModel {
         case .commandResult(let result):
             if addProjectCommandIds.remove(result.commandId) != nil {
                 if !result.ok { addProjectError = result.error ?? "couldn't add project" }
+                return
+            }
+            if projectEditCommandIds.remove(result.commandId) != nil {
+                pendingProjectEdits.resolve(commandId: result.commandId, ok: result.ok)
+                if !result.ok { projectEditError = result.error ?? "the Mac rejected the change" }
                 return
             }
             if branchRequestIds.remove(result.commandId) != nil {
@@ -372,6 +386,7 @@ public final class AppModel {
         case .projects(let snap):
             macOnline = true
             projectsSnapshot = snap
+            pendingProjectEdits.reconcile(with: snap)
 
         case .usage(let report):
             macOnline = true
@@ -670,9 +685,14 @@ public final class AppModel {
 
     // MARK: Derived state
 
+    /// The Mac's snapshot with the phone's not-yet-confirmed edits on top (decision 132).
+    public var displayedProjectsSnapshot: ProjectsSnapshot {
+        pendingProjectEdits.applied(to: projectsSnapshot)
+    }
+
     /// View-ready tree: joins the snapshot's agent ids against live `sessions`.
     public var projectTree: [ProjectRowData] {
-        assembleProjectTree(snapshot: projectsSnapshot, sessions: sessions, selectedId: activeSessionId)
+        assembleProjectTree(snapshot: displayedProjectsSnapshot, sessions: sessions, selectedId: activeSessionId)
     }
 
     /// Projects ▸ Other: loose terminals by folder, joined like `projectTree`.
@@ -817,6 +837,43 @@ public final class AppModel {
         let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: .addProject(path: path)))
         DiagLog.shared.log("model", "out \(commandId) add_project ok=\(ok)")
         if !ok { addProjectCommandIds.remove(commandId); addProjectError = "no connection" }
+    }
+
+    /// Decision 132: drops `path` onto `target`'s place and sends the new order.
+    /// Optimistic — the list moves at once; a rejection puts the Mac's order back.
+    public func moveProject(_ path: String, onto target: String) async {
+        let current = displayedProjectsSnapshot.projects.map(\.path)
+        let next = ProjectOrder.moving(path, onto: target, in: current)
+        guard next != current else { return }
+        let commandId = nextProjectEditCommandId()
+        pendingProjectEdits.setOrder(next, commandId: commandId)
+        await sendProjectEdit(commandId, .reorderProjects(paths: next))
+    }
+
+    /// Decision 132: replaces a project's appearance on the Mac. Optimistic like `moveProject`.
+    public func setProjectAppearance(path: String, appearance: ProjectAppearance) async {
+        let commandId = nextProjectEditCommandId()
+        pendingProjectEdits.setAppearance(appearance, for: path, commandId: commandId)
+        await sendProjectEdit(commandId, .setProjectAppearance(path: path, appearance: appearance))
+    }
+
+    public func clearProjectEditError() {
+        projectEditError = nil
+    }
+
+    private func nextProjectEditCommandId() -> String {
+        commandCounter += 1
+        return "ph-\(commandCounter)"
+    }
+
+    private func sendProjectEdit(_ commandId: String, _ action: CommandAction) async {
+        projectEditCommandIds.insert(commandId)
+        let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: action))
+        DiagLog.shared.log("model", "out \(commandId) project edit ok=\(ok)")
+        guard !ok else { return }
+        projectEditCommandIds.remove(commandId)
+        pendingProjectEdits.resolve(commandId: commandId, ok: false)
+        projectEditError = "no connection"
     }
 
     public func currentModel(for sessionId: String) -> String? {

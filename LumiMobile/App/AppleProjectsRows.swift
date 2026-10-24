@@ -24,6 +24,8 @@ enum AppleProjectsMetrics {
     /// Group Color test toggle: the project color fading over its checkouts / agents.
     static let checkoutTintOpacity = 0.12
     static let agentTintOpacity = 0.07
+    /// Outline of the project header a dragged project hovers (decision 132).
+    static let dropTargetLineWidth: CGFloat = 2
     private static let titlePoints: CGFloat = 15   // .subheadline
     private static let detailPoints: CGFloat = 12  // .caption
 
@@ -63,40 +65,66 @@ struct AppleGroupHeaderRow<Title: View>: View {
     @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
     @Binding var isExpanded: Bool
     let collapsedCount: Int
+    /// A dragged project hovers over this one (decision 132 reorder).
+    var isDropTarget = false
+    /// Projects get a trailing `⋯` menu with Edit Project… (decision 132); `Other` doesn't.
+    var onEdit: (() -> Void)?
+    var isEditEnabled = true
     @ViewBuilder let title: () -> Title
 
     var body: some View {
-        Button {
-            // The binding's setter animates the fold (ProjectsMotion.fold).
-            isExpanded.toggle()
-        } label: {
-            HStack(spacing: AppleProjectsMetrics.rowSpacing) {
-                title()
-                    .font(AppleProjectsMetrics.titleFont(scale).weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                if !isExpanded && collapsedCount > 0 {
-                    Text("\(collapsedCount)")
-                        .font(AppleProjectsMetrics.detailFont(scale)).foregroundStyle(.secondary).monospacedDigit()
+        HStack(spacing: AppleProjectsMetrics.rowSpacing) {
+            Button {
+                // The binding's setter animates the fold (ProjectsMotion.fold).
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: AppleProjectsMetrics.rowSpacing) {
+                    title()
+                        .font(AppleProjectsMetrics.titleFont(scale).weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    if !isExpanded && collapsedCount > 0 {
+                        Text("\(collapsedCount)")
+                            .font(AppleProjectsMetrics.detailFont(scale)).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                Image(systemName: "chevron.forward")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            if let onEdit { editMenu(onEdit) }
         }
-        .buttonStyle(.plain)
         .appleProjectsRow(scale: scale)
         .listRowBackground(band)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+    }
+
+    private func editMenu(_ onEdit: @escaping () -> Void) -> some View {
+        Menu {
+            Button(action: onEdit) { Label("Edit Project…", systemImage: "paintpalette") }
+                .disabled(!isEditEnabled)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(AppleProjectsMetrics.titleFont(scale))
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Project Actions")
     }
 
     private var band: some View {
         ZStack {
             Color(.secondarySystemGroupedBackground)
             tint.opacity(AppleProjectsMetrics.bandOpacity)
+            if isDropTarget {
+                Color.accentColor.opacity(AppleProjectsMetrics.bandOpacity)
+                Rectangle().strokeBorder(Color.accentColor, lineWidth: AppleProjectsMetrics.dropTargetLineWidth)
+            }
         }
     }
 }
@@ -105,9 +133,11 @@ struct AppleGroupHeaderRow<Title: View>: View {
 /// white on a circle of its color, or its emoji on a soft fill.
 struct AppleProjectBadge: View {
     let appearance: ProjectAppearance
+    /// Unscaled diameter; the A− / A+ scale applies on top.
+    var baseSize = AppleProjectsMetrics.projectBadgeSize
 
     @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
-    private var size: CGFloat { AppleProjectsMetrics.projectBadgeSize * scale }
+    private var size: CGFloat { baseSize * scale }
 
     var body: some View {
         switch appearance.icon {
@@ -124,7 +154,7 @@ struct AppleProjectBadge: View {
     }
 
     private func symbol(_ name: String) -> some View {
-        AppleSymbolBadge(symbol: name, color: Self.color(appearance.color))
+        AppleSymbolBadge(symbol: name, color: Self.color(appearance.color), baseSize: baseSize)
     }
 
     /// Mac palette mapped onto the closest system colors (they adapt to dark mode).
@@ -146,9 +176,10 @@ struct AppleProjectBadge: View {
 struct AppleSymbolBadge: View {
     let symbol: String
     let color: Color
+    var baseSize = AppleProjectsMetrics.projectBadgeSize
 
     @AppStorage(ProjectsRowMetrics.scaleKey) private var scale = 1.0
-    private var size: CGFloat { AppleProjectsMetrics.projectBadgeSize * scale }
+    private var size: CGFloat { baseSize * scale }
 
     var body: some View {
         Image(systemName: symbol)

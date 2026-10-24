@@ -20,22 +20,12 @@ struct ProjectsView: View {
     @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
     @AppStorage(TUIStyle.sizeKey) private var textSize = TUIStyle.defaultSize
     @AppStorage(DemoMode.storageKey) private var demoMode = false
-    @AppStorage(ProjectsRowSize.storageKey) private var rowSize = ProjectsRowSize.default
-    @AppStorage(ProjectsLayoutStyle.storageKey) private var layoutStyle = ProjectsLayoutStyle.default
+    /// Project whose appearance editor is open (decision 132).
+    @State private var editingProject: ProjectNode?
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch layoutStyle {
-                case .lumi:
-                    LumiProjectsList(model: model, actions: listActions)
-                        .navigationBarTitleDisplayMode(.inline)
-                        // The title is drawn in the list, under the usage strip (Mac top bar order).
-                        .toolbar { ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) } }
-                case .apple:
-                    AppleProjectsList(model: model, actions: listActions)
-                }
-            }
+            AppleProjectsList(model: model, actions: listActions)
             .navigationTitle("Projects")
             .navigationDestination(item: $openSession) { sessionId in
                 TerminalSessionView(model: model, sessionId: sessionId)
@@ -49,6 +39,11 @@ struct ProjectsView: View {
                 ToolbarItem(placement: .topBarTrailing) { settingsMenu }
             }
             .sheet(isPresented: $showAdd) { AddProjectSheet(model: model) }
+            .sheet(item: $editingProject) { project in
+                ProjectAppearanceSheet(project: project, isOnline: model.macOnline) { appearance in
+                    Task { await model.setProjectAppearance(path: project.path, appearance: appearance) }
+                }
+            }
             .sheet(item: $newBranchPreset) { preset in
                 NewSessionView(model: model, repoPath: preset.repoPath, branchMode: "new",
                                baseBranch: preset.baseBranch) { sessionId in
@@ -71,6 +66,14 @@ struct ProjectsView: View {
                     startError = error
                 default: break
                 }
+            }
+            .alert("Couldn't update project", isPresented: Binding(
+                get: { model.projectEditError != nil },
+                set: { if !$0 { model.clearProjectEditError() } }
+            )) {
+                Button("OK", role: .cancel) { model.clearProjectEditError() }
+            } message: {
+                Text("Your Mac kept its previous order and look (\(model.projectEditError ?? "")).")
             }
             .alert("Couldn't start agent", isPresented: Binding(
                 get: { startError != nil },
@@ -105,7 +108,9 @@ struct ProjectsView: View {
             open: { openSession = $0 },
             start: { startAgent(at: $0) },
             newBranch: { newBranchPreset = NewBranchPreset(repoPath: $0, baseBranch: $1) },
-            delete: { sessionId in Task { await model.deleteSession(sessionId: sessionId) } }
+            delete: { sessionId in Task { await model.deleteSession(sessionId: sessionId) } },
+            edit: { editingProject = $0 },
+            move: { path, target in Task { await model.moveProject(path, onto: target) } }
         )
     }
 
@@ -161,21 +166,6 @@ struct ProjectsView: View {
                 Label("Text Size", systemImage: "textformat.size")
             }
             .pickerStyle(.menu)
-            Toggle(isOn: Binding(
-                get: { layoutStyle == .apple },
-                set: { layoutStyle = $0 ? .apple : .lumi }
-            )) {
-                Label("Apple Layout", systemImage: "list.bullet.rectangle")
-            }
-            // Apple layout sizes rows with Dynamic Type instead.
-            if layoutStyle == .lumi {
-                Picker(selection: $rowSize) {
-                    ForEach(ProjectsRowSize.allCases) { Text($0.title).tag($0) }
-                } label: {
-                    Label("Row Size", systemImage: "list.bullet.indent")
-                }
-                .pickerStyle(.menu)
-            }
             if demoMode {
                 Button("Exit Demo Data", role: .destructive) { demoMode = false }
             } else {

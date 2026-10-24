@@ -16,7 +16,7 @@ struct ProjectsUsageStrip: View {
         if let report, !report.isEmpty {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let nowMs = context.date.timeIntervalSince1970 * 1000
-                HStack(spacing: 8) {
+                HStack(spacing: ProjectsHeaderChip.spacing) {
                     ForEach(report.providers) { provider in
                         UsageChipButton(id: provider.id, label: provider.indicatorLimit?.percent.map { "\($0)%" } ?? "—",
                                         tint: UsageToneColor.color(UsageTone(limit: provider.indicatorLimit, nowMs: nowMs))) {
@@ -45,20 +45,16 @@ private struct UsageChipButton<Popover: View>: View {
 
     @State private var showing = false
 
-    private static var corner: CGFloat { 8 }
-
     var body: some View {
         Button { showing = true } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: ProjectsHeaderChip.iconSpacing) {
                 UsageProviderIcon(id: id)
                 Text(label)
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(tint ?? LumiPalette.textPrimary)
+                    .font(ProjectsHeaderChip.font.monospacedDigit())
+                    .foregroundStyle(tint ?? Color.primary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(LumiPalette.elevated, in: RoundedRectangle(cornerRadius: Self.corner))
-            .overlay(RoundedRectangle(cornerRadius: Self.corner).stroke(LumiPalette.border, lineWidth: 1))
+            .padding(.horizontal, ProjectsHeaderChip.horizontalPadding)
+            .headerChip(isActive: false)
             .fixedSize()
         }
         .buttonStyle(.plain)

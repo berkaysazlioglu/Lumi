@@ -1,9 +1,9 @@
 import SwiftUI
 import LumiMobileKit
 
-/// What a Projects list can ask of its screen (`ProjectsView`). Both layouts —
-/// the Lumi tree and the Apple-standard one — read the model and call these;
-/// navigation, sheets, confirmations and the start/spinner flow stay in the screen.
+/// What the Projects list can ask of its screen (`ProjectsView`): the list reads
+/// the model and calls these; navigation, sheets, confirmations and the
+/// start/spinner flow stay in the screen.
 struct ProjectsListActions {
     /// Mac reachable — start buttons are disabled otherwise.
     let isOnline: Bool
@@ -17,23 +17,10 @@ struct ProjectsListActions {
     let newBranch: (_ repoPath: String, _ baseBranch: String) -> Void
     /// Ends an agent on the Mac. Rows ask first with `confirmDeleteChat`.
     let delete: (_ sessionId: String) -> Void
-}
-
-/// Settings ▸ Projects Layout: the Lumi tree or an Apple-standard list.
-enum ProjectsLayoutStyle: String, CaseIterable, Identifiable {
-    case lumi, apple
-
-    static let storageKey = "projectsLayoutStyle"
-    static let `default` = ProjectsLayoutStyle.lumi
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .lumi: "Lumi"
-        case .apple: "Apple"
-        }
-    }
+    /// Opens a project's appearance editor (decision 132).
+    let edit: (_ project: ProjectNode) -> Void
+    /// Drops the project at `path` onto `target`'s place (decision 132).
+    let move: (_ path: String, _ target: String) -> Void
 }
 
 /// "Delete this chat?" as a centered alert (an "are you sure?" popup). A

@@ -126,6 +126,14 @@ public actor DemoRelayClient: RelayClienting {
             let ok = world.addProject(path: path)
             if ok { broadcastTree() }
             reply(id, ok: ok, error: ok ? nil : "not_addable")
+        case .reorderProjects(let paths):
+            world.reorderProjects(paths)
+            reply(id, ok: true)
+            broadcastTree()
+        case let .setProjectAppearance(path, appearance):
+            let ok = world.setAppearance(appearance, of: path)
+            reply(id, ok: ok, error: ok ? nil : "unknown_project")
+            if ok { broadcastTree() }
         case .listBranches:
             reply(id, ok: true, branches: Self.demoBranches)
         case let .setModel(sessionId, model):

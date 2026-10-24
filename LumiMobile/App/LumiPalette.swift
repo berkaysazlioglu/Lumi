@@ -154,10 +154,3 @@ private struct LumiFieldModifier: ViewModifier {
 extension View {
     func lumiField() -> some View { modifier(LumiFieldModifier()) }
 }
-
-extension View {
-    /// A Projects list row on the panel surface, without separators (Mac panel parity).
-    func lumiRow() -> some View {
-        listRowBackground(LumiPalette.background).listRowSeparator(.hidden)
-    }
-}

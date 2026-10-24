@@ -192,4 +192,71 @@ struct RemoteCommandHandlerTests {
         let saved = await config.config().sidebarProjectPaths
         #expect(saved.filter { $0 == "/p/orca" }.count == 1)
     }
+
+    // MARK: - reorder_projects / set_project_appearance (karar 132)
+
+    private func handler(favorites: [String], appearance: [String: ProjectAppearance] = [:])
+        async -> (RemoteCommandHandler, FakeConfigService) {
+        let config = FakeConfigService()
+        var cfg = AppConfig.defaults
+        cfg.sidebarProjectPaths = favorites
+        cfg.projectAppearance = appearance
+        await config.seed(cfg)
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalService(), trust: FakeClaudeWorkspaceTrust(), config: config)
+        return (handler, config)
+    }
+
+    @Test func reorderProjectsWritesNewOrderKeepingHiddenFavorites() async throws {
+        let (handler, config) = await handler(favorites: ["/a", "/hidden", "/b", "/c"])
+        let result = await handler.handle([
+            "commandId": "c1", "action": "reorder_projects", "paths": ["/c", "/a", "/b"],
+        ])
+        #expect(result.ok)
+        #expect(await config.config().sidebarProjectPaths == ["/c", "/hidden", "/a", "/b"])
+    }
+
+    @Test func reorderProjectsRejectsEmptyOrder() async throws {
+        let (handler, config) = await handler(favorites: ["/a", "/b"])
+        let result = await handler.handle(["commandId": "c1", "action": "reorder_projects", "paths": [String]()])
+        #expect(result.error == "invalid_order")
+        #expect(await config.config().sidebarProjectPaths == ["/a", "/b"])
+    }
+
+    @Test func setProjectAppearanceReplacesWholeAppearance() async throws {
+        let (handler, config) = await handler(
+            favorites: ["/a"], appearance: ["/a": ProjectAppearance(color: .blue, rootTitle: "dev")])
+        let result = await handler.handle([
+            "commandId": "c1", "action": "set_project_appearance", "path": "/a",
+            "color": "pink", "icon": "emoji:🚀",
+        ])
+        #expect(result.ok)
+        let saved = await config.config().appearance(ofProject: "/a")
+        #expect(saved == ProjectAppearance(color: .pink, icon: .emoji("🚀")))   // rootTitle cleared
+    }
+
+    @Test func setProjectAppearanceWithNoFieldsRemovesRecord() async throws {
+        let (handler, config) = await handler(
+            favorites: ["/a"], appearance: ["/a": ProjectAppearance(color: .blue)])
+        let result = await handler.handle(["commandId": "c1", "action": "set_project_appearance", "path": "/a"])
+        #expect(result.ok)
+        #expect(await config.config().projectAppearance["/a"] == nil)
+    }
+
+    @Test func setProjectAppearanceRejectsInvalidValues() async throws {
+        let (handler, config) = await handler(favorites: ["/a"])
+        let badIcon = await handler.handle([
+            "commandId": "c1", "action": "set_project_appearance", "path": "/a", "icon": "sf:not-allowed",
+        ])
+        #expect(badIcon.error == "invalid_icon")
+        let badColor = await handler.handle([
+            "commandId": "c2", "action": "set_project_appearance", "path": "/a", "color": "mauve",
+        ])
+        #expect(badColor.error == "invalid_color")
+        let unknown = await handler.handle([
+            "commandId": "c3", "action": "set_project_appearance", "path": "/nope", "color": "blue",
+        ])
+        #expect(unknown.error == "unknown_project")
+        #expect(await config.config().projectAppearance.isEmpty)
+    }
 }

@@ -44,34 +44,17 @@ public enum ProjectIcon: Equatable, Hashable, Sendable {
     /// Bugünkü sabit ikon.
     public static let `default` = ProjectIcon.symbol("folder")
 
-    /// Seçilebilir SF Symbol'ler — bilinçli olarak dar (renk paletiyle aynı
-    /// gerekçe). İlki varsayılandır.
-    public static let symbolNames: [String] = [
-        "folder", "house", "star", "bolt", "flame", "leaf",
-        "gamecontroller", "hammer", "cube", "globe", "sparkles", "flag",
-        "heart", "paintbrush", "book", "puzzlepiece", "terminal",
-    ]
+    /// Seçilebilir SF Symbol'ler — telefonla ortak liste (`ProjectIdentityRules`). İlki varsayılandır.
+    public static var symbolNames: [String] { ProjectIdentityRules.symbolNames }
 
     /// Doğrulanmış SF Symbol; izin listesinde değilse `nil`.
     public static func symbol(named name: String) -> ProjectIcon? {
         symbolNames.contains(name) ? .symbol(name) : nil
     }
 
-    /// Doğrulanmış emoji: baştaki/sondaki boşluk atılır, tam olarak TEK
-    /// grapheme ve emoji olarak görüntülenen bir karakter olmalı (`1`, `#`
-    /// gibi emoji özelliği taşıyan ama metin olarak çizilen karakterler değil).
+    /// Doğrulanmış emoji (kural telefonla ortak: `ProjectIdentityRules.emoji(from:)`).
     public static func emoji(from raw: String) -> ProjectIcon? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count == 1, let character = trimmed.first, isEmoji(character) else { return nil }
-        return .emoji(trimmed)
-    }
-
-    private static let variationSelector16: Unicode.Scalar = "\u{FE0F}"
-
-    private static func isEmoji(_ character: Character) -> Bool {
-        let scalars = character.unicodeScalars
-        if scalars.contains(where: \.properties.isEmojiPresentation) { return true }
-        return scalars.contains(variationSelector16) && scalars.contains(where: \.properties.isEmoji)
+        ProjectIdentityRules.emoji(from: raw).map(ProjectIcon.emoji)
     }
 
     /// Diskteki değer.
@@ -98,17 +81,14 @@ public enum ProjectIcon: Equatable, Hashable, Sendable {
 public enum ProjectRootTitle {
     /// Bugünkü sabit başlık. Telefon/orchestrator ağacı (`ProjectTree.originalTitle`)
     /// bundan bağımsızdır ve değişmez.
-    public static let defaultTitle = "main"
+    public static var defaultTitle: String { ProjectIdentityRules.defaultRootTitle }
     /// Panel satırına sığan makul üst sınır (grapheme).
-    public static let maxLength = 24
+    public static var maxLength: Int { ProjectIdentityRules.rootTitleMaxLength }
 
     /// Kırpılmış ve sınırlanmış başlık; boşsa ya da varsayılanın kendisiyse
     /// `nil` (varsayılana döner — diske `main` yazılmaz).
     public static func normalized(_ raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let limited = String(trimmed.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !limited.isEmpty, limited != defaultTitle else { return nil }
-        return limited
+        ProjectIdentityRules.normalizedRootTitle(raw)
     }
 }
 
