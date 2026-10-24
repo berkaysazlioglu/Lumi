@@ -134,6 +134,7 @@ public final class LiveTaskAgentRunner: TaskAgentRunning {
         var parts = [AgentProvider.claude.launchCommand, shellQuoted(request.prompt)]
         if let model = request.agent.model { parts += ["--model", model.rawValue] }
         parts += ["--mcp-config", shellQuoted(mcpConfig), "--allowedTools", TaskAgentTools.allowedTools]
+        if let directory = request.attachmentDirectory { parts += ["--add-dir", shellQuoted(directory)] }
         return parts.joined(separator: " ")
     }
 

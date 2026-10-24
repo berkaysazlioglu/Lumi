@@ -64,8 +64,11 @@ extension TasksStore {
         for key in agentLinks.keys where key.source == id { stopAgent(key) }
         failureLog.removeAll { $0.source == id }
         let removed = state(of: id)?.source
+        let removedEntries = entries.filter { $0.source == id }
         sources.removeAll { $0.id == id }
         entries.removeAll { $0.source == id }
+        cleanUpImages(of: removedEntries)
+        Task { [images] in await images.removeAttachments(source: id) }
         providers[id] = nil
         if filter.source == id { filter.source = nil }
         if selectedTask?.source == id { selectedTask = nil }

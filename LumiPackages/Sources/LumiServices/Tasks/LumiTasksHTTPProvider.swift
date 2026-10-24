@@ -138,6 +138,8 @@ public struct LumiTasksHTTPProvider: TaskProviding {
         do {
             response = try await transport.send(request)
         } catch {
+            // İptal ağ hatası değildir — çağıran kendi iptalini tanısın.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             throw TaskRequestFailure(
                 kind: .unreachable(Self.networkMessage(error)), operation: operation, request: line, taskID: taskID
             )

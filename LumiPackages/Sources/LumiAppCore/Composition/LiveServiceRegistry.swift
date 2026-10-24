@@ -100,7 +100,10 @@ final class LiveServiceRegistry: ServiceRegistry {
         deepSeek = deepSeekEnvironment
         // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
         deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
-        taskImages = TaskImageCache(directory: paths.configDir.appendingPathComponent("tasks/images"))
+        taskImages = TaskImageCache(
+            directory: paths.configDir.appendingPathComponent("tasks/images"),
+            attachmentsRoot: paths.configDir.appendingPathComponent("tasks/attachments")
+        )
         taskAgentTools = TaskAgentMCPServer(directory: paths.configDir.appendingPathComponent("tasks/mcp"))
         appReleases = GitHubReleaseService()
         appUpdateInstaller = AppUpdateInstaller(root: paths.configDir.appendingPathComponent("updates"))

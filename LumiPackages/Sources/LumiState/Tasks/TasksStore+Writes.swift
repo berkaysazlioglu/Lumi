@@ -63,8 +63,10 @@ extension TasksStore {
         defer { endWrite(key) }
         do {
             try await provider.delete(taskID: key.id)
+            cleanUpImages(of: [removed])
         } catch let error where Self.isNotFound(error) {
             // Zaten silinmiş — hedeflenen sonuç bu.
+            cleanUpImages(of: [removed])
         } catch {
             deletions[key] = nil
             entries.insert(removed, at: min(index, entries.count))
@@ -91,6 +93,10 @@ extension TasksStore {
             } catch {
                 return
             }
+            // `flush` bekleyen zamanlayıcıyı iptal eder; o zamanlayıcı BU görev
+            // olduğu için referans önce bırakılır — yoksa gönderilen istek
+            // CancellationError ile düşüp task eski durumuna dönüyordu.
+            self?.pendingWrites[key]?.timer = nil
             await self?.flush(key)
         }
         pendingWrites[key] = write
@@ -130,6 +136,21 @@ extension TasksStore {
             }
             let failure = record(error, operation: .update, source: key.source, taskID: key.id)
             toasts.show(.error, title: "Couldn't save \(key.id)", message: failure.summary)
+        }
+    }
+
+    /// Silinen/kaldırılan task'lerin ajan ekleri ve — başka task kullanmıyorsa —
+    /// önbellekteki görselleri.
+    func cleanUpImages(of removed: [TaskEntry]) {
+        guard !removed.isEmpty else { return }
+        let stillUsed = Set(entries.flatMap { $0.item.images.flatMap { [$0.url] + ($0.thumbnailURL.map { [$0] } ?? []) } })
+        let urls = removed
+            .flatMap { $0.item.images.flatMap { [$0.url] + ($0.thumbnailURL.map { [$0] } ?? []) } }
+            .filter { !stillUsed.contains($0) }
+        let keys = removed.map(\.key)
+        Task { [images] in
+            await images.removeAttachments(for: keys)
+            await images.evict(urls)
         }
     }
 

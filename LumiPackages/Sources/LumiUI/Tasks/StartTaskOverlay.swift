@@ -139,7 +139,7 @@ public struct StartTaskOverlay: View {
                     selection: $model
                 )
             }
-            LumiField(title: "Prompt", hint: "Sent to Claude as the first message") {
+            LumiField(title: "Prompt", hint: promptHint(entry)) {
                 TextEditor(text: $prompt)
                     .font(Theme.Typography.bodyMono)
                     .scrollContentBackground(.hidden)
@@ -182,6 +182,12 @@ public struct StartTaskOverlay: View {
     }
 
     // MARK: - Mantık
+
+    private func promptHint(_ entry: TaskEntry) -> String {
+        let count = store.attachableImageCount(for: entry.key)
+        guard count > 0 else { return "Sent to Claude as the first message" }
+        return "Sent to Claude as the first message · \(count) image\(count == 1 ? "" : "s") attached — downloaded under ~/.lumi and listed in the prompt"
+    }
 
     private func matchHint(_ entry: TaskEntry) -> String? {
         guard let project = entry.item.project, info?.canRead(.project) == true else { return nil }

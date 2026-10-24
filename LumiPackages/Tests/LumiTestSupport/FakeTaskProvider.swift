@@ -56,12 +56,15 @@ public actor FakeTaskProvider: TaskProviding {
 
     public func listTasks() async throws -> [TaskItem] {
         listCount += 1
+        // Gerçek URLSession / demo gecikmesi gibi: iptal edilmiş görevde istek düşer.
+        try Task.checkCancellation()
         if let listError { throw listError }
         return tasks
     }
 
     public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem {
         updates.append((taskID, patch))
+        try Task.checkCancellation()
         if holdsUpdates {
             await withCheckedContinuation { updateGate = $0 }
         }
@@ -157,6 +160,23 @@ public actor FakeTaskImageLoader: TaskImageLoading {
         if let error { throw error }
         return url
     }
+
+    public private(set) var attachedTasks: [TaskKey] = []
+    public private(set) var removedAttachments: [TaskKey] = []
+    public private(set) var removedSources: [TaskSourceID] = []
+    public private(set) var evicted: [URL] = []
+
+    public func attachments(
+        for task: TaskKey, images: [TaskImage], authorization: @escaping @Sendable (URL) -> String?
+    ) async -> (directory: URL, files: [URL]) {
+        attachedTasks.append(task)
+        let directory = URL(fileURLWithPath: "/attachments/\(task.id)")
+        return (directory, images.enumerated().map { directory.appendingPathComponent("\($0.offset + 1)-\($0.element.displayName)") })
+    }
+
+    public func removeAttachments(for tasks: [TaskKey]) async { removedAttachments += tasks }
+    public func removeAttachments(source: TaskSourceID) async { removedSources.append(source) }
+    public func evict(_ urls: [URL]) async { evicted += urls }
 }
 
 /// Ajan koşucusu ikamesi: verilen olayları sırayla yayınlar.

@@ -80,6 +80,15 @@ final class LiveTaskAgentRunnerTests: XCTestCase {
         task.cancel()
     }
 
+    func testAttachmentDirectoryIsGrantedWithAddDir() {
+        let request = TaskAgentRequest(
+            task: key, taskTitle: "t", checkout: .existing(path: "/r"), agent: TaskAgentChoice(),
+            prompt: "p", attachmentDirectory: "/Users/me/.lumi/tasks/attachments/s/DEMO 1"
+        )
+        let command = LiveTaskAgentRunner.command(for: request, mcpConfig: "/x.json")
+        XCTAssertTrue(command.hasSuffix("--add-dir '/Users/me/.lumi/tasks/attachments/s/DEMO 1'"))
+    }
+
     func testDefaultModelOmitsModelFlag() {
         let command = LiveTaskAgentRunner.command(for: request(model: nil), mcpConfig: "/x.json")
         XCTAssertFalse(command.contains("--model"))

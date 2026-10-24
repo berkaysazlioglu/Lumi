@@ -125,3 +125,29 @@ final class TaskLinkCodecTests: XCTestCase {
         XCTAssertEqual(match, "/w/api-checkout", "ad tutmasa da origin eşleşir")
     }
 }
+
+/// Görsellerin ajan klasörüne konması ve temizlik (2026-10-25).
+final class TaskImageAttachmentTests: XCTestCase {
+    func testAttachmentsAreCopiedWithReadableNamesAndRemoved() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("lumi-attach-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("src")
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        let file = source.appendingPathComponent("shot.png")
+        try Data([1, 2, 3]).write(to: file)
+
+        let cache = TaskImageCache(directory: root.appendingPathComponent("cache"), attachmentsRoot: root.appendingPathComponent("att"))
+        let key = TaskKey(source: TaskSourceID("s/1"), id: "TASK:1")
+        let result = await cache.attachments(
+            for: key,
+            images: [TaskImage(url: file, name: "Mock up/1"), TaskImage(url: URL(fileURLWithPath: "/missing.png"))]
+        ) { _ in nil }
+
+        XCTAssertEqual(result.files.map(\.lastPathComponent), ["1-Mock up-1.png"], "inemeyen görsel atlanır")
+        XCTAssertEqual(result.directory.lastPathComponent, "TASK-1")
+        XCTAssertEqual(try Data(contentsOf: result.files[0]), Data([1, 2, 3]))
+
+        await cache.removeAttachments(for: [key])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: result.directory.path))
+    }
+}

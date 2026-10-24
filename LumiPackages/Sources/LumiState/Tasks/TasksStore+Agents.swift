@@ -44,7 +44,31 @@ extension TasksStore {
         if assignToMe, let me = info(of: key.source)?.me, current.item.assignee?.id != me.id {
             assign(key, to: me)
         }
-        consume(agents.start(request), for: key)
+        // Başlangıç değişiklikleri 2 sn beklemez — ekip task'in alındığını hemen görsün.
+        if pendingWrites[key] != nil {
+            Task { await self.flush(key) }
+        }
+        let images = info(of: key.source)?.canRead(.images) == true ? current.item.images : []
+        guard !images.isEmpty else {
+            consume(agents.start(request), for: key)
+            return
+        }
+        // Görseller ajanın okuyacağı klasöre iner, yolları prompt'a girer.
+        let provider = providers[key.source]
+        agentRuns[key] = Task { [weak self] in
+            guard let self else { return }
+            let prepared = await self.images.attachments(for: key, images: images) { url in
+                provider?.authorization(for: url)
+            }
+            guard !Task.isCancelled, self.agentLinks[key]?.state.isActive == true else { return }
+            self.consume(self.agents.start(request.attaching(prepared.files, in: prepared.directory)), for: key, replacing: false)
+        }
+    }
+
+    /// Start sheet'inin notu: ajana verilecek görsel sayısı.
+    public func attachableImageCount(for key: TaskKey) -> Int {
+        guard info(of: key.source)?.canRead(.images) == true else { return 0 }
+        return entry(key)?.item.images.count ?? 0
     }
 
     /// `get_task`'in metni — Start anındaki hâliyle.
@@ -75,8 +99,10 @@ extension TasksStore {
 
     // MARK: - Olaylar
 
-    func consume(_ events: AsyncStream<TaskAgentEvent>, for key: TaskKey) {
-        agentRuns[key]?.cancel()
+    /// `replacing: false`: çağıran zaten `agentRuns[key]`'teki görevin kendisi
+    /// (ek hazırlığı) — kendini iptal etmesin (birleşik yazımdaki hatanın eşi).
+    func consume(_ events: AsyncStream<TaskAgentEvent>, for key: TaskKey, replacing: Bool = true) {
+        if replacing { agentRuns[key]?.cancel() }
         agentRuns[key] = Task { [weak self] in
             for await event in events {
                 guard let self, !Task.isCancelled else { return }

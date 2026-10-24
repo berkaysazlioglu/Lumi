@@ -46,10 +46,13 @@ public struct TaskAgentRequest: Sendable, Hashable {
     public let prompt: String
     /// `get_task` aracının döndüreceği metin (başlık, durum, açıklama).
     public let details: String
+    /// Task'in görsellerinin indirildiği klasör — claude'a `--add-dir` ile
+    /// verilir ki dosyaları izin sormadan okuyabilsin.
+    public let attachmentDirectory: String?
 
     public init(
         task: TaskKey, taskTitle: String, checkout: TaskCheckoutChoice, agent: TaskAgentChoice,
-        prompt: String, details: String = ""
+        prompt: String, details: String = "", attachmentDirectory: String? = nil
     ) {
         self.task = task
         self.taskTitle = taskTitle
@@ -57,6 +60,17 @@ public struct TaskAgentRequest: Sendable, Hashable {
         self.agent = agent
         self.prompt = prompt
         self.details = details
+        self.attachmentDirectory = attachmentDirectory
+    }
+
+    /// Görseller eklenmiş kopya: dosya listesi teslim talimatından önce girer.
+    public func attaching(_ files: [URL], in directory: URL) -> TaskAgentRequest {
+        guard !files.isEmpty else { return self }
+        return TaskAgentRequest(
+            task: task, taskTitle: taskTitle, checkout: checkout, agent: agent,
+            prompt: TaskAgentPrompt.inserting(attachments: files, into: prompt),
+            details: details, attachmentDirectory: directory.path
+        )
     }
 }
 
@@ -179,6 +193,19 @@ public enum TaskAgentPrompt {
         return lines.joined(separator: "\n")
     }
 
+    /// Görsel listesini prompt'a yerleştirir: teslim talimatı varsa ondan önce
+    /// (talimat son söz kalsın), yoksa sona.
+    public static func inserting(attachments files: [URL], into prompt: String) -> String {
+        guard !files.isEmpty else { return prompt }
+        let section = (["Images attached to this task — open them with the Read tool:"]
+            + files.map { "- \($0.path)" }).joined(separator: "\n")
+        guard let range = prompt.range(of: "When the work is complete and verified") else {
+            return prompt + "\n\n" + section
+        }
+        let head = prompt[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        return [head, section, String(prompt[range.lowerBound...])].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
     /// `get_task`'in metni.
     public static func details(for task: TaskItem, includeBody: Bool) -> String {
         var lines = ["\(task.id): \(task.title)", "Status: \(task.status.title)"]
@@ -254,6 +281,16 @@ public protocol TaskImageLoading: Sendable {
     /// Görselin yerel kopyası — önbellekte varsa ağa çıkmaz. `authorization`
     /// yalnız kaynağın kendi sunucusundaki adreslere gönderilir (Faz 2).
     func localFile(for url: URL, authorization: String?) async throws -> URL
+    /// Ajan için görselleri task'e özel klasöre okunur adlarla koyar (eskileri
+    /// silinir) ve klasörü + dosyaları döner. İnemeyen görsel atlanır.
+    func attachments(
+        for task: TaskKey, images: [TaskImage], authorization: @escaping @Sendable (URL) -> String?
+    ) async -> (directory: URL, files: [URL])
+    /// Silinen/kaldırılan task'lerin ek klasörleri ve artık kimsenin
+    /// kullanmadığı önbellek dosyaları.
+    func removeAttachments(for tasks: [TaskKey]) async
+    func removeAttachments(source: TaskSourceID) async
+    func evict(_ urls: [URL]) async
 }
 
 /// Ajan bağlantısının `ui-state.json` kaydı (karar 137, additive `taskLinks`):

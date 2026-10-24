@@ -230,3 +230,14 @@ final class TaskPromptTemplateTests: XCTestCase {
         XCTAssertEqual(text, "Work on task 7: Fix login\n\nPOST")
     }
 }
+
+/// Ajan prompt'una görsel listesi (2026-10-25).
+final class TaskAttachmentPromptTests: XCTestCase {
+    func testAttachmentsGoBeforeTheSubmitInstruction() {
+        let prompt = TaskAgentPrompt.make(task: .fake(id: "1", title: "T"), includeBody: false)
+        let result = TaskAgentPrompt.inserting(attachments: [URL(fileURLWithPath: "/a/1-x.png")], into: prompt)
+        XCTAssertTrue(result.contains("Work on task 1: T\n\nImages attached to this task — open them with the Read tool:\n- /a/1-x.png\n\nWhen the work"))
+        XCTAssertEqual(TaskAgentPrompt.inserting(attachments: [URL(fileURLWithPath: "/a/1-x.png")], into: "custom"), "custom\n\nImages attached to this task — open them with the Read tool:\n- /a/1-x.png")
+        XCTAssertEqual(TaskAgentPrompt.inserting(attachments: [], into: "same"), "same")
+    }
+}

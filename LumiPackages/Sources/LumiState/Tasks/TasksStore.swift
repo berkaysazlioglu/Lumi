@@ -276,6 +276,9 @@ public final class TasksStore {
                 $0.lastUpdated = now()
             }
         } catch {
+            // Route kapanınca `keepFresh` iptal edilir: yarıda kalan tazeleme
+            // kesinti değildir, durum ve hata kaydı değişmez.
+            if Self.isCancellation(error) { return }
             update(id) { $0.phase = Self.phase(for: error) }
             record(error, operation: operation, source: id)
         }
@@ -305,10 +308,17 @@ public final class TasksStore {
         // Sunucunun listesinde henüz görünmeyen ama korunan yerel task'ler
         // (ör. az önce oluşturulan) düşmez.
         let serverIDs = Set(items.map(\.id))
-        for (taskID, entry) in local where !serverIDs.contains(taskID) && isProtected(entry.key, since: sequenceAtStart) {
-            merged.append(entry)
+        var vanished: [TaskEntry] = []
+        for (taskID, entry) in local where !serverIDs.contains(taskID) {
+            if isProtected(entry.key, since: sequenceAtStart) {
+                merged.append(entry)
+            } else {
+                vanished.append(entry)
+            }
         }
         entries = entries.filter { $0.source != id } + merged
+        // Sunucuda silinen task'lerin görselleri de gider.
+        cleanUpImages(of: vanished)
         if let selectedTask, selectedTask.source == id, entry(selectedTask) == nil {
             self.selectedTask = nil
         }
@@ -326,6 +336,10 @@ public final class TasksStore {
         case .unreachable, nil: .offline(message(error))
         case .invalidResponse, .conflict, .notFound: .failing(message(error))
         }
+    }
+
+    static func isCancellation(_ error: any Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled
     }
 
     static func message(_ error: any Error) -> String {

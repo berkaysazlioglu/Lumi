@@ -352,6 +352,34 @@ final class TasksStoreTests: XCTestCase {
         XCTAssertEqual(updates.last?.patch.status, .done)
     }
 
+    /// Hata kaydı (2026-10-25): zamanlayıcı süresi dolunca çağrılan `flush`
+    /// kendi görevini iptal ediyordu; istek CancellationError ile düşüp task
+    /// eski durumuna dönüyordu (Start → In Progress → Todo).
+    func testDebouncedWriteIsNotCancelledByItsOwnTimer() async {
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        let (store, _) = makeStore(provider, debounce: { _ in })
+        await connect(store)
+        let key = store.entries[0].key
+
+        store.move(key, to: .inProgress)
+        while store.hasPendingWrites { await Task.yield() }
+        for _ in 0..<50 { await Task.yield() }
+
+        XCTAssertEqual(store.entry(key)?.item.status, .inProgress, "sunucu kabul etti, geri dönmemeli")
+        XCTAssertTrue(store.failureLog.isEmpty, "\(store.failureLog.map(\.failure.summary))")
+        let saved = await provider.tasks.first?.status
+        XCTAssertEqual(saved, .inProgress)
+    }
+
+    func testCancelledRefreshIsNotAnOutage() async {
+        let (store, _, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let refresh = Task { await store.refreshAll() }
+        refresh.cancel()
+        await refresh.value
+        XCTAssertEqual(store.sources[0].phase, .ready, "route kapanınca iptal edilen tazeleme kesinti sayılmaz")
+        XCTAssertTrue(store.failureLog.isEmpty)
+    }
+
     func testRefreshWhilePendingKeepsLocalEdit() async {
         let (store, _, _) = await connectedStore(tasks: [.fake(id: "1")])
         let key = store.entries[0].key
@@ -696,6 +724,77 @@ final class TasksStoreTests: XCTestCase {
         await store.verifyConnect()
         await store.finishConnect()
         XCTAssertEqual(store.sources[0].source.promptTemplate.prefix, "PRE")
+    }
+
+    // MARK: - Görseller ajana ve temizlik
+
+    private func imageTask(_ id: String, urls: [String]) -> TaskItem {
+        var item = TaskItem.fake(id: id)
+        item.images = urls.map { TaskImage(url: URL(string: $0)!, name: ($0 as NSString).lastPathComponent) }
+        return item
+    }
+
+    func testStartAttachesImagesAndFlushesStatusImmediately() async {
+        let runner = FakeTaskAgentRunner()
+        let loader = FakeTaskImageLoader()
+        let provider = FakeTaskProvider(info: .fakeFull(me: me), tasks: [imageTask("1", urls: ["https://cdn.x/a.png", "https://cdn.x/b.png"])])
+        let store = TasksStore(
+            factory: FakeTaskProviderFactory(providers: [.demo: provider]), config: FakeConfigService(),
+            credentials: FakeTaskCredentialStore(), images: loader, agents: runner, toasts: ToastStore(autoDismissAfter: 60),
+            sleep: { _ in throw CancellationError() }, debounce: TasksStoreTests.neverFires
+        )
+        await connect(store)
+        let key = store.entries[0].key
+        XCTAssertEqual(store.attachableImageCount(for: key), 2)
+        let before = await provider.updates.count
+
+        store.start(
+            TaskAgentRequest(task: key, taskTitle: "t", checkout: .existing(path: "/r"), agent: TaskAgentChoice(), prompt: TaskAgentPrompt.make(task: store.entries[0].item, includeBody: false)),
+            moveToInProgress: true, assignToMe: false
+        )
+        while runner.requests.isEmpty { await Task.yield() }
+        let sent = runner.requests[0]
+        XCTAssertEqual(sent.attachmentDirectory, "/attachments/1")
+        XCTAssertTrue(sent.prompt.contains("- /attachments/1/1-a.png\n- /attachments/1/2-b.png"))
+        XCTAssertTrue(sent.prompt.hasSuffix("Never mark it done yourself."), "teslim talimatı son söz kalır")
+
+        var updates = await provider.updates.count
+        while updates == before { await Task.yield(); updates = await provider.updates.count }
+        let last = await provider.updates.last
+        XCTAssertEqual(last?.patch.status, .inProgress, "Start'taki durum 2 sn beklemeden gider")
+    }
+
+    func testDeletedAndVanishedTasksLoseTheirImagesUnlessShared() async {
+        let loader = FakeTaskImageLoader()
+        let provider = FakeTaskProvider(tasks: [
+            imageTask("1", urls: ["https://cdn.x/only1.png", "https://cdn.x/shared.png"]),
+            imageTask("2", urls: ["https://cdn.x/only2.png"]),
+            imageTask("3", urls: ["https://cdn.x/shared.png"]),
+        ])
+        let store = TasksStore(
+            factory: FakeTaskProviderFactory(providers: [.demo: provider]), config: FakeConfigService(),
+            credentials: FakeTaskCredentialStore(), images: loader, agents: FakeTaskAgentRunner(), toasts: ToastStore(autoDismissAfter: 60),
+            sleep: { _ in throw CancellationError() }, debounce: TasksStoreTests.neverFires
+        )
+        await connect(store)
+        let one = store.entries.first { $0.item.id == "1" }!.key
+
+        await store.delete(one)
+        var evicted = await loader.evicted
+        while evicted.isEmpty { await Task.yield(); evicted = await loader.evicted }
+        XCTAssertEqual(evicted.map(\.lastPathComponent), ["only1.png"], "task 3 hâlâ shared.png'yi kullanıyor")
+        let removed = await loader.removedAttachments
+        XCTAssertEqual(removed.map(\.id), ["1"])
+
+        // Sunucuda kaybolan task (2) de temizlenir.
+        await provider.setTasks(await provider.tasks.filter { $0.id != "2" })
+        await store.refreshAll()
+        while await loader.removedAttachments.count < 2 { await Task.yield() }
+        evicted = await loader.evicted
+        XCTAssertTrue(evicted.map(\.lastPathComponent).contains("only2.png"))
+
+        store.removeSource(store.sources[0].id)
+        while await loader.removedSources.isEmpty { await Task.yield() }
     }
 }
 
