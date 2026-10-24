@@ -20,9 +20,13 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var tasks: TasksStore?
     /// Task'e özel workspace'i (karar 137) repo feature'ının store'u açar.
     private let repo: RepoFeatureAssembly
+    /// Telefondaki Tasks: köprü `start`'ta kurulur (remote servis o fazda hazır).
+    private let remote: RemoteFeatureAssembly?
+    private var remoteBridge: RemoteTasksBridge?
 
-    init(repo: RepoFeatureAssembly) {
+    init(repo: RepoFeatureAssembly, remote: RemoteFeatureAssembly? = nil) {
         self.repo = repo
+        self.remote = remote
     }
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
@@ -117,10 +121,28 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     /// Kayıtlı kaynakları ve token'larını okur; ağ isteği route açılınca.
     func start() async {
         await tasks?.load()
+        startRemoteBridge()
+    }
+
+    private func startRemoteBridge() {
+        guard let tasks, let remote, remoteBridge == nil else { return }
+        let repo = repo
+        let bridge = RemoteTasksBridge(
+            store: tasks,
+            projects: RemoteTasksBridge.ProjectLookup(
+                projectPaths: { repo.workspaceStore.sidebarProjectPaths },
+                isGit: { repo.repoStore.repo(at: $0)?.isGitRepo == true }
+            )
+        )
+        let service = remote.service
+        service.setTasksHandler(bridge)
+        bridge.start { data in await service.publishTasks(data) }
+        remoteBridge = bridge
     }
 
     /// Kapanışta bekleyen birleşik yazımlar kaybolmasın.
     func shutdown() async {
+        remoteBridge?.stop()
         await tasks?.flushAll()
     }
 }

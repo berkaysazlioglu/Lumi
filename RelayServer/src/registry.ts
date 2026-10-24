@@ -12,6 +12,8 @@ export interface Room {
   projects: unknown | null
   /** Mac'in son kullanım/kota raporu (Claude/Codex/DeepSeek) — welcome'a iliştirilir. */
   usage: unknown | null
+  /** Mac'in son Tasks anlık görüntüsü (karar 137 mobil ek) — welcome'a iliştirilir. */
+  tasks: unknown | null
   lastSeenAt: number | null
   pushTokens: Set<string>
 }
@@ -53,7 +55,7 @@ export class Registry {
   private ensure(token: string): Room {
     let room = this.rooms.get(token)
     if (!room) {
-      room = { token, mac: null, phones: new Set(), sessions: null, repos: null, projects: null, usage: null, lastSeenAt: null, pushTokens: new Set() }
+      room = { token, mac: null, phones: new Set(), sessions: null, repos: null, projects: null, usage: null, tasks: null, lastSeenAt: null, pushTokens: new Set() }
       this.rooms.set(token, room)
     }
     return room

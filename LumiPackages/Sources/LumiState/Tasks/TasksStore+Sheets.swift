@@ -199,18 +199,34 @@ extension TasksStore {
             priority: info.canWrite(.priority) && form.priority != .none ? form.priority : nil,
             assignee: info.canAssign ? form.assignee : nil
         )
-        do {
-            let item = try await provider.create(draft)
-            let key = TaskKey(source: form.source, id: item.id)
-            beginWrite(key)
-            endWrite(key)
-            entries.append(TaskEntry(source: form.source, item: item))
+        switch await create(draft, in: form.source, provider: provider) {
+        case .success(let key):
             newTaskForm = nil
             selectedTask = key
-        } catch {
+        case .failure(let failure):
             newTaskForm?.isSubmitting = false
-            let failure = record(error, operation: .create, source: form.source)
             toasts.show(.error, title: "Couldn't create task", message: failure.summary)
+        }
+    }
+
+    /// Formdan bağımsız oluşturma (telefon). Kaynak `create` beyan etmeli.
+    public func createTask(_ draft: TaskDraft, in source: TaskSourceID) async -> Result<TaskKey, TaskRequestFailure> {
+        guard info(of: source)?.supports(.create) == true, let provider = providers[source] else {
+            return .failure(TaskRequestFailure(kind: .unsupported("creating tasks"), operation: .create))
+        }
+        return await create(draft, in: source, provider: provider)
+    }
+
+    private func create(_ draft: TaskDraft, in source: TaskSourceID, provider: any TaskProviding) async -> Result<TaskKey, TaskRequestFailure> {
+        do {
+            let item = try await provider.create(draft)
+            let key = TaskKey(source: source, id: item.id)
+            beginWrite(key)
+            endWrite(key)
+            entries.append(TaskEntry(source: source, item: item))
+            return .success(key)
+        } catch {
+            return .failure(record(error, operation: .create, source: source))
         }
     }
 }

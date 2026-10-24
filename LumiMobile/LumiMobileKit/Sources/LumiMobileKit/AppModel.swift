@@ -45,7 +45,7 @@ public final class AppModel {
     private var latestPushToken: String?
     private static let notificationsKey = "notificationsEnabled"
     private var consumeTask: Task<Void, Never>?
-    private var commandCounter = 0
+    var commandCounter = 0
     /// sessionId → current model id (from SessionMeta.model; persisted information).
     private var models: [String: String] = [:]
     /// commandId → sessionId; "" for start_session (session doesn't exist yet).
@@ -68,6 +68,17 @@ public final class AppModel {
     public private(set) var projectsSnapshot = ProjectsSnapshot(projects: [], addable: [])
     /// Mac quota indicators (decision 128); nil until the Mac reports.
     public private(set) var usage: UsageReport?
+    // Tasks (Mac decision 137, mobile addendum) — see AppModel+Tasks.
+    public internal(set) var tasksSnapshot: TasksSnapshot?
+    public internal(set) var taskDetails: [String: TaskDetail] = [:]
+    public internal(set) var taskStartState: TaskStartState = .idle
+    public internal(set) var taskError: String?
+    /// Optimistic status/assignee edits until the Mac's snapshot agrees.
+    var pendingTaskEdits: [String: PendingTaskEdit] = [:]
+    var taskCommands: [String: TaskCommandKind] = [:]
+    var tasksVisible = false
+    var tasksRenewTask: Task<Void, Never>?
+    public var tasksRenewInterval: Duration = .seconds(30)
     /// Last add_project failure (surfaced by the add sheet).
     public private(set) var addProjectError: String?
     private var addProjectCommandIds: Set<String> = []
@@ -175,6 +186,7 @@ public final class AppModel {
                     // When the connection is re-established and there is an active session,
                     // send a re-subscribe to the Mac; the Mac restarts fresh scrollback + live data stream.
                     // If activeSessionId is nil (first connection or no subscriber) nothing happens.
+                    if state == .connected, self.tasksVisible { self.sendTasksSubscribe() }
                     if state == .connected, let sid = self.activeSessionId {
                         if self.activeChatMode {
                             self.sendChatSubscribe(sid)
@@ -271,6 +283,7 @@ public final class AppModel {
             if let metas = welcome.sessions { applySessions(metas) }
             if let repos = welcome.repos { self.repos = repos }
             if let report = welcome.usage { usage = report }
+            if let tasks = welcome.tasks { applyTasks(tasks) }
             if let projects = welcome.projects {
                 projectsSnapshot = ProjectsSnapshot(
                     projects: projects, others: welcome.others ?? [], addable: welcome.addable ?? [],
@@ -299,7 +312,12 @@ public final class AppModel {
             macOnline = true
             route(chunk)
 
+        case .tasks(let snapshot):
+            macOnline = true
+            applyTasks(snapshot)
+
         case .commandResult(let result):
+            if handleTaskResult(result) { return }
             if addProjectCommandIds.remove(result.commandId) != nil {
                 if !result.ok { addProjectError = result.error ?? "couldn't add project" }
                 return
@@ -423,6 +441,8 @@ public final class AppModel {
             "projects projects=\(snap.projects.count) addable=\(snap.addable.count)"
         case .usage(let report):
             "usage providers=\(report.providers.count) deepseek=\(report.deepSeek != nil)"
+        case .tasks(let snapshot):
+            "tasks sources=\(snapshot.sources.count) tasks=\(snapshot.tasks.count)"
         }
     }
 

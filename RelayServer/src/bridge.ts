@@ -37,6 +37,8 @@ export class Bridge {
         display: proj?.display ?? {},
         // Kota göstergeleri (Mac top bar paritesi) — additive; Mac henüz göndermediyse null.
         usage: room.usage ?? null,
+        // Tasks (karar 137 mobil ek) — additive; Mac henüz göndermediyse null.
+        tasks: room.tasks ?? null,
         macOnline: room.mac !== null,
         lastSeenAt: room.lastSeenAt,
       }))
@@ -82,6 +84,11 @@ export class Bridge {
       case 'usage': {
         room.usage = env.payload
         this.broadcast(room, envelope('usage', env.payload))
+        break
+      }
+      case 'tasks': {
+        room.tasks = env.payload
+        this.broadcast(room, envelope('tasks', env.payload))
         break
       }
       case 'scrollback':

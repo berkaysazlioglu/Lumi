@@ -20,19 +20,33 @@ struct ProjectsView: View {
     @State private var newBranchPreset: NewBranchPreset?
     /// Project whose appearance editor is open (decision 132).
     @State private var editingProject: ProjectNode?
+    /// Projects | Tasks (Mac decision 137, mobile addendum); survives relaunches.
+    @AppStorage("homeMode") private var mode: HomeMode = .projects
 
     var body: some View {
         NavigationStack {
-            AppleProjectsList(model: model, actions: listActions)
-            .navigationTitle("Projects")
+            Group {
+                switch mode {
+                case .projects:
+                    AppleProjectsList(model: model, actions: listActions)
+                        .navigationTitle("Projects")
+                case .tasks:
+                    TasksView(model: model, openSession: { openSession = $0 })
+                        .navigationTitle("Tasks")
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $openSession) { sessionId in
                 TerminalSessionView(model: model, sessionId: sessionId)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { connectionDot }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
-                        .disabled(!model.macOnline || model.projectsSnapshot.addable.isEmpty)
+                ToolbarItem(placement: .principal) { modePicker }
+                if mode == .projects {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showAdd = true } label: { Image(systemName: "plus") }
+                            .disabled(!model.macOnline || model.projectsSnapshot.addable.isEmpty)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) { settingsButton }
             }
@@ -111,6 +125,14 @@ struct ProjectsView: View {
 
     // MARK: - Chrome
 
+    private var modePicker: some View {
+        Picker("View", selection: $mode) {
+            ForEach(HomeMode.allCases, id: \.self) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 200)
+    }
+
     private var connectionDot: some View {
         Circle()
             .fill(model.connection == .connected ? .green :
@@ -122,6 +144,19 @@ struct ProjectsView: View {
     private var settingsButton: some View {
         Button { showSettings = true } label: { Image(systemName: "gearshape") }
             .accessibilityLabel("Settings")
+    }
+}
+
+/// The home screen's two views.
+enum HomeMode: String, CaseIterable {
+    case projects
+    case tasks
+
+    var title: String {
+        switch self {
+        case .projects: "Projects"
+        case .tasks: "Tasks"
+        }
     }
 }
 

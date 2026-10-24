@@ -414,11 +414,13 @@ public struct Welcome: Decodable, Sendable, Equatable {
     public let display: MacDisplay?
     /// Quota indicators cached by the relay (additive; nil until the Mac reports).
     public let usage: UsageReport?
+    /// Tasks board cached by the relay (additive; nil until the Mac publishes one).
+    public let tasks: TasksSnapshot?
 
     public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil,
                 projects: [ProjectNode]? = nil, addable: [Repo]? = nil, others: [OtherGroupNode]? = nil,
                 looseLocations: [LooseLocation]? = nil, display: MacDisplay? = nil,
-                usage: UsageReport? = nil) {
+                usage: UsageReport? = nil, tasks: TasksSnapshot? = nil) {
         self.macOnline = macOnline
         self.lastSeenAt = lastSeenAt
         self.sessions = sessions
@@ -429,10 +431,11 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.looseLocations = looseLocations
         self.display = display
         self.usage = usage
+        self.tasks = tasks
     }
 
     private enum CodingKeys: String, CodingKey {
-        case macOnline, lastSeenAt, sessions, repos, projects, addable, others, looseLocations, display, usage
+        case macOnline, lastSeenAt, sessions, repos, projects, addable, others, looseLocations, display, usage, tasks
     }
 
     public init(from decoder: Decoder) throws {
@@ -447,6 +450,7 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.looseLocations = try? c.decodeIfPresent([LooseLocation].self, forKey: .looseLocations)
         self.display = try? c.decodeIfPresent(MacDisplay.self, forKey: .display)
         self.usage = try? c.decodeIfPresent(UsageReport.self, forKey: .usage)
+        self.tasks = try? c.decodeIfPresent(TasksSnapshot.self, forKey: .tasks)
     }
 }
 
@@ -470,12 +474,16 @@ public struct CommandResult: Decodable, Sendable, Equatable {
     public let sessionId: String?
     /// Branch list returned by the Mac in response to the list_branches command.
     public let branches: [String]?
+    /// Flat result fields of `task_*` commands (e.g. `task_detail` → `body`).
+    public let data: [String: String]?
 
-    public init(commandId: String, ok: Bool, error: String?, sessionId: String? = nil, branches: [String]? = nil) {
+    public init(commandId: String, ok: Bool, error: String?, sessionId: String? = nil, branches: [String]? = nil,
+                data: [String: String]? = nil) {
         self.commandId = commandId
         self.ok = ok
         self.error = error
         self.sessionId = sessionId
         self.branches = branches
+        self.data = data
     }
 }

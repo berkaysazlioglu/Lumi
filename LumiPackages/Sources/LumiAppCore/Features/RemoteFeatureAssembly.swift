@@ -50,6 +50,9 @@ final class RemoteFeatureAssembly: FeatureAssembly {
         usageBridge.start { report in await service.publishUsage(report) }
     }
 
+    /// Telefondaki Tasks köprüsü (karar 137 mobil ek) buradan bağlanır.
+    var service: RemoteService { remoteService }
+
     func shutdown() async {
         usageBridge.stop()
         remoteService.stop()

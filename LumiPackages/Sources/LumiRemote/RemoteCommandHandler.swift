@@ -13,6 +13,8 @@ struct CommandResult: Sendable {
     var error: String?
     var sessionId: String?
     var branches: [String]?
+    /// Telefondaki Tasks komutlarının düz sonuç alanları (karar 137 mobil ek).
+    var data: [String: String]?
 
     static func ok(_ commandId: String?, sessionId: String? = nil,
                    branches: [String]? = nil) -> CommandResult {
@@ -29,6 +31,7 @@ struct CommandResult: Sendable {
         if let error { payload["error"] = error }
         if let sessionId { payload["sessionId"] = sessionId }
         if let branches { payload["branches"] = branches }
+        if let data { payload["data"] = data }
         return payload
     }
 }
@@ -43,6 +46,8 @@ final class RemoteCommandHandler {
     private let repos: any RepoServicing
     private let workspaces: any WorkspaceServicing
     private let config: any ConfigServicing
+    /// Telefondaki Tasks — LumiAppCore'daki köprü bağlar; yoksa `tasks_unavailable`.
+    weak var tasks: (any RemoteTasksHandling)?
 
     init(terminal: any TerminalServicing, trust: any ClaudeWorkspaceTrusting,
          chatSessions: any ChatSessionServicing = NoopChatSessionService(),
@@ -59,6 +64,13 @@ final class RemoteCommandHandler {
 
     func handle(_ payload: [String: Any]) async -> CommandResult {
         let commandId = payload["commandId"] as? String
+        if let action = payload["action"] as? String, RemoteTaskCommandOutcome.isTaskAction(action) {
+            guard let tasks else { return .failure(commandId, "tasks_unavailable") }
+            let outcome = await tasks.handleTaskCommand(action: action, payload: payload)
+            var result = outcome.ok ? CommandResult.ok(commandId) : .failure(commandId, outcome.error ?? "failed")
+            result.data = outcome.data
+            return result
+        }
         switch payload["action"] as? String {
         case "send_text":
             return result(commandId, run: {

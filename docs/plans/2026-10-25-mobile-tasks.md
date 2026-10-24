@@ -1,6 +1,6 @@
 # Telefonda Tasks (plan)
 
-Durum: **plan, onay bekliyor** (2026-10-25). Karar 137'nin Faz 4'ünden yalnız telefon kısmı (kullanıcı isteği). Onaylanınca karar 137'ye ek olarak girer.
+Durum: **uygulandı** (2026-10-25) — Faz 1 ve 2; Faz 3'ün push bildirimi henüz yok. Karar 137'nin Faz 4'ünden yalnız telefon kısmı (kullanıcı isteği). Onaylanınca karar 137'ye ek olarak girer.
 
 ## İlke: Mac tek doğruluk kaynağı, telefon onun penceresi
 

@@ -113,6 +113,12 @@ public final class TasksStore {
     /// Gecikmesi süren birleşik yazımlar.
     @ObservationIgnored var pendingWrites: [TaskKey: PendingWrite] = [:]
     @ObservationIgnored var agentRuns: [TaskKey: Task<Void, Never>] = [:]
+    /// Son tamamlanan tazeleme — telefon izleyicisinin döngüsü Mac route'u
+    /// zaten tazeliyorsa tekrar istek atmasın.
+    @ObservationIgnored var lastRefreshAt: Date?
+    /// Telefon izleyicisinin kirası (bkz. `renewRemoteViewer`).
+    @ObservationIgnored var remoteViewerUntil: Date?
+    @ObservationIgnored var remoteViewerLoop: Task<Void, Never>?
     @ObservationIgnored var providers: [TaskSourceID: any TaskProviding] = [:]
     /// Yazım sıra numarası: her yerel yazım bir artırır. Uçuştaki ya da
     /// tazeleme başladıktan sonra yapılan yazımın task'i, tazelemenin getirdiği
@@ -254,6 +260,48 @@ public final class TasksStore {
         }
     }
 
+    // MARK: - Telefon izleyicisi
+
+    /// Kira süresi: telefon Tasks ekranı açıkken 30 sn'de bir yeniler.
+    public static let remoteViewerLease: TimeInterval = 45
+
+    /// "Kimse bakmıyorsa istek yok" kuralı (kullanıcı kararı 6) telefona da
+    /// uzanır: Tasks ekranı telefonda açıkken telefon bir izleyicidir ve Mac'in
+    /// route'u kapalı olsa da tazeleme sürer. Kira dolunca döngü biter.
+    public func renewRemoteViewer() {
+        remoteViewerUntil = now().addingTimeInterval(Self.remoteViewerLease)
+        guard remoteViewerLoop == nil else { return }
+        remoteViewerLoop = Task { [weak self] in
+            await self?.runRemoteViewerLoop()
+        }
+    }
+
+    public func endRemoteViewer() {
+        remoteViewerUntil = nil
+        remoteViewerLoop?.cancel()
+        remoteViewerLoop = nil
+    }
+
+    public var hasRemoteViewer: Bool {
+        remoteViewerUntil.map { $0 > now() } ?? false
+    }
+
+    private func runRemoteViewerLoop() async {
+        defer { remoteViewerLoop = nil }
+        while !Task.isCancelled, hasRemoteViewer {
+            // Mac route'u açıksa döngüsü zaten tazeliyor — çift istek atma.
+            let interval = Double(Self.refreshInterval.components.seconds)
+            if lastRefreshAt.map({ now().timeIntervalSince($0) >= interval / 2 }) ?? true {
+                await refreshSources()
+            }
+            do {
+                try await sleep(Self.refreshInterval)
+            } catch {
+                return
+            }
+        }
+    }
+
     func refresh(_ id: TaskSourceID) async {
         guard let provider = providers[id], let current = state(of: id) else { return }
         let sequenceAtStart = writeSequence
@@ -275,6 +323,7 @@ public final class TasksStore {
                 $0.phase = .ready
                 $0.lastUpdated = now()
             }
+            lastRefreshAt = now()
         } catch {
             // Route kapanınca `keepFresh` iptal edilir: yarıda kalan tazeleme
             // kesinti değildir, durum ve hata kaydı değişmez.

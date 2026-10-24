@@ -796,6 +796,35 @@ final class TasksStoreTests: XCTestCase {
         store.removeSource(store.sources[0].id)
         while await loader.removedSources.isEmpty { await Task.yield() }
     }
+
+    // MARK: - Telefon izleyicisi
+
+    func testRemoteViewerRefreshesUntilLeaseEnds() async {
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        let sleeps = SleepRecorder()
+        let (store, _) = makeStore(provider, sleep: { try await sleeps.sleep($0) })
+        await connect(store)
+        let base = await provider.listCount
+        XCTAssertFalse(store.hasRemoteViewer)
+
+        store.renewRemoteViewer()
+        XCTAssertTrue(store.hasRemoteViewer)
+        await sleeps.waitForCalls(1)
+        let afterFirst = await provider.listCount
+        XCTAssertEqual(afterFirst, base, "bağlanırken az önce tazelendi — çift istek yok")
+
+        store.endRemoteViewer()
+        XCTAssertFalse(store.hasRemoteViewer)
+    }
+
+    func testCreateTaskFromPhoneAppendsEntry() async {
+        let (store, provider, _) = await connectedStore(tasks: [])
+        let result = await store.createTask(TaskDraft(title: "From phone", status: .inProgress), in: store.sources[0].id)
+        guard case .success(let key) = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(store.entry(key)?.item.title, "From phone")
+        let created = await provider.created
+        XCTAssertEqual(created.last?.status, .inProgress)
+    }
 }
 
 /// `keepFresh`'in uykusunu kaydeder; iptal edilene kadar hemen döner ama her

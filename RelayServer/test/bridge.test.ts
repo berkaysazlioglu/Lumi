@@ -351,3 +351,22 @@ test('mac usage → telefonlara yayınlanır ve sonraki welcome\'a iliştirilir'
   bridge.handleHello(late, env('hello', { role: 'phone', token: TOKEN }))
   expect(late.last().payload.usage).toEqual(usage)
 })
+
+test('mac tasks → telefonlara yayınlanır ve sonraki welcome\'a iliştirilir', () => {
+  const { bridge, phone, macSession } = paired()
+  const tasks = { sources: [{ id: 's', name: 'Team', phase: 'ready' }], tasks: [{ source: 's', id: '1', title: 'T', status: 'todo' }] }
+  bridge.handleMessage(macSession, env('tasks', tasks))
+  expect(phone.last().type).toBe('tasks')
+  expect(phone.last().payload).toEqual(tasks)
+
+  const late = new FakeClient()
+  bridge.handleHello(late, env('hello', { role: 'phone', token: TOKEN }))
+  expect(late.last().payload.tasks).toEqual(tasks)
+})
+
+test('tasks yokken welcome tasks=null taşır', () => {
+  const { bridge } = paired()
+  const late = new FakeClient()
+  bridge.handleHello(late, env('hello', { role: 'phone', token: TOKEN }))
+  expect(late.last().payload.tasks).toBeNull()
+})

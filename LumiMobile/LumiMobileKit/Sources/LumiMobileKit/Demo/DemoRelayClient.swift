@@ -20,6 +20,7 @@ public actor DemoRelayClient: RelayClienting {
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var streamTask: Task<Void, Never>?
     private var terminalSeq: [String: Int] = [:]
+    private var taskBoard: DemoTaskBoard
 
     public static let defaultReplyDelay: Duration = .seconds(2)
     public static let defaultConnectDelay: Duration = .milliseconds(400)
@@ -42,6 +43,7 @@ public actor DemoRelayClient: RelayClienting {
         self.streamTick = streamTick
         self.now = now
         self.world = DemoWorld(nowMs: now().timeIntervalSince1970 * Self.msPerSecond)
+        self.taskBoard = DemoTaskBoard(nowMs: now().timeIntervalSince1970 * Self.msPerSecond)
     }
 
     private static let msPerSecond = 1000.0
@@ -107,7 +109,7 @@ public actor DemoRelayClient: RelayClienting {
             macOnline: true, lastSeenAt: nowMs, sessions: world.sessions, repos: world.repos,
             projects: world.projects, addable: world.addable, others: world.others,
             looseLocations: world.looseLocations, display: DemoData.display,
-            usage: DemoUsage.report(nowMs: nowMs)))))
+            usage: DemoUsage.report(nowMs: nowMs), tasks: taskBoard.snapshot))))
     }
 
     // MARK: Commands
@@ -145,7 +147,28 @@ public actor DemoRelayClient: RelayClienting {
             reply(id, ok: true)
         case .pressKey, .getHistory:
             reply(id, ok: true)
+        case .tasksSubscribe, .tasksUnsubscribe:
+            reply(id, ok: true)
+        case let .taskMove(_, taskId, status):
+            replyTask(id, ok: taskBoard.move(taskId, to: status))
+        case let .taskAssign(_, taskId, userId):
+            replyTask(id, ok: taskBoard.assign(taskId, to: userId))
+        case let .taskCreate(_, title, status):
+            let created = taskBoard.create(title: title, status: status, nowMs: nowMs)
+            replyTask(id, ok: true, data: ["taskId": created])
+        case let .taskDetail(_, taskId):
+            let data = taskBoard.detail(taskId)
+            emit(.message(.commandResult(CommandResult(commandId: id, ok: data != nil, error: data == nil ? "task_not_found" : nil, data: data))))
+        case let .taskStart(_, taskId, model, _, _):
+            let ok = taskBoard.start(taskId, model: model?.rawValue)
+            replyTask(id, ok: ok, error: ok ? nil : "An agent is already working on this task.")
         }
+    }
+
+    /// Replies, then publishes the board like the Mac's bridge does.
+    private func replyTask(_ commandId: String, ok: Bool, error: String? = nil, data: [String: String]? = nil) {
+        emit(.message(.commandResult(CommandResult(commandId: commandId, ok: ok, error: ok ? nil : (error ?? "task_not_found"), data: data))))
+        if ok { emit(.message(.tasks(taskBoard.snapshot))) }
     }
 
     private func startSession(_ commandId: String, repoPath: String, prompt: String,

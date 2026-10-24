@@ -26,6 +26,8 @@ public enum ServerMessage: Sendable, Equatable {
     case projects(ProjectsSnapshot)
     // Quota indicators (Mac decision 128)
     case usage(UsageReport)
+    // Tasks board (Mac decision 137, mobile addendum)
+    case tasks(TasksSnapshot)
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -44,6 +46,16 @@ public enum CommandAction: Sendable, Equatable {
     case reorderProjects(paths: [String])
     /// Decision 132: replaces the project's whole appearance (absent field = default).
     case setProjectAppearance(path: String, appearance: ProjectAppearance)
+    // Tasks (Mac decision 137, mobile addendum). The Mac executes them on its board.
+    case tasksSubscribe
+    case tasksUnsubscribe
+    case taskMove(source: String, taskId: String, status: RemoteTaskStatus)
+    case taskAssign(source: String, taskId: String, userId: String?)
+    case taskCreate(source: String, title: String, status: RemoteTaskStatus)
+    case taskDetail(source: String, taskId: String)
+    /// `projectPath` nil → the Mac matches the task's project; `existingCheckout`
+    /// false → a new workspace on git projects (the Mac's default).
+    case taskStart(source: String, taskId: String, model: ClaudeModelAlias?, projectPath: String?, existingCheckout: Bool)
 }
 
 public struct OutgoingCommand: Sendable, Equatable {
@@ -106,6 +118,7 @@ public enum PhoneProtocol {
             return .prompt(sessionId: sessionId, prompt: p)
         case "projects": return decodePayload(ProjectsSnapshot.self).map(ServerMessage.projects)
         case "usage": return decodePayload(UsageReport.self).map(ServerMessage.usage)
+        case "tasks": return decodePayload(TasksSnapshot.self).map(ServerMessage.tasks)
         default: return nil
         }
     }
@@ -240,6 +253,36 @@ public enum PhoneProtocol {
             if let color = appearance.color { payload["color"] = color.rawValue }
             if let icon = appearance.icon { payload["icon"] = icon.wire }
             if let rootTitle = appearance.rootTitle { payload["rootTitle"] = rootTitle }
+        case .tasksSubscribe:
+            payload["action"] = "tasks_subscribe"
+        case .tasksUnsubscribe:
+            payload["action"] = "tasks_unsubscribe"
+        case let .taskMove(source, taskId, status):
+            payload["action"] = "task_move"
+            payload["sourceId"] = source
+            payload["taskId"] = taskId
+            payload["status"] = status.rawValue
+        case let .taskAssign(source, taskId, userId):
+            payload["action"] = "task_assign"
+            payload["sourceId"] = source
+            payload["taskId"] = taskId
+            payload["userId"] = userId ?? NSNull()
+        case let .taskCreate(source, title, status):
+            payload["action"] = "task_create"
+            payload["sourceId"] = source
+            payload["title"] = title
+            payload["status"] = status.rawValue
+        case let .taskDetail(source, taskId):
+            payload["action"] = "task_detail"
+            payload["sourceId"] = source
+            payload["taskId"] = taskId
+        case let .taskStart(source, taskId, model, projectPath, existingCheckout):
+            payload["action"] = "task_start"
+            payload["sourceId"] = source
+            payload["taskId"] = taskId
+            if let model { payload["model"] = model.rawValue }
+            if let projectPath { payload["projectPath"] = projectPath }
+            payload["checkout"] = existingCheckout ? "existing" : "new"
         }
         return frame(type: "command", payload: payload)
     }

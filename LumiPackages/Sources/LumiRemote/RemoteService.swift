@@ -83,6 +83,9 @@ public final class RemoteService: RemoteServicing {
     /// Son yayının içeriği: `fetchedAt` her tazelemede değiştiği için raporun
     /// kendisi değil gönderilen payload karşılaştırılır.
     private var lastUsagePayload: Data?
+    /// Telefondaki Tasks: son `tasks` anlık görüntüsü (JSON) — relay bağlanınca
+    /// ve `welcome`'da yeniden gönderilir.
+    private var lastTasksPayload: Data?
 
     public init(
         paths: LumiPaths,
@@ -180,6 +183,24 @@ public final class RemoteService: RemoteServicing {
         await connection.send(type: "usage", payload: lastUsage.payload())
     }
 
+    /// Telefondaki Tasks komutlarının yürütücüsü (karar 137 mobil ek).
+    public func setTasksHandler(_ handler: any RemoteTasksHandling) {
+        commandHandler.tasks = handler
+    }
+
+    /// `tasks` anlık görüntüsü (JSON nesnesi). Aynısı tekrar gönderilmez.
+    public func publishTasks(_ payload: Data) async {
+        guard payload != lastTasksPayload else { return }
+        lastTasksPayload = payload
+        await sendTasks()
+    }
+
+    private func sendTasks() async {
+        guard running, let lastTasksPayload,
+              let object = try? JSONSerialization.jsonObject(with: lastTasksPayload) as? [String: Any] else { return }
+        await connection.send(type: "tasks", payload: object)
+    }
+
     /// `projects` anlık görüntüsünü değiştiren config alanları: ağaç (favoriler,
     /// workspace'ler), görünüm (karar 120), serbest konum kökleri ve terminal fontu.
     static func projectsInputsChanged(_ old: AppConfig, _ new: AppConfig) -> Bool {
@@ -245,6 +266,7 @@ public final class RemoteService: RemoteServicing {
                 await sendRepos()
                 await sendProjects()
                 await sendUsage()
+                await sendTasks()
                 await resyncChatSubscriptions()
             case "subscribe":
                 await handleSubscribe(payload)
