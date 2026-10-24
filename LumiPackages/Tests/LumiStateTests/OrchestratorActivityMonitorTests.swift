@@ -31,14 +31,24 @@ final class OrchestratorActivityMonitorTests: XCTestCase {
                           kind: .finished, summary: summary, needsUser: false, at: now)
     }
 
-    /// Toplama beklemesi + teslim.
+    /// Toplama beklemesi + teslim. Yalnız "hiçbir şey olmaz" iddiaları için;
+    /// olması beklenen teslim `waitUntil` ile beklenir.
     private func settle() async {
         try? await Task.sleep(for: .milliseconds(150))
     }
 
+    /// Koşul sağlanana dek bekler (üst sınır 5 sn). Sabit bekleme yavaş CI
+    /// runner'ında teslime yetişmiyordu.
+    private func waitUntil(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !condition(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     func testNewSummaryIsQueuedToTheOrchestratorWithoutUserInput() async throws {
         feed.append(event("Testler yeşil."))
-        await settle()
+        await waitUntil { !launcher.queued.isEmpty }
 
         let queued = try XCTUnwrap(launcher.queued.first)
         XCTAssertEqual(queued.thread, "thread-1")
@@ -51,6 +61,7 @@ final class OrchestratorActivityMonitorTests: XCTestCase {
     func testSimultaneousSummariesAreBatchedIntoOneNote() async {
         feed.append(event("a bitti", title: "a"))
         feed.append(event("b bitti", title: "b"))
+        await waitUntil { !launcher.queued.isEmpty }
         await settle()
 
         XCTAssertEqual(launcher.queued.count, 1)
@@ -67,7 +78,7 @@ final class OrchestratorActivityMonitorTests: XCTestCase {
 
         target = OrchestratorDeliveryTarget(thread: "thread-2", codexHome: nil)
         monitor.targetBecameAvailable()
-        await settle()
+        await waitUntil { !launcher.queued.isEmpty }
 
         XCTAssertEqual(launcher.queued.map(\.thread), ["thread-2"])
         XCTAssertTrue(launcher.queued[0].message.contains("bekleyen"))
@@ -76,14 +87,14 @@ final class OrchestratorActivityMonitorTests: XCTestCase {
     func testFailedDeliveryKeepsTheSummaryForTheNextAttempt() async {
         launcher.failQueue(with: .orchestratorQueueFailed(detail: "unknown thread"))
         feed.append(event("ilk"))
-        await settle()
+        await waitUntil { monitor.lastError != nil }
         XCTAssertTrue(launcher.queued.isEmpty)
         XCTAssertNotNil(monitor.lastError)
         XCTAssertTrue(feed.hasUnreported)
 
         launcher.failQueue(with: nil)
         feed.append(event("ikinci"))
-        await settle()
+        await waitUntil { !launcher.queued.isEmpty }
 
         XCTAssertEqual(launcher.queued.count, 1)
         XCTAssertTrue(launcher.queued[0].message.contains("ilk"))
@@ -98,13 +109,13 @@ final class OrchestratorActivityMonitorTests: XCTestCase {
         launcher.failQueue(with: .orchestratorQueueFailed(detail: "unknown thread"))
         let first = TerminalID()
         feed.append(event("ilk", terminal: first))
-        await settle()
+        await waitUntil { monitor.lastError != nil }
         XCTAssertTrue(delivered.isEmpty, "başarısız teslim uçmaz")
 
         launcher.failQueue(with: nil)
         let second = TerminalID()
         feed.append(event("ikinci", terminal: second))
-        await settle()
+        await waitUntil { delivered.count >= 2 }
 
         XCTAssertEqual(Set(delivered), [first, second])
     }

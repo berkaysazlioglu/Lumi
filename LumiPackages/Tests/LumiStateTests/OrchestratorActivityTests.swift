@@ -148,6 +148,14 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(120))
     }
 
+    /// Koşul sağlanana dek bekler (üst sınır 5 sn).
+    private func waitUntil(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !condition(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     /// Akışa en az `count` olay EKLENENE dek bekler (üst sınır 5 sn). Sabit
     /// bekleme yavaş CI runner'ında üretime yetişmiyordu. Ölçüt `unreadCount`'tur:
     /// feed aynı terminalin kartını yenisiyle değiştirdiği için `events.count`
@@ -238,16 +246,19 @@ final class TerminalDigestCoordinatorTests: XCTestCase {
     /// feed'e düşen olayını ezmez (orchestrator'a bayat not gitmez).
     func testSlowSummaryDoesNotOverwriteANewerEventOfTheSameTerminal() async {
         let meta = agent()
-        summarizer.setDelay(.milliseconds(600))
+        // Haiku ikinci olay feed'e düşene dek cevap vermez — sıra süreye değil
+        // kapıya bağlı, yavaş runner'da da kesin.
+        summarizer.hold()
         reply(String(repeating: "uzun cevap ", count: 60))
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
-        // Oturma süresi dolsun, haiku başlasın; sonra ikinci kısa turn.
-        try? await Task.sleep(for: .milliseconds(100))
+        await waitUntil { summarizer.requests.count == 1 }
         coordinator.apply(.statusChanged(meta.id, .working))
         reply("Bitti. Push'layayım mı?")
         coordinator.apply(.statusChanged(meta.id, .waitingUnseen))
         await settle(untilEvents: 1)
-        try? await Task.sleep(for: .milliseconds(800))
+        summarizer.release()
+        await waitUntil { summarizer.completedCount == 1 }
+        await settle()
 
         XCTAssertEqual(feed.events.map(\.summary), ["Bitti. Push'layayım mı?"])
         XCTAssertEqual(feed.unreadCount, 1, "bayat özet hiç eklenmedi")

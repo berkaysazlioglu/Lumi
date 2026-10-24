@@ -8,7 +8,9 @@ public final class FakeTerminalDigestSummarizer: TerminalDigestSummarizing, @unc
     private var _requests: [String] = []
     private var _sessionRequests: [String] = []
     private var outcome: Result<TerminalDigest, LumiError> = .success(TerminalDigest(summary: "özet", needsUser: false))
-    private var delay: Duration = .zero
+    private var isHeld = false
+    private var heldCalls: [CheckedContinuation<Void, Never>] = []
+    private var _completedCount = 0
 
     public init() {}
 
@@ -18,16 +20,35 @@ public final class FakeTerminalDigestSummarizer: TerminalDigestSummarizing, @unc
     public var sessionRequests: [String] { lock.withLock { _sessionRequests } }
 
     public func stub(_ outcome: Result<TerminalDigest, LumiError>) { lock.withLock { self.outcome = outcome } }
-    /// Yavaş haiku (sıra/yarış testleri): `summarize` cevabı bu kadar gecikir.
-    public func setDelay(_ delay: Duration) { lock.withLock { self.delay = delay } }
+    /// Biten `summarize` çağrılarının sayısı.
+    public var completedCount: Int { lock.withLock { _completedCount } }
+
+    /// Sıra testleri için: `release()` çağrılana dek `summarize` cevap vermez.
+    /// Süreye dayanan gecikmeden farkı, yavaş runner'da da sıranın kesin olması.
+    public func hold() { lock.withLock { isHeld = true } }
+
+    public func release() {
+        let calls = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            isHeld = false
+            defer { heldCalls = [] }
+            return heldCalls
+        }
+        calls.forEach { $0.resume() }
+    }
 
     public func summarize(agentMessage: String, terminalTitle: String) async throws -> TerminalDigest {
         let outcome = lock.withLock { () -> Result<TerminalDigest, LumiError> in
             _requests.append(agentMessage)
             return self.outcome
         }
-        let delay = lock.withLock { self.delay }
-        if delay > .zero { try? await Task.sleep(for: delay) }
+        await withCheckedContinuation { (call: CheckedContinuation<Void, Never>) in
+            let shouldWait = lock.withLock { () -> Bool in
+                if isHeld { heldCalls.append(call) }
+                return isHeld
+            }
+            if !shouldWait { call.resume() }
+        }
+        lock.withLock { _completedCount += 1 }
         return try outcome.get()
     }
 
