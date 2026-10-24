@@ -78,6 +78,7 @@ private struct CustomViewRow: View {
             }
             .buttonStyle(.plain)
         }
+        .newViewHighlight(shell.highlightedCustomView == view.id)
         .contextMenu {
             Button("Rename…") { beginRename() }
             Button("Delete View", role: .destructive) { shell.terminals.deleteCustomView(view.id) }
@@ -120,5 +121,55 @@ private struct CustomViewRow: View {
         if needsAttention { return Theme.warning }
         if isActive { return Theme.accentPrimary }
         return isHovering ? Theme.textPrimary : Theme.textSecondary
+    }
+}
+
+/// Karar 136: az önce doğan view satırının vurgusu — sarı çerçeve, etrafında
+/// nefes alan hale ve doğduğu an kısa bir büyüyüp küçülme. "Reduce motion"
+/// açıksa yalnız sabit çerçeve çizilir.
+private struct NewViewHighlight: ViewModifier {
+    let isOn: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isPopped = false
+
+    /// Doğuş anındaki büyüme oranı.
+    private static let popScale: CGFloat = 1.05
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPopped ? Self.popScale : 1)
+            .overlay {
+                if isOn {
+                    if reduceMotion {
+                        frame(glow: 1)
+                    } else {
+                        TimelineView(.animation(minimumInterval: AttentionPulse.frameInterval)) { timeline in
+                            frame(glow: AttentionPulse.opacity(at: timeline.date.timeIntervalSinceReferenceDate * 2))
+                        }
+                    }
+                }
+            }
+            .onChange(of: isOn, initial: true) { _, on in
+                guard on, !reduceMotion else { return }
+                withAnimation(.spring(duration: Theme.Motion.panel, bounce: 0.5)) { isPopped = true }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(Theme.Motion.panel))
+                    withAnimation(.spring(duration: Theme.Motion.panel, bounce: 0.5)) { isPopped = false }
+                }
+            }
+    }
+
+    private func frame(glow: Double) -> some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.md)
+            .strokeBorder(Theme.warning.opacity(glow), lineWidth: Theme.Stroke.graph)
+            .shadow(color: Theme.warning.opacity(AttentionPulse.glowOpacity * glow), radius: AttentionPulse.glowRadius)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+private extension View {
+    func newViewHighlight(_ isOn: Bool) -> some View {
+        modifier(NewViewHighlight(isOn: isOn))
     }
 }

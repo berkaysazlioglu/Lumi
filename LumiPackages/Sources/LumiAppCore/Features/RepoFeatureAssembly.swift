@@ -130,7 +130,8 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             title: "Project Tools",
             icon: "sidebar.right",
             defaultSlot: .right,
-            isAvailable: { $0.activeRepoPath != nil },
+            // Karar 136: All Terminals / Custom View'da seçili terminalin checkout'u.
+            isAvailable: { $0.toolsRepoPath != nil },
             makeView: { AnyView(ProjectToolsPanel()) }
         ))
     }
@@ -261,7 +262,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             }
         }
         // Bootstrap'te aktif tab varsa ilk yükleme (load() callback'ten önce kuruldu)
-        if let active = shared.navigation.activeRepoPath {
+        if let active = shared.navigation.toolsRepoPath {
             shared.navigation.onActiveRepoChanged?(nil, active)
         }
     }
@@ -321,7 +322,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         let coalescer = KeyedRefreshCoalescer { [weak self] repoPath in
             guard let self else { return }
             await self.repoStore.loadFileTree(repoPath)
-            if self.shared.navigation.activeRepoPath == repoPath {
+            if self.shared.navigation.toolsRepoPath == repoPath {
                 if self.isGitRepo(repoPath) {
                     // Karar 84: remote adresi yapılandırmadır, her dosya
                     // yazımında yeniden sorulmaz.

@@ -61,13 +61,17 @@ public final class SharedStores {
     ) -> SharedStores {
         let toasts = toastAutoDismissAfter.map { ToastStore(autoDismissAfter: $0) } ?? ToastStore()
         let terminals = TerminalListStore(service: terminal, toasts: toasts)
+        let navigation = NavigationStore(
+            config: config,
+            terminals: terminals,
+            viewProvider: viewProvider
+        )
+        // Karar 136: All Terminals / Custom View'da sağ panelin hedefi seçili
+        // terminali izler.
+        terminals.onActiveTerminalChanged = { [weak navigation] in navigation?.refreshToolsRepo() }
         return SharedStores(
             toasts: toasts,
-            navigation: NavigationStore(
-                config: config,
-                terminals: terminals,
-                viewProvider: viewProvider
-            ),
+            navigation: navigation,
             layout: LayoutStore(
                 config: config,
                 isTerminalVisible: { [terminals] id, scope in

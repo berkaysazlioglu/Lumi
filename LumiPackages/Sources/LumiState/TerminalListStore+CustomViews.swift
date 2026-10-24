@@ -60,6 +60,12 @@ extension TerminalListStore {
         return members.first
     }
 
+    /// Karar 136: kapsamdaki aktif terminalin checkout'u (sağ panelin hedefi).
+    public func activeTerminalRepoPath(in scope: TerminalScope) -> String? {
+        guard let id = activeTerminalID, let meta = meta(for: id), contains(meta, in: scope) else { return nil }
+        return meta.repoPath
+    }
+
     // MARK: - Açılış (karar 135 — karar 103 `restoreAllArrangement` kalıbı)
 
     /// Diskteki view'lar resume spawn'larından ÖNCE kurulur ki doğan oturumlar

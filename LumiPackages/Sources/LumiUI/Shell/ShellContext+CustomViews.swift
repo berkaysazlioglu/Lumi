@@ -7,10 +7,29 @@ import SwiftUI
 extension ShellContext {
     /// `Add to View ▸ New View`: isim sormaz, rastgele ad verir; kullanıcı
     /// yeni view'ın nerede durduğunu toast'tan öğrenir.
+    ///
+    /// Karar 136: yeni view'ın grid yerleşimi (kolon + yükseklik) ilk
+    /// terminalin projesinin yerleşimidir; satırı sol panelde kısa bir süre
+    /// parlar.
     public func addToNewCustomView(_ id: TerminalID) {
-        guard let view = terminals.createCustomView(with: id),
+        guard let meta = terminals.meta(for: id),
+              let view = terminals.createCustomView(with: id),
               let name = terminals.customViews.view(view)?.name else { return }
+        layout.setGridLayout(layout.gridLayout(for: .repo(meta.repoPath)), for: .custom(view))
         toasts.show(.success, title: "Created view \(name)", message: "Rename it from Views in the sidebar")
+        highlightNewCustomView(view)
+    }
+
+    /// Yeni view vurgusunun süresi.
+    static let newViewHighlightDuration: Duration = .seconds(4)
+
+    private func highlightNewCustomView(_ view: CustomViewID) {
+        highlightedCustomView = view
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.newViewHighlightDuration)
+            guard let self, self.highlightedCustomView == view else { return }
+            self.highlightedCustomView = nil
+        }
     }
 
     public func addToCustomView(_ id: TerminalID, _ view: CustomViewID) {

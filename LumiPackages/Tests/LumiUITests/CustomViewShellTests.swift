@@ -36,6 +36,28 @@ final class CustomViewShellTests: XCTestCase {
         }
     }
 
+    func testNewViewCopiesTheFirstTerminalsProjectLayoutAndIsHighlighted() async throws {
+        let game = try await fixture.spawnTerminal(in: "/projects/game")
+        let projectLayout = GridLayout(mode: .columns, count: 3, heightMode: .scroll, heightRatio: .half)
+        shell.layout.setGridLayout(projectLayout, for: "/projects/game")
+
+        shell.addToNewCustomView(game.id)
+
+        let view = try XCTUnwrap(shell.terminals.customViews.views.first?.id)
+        XCTAssertEqual(shell.layout.gridLayout(for: .custom(view)), projectLayout)
+        XCTAssertEqual(shell.highlightedCustomView, view)
+    }
+
+    func testRightPanelTargetsTheSelectedTerminalsCheckoutOnAllTerminals() async throws {
+        shell.navigation.openTab("/projects/game")
+        let game = try await fixture.spawnTerminal(in: "/projects/game")
+        shell.navigation.setRoute(AllTerminalsRoute.route)
+        shell.terminals.focus(game.id)
+
+        XCTAssertEqual(shell.toolsRepoPath, "/projects/game")
+        XCTAssertNil(shell.activeRepoPath, "repo eylemleri (hızlı komutlar, Files) kapalı kalır")
+    }
+
     func testNewViewGetsARandomNameAndAToast() async throws {
         let game = try await fixture.spawnTerminal(in: "/projects/game")
 

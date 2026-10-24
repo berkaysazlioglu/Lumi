@@ -238,7 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await composition.repo.repoStore.reload()
-            if let active = shared.navigation.activeRepoPath {
+            if let active = shared.navigation.toolsRepoPath {
                 await composition.repo.repoStore.loadFileTree(active)
                 await composition.repo.gitStore.refresh(active)
             }

@@ -35,9 +35,17 @@ public final class NavigationStore {
     /// `.repo` route'unun adaptörü (12+ çağrı yeri kademeli taşınır).
     public var activeRepoPath: String? { activeRoute.repoPath }
 
-    /// Aktif REPO değişimi: watch/unwatch + git veri yüklemesi köprüsü
-    /// (eski repo, yeni repo). Yalnız `.repo` geçişlerinde ateşlenir —
-    /// repo → repo-dışı route geçişi `(old, nil)` olarak bildirilir.
+    /// Karar 136: sağ panelin (Project Tools) ve dosya izleme/git yüklemesinin
+    /// hedef checkout'u. Repo route'unda aktif repo; All Terminals ve Custom
+    /// View'da seçili terminalin checkout'u — serbest terminalde (karar 108
+    /// güvenlik kapısı) ve terminal seçili değilken `nil`. Değişimi
+    /// `onActiveRepoChanged` ile duyurulur.
+    public private(set) var toolsRepoPath: String?
+
+    /// Hedef checkout değişimi (`toolsRepoPath`): watch/unwatch + git veri
+    /// yüklemesi köprüsü (eski, yeni). Repo route'unda aktif repo'yu, terminal
+    /// yüzeylerinde seçili terminalin checkout'unu izler (karar 136); yüzey
+    /// olmayan route'a geçiş `(old, nil)` olarak bildirilir.
     @ObservationIgnored public var onActiveRepoChanged: ((String?, String?) -> Void)?
 
     /// Tab kapanışı: repo'ya ait BELLEK cache'lerini boşaltma sinyali
@@ -86,7 +94,7 @@ public final class NavigationStore {
         if let scope = activeRoute.terminalScope {
             terminals.activateSurface(scope)
         }
-        announceRepoChange(from: .none, to: activeRoute)
+        refreshToolsRepo()
         return openTabs
     }
 
@@ -139,7 +147,7 @@ public final class NavigationStore {
         rememberCheckout(route.repoPath)
         applySurfaceTransition(from: previous, to: route)
         persist()
-        announceRepoChange(from: previous, to: route)
+        refreshToolsRepo()
     }
 
     /// **Faz 6.3 route geçiş sözleşmesi** (view'da DEĞİL, burada). Karar 103:
@@ -241,6 +249,7 @@ public final class NavigationStore {
     }
 
     public func closeTab(_ repoPath: String) {
+        let previousTools = toolsRepoPath
         let wasActive = activeRoute.repoPath == repoPath
         openTabs.removeAll { $0 == repoPath }
         if wasActive {
@@ -254,24 +263,35 @@ public final class NavigationStore {
         }
         terminals.closeAll(in: repoPath)
         persist()
-        if wasActive {
-            onActiveRepoChanged?(repoPath, activeRoute.repoPath)
-        } else {
-            onActiveRepoChanged?(repoPath, nil) // unwatch için kapanan repo bildirilir
+        // Hedef kapanan repo idiyse `(repoPath, yeni)` duyurulur (odak
+        // değişimi bunu zaten yapmış olabilir); değilse kapanan repo yine
+        // unwatch için bildirilir.
+        refreshToolsRepo()
+        if previousTools != repoPath {
+            onActiveRepoChanged?(repoPath, nil)
         }
         onTabClosed?(repoPath)
     }
 
     // MARK: - Köprüler
 
-    /// `onActiveRepoChanged` YALNIZ `.repo` ekseninde konuşur: repo-dışı bir
-    /// route'a geçişte hedef `nil`'dir (izleyici unwatch eder), repo-dışından
-    /// repo-dışına geçişte hiç ateşlenmez.
-    private func announceRepoChange(from previous: WorkspaceRoute, to current: WorkspaceRoute) {
-        let old = previous.repoPath
-        let new = current.repoPath
-        guard old != new, old != nil || new != nil else { return }
-        onActiveRepoChanged?(old, new)
+    /// Karar 136: hedef checkout'u yeniden hesaplar; değiştiyse
+    /// `onActiveRepoChanged` ile duyurur. Route değişiminde ve aktif terminal
+    /// değişiminde (`TerminalListStore.onActiveTerminalChanged`) çağrılır.
+    public func refreshToolsRepo() {
+        let next = resolveToolsRepo()
+        guard next != toolsRepoPath else { return }
+        let previous = toolsRepoPath
+        toolsRepoPath = next
+        onActiveRepoChanged?(previous, next)
+    }
+
+    private func resolveToolsRepo() -> String? {
+        if let repo = activeRoute.repoPath { return repo }
+        guard let scope = activeRoute.terminalScope,
+              let path = terminals.activeTerminalRepoPath(in: scope),
+              !isLooseTerminalPath(path) else { return nil }
+        return path
     }
 
     // MARK: - Persistence

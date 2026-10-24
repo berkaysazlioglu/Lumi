@@ -30,6 +30,12 @@ final class SpyTerminalFocusCoordinator: TerminalFocusCoordinating {
     func visibleTerminals(in repoPath: String) -> [TerminalMeta] {
         visibleByRepo[repoPath] ?? []
     }
+
+    var activeRepoByScope: [TerminalScope: String] = [:]
+
+    func activeTerminalRepoPath(in scope: TerminalScope) -> String? {
+        activeRepoByScope[scope]
+    }
 }
 
 enum WorkspaceFixtures {

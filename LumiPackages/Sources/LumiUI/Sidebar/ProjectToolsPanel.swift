@@ -21,13 +21,13 @@ public struct ProjectToolsPanel: View {
     public init() {}
 
     private var isGitRepo: Bool {
-        guard let path = shell.activeRepoPath else { return false }
+        guard let path = shell.toolsRepoPath else { return false }
         return shell.repos.capabilities[path]?.isGitRepo ?? shell.repos.repo(at: path)?.isGitRepo ?? false
     }
 
     /// Karar 46: `.plastic/` kökü Source Control sekmesini Plastic sürümüyle açar.
     private var isPlasticWorkspace: Bool {
-        guard let path = shell.activeRepoPath else { return false }
+        guard let path = shell.toolsRepoPath else { return false }
         return shell.repos.capabilities[path]?.isPlasticWorkspace ?? false
     }
 
@@ -62,7 +62,7 @@ public struct ProjectToolsPanel: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Theme.Spacing.md)
                 .padding(.vertical, Theme.Spacing.sm)
-            if let path = shell.activeRepoPath {
+            if let path = shell.toolsRepoPath {
                 switch selected {
                 case .explorer: ExplorerView(repoPath: path)
                 case .agentHistory: AgentHistoryView(repoPath: path)

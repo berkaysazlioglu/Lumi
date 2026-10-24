@@ -30,6 +30,9 @@ public protocol TerminalFocusCoordinating: AnyObject {
     func minimizedTerminals(in repoPath: String) -> [TerminalMeta]
     /// Maximize hedefinin hâlâ görünür olup olmadığı.
     func visibleTerminals(in repoPath: String) -> [TerminalMeta]
+    /// Karar 136: kapsamdaki aktif terminalin checkout'u — All Terminals ve
+    /// Custom View'da sağ panelin hedefi. Aktif terminal kapsamda değilse `nil`.
+    func activeTerminalRepoPath(in scope: TerminalScope) -> String?
 }
 
 extension TerminalListStore: TerminalFocusCoordinating {}

@@ -265,6 +265,7 @@ public final class TerminalListStore: StoreLifecycle {
         guard let id else {
             activeTerminalID = nil
             service.setFocused(nil)
+            onActiveTerminalChanged?()
             return
         }
         guard !minimizedIDs.contains(id) else { return }
@@ -278,6 +279,7 @@ public final class TerminalListStore: StoreLifecycle {
             rememberActiveMember(meta)
         }
         service.setFocused(id)
+        onActiveTerminalChanged?()
     }
 
     /// Orta alanın terminal yüzeyini gösteren/gizleyen TEK intent (Faz 4.9).
@@ -529,6 +531,9 @@ public final class TerminalListStore: StoreLifecycle {
     /// Karar 135: boş kalan view'lar silindi — açık route'u ve yerleşimini
     /// temizlemek composition root'un işidir (store navigasyonu tanımaz).
     @ObservationIgnored public var onCustomViewsRemoved: (([CustomViewID]) -> Void)?
+    /// Karar 136: aktif terminal değişti — sağ panelin hedefi (All Terminals /
+    /// Custom View'da seçili terminalin checkout'u) yeniden hesaplanır.
+    @ObservationIgnored public var onActiveTerminalChanged: (() -> Void)?
 
     func apply(_ event: TerminalEvent) {
         applyToList(event)
@@ -685,6 +690,7 @@ public final class TerminalListStore: StoreLifecycle {
             } else {
                 service.setFocused(nil)
             }
+            onActiveTerminalChanged?()
         }
 
         if lastActiveByRepo[repoPath] == id {

@@ -103,6 +103,10 @@ public final class ShellContext {
     /// Karar 114: orchestrator sohbeti.
     public let orchestrator: OrchestratorStore
 
+    /// Karar 136: az önce `New View` ile doğan view — sol paneldeki satırı
+    /// kısa bir süre parlayıp nabız atar. Oturumluk.
+    public internal(set) var highlightedCustomView: CustomViewID?
+
     // MARK: - Köprüler
 
     @ObservationIgnored public let viewProvider: any TerminalViewProviding
@@ -188,6 +192,10 @@ public final class ShellContext {
 
     /// `.repo` route'unun projeksiyonu — panel öğelerinin `isAvailable` kapısı.
     public var activeRepoPath: String? { navigation.activeRepoPath }
+
+    /// Karar 136: sağ panelin hedef checkout'u — repo route'unda aktif repo,
+    /// All Terminals / Custom View'da seçili terminalin checkout'u.
+    public var toolsRepoPath: String? { navigation.toolsRepoPath }
 
     /// Karar 103: orta alan bir terminal yüzeyiyse kapsamı — repo route'u ya
     /// da All Terminals. Grid/Edit gibi yüzey kontrollerinin kapısı; repo'ya
