@@ -58,11 +58,14 @@ public struct TasksScreen: View {
         } else {
             switch store.layout {
             case .board:
-                ScrollView(.horizontal) {
-                    TaskBoardView(store: store)
-                        .containerRelativeFrame([.horizontal, .vertical]) { length, axis in
-                            axis == .horizontal ? max(length, TaskBoardView.minimumWidth) : length
-                        }
+                // Yükseklik GeometryReader'dan gelir: yatay kaydırma içinde
+                // dikey `containerRelativeFrame` en küçük yüksekliği o anki
+                // yüksekliğe kilitliyor, pencere küçültülemiyordu.
+                GeometryReader { proxy in
+                    ScrollView(.horizontal) {
+                        TaskBoardView(store: store)
+                            .frame(width: max(proxy.size.width, TaskBoardView.minimumWidth), height: proxy.size.height)
+                    }
                 }
             case .list:
                 TaskListView(store: store)
