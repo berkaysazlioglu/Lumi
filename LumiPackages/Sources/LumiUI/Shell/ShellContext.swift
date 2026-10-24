@@ -197,7 +197,8 @@ public final class ShellContext {
     /// Yüzeyden terminal açmanın TEK intent'i (top bar, boş durum, focus bar,
     /// dropdown). Repo yüzeyi kendi checkout'unda açar; All Terminals serbest
     /// terminali geçerli konumda açar (karar 108) — konum silinmişse store
-    /// uyarır ve terminal açılmaz.
+    /// uyarır ve terminal açılmaz. Custom View (karar 135) çapa üyesinin
+    /// checkout'unda açar ve terminal view'a katılır — o projeye ait olur.
     public func spawnTerminal(in scope: TerminalScope, command: String?, task: String? = nil) {
         let directory: String
         switch scope {
@@ -206,6 +207,11 @@ public final class ShellContext {
         case .all:
             guard let location = looseTerminals.locationForSpawn() else { return }
             directory = location
+        case .custom(let view):
+            // Boş view yoktur; çapa yoksa view o an silinmiş demektir.
+            guard let anchor = terminals.spawnAnchor(in: view) else { return }
+            terminals.spawn(in: anchor.repoPath, command: command, task: task, joining: view)
+            return
         }
         terminals.spawn(in: directory, command: command, task: task)
     }

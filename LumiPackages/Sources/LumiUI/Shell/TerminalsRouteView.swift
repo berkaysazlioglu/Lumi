@@ -109,6 +109,9 @@ public struct TerminalsRouteView: View {
             EmptyStatePlaceholder("No terminals yet", density: .full) {
                 allTerminalsStartTiles
             }
+        } else if scope.customViewID != nil {
+            // Karar 135: boş view yoktur — görünür kart yoksa hepsi minimize'dır.
+            EmptyStatePlaceholder("All terminals in this view are minimized", density: .full)
         } else {
             // Topbar ile aynı split-button (DRY): chevron dropdown'u açar.
             EmptyStatePlaceholder("No terminals in this repo", density: .full) {
@@ -138,10 +141,10 @@ public struct TerminalsRouteView: View {
         .padding(.top, Theme.Spacing.md)
     }
 
-    /// Yalnız All Terminals etiket taşır — repo görünümünde her kart aynı
-    /// checkout'tadır.
+    /// Yalnız All Terminals ve Custom View'lar etiket taşır — repo görünümünde
+    /// her kart aynı checkout'tadır.
     private func checkoutLabels(for scope: TerminalScope) -> [String: String] {
-        guard scope == .all else { return [:] }
+        guard scope.repoPath == nil else { return [:] }
         let paths = Set(shell.terminals.terminals.map(\.repoPath))
         return Dictionary(uniqueKeysWithValues: paths.map { ($0, shell.checkoutLabel(for: $0)) })
     }

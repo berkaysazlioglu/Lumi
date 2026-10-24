@@ -72,6 +72,13 @@ public struct UIState: Sendable, Equatable {
     /// Karar 108 (additive): serbest terminal açılan son konumlar — en yeni
     /// başta, en fazla `LooseTerminalLocations.recentLimit`. Boşken yazılmaz.
     public var recentLooseLocations: [String]
+    /// Karar 135 (additive): Custom View'lar — ad + resume oturum kimlikleriyle
+    /// üye sırası. nil = anahtar dosyada yok; bir kez yazıldıktan sonra boş
+    /// liste de yazılır (silinen view diskte kalıp geri doğmasın).
+    public var customViews: [CustomViewState]?
+    /// Karar 135 (additive): view id → grid yerleşimi. `customViews` ile aynı
+    /// nil/boş kuralı.
+    public var customViewGridLayouts: [String: GridLayout]?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -104,7 +111,9 @@ public struct UIState: Sendable, Equatable {
         orchestratorActivityCollapsed: Bool? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
         allTerminalsOrder: [String] = [],
-        recentLooseLocations: [String] = []
+        recentLooseLocations: [String] = [],
+        customViews: [CustomViewState]? = nil,
+        customViewGridLayouts: [String: GridLayout]? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -127,6 +136,22 @@ public struct UIState: Sendable, Equatable {
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.allTerminalsOrder = allTerminalsOrder
         self.recentLooseLocations = recentLooseLocations
+        self.customViews = customViews
+        self.customViewGridLayouts = customViewGridLayouts
+    }
+}
+
+/// Karar 135: diske inen tek Custom View. `order` resume oturum kimlikleridir
+/// (karar 103 `allTerminalsOrder` ile aynı kimlik).
+public struct CustomViewState: Sendable, Equatable {
+    public var id: String
+    public var name: String
+    public var order: [String]
+
+    public init(id: String, name: String, order: [String]) {
+        self.id = id
+        self.name = name
+        self.order = order
     }
 }
 

@@ -20,6 +20,9 @@ import LumiTerminal
 ///   `.exited`'ları son snapshot'ı boş listeyle ezmesin.
 /// - **Karar 103 All Terminals sırası:** resume listesinin eşidir — aynı
 ///   checkpoint'te yazılır, açılışta resume spawn'larından ÖNCE geri kurulur.
+/// - **Karar 135 Custom View'lar:** aynı kalıp — ad + üye sırası checkpoint'te
+///   yazılır, açılışta spawn'lardan ÖNCE kurulur; spawn'lar bitince doğmayan
+///   üyeler düşer ve üyesiz kalan view silinir.
 @MainActor
 final class WorkspaceBootAssembly: FeatureAssembly {
     let bootstrapPhase = BootstrapPhase.ui
@@ -68,9 +71,15 @@ final class WorkspaceBootAssembly: FeatureAssembly {
         // Servisin canlı kümesi üzerinden: store spawn'ı henüz uygulamamış
         // olsa da yeni terminal sıranın sonunda diske iner.
         let allTerminalsOrder = shared.terminals.allArrangement.persistedKeys(live)
+        let customViews = shared.terminals.customViews.persisted(live)
         await services.config.updateUIState {
             $0.resumeSessions = resumeSessions
             $0.allTerminalsOrder = allTerminalsOrder
+            // Anahtar hiç yokken boş liste yazılmaz; bir kez yazıldıysa boş
+            // hâli de yazılır — silinen view açılışta geri doğmasın.
+            if !customViews.isEmpty || $0.customViews != nil {
+                $0.customViews = customViews
+            }
         }
     }
 
@@ -145,10 +154,26 @@ final class WorkspaceBootAssembly: FeatureAssembly {
         let state = await services.config.uiState()
         // Karar 103: doğacak oturumlar All Terminals'taki eski yerlerine otursun.
         shared.terminals.restoreAllArrangement(state.allTerminalsOrder)
+        // Karar 135: aynı gerekçe — doğan oturum kendi view'ına döner.
+        shared.terminals.restoreCustomViews(state.customViews ?? [])
         let entries = state.resumeSessions
+        if !entries.isEmpty {
+            await spawnResumedSessions(entries)
+        }
+        shared.terminals.finishCustomViewRestore(aliveTerminals: services.terminal.terminals)
+        settleCustomViewRoute()
         guard !entries.isEmpty else { return }
-        await spawnResumedSessions(entries)
         await checkpointResumeSessions()
+    }
+
+    /// Karar 135: `activeRoute` artık var olmayan bir view'ı gösteriyorsa
+    /// All Terminals'a düşülür; var olmayan view'ların yerleşimleri temizlenir.
+    private func settleCustomViewRoute() {
+        let existing = Set(shared.terminals.customViews.views.map(\.id))
+        shared.layout.pruneCustomViewLayouts(keeping: existing)
+        if let view = shared.navigation.activeRoute.terminalScope?.customViewID, !existing.contains(view) {
+            shared.navigation.setRoute(.content(.allTerminals))
+        }
     }
 
     /// Karar 108: açık tab'ı duran repo'nun kaydı ile, dizini hâlâ duran

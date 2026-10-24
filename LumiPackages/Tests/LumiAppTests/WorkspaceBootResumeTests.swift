@@ -120,6 +120,52 @@ final class WorkspaceBootResumeTests: XCTestCase {
         await assembly.shutdown()
     }
 
+    // MARK: - Karar 135: Custom View'lar
+
+    func testViewWhoseSessionsNeverResumeIsDroppedAndRouteFallsBackToAllTerminals() async {
+        var seed = UIState.defaults
+        seed.customViews = [CustomViewState(id: "v-1", name: "Gone", order: ["never-spawns"])]
+        seed.customViewGridLayouts = ["v-1": GridLayout(mode: .columns, count: 2, heightMode: .fit)]
+        let (registry, shared, assembly) = await makeHarness(seed: seed)
+        defer { registry.removeTemporaryDirectories() }
+        let view = CustomViewID(rawValue: "v-1")
+        shared.navigation.setRoute(.content(.customView(view)))
+
+        await assembly.start()
+
+        XCTAssertTrue(shared.terminals.customViews.views.isEmpty)
+        XCTAssertEqual(shared.navigation.activeRoute, .content(.allTerminals))
+        XCTAssertTrue(shared.layout.customViewGridLayouts.isEmpty)
+        await assembly.shutdown()
+        let written = await registry.fakeConfig.uiState().customViews
+        XCTAssertEqual(written, [], "silinen view diskte kalmaz")
+    }
+
+    func testCheckpointWritesViewsWithResumableMembers() async throws {
+        let (registry, shared, assembly) = await makeHarness()
+        defer { registry.removeTemporaryDirectories() }
+        shared.terminals.start()
+        defer { shared.terminals.stop() }
+        await assembly.start()
+        let meta = try XCTUnwrap(shared.terminals.spawn(in: "/r/alpha", command: "claude"))
+        let spawnDeadline = ContinuousClock.now + .seconds(2)
+        while shared.terminals.meta(for: meta.id) == nil, ContinuousClock.now < spawnDeadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let view = try XCTUnwrap(shared.terminals.createCustomView(with: meta.id))
+        let name = try XCTUnwrap(shared.terminals.customViews.view(view)?.name)
+
+        let expected = [CustomViewState(id: view.rawValue, name: name, order: [meta.claudeSessionID!])]
+        let deadline = ContinuousClock.now + .seconds(2)
+        var written = await registry.fakeConfig.uiState().customViews
+        while written != expected, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+            written = await registry.fakeConfig.uiState().customViews
+        }
+        XCTAssertEqual(written, expected)
+        await assembly.shutdown()
+    }
+
     // MARK: - Karar 108: serbest terminallerin resume'u
 
     func testResumableKeepsOpenTabsAndExistingLooseDirectories() {

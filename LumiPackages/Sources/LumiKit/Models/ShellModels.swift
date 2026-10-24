@@ -58,11 +58,13 @@ public enum WorkspaceRoute: Hashable, Sendable {
     /// Route bir terminal yüzeyi mi, öyleyse hangi terminalleri kapsıyor
     /// (karar 103). Yüzey geçişi (foreground/background, view attach) ve
     /// terminal kontrolleri (grid, Edit, klavye) bu projeksiyondan okur;
-    /// `.content` route'larından yalnız All Terminals bir yüzeydir.
+    /// `.content` route'larından All Terminals ve Custom View'lar (karar 135)
+    /// yüzeydir.
     public var terminalScope: TerminalScope? {
         switch self {
         case .repo(let path): .repo(path)
-        case .content(let id): id == .allTerminals ? .all : nil
+        case .content(let id):
+            if id == .allTerminals { .all } else { id.customViewID.map(TerminalScope.custom) }
         case .none: nil
         }
     }

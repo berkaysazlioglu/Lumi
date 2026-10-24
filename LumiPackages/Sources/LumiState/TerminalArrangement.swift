@@ -17,6 +17,10 @@ import LumiKit
 /// yerini korur. Resume edilemeyen terminaller (düz shell) zaten açılışta
 /// geri gelmez; çalışırken yine `TerminalID` ile sıralanır.
 ///
+/// **Custom View (karar 135)** aynı tipi üyelik listesi olarak kullanır:
+/// `members` yalnız yeri olanları döndürür, üyelik `insert`/`remove` ile
+/// değişir ve `pinMembers` yeni terminali kendiliğinden eklemez.
+///
 /// **Saf değer tipi:** `ordered` render sırasında çağrılabilir (mutasyon yok);
 /// mutasyonlar (`pin`, `swap`) olay anında store'dan gelir.
 public struct TerminalArrangement: Equatable, Sendable {
@@ -52,6 +56,19 @@ public struct TerminalArrangement: Equatable, Sendable {
             .map(\.element)
     }
 
+    /// Karar 135 (Custom View): yalnız sırada yeri olan terminaller, sıra
+    /// düzeninde. All Terminals'tan farkı — yeri olmayan terminal gösterilmez.
+    public func members(_ metas: [TerminalMeta]) -> [TerminalMeta] {
+        let placed = placements(of: metas)
+        return metas
+            .compactMap { meta in placed[meta.id].map { (index: $0, meta: meta) } }
+            .sorted { $0.index < $1.index }
+            .map(\.meta)
+    }
+
+    /// Sırada hiç kayıt yok (ne canlı terminal ne doğmamış resume kaydı).
+    public var isEmpty: Bool { entries.isEmpty }
+
     /// Diske inen sıra: resume edilebilen terminallerin oturum kimlikleri.
     /// Yalnız canlılar yazılır — doğmamış resume kayıtları bir sonraki
     /// açılışa sarkmaz (resume listesiyle aynı kural, karar 90).
@@ -66,6 +83,43 @@ public struct TerminalArrangement: Equatable, Sendable {
     /// eklenir. Henüz doğmamış resume kayıtları yerinde bekler — sonradan
     /// doğan oturum kendi eski yerine oturur.
     public mutating func pin(_ metas: [TerminalMeta]) {
+        repin(metas, appendingUnplaced: true)
+    }
+
+    /// Karar 135 (Custom View): `pin` gibi ama yeri olmayan terminal EKLENMEZ —
+    /// üyelik yalnız `insert` ile büyür.
+    public mutating func pinMembers(_ metas: [TerminalMeta]) {
+        repin(metas, appendingUnplaced: false)
+    }
+
+    /// Karar 135: açılıştaki resume spawn'ları bittikten sonra, hiç doğmayacak
+    /// oturumların (`aliveKeys`'te olmayan) bekleyen kayıtları düşer. Doğmuş
+    /// ama store'a henüz yansımamış oturumun kaydı bekler.
+    public mutating func dropResumed(notIn aliveKeys: Set<String>) {
+        entries.removeAll { entry in
+            guard case .resumed(let key) = entry else { return false }
+            return !aliveKeys.contains(key)
+        }
+    }
+
+    /// Karar 135: terminali sıranın sonuna ekler; zaten varsa no-op.
+    /// Dönüş: eklendi mi.
+    @discardableResult
+    public mutating func insert(_ id: TerminalID) -> Bool {
+        guard !entries.contains(.terminal(id)) else { return false }
+        entries.append(.terminal(id))
+        return true
+    }
+
+    /// Karar 135: terminali sıradan çıkarır. Dönüş: çıkarıldı mı.
+    @discardableResult
+    public mutating func remove(_ id: TerminalID) -> Bool {
+        guard let index = entries.firstIndex(of: .terminal(id)) else { return false }
+        entries.remove(at: index)
+        return true
+    }
+
+    private mutating func repin(_ metas: [TerminalMeta], appendingUnplaced: Bool) {
         let placed = placements(of: metas)
         let idAtEntry = Dictionary(uniqueKeysWithValues: placed.map { ($1, $0) })
         var next: [Entry] = []
@@ -76,17 +130,25 @@ public struct TerminalArrangement: Equatable, Sendable {
                 next.append(entry)
             }
         }
-        next += metas.filter { placed[$0.id] == nil }.map { .terminal($0.id) }
+        if appendingUnplaced {
+            next += metas.filter { placed[$0.id] == nil }.map { .terminal($0.id) }
+        }
         guard next != entries else { return }
         entries = next
     }
 
     /// Karar 97 takası All Terminals'ta: iki kart birbirinin yerine geçer,
     /// aradaki (minimize edilmiş dahil) hiçbir kart kıpırdamaz. Repo sınırı
-    /// yoktur. Dönüş: sıra değişti mi.
+    /// yoktur. Custom View'da (karar 135) `appendingUnplaced: false` — üye
+    /// olmayan terminal takasla view'a girmez. Dönüş: sıra değişti mi.
     @discardableResult
-    public mutating func swap(_ first: TerminalID, _ second: TerminalID, among metas: [TerminalMeta]) -> Bool {
-        pin(metas)
+    public mutating func swap(
+        _ first: TerminalID,
+        _ second: TerminalID,
+        among metas: [TerminalMeta],
+        appendingUnplaced: Bool = true
+    ) -> Bool {
+        repin(metas, appendingUnplaced: appendingUnplaced)
         guard first != second,
               let firstIndex = entries.firstIndex(of: .terminal(first)),
               let secondIndex = entries.firstIndex(of: .terminal(second)) else { return false }

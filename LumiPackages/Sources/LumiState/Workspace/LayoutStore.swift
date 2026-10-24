@@ -23,6 +23,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
     public var allTerminalsGridLayout: GridLayout?
     /// Karar 124: Monitor bölmesi daraltılmış mı. Açık (varsayılan) iken `nil`.
     public var orchestratorActivityCollapsed: Bool?
+    /// Karar 135: Custom View id → grid yerleşimi.
+    public var customViewGridLayouts: [String: GridLayout]
 
     public init(
         panelLayout: PanelLayout,
@@ -31,7 +33,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
         uiFontFamily: UIFontFamily? = nil,
         projectToolsTab: ProjectToolsTab? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
-        orchestratorActivityCollapsed: Bool? = nil
+        orchestratorActivityCollapsed: Bool? = nil,
+        customViewGridLayouts: [String: GridLayout] = [:]
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
@@ -40,6 +43,7 @@ public struct LayoutSnapshot: Equatable, Sendable {
         self.projectToolsTab = projectToolsTab
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.orchestratorActivityCollapsed = orchestratorActivityCollapsed
+        self.customViewGridLayouts = customViewGridLayouts
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -77,6 +81,9 @@ public final class LayoutStore {
     /// `projectGridLayouts`'a yazılmaz — o sözlük repo yolu → yerleşimdir
     /// (karar 9) ve sahte bir anahtar taşımamalı.
     public private(set) var allTerminalsGridLayout: GridLayout?
+    /// Karar 135: Custom View başına grid yerleşimi; yoksa varsayılan. View
+    /// silinince kaydı düşer (`forgetCustomViews`).
+    public private(set) var customViewGridLayouts: [CustomViewID: GridLayout] = [:]
     /// Oturumluk maximize/solo — yüzey başına en çok bir terminal tam alanı
     /// kaplar; diğer görünürler alt şeride iner. Persist edilmez.
     public private(set) var maximizedByScope: [TerminalScope: TerminalID] = [:]
@@ -170,6 +177,9 @@ public final class LayoutStore {
         isOrchestratorActivityExpanded = state.orchestratorActivityCollapsed != true
         projectGridLayouts = state.projectGridLayouts
         allTerminalsGridLayout = state.allTerminalsGridLayout
+        customViewGridLayouts = Dictionary(
+            uniqueKeysWithValues: (state.customViewGridLayouts ?? [:]).map { (CustomViewID(rawValue: $0.key), $0.value) }
+        )
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
             for tab in openTabs {
                 projectGridLayouts[tab] = legacy
@@ -339,6 +349,7 @@ public final class LayoutStore {
         switch scope {
         case .repo(let repoPath): projectGridLayouts[repoPath] ?? Self.defaultGridLayout
         case .all: allTerminalsGridLayout ?? Self.defaultGridLayout
+        case .custom(let id): customViewGridLayouts[id] ?? Self.defaultGridLayout
         }
     }
 
@@ -354,6 +365,8 @@ public final class LayoutStore {
             projectGridLayouts[repoPath] = layout
         case .all:
             allTerminalsGridLayout = layout
+        case .custom(let id):
+            customViewGridLayouts[id] = layout
         }
         persist() // disk yazımı servis tarafında 500ms debounce'lu
     }
@@ -460,6 +473,23 @@ public final class LayoutStore {
         if arrangingScope == .repo(repoPath) { endArranging() }
     }
 
+    /// Karar 135: silinen view'ların oturumluk (maximize, Edit) ve kalıcı
+    /// (grid) kayıtları düşer.
+    public func forgetCustomViews(_ ids: [CustomViewID]) {
+        var changed = false
+        for id in ids {
+            maximizedByScope.removeValue(forKey: .custom(id))
+            if arrangingScope == .custom(id) { endArranging() }
+            changed = customViewGridLayouts.removeValue(forKey: id) != nil || changed
+        }
+        if changed { persist() }
+    }
+
+    /// Karar 135: açılışta artık var olmayan view'ların yerleşimleri düşer.
+    public func pruneCustomViewLayouts(keeping ids: Set<CustomViewID>) {
+        forgetCustomViews(customViewGridLayouts.keys.filter { !ids.contains($0) })
+    }
+
     // MARK: - Persistence
 
     public var snapshot: LayoutSnapshot {
@@ -474,7 +504,10 @@ public final class LayoutStore {
             projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab,
             allTerminalsGridLayout: allTerminalsGridLayout,
             // Açık (varsayılan) iken nil: aynı gerekçe.
-            orchestratorActivityCollapsed: isOrchestratorActivityExpanded ? nil : true
+            orchestratorActivityCollapsed: isOrchestratorActivityExpanded ? nil : true,
+            customViewGridLayouts: Dictionary(
+                uniqueKeysWithValues: customViewGridLayouts.map { ($0.key.rawValue, $0.value) }
+            )
         )
     }
 
@@ -551,6 +584,11 @@ public final class LayoutStore {
                 state.projectToolsTab = snapshot.projectToolsTab?.rawValue
                 state.allTerminalsGridLayout = snapshot.allTerminalsGridLayout
                 state.orchestratorActivityCollapsed = snapshot.orchestratorActivityCollapsed
+                // Karar 135: anahtar hiç yokken boş sözlük yazılmaz; bir kez
+                // yazıldıktan sonra boş hâli de yazılır (silinen view diskte kalmasın).
+                if !snapshot.customViewGridLayouts.isEmpty || state.customViewGridLayouts != nil {
+                    state.customViewGridLayouts = snapshot.customViewGridLayouts
+                }
             }
         }
     }

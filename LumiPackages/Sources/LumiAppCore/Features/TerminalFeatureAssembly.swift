@@ -24,6 +24,19 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
         self.shared = shared
         promptQueue = PromptQueueStore(service: services.terminal, toasts: shared.toasts)
         looseTerminals = LooseTerminalStore(config: services.config, toasts: shared.toasts)
+        wireCustomViewRemoval(shared)
+    }
+
+    /// Karar 135: boş kalan view silinince yerleşim kayıtları düşer; açık
+    /// olan view'ın route'u All Terminals'a döner.
+    private func wireCustomViewRemoval(_ shared: SharedStores) {
+        shared.terminals.onCustomViewsRemoved = { [weak shared] ids in
+            guard let shared else { return }
+            shared.layout.forgetCustomViews(ids)
+            if let view = shared.navigation.activeRoute.terminalScope?.customViewID, ids.contains(view) {
+                shared.navigation.setRoute(.content(.allTerminals))
+            }
+        }
     }
 
     /// Faz 6.6: orta alanın terminals route'u BU assembly'nin katkısıdır.
@@ -42,6 +55,14 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
             title: AllTerminalsRoute.title,
             icon: AllTerminalsRoute.icon,
             makeView: { _ in AnyView(TerminalsRouteView(scope: .all)) }
+        ))
+        // Karar 135: her Custom View kendi route'udur (`customView:<id>`);
+        // registry önekli id'leri bu aile descriptor'ına çözer.
+        registries.routes.register(ContentRouteDescriptor(
+            id: .customViewFamily,
+            title: "View",
+            icon: CustomViewRoute.icon,
+            makeView: { _ in AnyView(CustomViewRouteView()) }
         ))
         registries.toolbar.register(ToolbarItemDescriptor(
             id: ToolbarItemID("route.allTerminals"),

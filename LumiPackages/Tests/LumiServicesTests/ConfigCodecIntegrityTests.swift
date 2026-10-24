@@ -253,7 +253,9 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         orchestratorActivityCollapsed: true,
         allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
         allTerminalsOrder: ["s-1", "s-2"],
-        recentLooseLocations: ["/Users/me", "/Users/me/Desktop"]
+        recentLooseLocations: ["/Users/me", "/Users/me/Desktop"],
+        customViews: [CustomViewState(id: "v-1", name: "Amber Falcon", order: ["s-1"])],
+        customViewGridLayouts: ["v-1": GridLayout(mode: .columns, count: 2, heightMode: .fit)]
     )
 }
 

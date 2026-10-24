@@ -27,6 +27,9 @@ public final class TerminalListStore: StoreLifecycle {
     /// Karar 103: All Terminals görünümünün kendi kart sırası. Tam liste
     /// (`terminals`) repo görünümlerinin sırasıdır ve bundan etkilenmez.
     public private(set) var allArrangement = TerminalArrangement()
+    /// Karar 135: kullanıcının seçtiği terminallerden oluşan view'lar.
+    /// Mutasyonlar `TerminalListStore+CustomViews`'tadır.
+    public internal(set) var customViews = CustomTerminalViews()
 
     /// Karar 24: açıkken working'e geçen terminal otomatik minimize edilir ve
     /// turn bitince / girdi beklenince otomatik restore edilir. Config aynası —
@@ -37,6 +40,13 @@ public final class TerminalListStore: StoreLifecycle {
     @ObservationIgnored private var autoMinimizedIDs: Set<TerminalID> = []
 
     @ObservationIgnored private var lastActiveByRepo: [String: TerminalID] = [:]
+    /// Karar 135: view başına son aktif üye — view'a terminal açarken hedef
+    /// checkout'u (çapa) verir.
+    @ObservationIgnored var lastActiveByView: [CustomViewID: TerminalID] = [:]
+    /// Karar 135: view'a açılan terminal store'a `.spawned` ile yansıyınca
+    /// view'a katılır (store terminali tanımadan üyelik yazılmaz — kimlik
+    /// eşlemesi onu ölü sayıp düşürürdü).
+    @ObservationIgnored var pendingViewJoins: [TerminalID: CustomViewID] = [:]
     /// Terminal yüzeyinin şu an hangi kapsam için önde olduğu (Faz 4.9; karar
     /// 103'te repo → kapsam). Tab/route geçişinde eski kapsamı arkaya almanın
     /// tek kaynağıdır; `activeTerminalID` bundan ayrıdır (yüzey gizliyken de
@@ -98,6 +108,16 @@ public final class TerminalListStore: StoreLifecycle {
         switch scope {
         case .repo(let repoPath): terminals(in: repoPath)
         case .all: allArrangement.ordered(terminals)
+        case .custom(let id): customViews.members(of: id, among: terminals)
+        }
+    }
+
+    /// Terminal kapsamın içinde mi. `.custom` üyeliği terminal kimliğine
+    /// bağlıdır (karar 135) — saf `TerminalScope.contains` onu yanıtlamaz.
+    public func contains(_ meta: TerminalMeta, in scope: TerminalScope) -> Bool {
+        switch scope {
+        case .repo, .all: scope.contains(meta)
+        case .custom(let id): customViews.members(of: id, among: terminals).contains { $0.id == meta.id }
         }
     }
 
@@ -165,13 +185,17 @@ public final class TerminalListStore: StoreLifecycle {
         in repoPath: String,
         command: String? = nil,
         task: String? = nil,
-        environment: [String: String] = [:]
+        environment: [String: String] = [:],
+        joining view: CustomViewID? = nil
     ) -> TerminalMeta? {
         var spawned: TerminalMeta?
         toasts.reporting {
             spawned = try self.service.spawn(
                 repoPath: repoPath, task: task, command: command, environment: environment
             )
+        }
+        if let view, let spawned {
+            pendingViewJoins[spawned.id] = view
         }
         return spawned
     }
@@ -214,6 +238,9 @@ public final class TerminalListStore: StoreLifecycle {
         case .all:
             guard allArrangement.swap(first, second, among: terminals) else { return }
             onOrderChanged?()
+        case .custom(let id):
+            guard customViews.swap(first, second, in: id, among: terminals) else { return }
+            onOrderChanged?()
         }
     }
 
@@ -246,8 +273,9 @@ public final class TerminalListStore: StoreLifecycle {
             Self.logger.log("focus on id not in store: \(LumiLog.short(id), privacy: .public)")
         }
         activeTerminalID = id
-        if let repoPath = meta(for: id)?.repoPath {
-            lastActiveByRepo[repoPath] = id
+        if let meta = meta(for: id) {
+            lastActiveByRepo[meta.repoPath] = id
+            rememberActiveMember(meta)
         }
         service.setFocused(id)
     }
@@ -265,9 +293,16 @@ public final class TerminalListStore: StoreLifecycle {
     }
 
     /// Kapsamlı hâli (karar 103): `.all` servisin "tüm terminaller" kanalına
-    /// (`repoPath == nil`) iner.
+    /// (`repoPath == nil`) iner; `.custom` üyeler terminal başına geçer (karar 135).
     public func setTerminalSurfaceVisible(_ visible: Bool, in scope: TerminalScope) {
-        service.setSurfaceState(visible ? .foreground : .background, in: scope.repoPath)
+        let state: TerminalSurfaceState = visible ? .foreground : .background
+        if case .custom = scope {
+            for meta in terminals(in: scope) {
+                service.setSurfaceState(state, for: meta.id)
+            }
+        } else {
+            service.setSurfaceState(state, in: scope.repoPath)
+        }
         guard visible else {
             service.setFocused(nil)
             return
@@ -279,7 +314,7 @@ public final class TerminalListStore: StoreLifecycle {
             service.setSurfaceState(.minimized, for: meta.id)
         }
         guard let active = activeTerminalID,
-              let activeMeta = meta(for: active), scope.contains(activeMeta),
+              let activeMeta = meta(for: active), contains(activeMeta, in: scope),
               !minimizedIDs.contains(active) else { return }
         service.setFocused(active)
     }
@@ -295,13 +330,14 @@ public final class TerminalListStore: StoreLifecycle {
 
     /// Minimize: aktifse görünür komşuya proaktif odak kayar.
     public func minimize(_ id: TerminalID) {
-        guard let repoPath = meta(for: id)?.repoPath else { return }
+        guard let meta = meta(for: id) else { return }
+        let repoPath = meta.repoPath
         minimizedIDs.insert(id)
         // Karar 24 akışı dahil: gizlenen kart arka plan politikasına düşer
         // (coalescer 100ms + onBlur) — "görünmüyor ama odaklı" hâli kalmaz.
         service.setSurfaceState(.minimized, for: id)
         if activeTerminalID == id {
-            let visibleBefore = terminals(in: neighborScope(for: repoPath)).filter {
+            let visibleBefore = terminals(in: neighborScope(for: meta)).filter {
                 $0.id == id || !minimizedIDs.contains($0.id)
             }
             focus(Self.neighborID(closing: id, among: visibleBefore))
@@ -319,22 +355,24 @@ public final class TerminalListStore: StoreLifecycle {
     public func restore(_ id: TerminalID) {
         minimizedIDs.remove(id)
         autoMinimizedIDs.remove(id)
-        guard let repoPath = meta(for: id)?.repoPath, isSurfaceForeground(repoPath) else { return }
+        guard let meta = meta(for: id), isSurfaceForeground(meta) else { return }
         service.setSurfaceState(.foreground, for: id)
     }
 
-    /// Terminal yüzeyi şu an bu repo için önde mi. Henüz hiçbir repo aktive
-    /// edilmediyse (bootstrap penceresi) kısıtlama uygulanmaz.
-    private func isSurfaceForeground(_ repoPath: String) -> Bool {
+    /// Terminal yüzeyi şu an bu terminal için önde mi. Henüz hiçbir yüzey
+    /// aktive edilmediyse (bootstrap penceresi) kısıtlama uygulanmaz.
+    private func isSurfaceForeground(_ meta: TerminalMeta) -> Bool {
         guard !isSurfaceDeactivated else { return false }
-        return surfaceScope?.contains(repoPath: repoPath) ?? true
+        return surfaceScope.map { contains(meta, in: $0) } ?? true
     }
 
-    /// Odak kaydığında komşu adaylarının kapsamı: All Terminals öndeyse ekranda
-    /// yan yana duran kartlar tüm projelerindir; aksi hâlde odak başka repo'ya
-    /// atlamaz (Electron paritesi).
-    private func neighborScope(for repoPath: String) -> TerminalScope {
-        surfaceScope == .all && !isSurfaceDeactivated ? .all : .repo(repoPath)
+    /// Odak kaydığında komşu adaylarının kapsamı: All Terminals ya da terminalin
+    /// üyesi olduğu bir Custom View öndeyse ekranda yan yana duran kartlar o
+    /// yüzeyindir; aksi hâlde odak başka repo'ya atlamaz (Electron paritesi).
+    private func neighborScope(for meta: TerminalMeta) -> TerminalScope {
+        guard let scope = surfaceScope, !isSurfaceDeactivated, scope.repoPath == nil,
+              contains(meta, in: scope) else { return .repo(meta.repoPath) }
+        return scope
     }
 
     /// Bildirim tıklaması istisnası: önce restore, sonra odak.
@@ -385,10 +423,14 @@ public final class TerminalListStore: StoreLifecycle {
         switch scope {
         case .repo(let repoPath):
             return lastActiveVisible(in: repoPath)
-        case .all:
+        case .all, .custom:
             let visible = visibleTerminals(in: scope)
             if let active = activeTerminalID, visible.contains(where: { $0.id == active }) {
                 return active
+            }
+            if let view = scope.customViewID, let last = lastActiveByView[view],
+               visible.contains(where: { $0.id == last }) {
+                return last
             }
             return visible.first?.id
         }
@@ -484,11 +526,18 @@ public final class TerminalListStore: StoreLifecycle {
     /// Karar 97: elle sıralama değişti. Servis olayı doğmadığı için resume
     /// checkpoint'i (karar 90) bu kanaldan tetiklenir.
     @ObservationIgnored public var onOrderChanged: (() -> Void)?
+    /// Karar 135: boş kalan view'lar silindi — açık route'u ve yerleşimini
+    /// temizlemek composition root'un işidir (store navigasyonu tanımaz).
+    @ObservationIgnored public var onCustomViewsRemoved: (([CustomViewID]) -> Void)?
 
     func apply(_ event: TerminalEvent) {
         applyToList(event)
         if Self.affectsArrangement(event) {
             allArrangement.pin(terminals)
+            pinCustomViews()
+        }
+        if case .spawned(let meta) = event {
+            joinPendingView(meta.id)
         }
     }
 
@@ -624,7 +673,7 @@ public final class TerminalListStore: StoreLifecycle {
         let repoPath = terminals[index].repoPath
 
         if activeTerminalID == id {
-            let candidates = terminals(in: neighborScope(for: repoPath)).filter {
+            let candidates = terminals(in: neighborScope(for: terminals[index])).filter {
                 $0.id == id || !minimizedIDs.contains($0.id)
             }
             let neighbor = Self.neighborID(closing: id, among: candidates)
@@ -653,6 +702,7 @@ public final class TerminalListStore: StoreLifecycle {
         autoMinimizedIDs.remove(id)
         awaitingDecisionIDs.remove(id)
         stalledIDs.remove(id)
+        pendingViewJoins.removeValue(forKey: id)
         terminals.remove(at: index)
     }
 

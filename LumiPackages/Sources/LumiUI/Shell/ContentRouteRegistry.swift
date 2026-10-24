@@ -52,8 +52,9 @@ public struct ContentRouteRegistry {
     }
 
     /// Bilinmeyen route → terminals'a düşer (ui-state'te kalmış eski bir id
-    /// kabuğu boş bırakmaz). Terminals de kayıtlı değilse `nil`.
+    /// kabuğu boş bırakmaz). Terminals de kayıtlı değilse `nil`. Ekli id
+    /// (`aile:ek`, karar 135) kendi kaydı yoksa ailesinin descriptor'ına çözülür.
     public func resolve(_ id: ContentRouteID) -> ContentRouteDescriptor? {
-        descriptors[id] ?? descriptors[.terminals]
+        descriptors[id] ?? descriptors[id.family] ?? descriptors[.terminals]
     }
 }

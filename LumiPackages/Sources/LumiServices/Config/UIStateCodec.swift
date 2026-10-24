@@ -91,6 +91,13 @@ enum UIStateCodec {
                 raw.compactMap { $0 as? String }.prefix(LooseTerminalLocations.recentLimit)
             )
         }
+        // Karar 135 (additive): Custom View'lar ve yerleşimleri.
+        if let raw = dict["customViews"] as? [Any] {
+            state.customViews = CustomViewCodec.decode(raw)
+        }
+        if let raw = dict["customViewGridLayouts"] as? [String: Any] {
+            state.customViewGridLayouts = raw.compactMapValues { GridLayoutCodec.decode($0 as? [String: Any]) }
+        }
         return state
     }
 
@@ -168,6 +175,14 @@ enum UIStateCodec {
         // Karar 108 (additive): yalnız DOLU iken yazılır.
         if !state.recentLooseLocations.isEmpty {
             overlay["recentLooseLocations"] = state.recentLooseLocations
+        }
+        // Karar 135 (additive): anahtar bir kez yazıldıktan sonra boş hâli de
+        // yazılır (nil → hiç yazılmaz): merge son silinen view'ı diskte bırakmasın.
+        if let views = state.customViews {
+            overlay["customViews"] = views.map(CustomViewCodec.overlay)
+        }
+        if let layouts = state.customViewGridLayouts {
+            overlay["customViewGridLayouts"] = layouts.mapValues(GridLayoutCodec.overlay)
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.
@@ -362,5 +377,26 @@ enum ResumeSessionCodec {
 
     private static func isSafeSessionID(_ value: String) -> Bool {
         value.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$"#, options: .regularExpression) != nil
+    }
+}
+
+/// Karar 135: `ui-state.json` → `customViews[*]` ↔ `CustomViewState`.
+/// Kimliği boş/tekrarlı ya da adı olmayan girdi atılır; sıradaki String
+/// olmayan girdiler düşer.
+enum CustomViewCodec {
+    static func decode(_ raw: [Any]) -> [CustomViewState] {
+        var seen = Set<String>()
+        return raw.compactMap { item -> CustomViewState? in
+            guard let dict = item as? [String: Any],
+                  let id = dict["id"] as? String, !id.isEmpty, seen.insert(id).inserted,
+                  let name = (dict["name"] as? String).flatMap(CustomViewName.sanitized)
+            else { return nil }
+            let order = (dict["order"] as? [Any])?.compactMap { $0 as? String } ?? []
+            return CustomViewState(id: id, name: name, order: order)
+        }
+    }
+
+    static func overlay(_ view: CustomViewState) -> [String: Any] {
+        ["id": view.id, "name": view.name, "order": view.order]
     }
 }
