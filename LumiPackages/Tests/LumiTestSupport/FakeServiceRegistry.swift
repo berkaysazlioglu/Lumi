@@ -26,7 +26,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var taskProviders: any TaskProviderMaking = FakeTaskProviderFactory()
     public var taskImages: any TaskImageLoading = FakeTaskImageLoader()
     public var taskCredentials: any TaskCredentialStoring = FakeTaskCredentialStore()
-    public var taskAgents: any TaskAgentRunning = FakeTaskAgentRunner()
+    public var taskAgentTools: any TaskAgentToolServing = FakeTaskAgentTools()
     public var git: any GitServicing
     public var plastic: any PlasticServicing = FakePlasticService()
     public var commitMessages: any CommitMessageGenerating = FakeCommitMessageGenerator()

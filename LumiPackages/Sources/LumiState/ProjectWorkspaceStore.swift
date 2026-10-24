@@ -248,6 +248,20 @@ public final class ProjectWorkspaceStore {
         }
     }
 
+    /// Formdan bağımsız oluşturma (karar 137: task'e özel workspace). Create
+    /// Workspace dialogunun durumuna dokunmaz; kayıt aynı yoldan kaydedilir.
+    public func createWorkspace(project: Repo, name: String, branch: String) async throws -> ProjectWorkspace {
+        let request = WorkspaceCreateRequest(
+            project: project, name: name, branchName: branch, branchMode: .new,
+            knownProjectPaths: repos.repos.map(\.path)
+        )
+        let result = try await service.create(request)
+        pendingRecords[result.workspace.path] = result.workspace
+        updateRecords(records)
+        await save(result.workspace)
+        return result.workspace
+    }
+
     public func retryLibrary() async {
         guard !isCreating, libraryNeedsRetry, let created = lastCreated, let source else { return }
         isCreating = true

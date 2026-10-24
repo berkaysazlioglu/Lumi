@@ -78,6 +78,10 @@ enum UIStateCodec {
         if let raw = dict["orchestratorWatchedSessions"] as? [Any] {
             state.orchestratorWatchedSessions = raw.compactMap { $0 as? String }.filter { !$0.isEmpty }
         }
+        // Karar 137 (additive): task ↔ ajan bağlantıları; bozuk girdi atılır.
+        if let raw = dict["taskLinks"] as? [Any] {
+            state.taskLinks = raw.compactMap(TaskLinkCodec.decode)
+        }
         // Karar 103 (additive): All Terminals yerleşimi ve kart sırası. Yoksa/
         // bozuksa varsayılan; sıradaki String olmayan girdiler atılır.
         state.allTerminalsGridLayout = GridLayoutCodec.decode(dict["allTerminalsGridLayout"] as? [String: Any])
@@ -162,6 +166,9 @@ enum UIStateCodec {
         // nil → yazılmaz; boş liste YAZILIR (merge bayat listeyi diskte bırakmasın).
         if let watched = state.orchestratorWatchedSessions {
             overlay["orchestratorWatchedSessions"] = watched
+        }
+        if let links = state.taskLinks {
+            overlay["taskLinks"] = links.map(TaskLinkCodec.overlay)
         }
         // Karar 103 (additive): ikisi de yalnız DOLU iken yazılır. Sıra boşalınca
         // diskte kalan eski liste zararsızdır: resume listesi (her yazımda

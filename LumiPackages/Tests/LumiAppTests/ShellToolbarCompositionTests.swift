@@ -24,7 +24,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
         // `AppComposition.live` ile AYNI katkıcı listesi.
         registries = ShellComposition.makeRegistries(
             contributors: [
-                TasksFeatureAssembly(), TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(),
+                TasksFeatureAssembly(repo: RepoFeatureAssembly()), TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(),
                 StatusBarFeatureAssembly(), TerminalLinkActionsAssembly(), AppUpdateFeatureAssembly(),
             ]
         )

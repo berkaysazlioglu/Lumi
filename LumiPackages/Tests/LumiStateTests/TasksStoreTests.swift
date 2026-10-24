@@ -579,6 +579,97 @@ final class TasksStoreTests: XCTestCase {
         let saved = await config.config().taskSources
         XCTAssertEqual(saved.map(\.id), [id])
     }
+
+    // MARK: - Ajan bağlantısı kalıcılığı (Faz 3)
+
+    private func agentStore(
+        _ runner: FakeTaskAgentRunner, config: FakeConfigService, tasks: [TaskItem] = [.fake(id: "1")]
+    ) -> (TasksStore, FakeTaskProvider) {
+        let provider = FakeTaskProvider(info: .fakeFull(me: me), tasks: tasks)
+        let store = TasksStore(
+            factory: FakeTaskProviderFactory(providers: [.demo: provider]),
+            config: config, credentials: FakeTaskCredentialStore(),
+            images: FakeTaskImageLoader(), agents: runner, toasts: ToastStore(autoDismissAfter: 60),
+            sleep: { _ in throw CancellationError() }, debounce: TasksStoreTests.neverFires
+        )
+        return (store, provider)
+    }
+
+    private func request(_ key: TaskKey) -> TaskAgentRequest {
+        TaskAgentRequest(task: key, taskTitle: "t", checkout: .existing(path: "/repo"), agent: TaskAgentChoice(model: .sonnet), prompt: "p")
+    }
+
+    func testStartedAgentIsPersistedWithItsSession() async {
+        let terminal = TerminalID()
+        let runner = FakeTaskAgentRunner(script: [.started(terminal, sessionID: "s1"), .state(.working)])
+        let config = FakeConfigService()
+        let (store, _) = agentStore(runner, config: config)
+        await connect(store)
+        let key = store.entries[0].key
+
+        store.start(request(key), moveToInProgress: false, assignToMe: false)
+        while store.agentLink(for: key)?.state != .working { await Task.yield() }
+        var saved: [TaskAgentLinkRecord]?
+        while saved?.isEmpty != false { saved = await config.uiState().taskLinks; await Task.yield() }
+
+        XCTAssertEqual(saved?.first?.sessionID, "s1")
+        XCTAssertEqual(saved?.first?.checkoutPath, "/repo")
+        XCTAssertEqual(saved?.first?.model, .sonnet)
+        XCTAssertEqual(store.agentLink(for: key)?.terminalID, terminal)
+    }
+
+    func testFailedStartShowsToastAndEndsTheLink() async {
+        let runner = FakeTaskAgentRunner(script: [.failed("Couldn't create the workspace: exists")])
+        let (store, _) = agentStore(runner, config: FakeConfigService())
+        await connect(store)
+        let key = store.entries[0].key
+        store.start(request(key), moveToInProgress: false, assignToMe: false)
+        while store.agentLink(for: key)?.state != .exited { await Task.yield() }
+        XCTAssertEqual(store.agentLink(for: key)?.state.isActive, false)
+    }
+
+    func testSubmittedChipIsNotOverwrittenByLaterTurns() async {
+        let runner = FakeTaskAgentRunner(script: [
+            .started(TerminalID(), sessionID: "s1"), .state(.submitted(summary: "ok")), .state(.working), .state(.idle),
+        ])
+        let (store, _) = agentStore(runner, config: FakeConfigService())
+        await connect(store)
+        let key = store.entries[0].key
+        store.start(request(key), moveToInProgress: false, assignToMe: false)
+        for _ in 0..<200 { await Task.yield() }
+        XCTAssertEqual(store.agentLink(for: key)?.state, .submitted(summary: "ok"))
+        XCTAssertEqual(store.entry(key)?.item.status, .inReview)
+    }
+
+    func testRestoreReattachesSavedLinksAndDropsMissingOnes() async {
+        let config = FakeConfigService()
+        let demo = TaskSource(id: TaskSourceID("d"), name: "Demo", kind: .demo)
+        var seededConfig = AppConfig.defaults
+        seededConfig.taskSources = [demo]
+        await config.seed(seededConfig)
+        var ui = UIState.defaults
+        ui.taskLinks = [
+            TaskAgentLinkRecord(source: demo.id, taskID: "1", sessionID: "alive", checkoutPath: "/repo", model: nil, startedAt: Date(timeIntervalSince1970: 1), summary: nil),
+        ]
+        await config.seed(ui)
+        let runner = FakeTaskAgentRunner()
+        let terminal = TerminalID()
+        runner.reattachScript = [.started(terminal, sessionID: "alive"), .state(.idle)]
+        let (store, _) = agentStore(runner, config: config)
+
+        await store.load()
+        let key = TaskKey(source: demo.id, id: "1")
+        while store.agentLink(for: key)?.state != .idle { await Task.yield() }
+        XCTAssertEqual(store.agentLink(for: key)?.isReattached, true)
+        XCTAssertEqual(store.agentLink(for: key)?.terminalID, terminal)
+        XCTAssertEqual(runner.reattachedSessions, ["alive"])
+
+        // Terminali bulunamayan kayıt düşer.
+        runner.reattachScript = []
+        let (fresh, _) = agentStore(runner, config: config)
+        await fresh.load()
+        while fresh.agentLink(for: key) != nil { await Task.yield() }
+    }
 }
 
 /// `keepFresh`'in uykusunu kaydeder; iptal edilene kadar hemen döner ama her

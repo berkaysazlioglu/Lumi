@@ -21,6 +21,9 @@ public final class TerminalListStore: StoreLifecycle {
     /// "Karar bekliyor" (izin promptu) sinyali — ephemeral, persist edilmez.
     /// Prompt kuyruğu bunu görünce duraklar (status'ten ayrı sinyal).
     public private(set) var awaitingDecisionIDs: Set<TerminalID> = []
+    /// Kart başlığındaki küçük rozet (karar 137: ajanın çalıştığı task, ör.
+    /// `DEMO-1`). Özelliğe bağımsızdır; terminal kapanınca düşer.
+    public private(set) var cardBadges: [TerminalID: String] = [:]
     /// Feed akışı donmuş terminaller (design/00 Ek A §A.2-10) — ephemeral,
     /// persist EDİLMEZ: `TerminalMeta` formatı değişmez (karar 9).
     public private(set) var stalledIDs: Set<TerminalID> = []
@@ -261,6 +264,10 @@ public final class TerminalListStore: StoreLifecycle {
 
     /// setActiveTerminal paritesi: id map'te olmasa bile set edilir
     /// (yeni spawn henüz yansımamış olabilir); minimize edilmişe odak verilmez.
+    public func setCardBadge(_ badge: String?, for id: TerminalID) {
+        cardBadges[id] = badge
+    }
+
     public func focus(_ id: TerminalID?) {
         guard let id else {
             activeTerminalID = nil
@@ -708,6 +715,7 @@ public final class TerminalListStore: StoreLifecycle {
         autoMinimizedIDs.remove(id)
         awaitingDecisionIDs.remove(id)
         stalledIDs.remove(id)
+        cardBadges.removeValue(forKey: id)
         pendingViewJoins.removeValue(forKey: id)
         terminals.remove(at: index)
     }

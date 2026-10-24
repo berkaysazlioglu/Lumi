@@ -102,6 +102,8 @@ public final class TasksStore {
     @ObservationIgnored let credentials: any TaskCredentialStoring
     @ObservationIgnored let images: any TaskImageLoading
     @ObservationIgnored let agents: any TaskAgentRunning
+    /// Lumi projesinin git origin'i (Start'ta proje eşleşmesi).
+    @ObservationIgnored let remoteURL: @Sendable (String) async -> String?
     @ObservationIgnored let toasts: ToastStore
     @ObservationIgnored let now: @MainActor () -> Date
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
@@ -127,6 +129,7 @@ public final class TasksStore {
         credentials: any TaskCredentialStoring,
         images: any TaskImageLoading,
         agents: any TaskAgentRunning,
+        remoteURL: @escaping @Sendable (String) async -> String? = { _ in nil },
         toasts: ToastStore,
         now: @escaping @MainActor () -> Date = { Date() },
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
@@ -137,6 +140,7 @@ public final class TasksStore {
         self.credentials = credentials
         self.images = images
         self.agents = agents
+        self.remoteURL = remoteURL
         self.toasts = toasts
         self.now = now
         self.sleep = sleep

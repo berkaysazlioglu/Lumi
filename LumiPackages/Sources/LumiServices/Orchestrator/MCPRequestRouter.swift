@@ -48,11 +48,22 @@ enum MCPRequestRouter {
     }
 
     static func route(_ request: HTTPRequest, token: String, serverVersion: String) -> Disposition {
+        route(request, isAuthorized: { $0 == "Bearer \(token)" }, tools: OrchestratorTools.specs, serverVersion: serverVersion)
+    }
+
+    /// Araç listesi ve yetki kuralı parametreli yönlendirme — task ajanlarının
+    /// sunucusu (karar 137) kendi araçlarını ve terminal başına token'larını verir.
+    static func route(
+        _ request: HTTPRequest,
+        isAuthorized: (String?) -> Bool,
+        tools: [OrchestratorToolSpec],
+        serverVersion: String
+    ) -> Disposition {
         guard request.path.split(separator: "?").first.map(String.init) == path else {
             return .reply(status: 404, body: nil)
         }
         // Aynı kullanıcı hesabındaki başka süreçler araç çağıramasın.
-        guard request.header("Authorization") == "Bearer \(token)" else {
+        guard isAuthorized(request.header("Authorization")) else {
             return .reply(status: 401, body: nil)
         }
         // SSE akışı ve oturum silme desteklenmez (spec: 405 serbest).
@@ -83,7 +94,7 @@ enum MCPRequestRouter {
         case "ping":
             return .reply(status: 200, body: result(id: id, [:]))
         case "tools/list":
-            return .reply(status: 200, body: result(id: id, ["tools": toolList()]))
+            return .reply(status: 200, body: result(id: id, ["tools": toolList(tools)]))
         case "tools/call":
             guard let name = params["name"] as? String else {
                 return .reply(status: 200, body: error(id: id, code: ErrorCode.invalidParams, message: "Missing tool name"))
@@ -104,8 +115,8 @@ enum MCPRequestRouter {
         ])
     }
 
-    private static func toolList() -> [[String: Any]] {
-        OrchestratorTools.specs.map { spec in
+    private static func toolList(_ specs: [OrchestratorToolSpec]) -> [[String: Any]] {
+        specs.map { spec in
             let schema = (try? JSONSerialization.jsonObject(with: Data(spec.inputSchema.utf8))) ?? ["type": "object"]
             return ["name": spec.name, "description": spec.description, "inputSchema": schema]
         }

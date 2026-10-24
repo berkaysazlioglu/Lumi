@@ -57,6 +57,9 @@ public struct UIState: Sendable, Equatable {
     /// yazılmaz); izleme bir kez başladıysa boş liste de yazılır ki son
     /// terminalin bırakılması diske insin.
     public var orchestratorWatchedSessions: [String]?
+    /// Karar 137 (additive): task ↔ ajan bağlantıları. nil = hiç kullanılmadı
+    /// (yazılmaz); bir kez kullanıldıysa boş liste de yazılır.
+    public var taskLinks: [TaskAgentLinkRecord]?
     /// Karar 124 (additive): orchestrator panelinin Monitor bölmesi (izlenen
     /// terminaller + Activity) daraltılmış mı. nil = dosyada yok → açık; yalnız
     /// daraltılmışken `true` yazılır.
@@ -108,6 +111,7 @@ public struct UIState: Sendable, Equatable {
         projectToolsTab: String? = nil,
         orchestratorCodexThreadID: String? = nil,
         orchestratorWatchedSessions: [String]? = nil,
+        taskLinks: [TaskAgentLinkRecord]? = nil,
         orchestratorActivityCollapsed: Bool? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
         allTerminalsOrder: [String] = [],
@@ -132,6 +136,7 @@ public struct UIState: Sendable, Equatable {
         self.projectToolsTab = projectToolsTab
         self.orchestratorCodexThreadID = orchestratorCodexThreadID
         self.orchestratorWatchedSessions = orchestratorWatchedSessions
+        self.taskLinks = taskLinks
         self.orchestratorActivityCollapsed = orchestratorActivityCollapsed
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.allTerminalsOrder = allTerminalsOrder

@@ -254,6 +254,10 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         projectToolsTab: "agentHistory",
         orchestratorCodexThreadID: "orch-1",
         orchestratorWatchedSessions: ["s-1"],
+        taskLinks: [TaskAgentLinkRecord(
+            source: TaskSourceID("s"), taskID: "1", sessionID: "sess", checkoutPath: "/repo",
+            model: .opus, startedAt: Date(timeIntervalSince1970: 1_700_000_000), summary: "done"
+        )],
         orchestratorActivityCollapsed: true,
         allTerminalsGridLayout: GridLayout(mode: .auto, count: 2, heightMode: .scroll, heightRatio: .half),
         allTerminalsOrder: ["s-1", "s-2"],

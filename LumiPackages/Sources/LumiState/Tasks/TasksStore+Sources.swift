@@ -29,6 +29,7 @@ extension TasksStore {
                 )
             }
         }
+        await restoreAgentLinks()
     }
 
     func addSource(_ source: TaskSource, provider: any TaskProviding, info: TaskSourceInfo) async {

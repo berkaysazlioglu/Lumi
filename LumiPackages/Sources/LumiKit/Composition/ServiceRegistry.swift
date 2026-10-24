@@ -50,8 +50,8 @@ public protocol ServiceRegistry: AnyObject {
     var taskImages: any TaskImageLoading { get }
     /// Task kaynağı token'ları (Keychain).
     var taskCredentials: any TaskCredentialStoring { get }
-    /// Task'i ajana veren koşucu (Faz 3'e kadar önizleme).
-    var taskAgents: any TaskAgentRunning { get }
+    /// Task ajanlarının MCP sunucusu (`get_task`, `submit_for_review`).
+    var taskAgentTools: any TaskAgentToolServing { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

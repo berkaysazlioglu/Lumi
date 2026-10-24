@@ -22,6 +22,10 @@ public struct StartTaskOverlay: View {
     @State private var prompt = ""
     @State private var moveToInProgress = true
     @State private var assignToMe = true
+    /// Lumi projelerinin git origin'leri — task'in `project.repo`'suyla eşleşme.
+    @State private var origins: [String: String] = [:]
+    /// Kullanıcı projeyi elle seçtiyse origin'ler gelince ezilmez.
+    @State private var userPickedProject = false
 
     public init(store: TasksStore) {
         self.store = store
@@ -70,6 +74,13 @@ public struct StartTaskOverlay: View {
             .frame(width: Self.panelWidth, height: Self.panelHeight)
         }
         .onAppear(perform: prefill)
+        .task {
+            origins = await store.origins(for: projectPaths)
+            guard !userPickedProject, let entry,
+                  let matched = TaskProjectMatcher.match(entry.item.project, in: projectPaths, origins: origins)
+            else { return }
+            projectPath = matched
+        }
         .onChange(of: projectPath) { _, path in
             // Proje değişince checkout seçimi o projeye göre yeniden kurulur.
             if case .existing(let current) = checkout, checkouts.contains(where: { $0.path == current }) { return }
@@ -107,7 +118,7 @@ public struct StartTaskOverlay: View {
             LumiField(title: "Project", hint: matchHint(entry)) {
                 LumiDropdown(
                     options: projectPaths.map { .init(value: $0, label: projectName($0)) },
-                    selection: $projectPath,
+                    selection: Binding(get: { projectPath }, set: { projectPath = $0; userPickedProject = true }),
                     placeholder: "Choose a project",
                     emptyNote: "Add a project in the Projects panel first"
                 )
@@ -174,7 +185,7 @@ public struct StartTaskOverlay: View {
 
     private func matchHint(_ entry: TaskEntry) -> String? {
         guard let project = entry.item.project, info?.canRead(.project) == true else { return nil }
-        return TaskProjectMatcher.match(project, in: projectPaths) == nil
+        return TaskProjectMatcher.match(project, in: projectPaths, origins: origins) == nil
             ? "No Lumi project matches \"\(project.displayName)\" — pick one"
             : "Matched from the task's project \"\(project.displayName)\""
     }
@@ -212,7 +223,8 @@ public struct StartTaskOverlay: View {
         store.start(
             TaskAgentRequest(
                 task: entry.key, taskTitle: entry.item.title, checkout: choice,
-                agent: TaskAgentChoice(model: model), prompt: prompt
+                agent: TaskAgentChoice(model: model), prompt: prompt,
+                details: store.agentDetails(for: entry.key)
             ),
             moveToInProgress: moveToInProgress,
             assignToMe: assignToMe && canAssignToMe(entry)

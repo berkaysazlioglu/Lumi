@@ -55,6 +55,12 @@ struct TaskAgentSection: View {
     let store: TasksStore
     let entry: TaskEntry
 
+    @Shell private var shell
+
+    private func terminal(of link: TaskAgentLink) -> TerminalMeta? {
+        link.terminalID.flatMap { id in shell.terminals.terminals.first { $0.id == id } }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             HStack(spacing: Theme.Spacing.sm) {
@@ -82,6 +88,12 @@ struct TaskAgentSection: View {
             Text("in \(link.checkout.label) · started \(TaskPresentation.relative(link.startedAt))")
                 .font(Theme.Typography.labelMono)
                 .foregroundStyle(Theme.textMuted)
+            if link.isReattached, link.state.isActive {
+                Text("Reconnected after Lumi restarted — the agent can't submit by itself anymore; use Move to In Review when it's done.")
+                    .font(Theme.Typography.labelMono)
+                    .foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if case .submitted(let summary) = link.state {
                 Text(summary)
                     .font(Theme.Typography.bodyMono)
@@ -93,16 +105,19 @@ struct TaskAgentSection: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
             }
             HStack(spacing: Theme.Spacing.sm) {
-                LumiActionButton(title: "Open Terminal") {}
-                    .disabled(link.terminalID == nil)
-                    .help(link.terminalID == nil ? "Preview — there is no real terminal yet" : "Show the agent's terminal")
+                LumiActionButton(title: "Open Terminal") {
+                    if let meta = terminal(of: link) { shell.focusAgent(meta) }
+                }
+                .disabled(terminal(of: link) == nil)
+                .help(terminal(of: link) == nil ? "The agent's terminal is closed" : "Show the agent's terminal")
                 // Ajan teslim etmeden durduysa ya da teslimdeki taşıma sunucuda
                 // başarısız olduysa kullanıcı elle taşır.
                 if !link.state.isActive || link.state == .idle, entry.item.status != .inReview, entry.item.status != .done {
                     LumiActionButton(title: "Move to In Review") { store.moveToReview(entry.key) }
                 }
                 if link.state.isActive {
-                    LumiActionButton(title: "Stop", kind: .destructive) { store.stopAgent(entry.key) }
+                    LumiActionButton(title: "Unlink") { store.stopAgent(entry.key) }
+                        .help("Stop tracking this agent here — its terminal stays open")
                 } else {
                     LumiActionButton(title: "Dismiss") { store.dismissAgent(entry.key) }
                 }

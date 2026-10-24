@@ -137,6 +137,9 @@ struct TerminalCardHeader: View {
 
     private var projectColor: ProjectColor? { projectColors[meta.id] }
     private var projectTint: Color? { projectColor.map(Theme.projectColor) }
+    /// Karar 137: ajanın çalıştığı task (`DEMO-1`) — terminal listesinin
+    /// özelliğe bağımsız rozet kanalından.
+    @Shell private var shell
 
     var body: some View {
         HStack(spacing: style.spacing) {
@@ -148,6 +151,11 @@ struct TerminalCardHeader: View {
                 size: style.titleSize
             )
             TerminalIdentityIcon(provider: meta.provider, size: style.titleSize)
+            if let badge = shell.terminals.cardBadges[meta.id] {
+                Badge(text: badge, color: Theme.accentPrimary, shape: .capsule)
+                    .help("Working on task \(badge)")
+                    .accessibilityLabel("Task \(badge)")
+            }
             if isStalled {
                 Badge(text: "stalled", color: Theme.warning)
                     .accessibilityLabel("Terminal stalled")

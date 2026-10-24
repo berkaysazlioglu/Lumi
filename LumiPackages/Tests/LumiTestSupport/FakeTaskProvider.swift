@@ -160,10 +160,12 @@ public actor FakeTaskImageLoader: TaskImageLoading {
 }
 
 /// Ajan koşucusu ikamesi: verilen olayları sırayla yayınlar.
-public final class FakeTaskAgentRunner: TaskAgentRunning, @unchecked Sendable {
-    private let lock = NSLock()
+@MainActor
+public final class FakeTaskAgentRunner: TaskAgentRunning {
     private var script: [TaskAgentEvent]
+    public var reattachScript: [TaskAgentEvent] = []
     public private(set) var requests: [TaskAgentRequest] = []
+    public private(set) var reattachedSessions: [String] = []
 
     public init(script: [TaskAgentEvent] = [.started(nil), .state(.working)]) {
         self.script = script
@@ -172,11 +174,17 @@ public final class FakeTaskAgentRunner: TaskAgentRunning, @unchecked Sendable {
     public var isPreview: Bool { false }
 
     public func start(_ request: TaskAgentRequest) -> AsyncStream<TaskAgentEvent> {
-        lock.lock()
         requests.append(request)
-        let events = script
-        lock.unlock()
-        return AsyncStream { continuation in
+        return Self.stream(script)
+    }
+
+    public func reattach(sessionID: String, task: TaskKey) -> AsyncStream<TaskAgentEvent> {
+        reattachedSessions.append(sessionID)
+        return Self.stream(reattachScript)
+    }
+
+    private static func stream(_ events: [TaskAgentEvent]) -> AsyncStream<TaskAgentEvent> {
+        AsyncStream { continuation in
             for event in events { continuation.yield(event) }
             continuation.finish()
         }
@@ -259,4 +267,35 @@ public final class FakeHTTPTransport: HTTPTransporting, @unchecked Sendable {
         }
     }
 
+}
+
+/// Task ajanı MCP sunucusu ikamesi: kayıtları tutar, `submit` ile aracı tetikler.
+public actor FakeTaskAgentTools: TaskAgentToolServing {
+    public private(set) var registered: [(details: String, session: TaskAgentToolSession)] = []
+    public private(set) var unregistered: [TaskAgentToolSession] = []
+    private var handlers: [String: @Sendable (String) async -> String] = [:]
+    public var fails = false
+
+    public init() {}
+
+    public func setFails(_ fails: Bool) { self.fails = fails }
+
+    public func register(details: String, onSubmit: @escaping @Sendable (String) async -> String) async throws -> TaskAgentToolSession {
+        if fails { throw TaskProviderError.unreachable("listener failed") }
+        let session = TaskAgentToolSession(configPath: "/tmp/mcp-\(registered.count).json", token: "tok-\(registered.count)")
+        registered.append((details, session))
+        handlers[session.token] = onSubmit
+        return session
+    }
+
+    public func unregister(_ session: TaskAgentToolSession) async {
+        unregistered.append(session)
+        handlers[session.token] = nil
+    }
+
+    /// Ajanın `submit_for_review` çağrısını taklit eder.
+    public func submit(token: String, summary: String) async -> String? {
+        guard let handler = handlers[token] else { return nil }
+        return await handler(summary)
+    }
 }

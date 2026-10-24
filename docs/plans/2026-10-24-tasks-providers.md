@@ -1,6 +1,6 @@
 # Tasks — kendi sunucunu bağla (Lumi Tasks Protocol + adapter'lar) (plan)
 
-Durum: **onaylandı, karar 137** (2026-10-24). Faz 1, 1b ve 2 tamam; protokol ve mimari `docs/design/06-tasks-protocol.md`'de. Sıradaki: Faz 3 (gerçek ajan).
+Durum: **onaylandı, karar 137** (2026-10-24). Faz 1, 1b, 2 ve 3 tamam; protokol ve mimari `docs/design/06-tasks-protocol.md`'de. Sıradaki: Faz 4 (ayrı onay).
 
 Kullanıcı isteği: "Tasks sekmesini canlandırmak istiyorum … herkes kendi sisteminde kullanabilsin … user tasks sekmesindeki özel prompt'u alıp kendi heroku projesindeki bir agent'a yapıştırınca agent öyle bir sistem inşa edecek ki user o linki app'e yapıştırınca lumi task'leri çekebilecek, done'a atabilecek … token sistemi de olur … başka user railway'i bağlar."
 
@@ -206,7 +206,7 @@ Mobil ve orchestrator v1 kapsamı dışında; mimari onları engellemez (Faz 4).
 1. ✅ **UI, sahte veriyle.** LumiKit modeli + `TasksStore` + tüm görünümler + `DemoTaskProvider` (bellek içi, gecikme simülasyonlu). Bağlama sheet'inde `Demo data` adapter'ı gerçekten bağlanır ve Verify kontrol listesi ona karşı koşar; `Custom` akışı (URL + token) görünür ama adapter'ı Faz 2'ye kadar "not available yet" hatası döner. Demo kaynağın menüsünde capability/alan anahtarları vardır ki "X yoksa" kuralları gözle denensin. Kaynaklar bu fazda kalıcı değildir (yeniden başlatınca gider). → **Gözden geçirme, görsel onay.**
 1b. ✅ **İkinci tur (kullanıcı kararları 7–10), sahte veriyle:** birleşik yazım (`TasksStore+Writes`), hata kaydı + `Request Errors` sheet'i + `failing` bandı + demo hata taklidi, `images` alanı + disk önbelleği (`TaskImageCache`) + küçültülmüş önizleme şeridi + viewer'da açma, Start sheet'i + ajan çipi/bölümü + `PreviewTaskAgentRunner`.
 2. ✅ **Protokol.** `docs/design/06-tasks-protocol.md` (OpenAPI dosyası bilinçli olarak yazılmadı — kanonik metin setup prompt'tur, bkz. design/06 §1), setup prompt metni, HTTP adapter, Keychain, codec, cache, gerçek Verify. Doğrulama: setup prompt'u boş bir Node projesinde gerçekten bir ajana koşturup çıkan sunucuyu Lumi'ye bağlamak (dogfood). Setup prompt'ta Heroku/Railway uyarısı: dosya sistemi geçicidir, kalıcılık için Postgres vb. kullanılmalı.
-3. **Gerçek ajan.** "Task → ajan" bölümündeki Faz 3 işi: gerçek koşucu, `submit_for_review` MCP aracı, git origin'li proje eşleşmesi, bağlantı kalıcılığı, terminal kartında task çipi.
+3. ✅ **Gerçek ajan.** "Task → ajan" bölümündeki Faz 3 işi: gerçek koşucu, `submit_for_review` MCP aracı, git origin'li proje eşleşmesi, bağlantı kalıcılığı, terminal kartında task çipi.
 4. **Genişleme (ayrı onay).** Orchestrator MCP araçları (`list_tasks`, `update_task`), telefonda Tasks, GitHub/Linear adapter'ları, artımlı senkron.
 
 ## Riskler

@@ -27,11 +27,11 @@ Task: zorunlu `id`, `title`, `status` (`todo | in_progress | in_review | done`),
 LumiKit     TaskItem/TaskPatch/TaskDraft · TaskSourceInfo (capabilities + fields + me)
             TaskProviding · TaskProviderMaking · TaskCredentialStoring · HTTPTransporting
             TaskSourceVerifier · TaskBoard/TaskFilter · TaskRequestFailure · TaskSetupPrompt
-            TaskAgent* (Start sheet modeli, TaskAgentRunning dikişi) · TaskEndpoint
+            TaskAgent* (Start sheet modeli, TaskAgentRunning dikişi, TaskAgentTools) · TaskEndpoint
 LumiServices LumiTasksHTTPProvider + LumiTasksWire (custom) · DemoTaskProvider (demo)
             LiveTaskProviderFactory · URLSessionTransport · KeychainTaskCredentialStore
-            TaskImageCache · PreviewTaskAgentRunner · Config/TaskSourceCodec
-LumiState   TasksStore (+Writes, +Failures, +Agents, +Sheets, +Sources)
+            TaskImageCache · TaskAgentMCPServer · Config/TaskSourceCodec + TaskLinkCodec
+LumiState   TasksStore (+Writes, +Failures, +Agents, +Sheets, +Sources) · LiveTaskAgentRunner
 LumiUI      TasksScreen · TasksHeaderBar · TaskBoardView · TaskListView · TaskDetailPanel
             TaskConnectOverlay · NewTaskOverlay · StartTaskOverlay · TaskFailureLogOverlay
 LumiAppCore TasksFeatureAssembly (store'u kurar, route + 4 sheet'i descriptor'la kaydeder)
@@ -68,6 +68,31 @@ Görünümler alan/yetenek sorusunu yalnız `TaskSourceInfo`'ya sorar (`canRead`
 
 Setup prompt'u bir Express + `node:sqlite` projesinde `claude -p --model sonnet`'e verildi. Ajan protokolü projenin mevcut veritabanıyla kurdu (sabit zamanlı token karşılaştırması, zarf, keyset sayfalama, `updatedAt` artışı); Lumi'nin gerçek adapter'ı + Verify bu sunucuya karşı geçti (`LumiTasksLiveServerTests`, `LUMI_TASKS_E2E_URL`/`LUMI_TASKS_E2E_TOKEN` ile). İlk turda çıkan iki sorun prompt'a işlendi: ajan token'ı üretip yazdırmalı; token tanımlı değilse uygulamanın geri kalanı açılmalı, yalnız `/lumi/v1` `503 not_configured` dönmeli.
 
-## 8. Sonraki faz
+## 8. Task → ajan (Faz 3)
 
-Faz 3 — gerçek ajan: `TaskAgentRunning`'in terminal + `submit_for_review` MCP aracıyla yazılması, git origin'li proje eşleşmesi, ajan bağlantısının kalıcılığı, terminal kartında task çipi (plan: "Task → ajan").
+```
+Start sheet ─▶ TasksStore.start ─▶ LiveTaskAgentRunner
+                                    1. yeni workspace? ProjectWorkspaceStore.createWorkspace (task/<id>-<slug>)
+                                    2. TaskAgentMCPServer.register → task kapsamlı token + 0600 mcp config
+                                    3. ClaudeWorkspaceTrust.markTrusted(checkout)
+                                    4. terminals.spawn("claude '<prompt>' --model … --mcp-config '<file>'
+                                                         --allowedTools mcp__lumi__get_task,mcp__lumi__submit_for_review")
+                                    5. cardBadges[terminal] = "<task id>"
+                                    6. terminal durumunu izle (withObservationTracking) → TaskAgentState
+ajan ─ submit_for_review(summary) ─▶ MCP ─▶ .submitted ─▶ TasksStore: In Review'a taşı + hemen gönder
+```
+
+- **Görünür terminal.** Ajan normal bir claude terminalidir: Projects'te, ızgarada, telefonda görünür; `--session-id` enjeksiyonu (karar 23) korunur, resume (karar 90) çalışır. Kart başlığında task rozeti (`TerminalListStore.cardBadges` — özelliğe bağımsız kanal), task kartında ajan çipi, detayda `Open Terminal` (`ShellContext.focusAgent`).
+- **Komut sırası.** Prompt konumsal argüman olarak **önce** gelir: `--mcp-config` ve `--allowedTools` çok değerli seçeneklerdir, arkalarındaki argümanı yutarlar. `--strict-mcp-config` verilmez — kullanıcının kendi MCP'leri ajanda kalır.
+- **Sunucu.** `TaskAgentMCPServer` orchestrator'ınkinden ayrıdır (aynı `MCPRequestRouter`, araç listesi parametreli): tek loopback dinleyici, **terminal başına token**; token kayda çözülür, bir ajan başka bir task'i teslim edemez. Araçlar `get_task` (Start anındaki başlık/durum/açıklama) ve `submit_for_review(summary)`; ikisi de `--allowedTools` ile onaysız. Terminal kapanınca kayıt ve dosya düşer.
+- **Durum eşlemesi.** working → Working; karar bekliyor → Needs input; turn bitti → Waiting; claude çıktı (provider `nil`) ya da terminal kapandı → Exited. Terminal listede bir kez görünmeden "kapandı" sayılmaz (`spawn` meta'yı `.spawned` olayından önce döner). Teslimden sonra yalnız kapanış çipi değiştirir.
+- **Proje eşleşmesi.** `project.repo` ↔ Lumi projesinin git origin'i (`git@host:o/r.git`, `https://host/o/r`, `ssh://git@host:22/o/r.git` aynı sayılır), sonra ad.
+- **Kalıcılık.** Oturum kimliği bilinen bağlantılar `ui-state.json`'ın additive `taskLinks` anahtarına yazılır (`TaskLinkCodec`; nil → yazılmaz, bir kez kullanıldıysa boş da yazılır). Açılışta resume edilen terminal oturum kimliğiyle 10 sn'ye kadar beklenip yeniden bağlanır; bulunamayan kayıt düşer. **Yeniden bağlanan ajanın MCP aracı yoktur** (resume komutu `--mcp-config` taşımaz) — detay bunu söyler, teslim `Move to In Review` ile.
+- **Doğrulama.** `TaskAgentClaudeLiveTests` (`LUMI_TASKS_AGENT_E2E=1`) gerçek `claude`'u aynı bayraklarla koşturur; ajan `get_task` + `submit_for_review`'u çağırdı (2026-10-25).
+
+## 9. Bilinen sınırlar
+
+- Lumi yeniden açılınca ajan teslim aracını kaybeder (yukarıda).
+- Yalnız Claude; Codex ajanı (MCP `config.toml`) sonra.
+- `lumiMetadata` henüz sunucuya yazılmıyor — bağlantı yalnız bu Mac'te.
+- Settings ▸ Tasks sekmesi yok; kaynak yönetimi kaynak menüsünden (`Reconnect…`, `Disconnect`).

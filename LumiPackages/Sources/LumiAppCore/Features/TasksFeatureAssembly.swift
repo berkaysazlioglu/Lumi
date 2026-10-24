@@ -1,5 +1,6 @@
 import Foundation
 import LumiKit
+import LumiServices
 import LumiState
 import LumiUI
 import SwiftUI
@@ -17,14 +18,35 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     /// `build`'den önce nil — kabuk kaydı testlerde `build` olmadan da kurulur,
     /// bu yüzden descriptor'lar store'u çağrı anında ve zayıf okur.
     private(set) var tasks: TasksStore?
+    /// Task'e özel workspace'i (karar 137) repo feature'ının store'u açar.
+    private let repo: RepoFeatureAssembly
+
+    init(repo: RepoFeatureAssembly) {
+        self.repo = repo
+    }
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
+        let git = services.git
+        let runner = LiveTaskAgentRunner(
+            terminals: shared.terminals,
+            tools: services.taskAgentTools,
+            createWorkspace: { [repo] projectPath, branch in
+                guard let project = repo.repoStore.repo(at: projectPath) else {
+                    throw TaskAgentStartError.projectNotFound(projectPath)
+                }
+                return try await repo.workspaceStore.createWorkspace(
+                    project: project, name: TaskAgentStartError.workspaceName(for: branch), branch: branch
+                ).path
+            },
+            trust: { ClaudeWorkspaceTrust().markTrusted(repoPath: $0) }
+        )
         tasks = TasksStore(
             factory: services.taskProviders,
             config: services.config,
             credentials: services.taskCredentials,
             images: services.taskImages,
-            agents: services.taskAgents,
+            agents: runner,
+            remoteURL: { await git.remoteURL(repoPath: $0) },
             toasts: shared.toasts
         )
     }
@@ -97,5 +119,21 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     /// Kapanışta bekleyen birleşik yazımlar kaybolmasın.
     func shutdown() async {
         await tasks?.flushAll()
+    }
+}
+
+/// Task ajanını başlatırken workspace tarafındaki hatalar.
+enum TaskAgentStartError: LocalizedError {
+    case projectNotFound(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .projectNotFound(let path): "\((path as NSString).lastPathComponent) is no longer in Projects."
+        }
+    }
+
+    /// Workspace klasör adı: dal adının `task/` öneki atılmış hâli.
+    static func workspaceName(for branch: String) -> String {
+        branch.hasPrefix("task/") ? String(branch.dropFirst("task/".count)) : branch
     }
 }
