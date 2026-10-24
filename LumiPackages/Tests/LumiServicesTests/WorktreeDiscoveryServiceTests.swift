@@ -88,6 +88,29 @@ final class WorktreeDiscoveryServiceTests: XCTestCase {
         XCTAssertEqual(gone?.isListable, false)
     }
 
+    func testToolPreparationWorktreeIsNotListable() async throws {
+        let project = try makeGitProject("source")
+        let preparing = root.appendingPathComponent("orca/workspaces/.orca-preparing/86327-abc")
+        try runGit(in: project, "worktree", "add", "--detach", preparing.path)
+        try runGit(in: project, "worktree", "lock", "--reason", "orca-create-preparation:v1", preparing.path)
+
+        let service = WorktreeDiscoveryService(managedRoot: root.appendingPathComponent("workspaces"))
+        let entry = try await service.worktrees(projectPath: project.path).first { $0.path == preparing.path }
+
+        XCTAssertEqual(entry?.isLocked, true)
+        XCTAssertEqual(entry?.isTransient, true)
+        XCTAssertEqual(entry?.isListable, false)
+    }
+
+    func testTransientRule() {
+        XCTAssertTrue(GitWorktreeEntry(path: "/x/locked", branch: nil, isLocked: true).isTransient)
+        XCTAssertTrue(GitWorktreeEntry(path: "/x/locked", branch: "feature", isLocked: true).isListable)
+        XCTAssertTrue(GitWorktreeEntry(path: "/x/.tool-preparing/id", branch: "b").isTransient)
+        XCTAssertFalse(GitWorktreeEntry(path: "/x/detached", branch: nil).isTransient)
+        // Claude Code'un `<repo>/.claude/worktrees/<ad>` worktree'leri kalır.
+        XCTAssertFalse(GitWorktreeEntry(path: "/repo/.claude/worktrees/fix", branch: "fix").isTransient)
+    }
+
     func testGitFailureThrowsInsteadOfReturningEmptyList() async throws {
         let plain = root.appendingPathComponent("not-a-repo")
         try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)

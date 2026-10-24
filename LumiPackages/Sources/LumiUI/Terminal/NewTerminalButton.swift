@@ -42,6 +42,9 @@ struct NewTerminalButton: View {
     var locationLabel: String?
     let onNewProvider: () -> Void
     let items: [NewTerminalMenuItem]
+    /// Karar 121: Claude model kısayolları — ajanların altında, ayırıcıdan
+    /// sonra; boşsa bölüm çizilmez.
+    var modelItems: [NewTerminalMenuItem] = []
     /// Karar 108: dropdown'un "Open in" bölümü; boşsa bölüm çizilmez.
     var locationItems: [NewTerminalMenuItem] = []
 
@@ -135,12 +138,14 @@ struct NewTerminalButton: View {
             ForEach(items) { item in
                 dropdownRow(item)
             }
+            if !modelItems.isEmpty {
+                sectionSeparator
+                ForEach(modelItems) { item in
+                    dropdownRow(item)
+                }
+            }
             if !locationItems.isEmpty {
-                Rectangle()
-                    .fill(Theme.border)
-                    .frame(height: Theme.Stroke.hairline)
-                    .padding(.vertical, Theme.Spacing.xs)
-                    .accessibilityHidden(true)
+                sectionSeparator
                 Text("Open in")
                     .font(Theme.Typography.mono(.caption, weight: .semibold))
                     .foregroundStyle(Theme.textMuted)
@@ -158,6 +163,15 @@ struct NewTerminalButton: View {
 }
 
 extension NewTerminalButton {
+    /// Bölümler arası yatay ince çizgi (macOS menü ayırıcısı gibi).
+    fileprivate var sectionSeparator: some View {
+        Rectangle()
+            .fill(Theme.border)
+            .frame(height: Theme.Stroke.hairline)
+            .padding(.vertical, Theme.Spacing.xs)
+            .accessibilityHidden(true)
+    }
+
     fileprivate func dropdownRow(_ item: NewTerminalMenuItem) -> some View {
         NewTerminalDropdownItem(glyph: item.glyph, label: item.label, isSelected: item.isSelected) {
             isOpen = false
@@ -181,6 +195,7 @@ struct ScopedNewTerminalButton: View {
             locationLabel: NewTerminalMenu.locationLabel(shell: shell, scope: scope),
             onNewProvider: { shell.spawnTerminal(in: scope, command: provider.launchCommand) },
             items: NewTerminalMenu.items(shell: shell, scope: scope),
+            modelItems: NewTerminalMenu.modelItems(shell: shell, scope: scope),
             locationItems: NewTerminalMenu.locationItems(shell: shell, scope: scope)
         )
     }
@@ -249,6 +264,9 @@ private struct NewTerminalDropdownItem: View {
             NewTerminalMenuItem(label: "New Codex", glyph: .provider(.codex), action: {}),
             NewTerminalMenuItem(label: "New DeepSeek", glyph: .symbol("sparkles"), action: {}),
             NewTerminalMenuItem(label: "New Bash", glyph: .symbol("terminal"), action: {}),
+        ],
+        modelItems: [
+            NewTerminalMenuItem(label: "New Claude Opus", glyph: .provider(.claude), action: {}),
         ]
     )
         .padding(Theme.Spacing.xxl)

@@ -11,12 +11,21 @@ final class NewTerminalMenuTests: XCTestCase {
 
     private let modelLabels = ["New Claude Fable", "New Claude Opus", "New Claude Sonnet", "New Claude Haiku"]
 
-    func testListsModelsThenTheOtherProviderThenDeepSeekThenBash() async {
+    func testListsTheOtherProviderThenDeepSeekThenBash() async {
         let fixture = await ShellContextFixture.make()
 
         let labels = NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath)).map(\.label)
 
-        XCTAssertEqual(labels, modelLabels + ["New Codex", "New DeepSeek", "New Bash"])
+        XCTAssertEqual(labels, ["New Codex", "New DeepSeek", "New Bash"])
+    }
+
+    /// Karar 121: model kısayolları ayrı bölümdür (ayırıcıdan sonra çizilir).
+    func testModelShortcutsAreASeparateSection() async {
+        let fixture = await ShellContextFixture.make()
+
+        let labels = NewTerminalMenu.modelItems(shell: fixture.context, scope: .repo(repoPath)).map(\.label)
+
+        XCTAssertEqual(labels, modelLabels)
     }
 
     func testActiveProviderIsExcluded() async {
@@ -25,7 +34,7 @@ final class NewTerminalMenuTests: XCTestCase {
 
         let labels = NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath)).map(\.label)
 
-        XCTAssertEqual(labels, modelLabels + ["New Claude", "New DeepSeek", "New Bash"])
+        XCTAssertEqual(labels, ["New Claude", "New DeepSeek", "New Bash"])
     }
 
     /// Karar 121: ayar kapalıyken model kısayolları listelenmez.
@@ -33,16 +42,14 @@ final class NewTerminalMenuTests: XCTestCase {
         let fixture = await ShellContextFixture.make()
         fixture.context.settings.setClaudeModelShortcutsEnabled(false)
 
-        let labels = NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath)).map(\.label)
-
-        XCTAssertEqual(labels, ["New Codex", "New DeepSeek", "New Bash"])
+        XCTAssertTrue(NewTerminalMenu.modelItems(shell: fixture.context, scope: .repo(repoPath)).isEmpty)
     }
 
     func testModelItemSpawnsClaudeWithTheAlias() async {
         let fixture = await ShellContextFixture.make()
 
         let item = try? XCTUnwrap(
-            NewTerminalMenu.items(shell: fixture.context, scope: .repo(repoPath))
+            NewTerminalMenu.modelItems(shell: fixture.context, scope: .repo(repoPath))
                 .first { $0.label == "New Claude Fable" }
         )
         item?.action()

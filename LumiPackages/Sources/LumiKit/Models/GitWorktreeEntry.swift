@@ -34,9 +34,21 @@ public struct GitWorktreeEntry: Sendable, Equatable {
         self.isInsideManagedRoot = isInsideManagedRoot
     }
 
-    /// Checkout olarak listelenebilir mi: projenin kendisi, bare girdi ve
-    /// kaydı kalmış ama klasörü gitmiş worktree satır olamaz.
-    public var isListable: Bool { !isMain && !isBare && !isPrunable }
+    /// Checkout olarak listelenebilir mi: projenin kendisi, bare girdi,
+    /// kaydı kalmış ama klasörü gitmiş worktree ve başka bir aracın
+    /// oluşturmakta olduğu geçici worktree satır olamaz.
+    public var isListable: Bool { !isMain && !isBare && !isPrunable && !isTransient }
+
+    /// Başka bir aracın hazırlık aşamasındaki worktree'si (ör. Orca'nın
+    /// `.orca-preparing/<id>` klasörü, `orca-create-preparation` kilidiyle):
+    /// kilitli + detached ya da gizli (`.` ile başlayan) bir ara klasörün
+    /// hemen altında. İş bitince araç onu asıl yerine taşır; listelemek
+    /// UUID adlı, kısa ömürlü bir satır üretir.
+    public var isTransient: Bool {
+        if isLocked, branch == nil { return true }
+        let parent = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+        return parent.hasPrefix(".")
+    }
 
     /// Satır adı: klasör adı (Lumi'nin oluşturduğu workspace'te de klasör
     /// adı workspace adının slug'ıdır).
