@@ -59,7 +59,7 @@ extension TasksStore {
 extension TasksStore {
     public func imageFile(for image: URL, in source: TaskSourceID, task: String? = nil) async -> URL? {
         do {
-            return try await images.localFile(for: image, authorization: nil)
+            return try await images.localFile(for: image, authorization: providers[source]?.authorization(for: image))
         } catch {
             record(error, operation: .loadImage, source: source, taskID: task)
             return nil

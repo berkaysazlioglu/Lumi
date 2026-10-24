@@ -182,3 +182,81 @@ public final class FakeTaskAgentRunner: TaskAgentRunning, @unchecked Sendable {
         }
     }
 }
+
+/// Token deposu ikamesi: bellek içi; okuma/yazma hatası scriptlenebilir.
+public actor FakeTaskCredentialStore: TaskCredentialStoring {
+    public private(set) var tokens: [TaskSourceID: String] = [:]
+    public var readFailure: String?
+    public var writeFails = false
+
+    public init(tokens: [TaskSourceID: String] = [:]) {
+        self.tokens = tokens
+    }
+
+    public func setReadFailure(_ detail: String?) { readFailure = detail }
+    public func setWriteFails(_ fails: Bool) { writeFails = fails }
+
+    public func token(for source: TaskSourceID) async -> KeychainReadResult {
+        if let readFailure { return .failed(detail: readFailure) }
+        return tokens[source].map { .found($0) } ?? .missing
+    }
+
+    public func setToken(_ token: String, for source: TaskSourceID) async throws {
+        if writeFails { throw TaskProviderError.unreachable("keychain locked") }
+        tokens[source] = token
+    }
+
+    public func deleteToken(for source: TaskSourceID) async throws {
+        tokens[source] = nil
+    }
+}
+
+/// Scriptli HTTP taşıması: (yöntem, yol) → yanıt; istekleri kaydeder.
+/// Senkron kurulur (sınıf + kilit) — JSON sözlükleri actor sınırından geçmesin.
+public final class FakeHTTPTransport: HTTPTransporting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [URLRequest] = []
+    private var routes: [String: [HTTPResponse]] = [:]
+    private var networkError: URLError?
+
+    public init() {}
+
+    public var requests: [URLRequest] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    /// Aynı uca birden çok yanıt verilirse sırayla tüketilir; sonuncu kalır.
+    public func respond(_ method: String, _ path: String, status: Int, json: Any? = nil, raw: String? = nil, headers: [String: String] = [:]) {
+        let body: Data = if let json { (try? JSONSerialization.data(withJSONObject: json)) ?? Data() } else { Data((raw ?? "").utf8) }
+        lock.lock()
+        routes["\(method) \(path)", default: []].append(HTTPResponse(status: status, body: body, headers: headers))
+        lock.unlock()
+    }
+
+    public func setNetworkError(_ error: URLError?) {
+        lock.lock()
+        networkError = error
+        lock.unlock()
+    }
+
+    public func send(_ request: URLRequest) async throws -> HTTPResponse {
+        try next(for: request).get()
+    }
+
+    private func next(for request: URLRequest) -> Result<HTTPResponse, URLError> {
+        lock.withLock {
+            recorded.append(request)
+            if let networkError { return .failure(networkError) }
+            let key = "\(request.httpMethod ?? "GET") \(request.url?.path(percentEncoded: false) ?? "")"
+            guard var queue = routes[key], !queue.isEmpty else {
+                return .success(HTTPResponse(status: 404, body: Data(#"{"error":{"code":"not_found","message":"no fake route"}}"#.utf8)))
+            }
+            let response = queue.count > 1 ? queue.removeFirst() : queue[0]
+            routes[key] = queue
+            return .success(response)
+        }
+    }
+
+}

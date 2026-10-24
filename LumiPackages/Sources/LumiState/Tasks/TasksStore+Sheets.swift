@@ -12,6 +12,8 @@ public struct TaskConnectFlow: Sendable {
     public var isVerifying = false
     /// Adres doğrulamasının hatası (Verify'a basılınca dolar).
     public var addressProblem: String?
+    /// Doluysa yeni kaynak eklenmez; bu kaynağın adresi/token'ı yenilenir.
+    public var reconnecting: TaskSourceID?
 
     public init(kind: TaskProviderKind = .custom, name: String = "", address: String = "", token: String = "") {
         self.kind = kind
@@ -78,7 +80,7 @@ extension TasksStore {
 
     public func verifyConnect() async {
         guard var flow = connectFlow, flow.canVerify else { return }
-        var source = TaskSource(name: Self.defaultName(for: flow), kind: flow.kind)
+        var source = TaskSource(id: flow.reconnecting ?? .make(), name: Self.defaultName(for: flow), kind: flow.kind)
         if flow.kind.needsEndpoint {
             switch TaskEndpoint.normalize(flow.address) {
             case .failure(let problem):
@@ -109,10 +111,36 @@ extension TasksStore {
         else { return }
         var named = source
         named.name = Self.defaultName(for: flow, info: info)
+        let token = flow.kind.needsEndpoint ? flow.token.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        if let reconnecting = flow.reconnecting {
+            named = TaskSource(id: reconnecting, name: named.name, kind: named.kind, baseURL: named.baseURL)
+        }
+        if let token {
+            do {
+                try await credentials.setToken(token, for: named.id)
+            } catch {
+                toasts.show(.error, title: "Couldn't save the token", message: "The Keychain refused the write: \(Self.message(error))")
+                return
+            }
+        }
         connectFlow = nil
         pendingConnection = nil
-        await addSource(named, provider: provider, info: info)
-        toasts.show(.success, title: "Connected \(named.name)")
+        if flow.reconnecting != nil {
+            await replaceSource(named, provider: provider, info: info)
+            toasts.show(.success, title: "Reconnected \(named.name)")
+        } else {
+            await addSource(named, provider: provider, info: info)
+            toasts.show(.success, title: "Connected \(named.name)")
+        }
+    }
+
+    /// Token reddedilen (ya da adresi değişen) kaynağı yeniden bağlar: aynı
+    /// kaynak, yeni token — task'ler ve filtreler yerinde kalır.
+    public func beginReconnect(_ id: TaskSourceID) {
+        guard let state = state(of: id) else { return }
+        var flow = TaskConnectFlow(kind: state.source.kind, name: state.source.name, address: state.source.baseURL ?? "")
+        flow.reconnecting = id
+        connectFlow = flow
     }
 
     static func defaultName(for flow: TaskConnectFlow, info: TaskSourceInfo? = nil) -> String {

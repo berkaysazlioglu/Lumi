@@ -22,6 +22,7 @@ final class TasksScreenSizingTests: XCTestCase {
         let provider = FakeTaskProvider(tasks: tasks)
         let store = TasksStore(
             factory: FakeTaskProviderFactory(providers: [.demo: provider]),
+            config: FakeConfigService(), credentials: FakeTaskCredentialStore(),
             images: FakeTaskImageLoader(), agents: FakeTaskAgentRunner(), toasts: ToastStore()
         )
         store.beginConnect()

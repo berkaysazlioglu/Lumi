@@ -85,6 +85,9 @@ struct TasksHeaderBar: View {
                     items.append(.submenu("Simulate Errors", icon: "exclamationmark.triangle", items: errorToggles(target)))
                 }
             }
+            if target.source.kind.needsEndpoint {
+                items.append(.action("Reconnect \(target.source.name)…", icon: "key") { store.beginReconnect(target.id) })
+            }
             items.append(.divider)
             items.append(.action("Disconnect \(target.source.name)", icon: "xmark.circle", isDestructive: true) {
                 store.removeSource(target.id)

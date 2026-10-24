@@ -26,7 +26,9 @@ public struct TaskConnectOverlay: View {
                     divider
                     ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: 0) {
-                            LumiField(title: "Source type", hint: nil) { kindPicker }
+                            if flow?.reconnecting == nil {
+                                LumiField(title: "Source type", hint: nil) { kindPicker }
+                            }
                             if let flow, flow.kind.needsEndpoint {
                                 LumiField(
                                     title: "1 · Set up your server",
@@ -84,10 +86,10 @@ public struct TaskConnectOverlay: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text("Connect Task Source")
+                Text(flow?.reconnecting == nil ? "Connect Task Source" : "Reconnect \(flow?.name ?? "")")
                     .font(Theme.Typography.mono(.headline, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
-                Text("Lumi reads and moves tasks on a server you own")
+                Text(flow?.reconnecting == nil ? "Lumi reads and moves tasks on a server you own" : "Paste a new token — tasks and filters stay as they are")
                     .font(Theme.Typography.labelMono)
                     .foregroundStyle(Theme.textMuted)
             }
@@ -141,12 +143,15 @@ public struct TaskConnectOverlay: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    /// Faz 2'de protokol yazılınca prompt metni buraya gelir.
+    /// Protokolün kanonik metni (`TaskSetupPrompt`) — kullanıcının ajanına.
     private var setupPrompt: some View {
         HStack(spacing: Theme.Spacing.md) {
-            LumiActionButton(title: "Copy Setup Prompt") {}
-                .disabled(true)
-            Text("Available with protocol support (next phase)")
+            LumiActionButton(title: "Copy Setup Prompt", kind: .primary) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(TaskSetupPrompt.text, forType: .string)
+                shell.toasts.show(.success, title: "Copied setup prompt", message: "Paste it into an agent working in your server's project.")
+            }
+            Text("Lumi Tasks Protocol v1")
                 .font(Theme.Typography.labelMono)
                 .foregroundStyle(Theme.textMuted)
         }

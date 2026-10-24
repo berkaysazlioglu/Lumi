@@ -48,6 +48,8 @@ public protocol ServiceRegistry: AnyObject {
     var taskProviders: any TaskProviderMaking { get }
     /// Task görsellerinin indirme/önbelleği.
     var taskImages: any TaskImageLoading { get }
+    /// Task kaynağı token'ları (Keychain).
+    var taskCredentials: any TaskCredentialStoring { get }
     /// Task'i ajana veren koşucu (Faz 3'e kadar önizleme).
     var taskAgents: any TaskAgentRunning { get }
 

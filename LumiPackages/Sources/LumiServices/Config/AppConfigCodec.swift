@@ -73,6 +73,7 @@ enum AppConfigCodec {
         config.projectQuickCommands = QuickCommandCodec.decodeList(dict["projectQuickCommands"])
         config.projectFavoriteFiles = FavoriteFileCodec.decodeList(dict["projectFavoriteFiles"])
         config.projectAppearance = ProjectAppearanceCodec.decodeMap(dict["projectAppearance"])
+        config.taskSources = TaskSourceCodec.decodeList(dict["taskSources"])
         return config
     }
 
@@ -106,6 +107,7 @@ enum AppConfigCodec {
             "projectQuickCommands": QuickCommandCodec.overlayList(config.projectQuickCommands),
             "projectFavoriteFiles": FavoriteFileCodec.overlayList(config.projectFavoriteFiles),
             "projectAppearance": ProjectAppearanceCodec.overlayMap(config.projectAppearance),
+            "taskSources": TaskSourceCodec.overlayList(config.taskSources),
         ]
         // Sistem varsayılanı `null` olarak yazılır: anahtarı silmek, ham-dict
         // merge'inde eski seçimi diskte bırakırdı (karar 9).

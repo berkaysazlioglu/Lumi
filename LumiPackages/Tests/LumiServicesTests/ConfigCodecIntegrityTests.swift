@@ -222,6 +222,10 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         projectAppearance: [
             "/p": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
             "/tmp/selected": ProjectAppearance(icon: .emoji("🚀")),
+        ],
+        taskSources: [
+            TaskSource(id: TaskSourceID("ts"), name: "Team", kind: .custom, baseURL: "https://tasks.example.com"),
+            TaskSource(id: TaskSourceID("demo"), name: "Demo", kind: .demo),
         ]
     )
 

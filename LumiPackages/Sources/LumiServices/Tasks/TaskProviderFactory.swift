@@ -1,15 +1,27 @@
 import Foundation
 import LumiKit
 
-/// Canlı adapter fabrikası. `custom` adapter'ı protokol fazında (Faz 2) gelir;
-/// o zamana kadar bağlanmayı açık bir mesajla reddeder.
+/// Canlı adapter fabrikası: `custom` → Lumi Tasks Protocol üzerinden HTTP,
+/// `demo` → bellek içi örnek veri. Henüz yazılmamış adapter'lar bağlanmayı
+/// açık bir mesajla reddeder.
 public struct LiveTaskProviderFactory: TaskProviderMaking {
-    public init() {}
+    private let transport: any HTTPTransporting
+
+    public init(transport: any HTTPTransporting = URLSessionTransport()) {
+        self.transport = transport
+    }
 
     public func makeProvider(for source: TaskSource, token: String?) -> any TaskProviding {
         switch source.kind {
-        case .demo: DemoTaskProvider()
-        case .custom, .github, .linear: UnavailableTaskProvider(kind: source.kind)
+        case .demo:
+            return DemoTaskProvider()
+        case .custom:
+            guard let address = source.baseURL, case .success(let url) = TaskEndpoint.normalize(address) else {
+                return UnavailableTaskProvider(kind: source.kind)
+            }
+            return LumiTasksHTTPProvider(baseURL: url, token: token, transport: transport)
+        case .github, .linear:
+            return UnavailableTaskProvider(kind: source.kind)
         }
     }
 }
@@ -23,7 +35,7 @@ public struct UnavailableTaskProvider: TaskProviding {
     }
 
     private var error: TaskProviderError {
-        .unsupported("\(kind.title) connections in this build — protocol support arrives in the next phase")
+        .unsupported("\(kind.title) connections yet")
     }
 
     public func discover() async throws -> TaskSourceInfo { throw error }

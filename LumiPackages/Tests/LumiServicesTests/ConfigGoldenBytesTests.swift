@@ -88,6 +88,10 @@ final class ConfigGoldenBytesTests: XCTestCase {
                 "/Users/dev/selected": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
                 "/Users/dev/another": ProjectAppearance(color: .pink),
             ]
+            // Tasks planı Faz 2 additive anahtar — token asla yazılmaz.
+            config.taskSources = [
+                TaskSource(id: TaskSourceID("ts-1"), name: "Team", kind: .custom, baseURL: "https://tasks.example.com"),
+            ]
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -190,6 +194,14 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "sidebarProjectPaths" : [
         "/Users/dev/selected",
         "/Users/dev/another"
+      ],
+      "taskSources" : [
+        {
+          "baseURL" : "https://tasks.example.com",
+          "id" : "ts-1",
+          "kind" : "custom",
+          "name" : "Team"
+        }
       ],
       "terminalCursorBlink" : false,
       "terminalCursorStyle" : "bar",

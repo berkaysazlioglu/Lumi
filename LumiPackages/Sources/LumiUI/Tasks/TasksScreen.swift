@@ -137,7 +137,7 @@ private struct TaskSourceBanner: View {
             return Content(
                 icon: "key.slash", color: Theme.error,
                 message: "\(name) rejected the token. Reconnect with a new token.",
-                action: .init(title: "Reconnect…") { store.beginConnect() }
+                action: .init(title: "Reconnect…") { store.beginReconnect(state.id) }
             )
         case .failing(let message):
             let age = state.lastUpdated.map { " · showing data from \(TaskPresentation.relative($0))" } ?? ""

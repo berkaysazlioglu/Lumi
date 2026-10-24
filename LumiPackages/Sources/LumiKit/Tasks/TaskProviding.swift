@@ -45,6 +45,8 @@ public protocol TaskProviding: Sendable {
     func delete(taskID: String) async throws
     func listUsers() async throws -> [TaskUser]
     func listProjects() async throws -> [TaskProjectRef]
+    /// Görsel isteğine eklenecek yetki başlığı (bkz. varsayılan uygulama).
+    func authorization(for url: URL) -> String?
 }
 
 /// Kaynak → adapter. Canlı uygulaması LumiServices'te; token Faz 2'de

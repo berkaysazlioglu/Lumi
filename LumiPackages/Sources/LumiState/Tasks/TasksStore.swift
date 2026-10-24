@@ -98,6 +98,8 @@ public final class TasksStore {
     public internal(set) var pendingWriteCount = 0
 
     @ObservationIgnored let factory: any TaskProviderMaking
+    @ObservationIgnored let config: any ConfigServicing
+    @ObservationIgnored let credentials: any TaskCredentialStoring
     @ObservationIgnored let images: any TaskImageLoading
     @ObservationIgnored let agents: any TaskAgentRunning
     @ObservationIgnored let toasts: ToastStore
@@ -121,6 +123,8 @@ public final class TasksStore {
 
     public init(
         factory: any TaskProviderMaking,
+        config: any ConfigServicing,
+        credentials: any TaskCredentialStoring,
         images: any TaskImageLoading,
         agents: any TaskAgentRunning,
         toasts: ToastStore,
@@ -129,6 +133,8 @@ public final class TasksStore {
         debounce: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.factory = factory
+        self.config = config
+        self.credentials = credentials
         self.images = images
         self.agents = agents
         self.toasts = toasts
@@ -271,7 +277,7 @@ public final class TasksStore {
 
     /// Kullanıcı ve proje listeleri yalnız discovery'de (bağlanırken ve
     /// yeniden bağlanırken) çekilir; ikisi de sık değişmez.
-    private func loadDirectories(_ id: TaskSourceID, provider: any TaskProviding, info: TaskSourceInfo) async {
+    func loadDirectories(_ id: TaskSourceID, provider: any TaskProviding, info: TaskSourceInfo) async {
         let users = info.supports(.users) ? (try? await provider.listUsers()) ?? [] : []
         let projects = info.supports(.projects) ? (try? await provider.listProjects()) ?? [] : []
         update(id) {
@@ -327,26 +333,6 @@ public final class TasksStore {
 
     // MARK: - Kaynak yönetimi
 
-    public func removeSource(_ id: TaskSourceID) {
-        for key in pendingWrites.keys where key.source == id {
-            pendingWrites.removeValue(forKey: key)?.timer?.cancel()
-        }
-        pendingWriteCount = pendingWrites.count
-        for key in agentLinks.keys where key.source == id { stopAgent(key) }
-        failureLog.removeAll { $0.source == id }
-        sources.removeAll { $0.id == id }
-        entries.removeAll { $0.source == id }
-        providers[id] = nil
-        if filter.source == id { filter.source = nil }
-        if selectedTask?.source == id { selectedTask = nil }
-    }
-
-    public func renameSource(_ id: TaskSourceID, to name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        update(id) { $0.source.name = trimmed }
-    }
-
     /// Demo kaynağın "X yoksa" anahtarı — yalnız beyanı maskeler.
     public func setCapability(_ capability: TaskCapability, hidden: Bool, in id: TaskSourceID) {
         update(id) { state in
@@ -369,14 +355,5 @@ public final class TasksStore {
 
     public func canSimulateFailures(in id: TaskSourceID) -> Bool {
         providers[id] is any TaskProviderSimulating
-    }
-
-    /// Bağlama akışının sonu: doğrulanmış adapter ve beyanıyla kaynak eklenir.
-    func addSource(_ source: TaskSource, provider: any TaskProviding, info: TaskSourceInfo) async {
-        providers[source.id] = provider
-        sources.append(SourceState(source: source, declaredInfo: nil, phase: .loading))
-        await loadDirectories(source.id, provider: provider, info: info)
-        update(source.id) { $0.declaredInfo = info }
-        await refresh(source.id)
     }
 }

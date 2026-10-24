@@ -21,6 +21,8 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     func build(services: any ServiceRegistry, shared: SharedStores) {
         tasks = TasksStore(
             factory: services.taskProviders,
+            config: services.config,
+            credentials: services.taskCredentials,
             images: services.taskImages,
             agents: services.taskAgents,
             toasts: shared.toasts
@@ -87,7 +89,10 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
         ))
     }
 
-    func start() async {}
+    /// Kayıtlı kaynakları ve token'larını okur; ağ isteği route açılınca.
+    func start() async {
+        await tasks?.load()
+    }
 
     /// Kapanışta bekleyen birleşik yazımlar kaybolmasın.
     func shutdown() async {

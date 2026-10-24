@@ -90,6 +90,9 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 120). Boş görünüm tutulmaz. Proje Projects'ten kaldırılınca
     /// silinmez (favoriler gibi). Additive (karar 9): yoksa boş.
     public var projectAppearance: [String: ProjectAppearance]
+    /// Bağlı task kaynakları (Tasks planı, Faz 2). Token burada DEĞİL,
+    /// Keychain'dedir. Additive (karar 9): yoksa boş.
+    public var taskSources: [TaskSource]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -132,7 +135,8 @@ public struct AppConfig: Sendable, Equatable {
         sidebarProjectPaths: [],
         projectQuickCommands: [],
         projectFavoriteFiles: [],
-        projectAppearance: [:]
+        projectAppearance: [:],
+        taskSources: []
     )
 
     public init(
@@ -165,7 +169,8 @@ public struct AppConfig: Sendable, Equatable {
         sidebarProjectPaths: [String] = [],
         projectQuickCommands: [ProjectQuickCommand] = [],
         projectFavoriteFiles: [ProjectFavoriteFile] = [],
-        projectAppearance: [String: ProjectAppearance] = [:]
+        projectAppearance: [String: ProjectAppearance] = [:],
+        taskSources: [TaskSource] = []
     ) {
         self.projectsRoot = projectsRoot
         self.onboardingCompleted = onboardingCompleted
@@ -197,5 +202,6 @@ public struct AppConfig: Sendable, Equatable {
         self.projectQuickCommands = projectQuickCommands
         self.projectFavoriteFiles = projectFavoriteFiles
         self.projectAppearance = projectAppearance
+        self.taskSources = taskSources
     }
 }

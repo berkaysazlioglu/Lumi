@@ -27,7 +27,8 @@ final class TasksStoreTests: XCTestCase {
         let toasts = ToastStore(autoDismissAfter: 60)
         let factory = FakeTaskProviderFactory(providers: [.demo: provider, .custom: provider])
         let store = TasksStore(
-            factory: factory, images: images, agents: agents, toasts: toasts,
+            factory: factory, config: FakeConfigService(), credentials: FakeTaskCredentialStore(),
+            images: images, agents: agents, toasts: toasts,
             now: { Date(timeIntervalSince1970: 500) }, sleep: sleep, debounce: debounce
         )
         return (store, toasts)
@@ -457,6 +458,126 @@ final class TasksStoreTests: XCTestCase {
         XCTAssertFalse(store.canSimulateFailures(in: id), "fake sağlayıcı taklit etmez")
         store.setSimulatedFailure(.offline, in: id)
         XCTAssertNil(store.sources[0].simulatedFailure)
+    }
+
+    // MARK: - Kalıcılık (Faz 2)
+
+    private func persistentStore(
+        _ provider: FakeTaskProvider, config: FakeConfigService, credentials: FakeTaskCredentialStore
+    ) -> TasksStore {
+        TasksStore(
+            factory: FakeTaskProviderFactory(providers: [.demo: provider, .custom: provider]),
+            config: config, credentials: credentials,
+            images: FakeTaskImageLoader(), agents: FakeTaskAgentRunner(), toasts: ToastStore(autoDismissAfter: 60),
+            sleep: { _ in throw CancellationError() }, debounce: TasksStoreTests.neverFires
+        )
+    }
+
+    private func connectCustom(_ store: TasksStore, address: String = "my-app.herokuapp.com", token: String = "tok") async {
+        store.beginConnect()
+        store.connectFlow?.address = address
+        store.connectFlow?.token = token
+        await store.verifyConnect()
+        await store.finishConnect()
+    }
+
+    func testConnectingCustomPersistsRecordAndTokenSeparately() async {
+        let config = FakeConfigService()
+        let credentials = FakeTaskCredentialStore()
+        let store = persistentStore(FakeTaskProvider(), config: config, credentials: credentials)
+        await connectCustom(store)
+
+        let saved = await config.config().taskSources
+        XCTAssertEqual(saved.count, 1)
+        XCTAssertEqual(saved[0].kind, .custom)
+        XCTAssertEqual(saved[0].baseURL, "https://my-app.herokuapp.com")
+        let tokens = await credentials.tokens
+        XCTAssertEqual(tokens[saved[0].id], "tok")
+        XCTAssertEqual(store.sources.map(\.id), saved.map(\.id))
+    }
+
+    func testKeychainWriteFailureKeepsTheSheetOpen() async {
+        let config = FakeConfigService()
+        let credentials = FakeTaskCredentialStore()
+        await credentials.setWriteFails(true)
+        let store = persistentStore(FakeTaskProvider(), config: config, credentials: credentials)
+        await connectCustom(store)
+
+        XCTAssertNotNil(store.connectFlow)
+        XCTAssertTrue(store.sources.isEmpty)
+        let saved = await config.config().taskSources
+        XCTAssertTrue(saved.isEmpty, "token yazılamadıysa kayıt da yazılmaz")
+    }
+
+    func testLoadRestoresSourcesWithoutTouchingTheNetwork() async {
+        let custom = TaskSource(id: TaskSourceID("c"), name: "Team", kind: .custom, baseURL: "https://x.dev")
+        let demo = TaskSource(id: TaskSourceID("d"), name: "Demo", kind: .demo)
+        let config = FakeConfigService()
+        var seeded = AppConfig.defaults
+        seeded.taskSources = [custom, demo]
+        await config.seed(seeded)
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        let store = persistentStore(provider, config: config, credentials: FakeTaskCredentialStore(tokens: [custom.id: "t"]))
+
+        await store.load()
+        XCTAssertEqual(store.sources.map(\.source.name), ["Team", "Demo"])
+        XCTAssertTrue(store.sources.allSatisfy { $0.phase == .loading })
+        let discoverCount = await provider.discoverCount
+        XCTAssertEqual(discoverCount, 0, "açılışta istek yok — route açılınca")
+
+        await store.refreshAll()
+        XCTAssertTrue(store.sources.allSatisfy { $0.phase == .ready })
+    }
+
+    func testMissingTokenAsksToReconnect() async {
+        let custom = TaskSource(id: TaskSourceID("c"), name: "Team", kind: .custom, baseURL: "https://x.dev")
+        let config = FakeConfigService()
+        var seeded = AppConfig.defaults
+        seeded.taskSources = [custom]
+        await config.seed(seeded)
+        let store = persistentStore(FakeTaskProvider(), config: config, credentials: FakeTaskCredentialStore())
+
+        await store.load()
+        XCTAssertEqual(store.sources.first?.phase, .reconnect)
+        XCTAssertEqual(store.failureLog.first?.failure.serverMessage, "No token in the Keychain for this source")
+    }
+
+    func testRemovingCustomSourceDeletesRecordAndToken() async {
+        let config = FakeConfigService()
+        let credentials = FakeTaskCredentialStore()
+        let store = persistentStore(FakeTaskProvider(), config: config, credentials: credentials)
+        await connectCustom(store)
+        let id = store.sources[0].id
+
+        store.removeSource(id)
+        while await !config.config().taskSources.isEmpty { await Task.yield() }
+        while await credentials.tokens[id] != nil { await Task.yield() }
+    }
+
+    func testReconnectKeepsTheSourceAndReplacesToken() async {
+        let config = FakeConfigService()
+        let credentials = FakeTaskCredentialStore()
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        let store = persistentStore(provider, config: config, credentials: credentials)
+        await connectCustom(store, token: "old")
+        let id = store.sources[0].id
+        await provider.setListError(.unauthorized)
+        await store.refreshAll()
+        XCTAssertEqual(store.sources[0].phase, .reconnect)
+
+        await provider.setListError(nil)
+        store.beginReconnect(id)
+        XCTAssertEqual(store.connectFlow?.address, "https://my-app.herokuapp.com")
+        store.connectFlow?.token = "new"
+        await store.verifyConnect()
+        await store.finishConnect()
+
+        XCTAssertEqual(store.sources.map(\.id), [id], "yeni kaynak eklenmez")
+        XCTAssertEqual(store.sources[0].phase, .ready)
+        let tokens = await credentials.tokens
+        XCTAssertEqual(tokens[id], "new")
+        let saved = await config.config().taskSources
+        XCTAssertEqual(saved.map(\.id), [id])
     }
 }
 

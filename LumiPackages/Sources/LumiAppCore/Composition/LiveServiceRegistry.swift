@@ -24,6 +24,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let deepSeekBalance: any DeepSeekBalanceServicing
     let taskProviders: any TaskProviderMaking = LiveTaskProviderFactory()
     let taskImages: any TaskImageLoading
+    let taskCredentials: any TaskCredentialStoring = KeychainTaskCredentialStore()
     let taskAgents: any TaskAgentRunning = PreviewTaskAgentRunner()
     let appReleases: any AppReleaseChecking
     let appUpdateInstaller: any AppUpdateInstalling
