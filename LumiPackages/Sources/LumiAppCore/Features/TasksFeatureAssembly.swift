@@ -4,16 +4,23 @@ import LumiState
 import LumiUI
 import SwiftUI
 
-/// Sol panelin Tasks/Remote öğesi (karar 55).
+/// Sol panelin Tasks/Remote öğesi (karar 55) ve Tasks route'unun içeriği
+/// (Tasks planı, Faz 1).
 ///
-/// Henüz store'u yoktur: panel içeriği yer tutucudur, bu yüzden `build`/`start`
-/// boştur. Assembly yine de vardır ki içerik geldiğinde store'u ve bootstrap'i
-/// kabuk dosyalarına dokunmadan buraya eklensin (karar 33).
+/// `TasksStore` yalnız bu feature'ındır: route view'ı ve iki sheet onu
+/// descriptor closure'larından alır — `ShellContext`'e girmez. Tazeleme
+/// döngüsü route view'ının ömrüne bağlı olduğu için `start` iş yapmaz.
 @MainActor
 final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.ui
 
-    func build(services: any ServiceRegistry, shared: SharedStores) {}
+    /// `build`'den önce nil — kabuk kaydı testlerde `build` olmadan da kurulur,
+    /// bu yüzden descriptor'lar store'u çağrı anında ve zayıf okur.
+    private(set) var tasks: TasksStore?
+
+    func build(services: any ServiceRegistry, shared: SharedStores) {
+        tasks = TasksStore(factory: services.taskProviders, toasts: shared.toasts)
+    }
 
     func registerShellItems(into registries: ShellRegistries) {
         registries.panels.register(PanelItemDescriptor(
@@ -30,7 +37,12 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
                 id: section.routeID,
                 title: section.title,
                 icon: section.icon,
-                makeView: { _ in AnyView(TasksRouteView(section: section)) }
+                makeView: { [weak self] _ in
+                    guard section == .tasks, let store = self?.tasks else {
+                        return AnyView(TasksRouteView(section: section))
+                    }
+                    return AnyView(TasksScreen(store: store))
+                }
             ))
             registries.toolbar.register(ToolbarItemDescriptor(
                 id: ToolbarItemID("route.\(section.rawValue)"),
@@ -40,6 +52,22 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
                 makeView: { AnyView(TasksRouteToolbarItem(section: section)) }
             ))
         }
+        registries.overlays.register(OverlayDescriptor(
+            id: .taskConnect,
+            isPresented: { [weak self] _ in self?.tasks?.connectFlow != nil },
+            makeView: { [weak self] in
+                guard let store = self?.tasks else { return AnyView(EmptyView()) }
+                return AnyView(TaskConnectOverlay(store: store))
+            }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .newTask,
+            isPresented: { [weak self] _ in self?.tasks?.newTaskForm != nil },
+            makeView: { [weak self] in
+                guard let store = self?.tasks else { return AnyView(EmptyView()) }
+                return AnyView(NewTaskOverlay(store: store))
+            }
+        ))
     }
 
     func start() async {}

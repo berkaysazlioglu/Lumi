@@ -22,6 +22,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let agentSessionTransfer: any AgentSessionTransferring
     let deepSeek: any DeepSeekEnvironmentServicing
     let deepSeekBalance: any DeepSeekBalanceServicing
+    let taskProviders: any TaskProviderMaking = LiveTaskProviderFactory()
     let appReleases: any AppReleaseChecking
     let appUpdateInstaller: any AppUpdateInstalling
     let claudeAccounts: any ClaudeAccountServicing

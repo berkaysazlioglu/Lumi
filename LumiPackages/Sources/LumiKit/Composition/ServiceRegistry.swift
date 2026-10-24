@@ -44,6 +44,8 @@ public protocol ServiceRegistry: AnyObject {
     var claudeAccounts: any ClaudeAccountServicing { get }
     /// Codex accounts stored as isolated CODEX_HOME directories.
     var codexAccounts: any CodexAccountServicing { get }
+    /// Tasks planı: bağlı task kaynağı → adapter.
+    var taskProviders: any TaskProviderMaking { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

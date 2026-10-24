@@ -9,6 +9,9 @@ Kullanıcı isteği: "Tasks sekmesini canlandırmak istiyorum … herkes kendi s
 1. Durum modeli **sabit dört durum**: `todo` / `in_progress` / `in_review` / `done`.
 2. Lumi içeride **adapter** mimarisiyle kurulur; ilk (ve v1'deki tek) adapter **Custom — Lumi Tasks API**. GitHub Issues / Linear / Jira sonraki adapter'lardır.
 3. Implementasyondan önce plan; **önce UI** (sahte veriyle), onaydan sonra protokol.
+4. **Yorum yok** — `comments` capability'si ve uçları plandan çıktı.
+5. **Atama:** kaynak `users` capability'sini beyan ederse kullanıcı listesi gelir ve task herhangi birine atanabilir; seçicide **`You` en üsttedir** (token'ın sahibi — discovery'deki `me`).
+6. **Tazeleme:** Tasks route'u kapalıyken istek atılmaz; route açıldığı an güncel hâl çekilir ve açık kaldığı sürece periyodik olarak güncel tutulur.
 
 ## Terimler
 
@@ -18,7 +21,7 @@ Kullanıcı isteği: "Tasks sekmesini canlandırmak istiyorum … herkes kendi s
 | **Adapter** (`TaskProviding`) | Bir kaynağı Lumi'nin ortak task modeline çeviren katman. Custom adapter HTTP ile Lumi Tasks Protocol'ü konuşur; GitHub adapter'ı ileride GitHub API'sini konuşur. UI hangi adapter olduğunu bilmez. |
 | **Lumi Tasks Protocol (v1)** | Custom adapter'ın konuştuğu açık, sürümlü HTTP sözleşmesi. Kullanıcının sunucusu bunu uygular. |
 | **Setup prompt** | Tasks sekmesinden kopyalanan, protokolün tamamını içeren talimat. Kullanıcı kendi projesindeki ajana yapıştırır, ajan sunucuyu kurar ve sonunda URL + token'ı yazdırır. |
-| **Capabilities** | Kaynağın neleri desteklediğinin beyanı (oluşturma, silme, yorum, hangi alanlar…). Lumi UI'ı buna göre açar/kapatır. |
+| **Capabilities** | Kaynağın neleri desteklediğinin beyanı (oluşturma, silme, kullanıcı listesi, hangi alanlar…). Lumi UI'ı buna göre açar/kapatır. |
 | **Verify** (uygunluk testi) | Lumi'nin sunucuya karşı koştuğu otomatik kontrol listesi; hatayı ajana yapıştırılabilir bir raporla verir. |
 
 ## Ortak task modeli (Lumi içi, `LumiKit`)
@@ -36,12 +39,10 @@ Adapter ne olursa olsun UI yalnız bunu görür. **Zorunlu** alanlar az tutulur 
 | `project` | `{ key, name?, repo? }` | | Lumi projesiyle eşleşme ipucu (aşağıda). |
 | `priority` | `none` \| `low` \| `medium` \| `high` \| `urgent` | | |
 | `labels` | [string] | | |
-| `assignee` | `{ name, email? }` | | Tek kişi; çok kullanıcılılık v1 kapsamı dışında. |
+| `assignee` | `{ id, name, email? }` | | Tek kişi. Yazılabilirse (`rw`) atama `assigneeId` ile yapılır. |
 | `dueDate` | `YYYY-MM-DD` | | |
 | `url` | string | | Sunucunun kendi web arayüzü varsa `Open in Browser`. |
 | `lumi` | `{ sessionId?, checkoutPath?, branch?, agent? }` | | Lumi'nin task'e iliştirdiği bağlantı; sunucu yalnız saklar ve geri döner (capability `lumiMetadata`). |
-
-Yorumlar (`comments`) ayrı bir capability'dir: `{ id, body, author?, createdAt }`.
 
 ## Lumi Tasks Protocol v1 (taslak)
 
@@ -55,8 +56,7 @@ GET    /lumi/v1/tasks/{id}
 PATCH  /lumi/v1/tasks/{id}          → kısmi güncelleme; en az `status` ZORUNLU desteklenir
 POST   /lumi/v1/tasks               → capability `create`
 DELETE /lumi/v1/tasks/{id}          → capability `delete`
-GET    /lumi/v1/tasks/{id}/comments → capability `comments`
-POST   /lumi/v1/tasks/{id}/comments → capability `comments`
+GET    /lumi/v1/users               → capability `users`: { users: [{ id, name, email? }] }
 GET    /lumi/v1/projects            → capability `projects` (oluşturmada proje seçimi için)
 ```
 
@@ -67,13 +67,16 @@ Discovery yanıtı:
   "protocol": "lumi-tasks",
   "version": 1,
   "name": "Acme backlog",
-  "capabilities": ["create", "delete", "comments", "projects", "lumiMetadata"],
+  "me": { "id": "u_1", "name": "Berkay" },
+  "capabilities": ["create", "delete", "users", "projects", "lumiMetadata"],
   "fields": {
     "body": "rw", "project": "rw", "priority": "rw", "labels": "r",
-    "assignee": "r", "dueDate": "rw", "url": "r"
+    "assignee": "rw", "dueDate": "rw", "url": "r"
   }
 }
 ```
+
+- `me` opsiyoneldir: token'ın sahibi olan kullanıcı. Varsa atama seçicisinde `You` olarak en üstte durur ve `Assigned to me` filtresi açılır.
 
 - **Minimum uyumlu sunucu** = discovery + liste + tekil okuma + `PATCH status`. Bu kadarı Board'u çalıştırır.
 - Hata zarfı: `{ "error": { "code": "not_found", "message": "..." } }`. Kodlar: `unauthorized` (401), `not_found` (404), `validation_failed` (422), `conflict` (409), `rate_limited` (429 + `Retry-After`).
@@ -94,7 +97,8 @@ Tek ilke: **UI, kaynağın beyan ettiği kadardır.** Desteklenmeyen şey boş y
 | Yanıtta beyan dışı/bilinmeyen alan | Yok sayılır. |
 | `create` yok | `New Task` butonu yok. |
 | `delete` yok | Sil seçeneği yok. |
-| `comments` yok | Detayda yorum bölümü yok; Lumi'nin "Started in Lumi…" notları da gönderilmez. |
+| `assignee` `rw` ama `users` yok | Seçicide yalnız `You` (`me` varsa) ve `Unassigned` bulunur; `me` de yoksa atama salt okunurdur. |
+| `users` var, `assignee` `r` | Liste yalnız filtrede kullanılır; atama kontrolü kapalıdır. |
 | `projects` yok | Oluşturmada proje alanı serbest metin `key`'dir (ya da gizli, alan da yoksa). |
 | `lumiMetadata` yok | Ajan ↔ task bağlantısı **yerelde** tutulur (`ui-state` additive `taskLinks`); yalnız o Mac'te görünür. |
 | Zorunlu alan eksik / `status` dört değerden biri değil | Task listeden atılmaz: `Needs attention` rozetiyle Todo kolonunda gösterilir, durum değiştirmek sunucuya geçerli değeri yazar. Verify bunu hata olarak raporlar. |
@@ -118,7 +122,7 @@ Eşleşmeyen task da gösterilir; yalnız `Start` eşleme ister. Kartlarda eşle
 
 ## UI planı
 
-**Sol panel:** mevcut `Tasks` satırı (karar 55) kalır; yanında açık task sayısı rozeti (`todo` + `in_progress` + `in_review`).
+**Sol panel:** mevcut `Tasks` satırı (karar 55) aynen kalır.
 
 **Boş durum (kaynak yok):** kısa açıklama + `Connect Task Source`.
 
@@ -128,21 +132,23 @@ Eşleşmeyen task da gösterilir; yalnız `Start` eşleme ister. Kartlarda eşle
 3. `URL` + `Token` alanları → `Verify & Connect`: kontrol listesi canlı dolar (✓ discovery, ✓ auth, ✓ list, ✓ status update — test task'inde, ✓ create/delete varsa…), hata olursa `Copy Report for Agent`.
 
 **Ana görünüm (route):**
-- Top bar orta bölgesi: kaynak seçici (birden çok kaynak varsa; `All Sources` birleşik görünüm), arama, proje filtresi, `Board | List`, `New Task` (capability'ye bağlı), yenile.
+- Route'un kendi başlık şeridi (top bar'da yalnız route adı kalır): kaynak seçici (birden çok kaynak varsa; `All Sources` birleşik görünüm), arama, proje filtresi, `Board | List`, `New Task` (capability'ye bağlı), yenile.
 - **Board:** Todo / In Progress / In Review / Done kolonları; kart kolonlar arası sürüklenince `PATCH status` (iyimser). Done kolonu son 20 ile sınırlı, `Show all`.
 - **Kart:** başlık, proje rengi noktası + adı, öncelik ikonu, etiketler (en çok 2 + `+N`), atanan baş harfleri, bağlı ajan varsa `AgentActivityIcon` (çalışıyor / karar bekliyor / bitti — karar 81 dili).
 - **List:** aynı veri tablo hâlinde, kolon başlığıyla sıralanır.
-- **Detay** (sağdan açılan çekmece): başlık, durum menüsü, markdown gövde, metadata, yorumlar (varsa), eylemler: `Start in Lumi`, `Open in Browser` (url varsa), `Copy as Prompt`, `Delete` (varsa).
+- **Detay** (sağdan açılan çekmece): başlık, durum menüsü, atama seçicisi (`You` en üstte), öncelik menüsü, markdown gövde, metadata, eylemler: `Start in Lumi` (Faz 3), `Open in Browser` (url varsa), `Copy as Prompt`, `Delete` (varsa).
 
 **Start in Lumi** (Faz 3): checkout seçimi (eşleşen projenin mevcut checkout'ları ya da karar 58 dialoguyla yeni workspace — dal adı önerisi `task/<id>-<slug>`), ajan (New Claude modelleri dahil — karar 121), prompt şablonu ön izlemesi → terminal açılır, task `in_progress`'e çekilir (ayar), `lumi` metadata'sı yazılır. Ajanın turn'ü bitince kartta `waiting` görünür; `Move to In Review` önerisi kartta tek tıkla — **otomatik taşıma yok** (ajan bitti ≠ iş bitti).
 
-**Settings ▸ Tasks:** kaynak listesi (ad değiştir, token yenile, Verify, kaldır), yenileme aralığı (1 / 5 / 15 dk; route görünürken + açılışta), Start prompt şablonu, "Start'ta In Progress'e taşı" anahtarı.
+**Tazeleme (kullanıcı kararı 6):** route görünür olduğu sürece yaşayan tek bir döngü — açılışta hemen istek, sonra 15 sn'de bir; route'tan çıkılınca döngü iptal olur ve hiçbir istek atılmaz (SwiftUI `.task` ömrü). Kendi düzenlemesi yoldayken gelen liste o task'i ezmez (bekleyen yazımlar korunur). Sol paneldeki satırda sayı rozeti yoktur — kapalıyken veri tazelenmediği için bayat sayı gösterilmez.
+
+**Settings ▸ Tasks:** kaynak listesi (ad değiştir, token yenile, Verify, kaldır), Start prompt şablonu, "Start'ta In Progress'e taşı" anahtarı.
 
 Mobil ve orchestrator v1 kapsamı dışında; mimari onları engellemez (Faz 4).
 
 ## Lumi tarafı mimari
 
-- **LumiKit:** `TaskItem`, `TaskStatus`, `TaskPriority`, `TaskSourceID`, `TaskSource` (`id, name, kind, baseURL`), `TaskCapabilities` + `TaskFieldAccess`, `TaskProviding` protokolü (`discover / list / get / update / create / delete / comments`), `TaskProviderKind` (`.custom`; ileride `.github`, `.linear`), saf `TaskProjectMatcher`, `TaskBoard` (kolonlama/filtre — saf).
+- **LumiKit:** `TaskItem`, `TaskStatus`, `TaskPriority`, `TaskUser`, `TaskSourceID`, `TaskSource` (`id, name, kind, baseURL`), `TaskSourceInfo` (capabilities + alan erişimi + `me`), `TaskProviding` protokolü (`discover / listTasks / update / create / delete / listUsers / listProjects`), `TaskProviderMaking` (kaynak → adapter), `TaskProviderKind` (`.demo`, `.custom`; ileride `.github`, `.linear`), adapter'dan bağımsız `TaskSourceVerifier`, saf `TaskBoard` (kolonlama/filtre) ve `TaskUserOrdering` (`You` en üstte), ileride `TaskProjectMatcher`.
 - **LumiServices:** `LumiTasksHTTPProvider` (custom adapter), yeni `HTTPTransporting` dikişi (URLSession sarmalayıcı; fake'i `LumiTestSupport`'a), `TaskProtocolVerifier`, `TaskSourceCodec` (`config.json` additive `taskSources` — **token config'e yazılmaz**, `KeychainAccessing` ile `com.lumi.tasks` / `<sourceID>`), `TaskCache` (dosya). `LiveServiceRegistry`/`FakeServiceRegistry`'ye birer satır.
 - **LumiState:** `TasksStore` — kaynak başına durum (`loading / loaded / offline(stale) / reconnect / unsupported`), birleşik task listesi, filtreler, iyimser güncelleme + geri alma, `AutoRefreshing` (karar 75 deseni).
 - **LumiUI:** `TasksRouteView` yer tutucusu yerine `TasksBoardView`, `TaskCardView`, `TaskDetailDrawer`, `ConnectTaskSourceSheet`, `TasksSettingsTab`. Tüm ölçüler token'dan (karar 61).
@@ -150,9 +156,9 @@ Mobil ve orchestrator v1 kapsamı dışında; mimari onları engellemez (Faz 4).
 
 ## Fazlar (her biri derlenir, testler yeşil, faz sonu onay)
 
-1. **UI, sahte veriyle.** LumiKit modeli + `TasksStore` + tüm görünümler + `DemoTaskProvider` (bellek içi, gecikme simülasyonlu; capability'leri Settings'teki gizli bir debug anahtarıyla açılıp kapanır ki "X yoksa" kuralları gözle denensin). Bağlama sheet'i görünür ama Verify sahte sonuç döner. → **Gözden geçirme, görsel onay.**
+1. **UI, sahte veriyle.** LumiKit modeli + `TasksStore` + tüm görünümler + `DemoTaskProvider` (bellek içi, gecikme simülasyonlu). Bağlama sheet'inde `Demo data` adapter'ı gerçekten bağlanır ve Verify kontrol listesi ona karşı koşar; `Custom` akışı (URL + token) görünür ama adapter'ı Faz 2'ye kadar "not available yet" hatası döner. Demo kaynağın menüsünde capability/alan anahtarları vardır ki "X yoksa" kuralları gözle denensin. Kaynaklar bu fazda kalıcı değildir (yeniden başlatınca gider). → **Gözden geçirme, görsel onay.**
 2. **Protokol.** `docs/design/06-tasks-protocol.md` (+ OpenAPI dosyası), setup prompt metni, HTTP adapter, Keychain, codec, cache, gerçek Verify. Doğrulama: setup prompt'u boş bir Node projesinde gerçekten bir ajana koşturup çıkan sunucuyu Lumi'ye bağlamak (dogfood). Setup prompt'ta Heroku/Railway uyarısı: dosya sistemi geçicidir, kalıcılık için Postgres vb. kullanılmalı.
-3. **Lumi entegrasyonu.** Proje eşleşmesi, `Start in Lumi`, ajan ↔ task bağlantısı (`lumi` metadata ya da yerel `taskLinks`), kartta ajan durumu, `Move to In Review` önerisi, yorumla not düşme.
+3. **Lumi entegrasyonu.** Proje eşleşmesi, `Start in Lumi`, ajan ↔ task bağlantısı (`lumi` metadata ya da yerel `taskLinks`), kartta ajan durumu, `Move to In Review` önerisi.
 4. **Genişleme (ayrı onay).** Orchestrator MCP araçları (`list_tasks`, `update_task`), telefonda Tasks, GitHub/Linear adapter'ları, artımlı senkron.
 
 ## Riskler

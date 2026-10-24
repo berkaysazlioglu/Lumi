@@ -1,0 +1,315 @@
+import Foundation
+import LumiKit
+import LumiTestSupport
+import XCTest
+
+@testable import LumiState
+
+/// Tasks planı, Faz 1: `TasksStore` sözleşmesi — bağlama akışı, yalnız
+/// görünürken tazeleme, iyimser yazım + geri alma, kaynak durumları.
+@MainActor
+final class TasksStoreTests: XCTestCase {
+    private let me = TaskUser(id: "me", name: "Me")
+    private let ada = TaskUser(id: "ada", name: "Ada")
+
+    private func makeStore(
+        _ provider: FakeTaskProvider,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in throw CancellationError() }
+    ) -> (TasksStore, ToastStore) {
+        let toasts = ToastStore(autoDismissAfter: 60)
+        let factory = FakeTaskProviderFactory(providers: [.demo: provider, .custom: provider])
+        return (TasksStore(factory: factory, toasts: toasts, now: { Date(timeIntervalSince1970: 500) }, sleep: sleep), toasts)
+    }
+
+    /// Demo adapter'ıyla bağlama akışını uçtan uca koşar.
+    private func connect(_ store: TasksStore) async {
+        store.beginConnect()
+        store.selectConnectKind(.demo)
+        await store.verifyConnect()
+        await store.finishConnect()
+    }
+
+    private func connectedStore(
+        tasks: [TaskItem],
+        info: TaskSourceInfo = .fakeFull(me: TaskUser(id: "me", name: "Me"))
+    ) async -> (TasksStore, FakeTaskProvider, ToastStore) {
+        let provider = FakeTaskProvider(info: info, tasks: tasks, users: [me, ada])
+        let (store, toasts) = makeStore(provider)
+        await connect(store)
+        return (store, provider, toasts)
+    }
+
+    // MARK: - Bağlama
+
+    func testConnectingVerifiesThenLoadsTasksAndDirectories() async {
+        let (store, _, toasts) = await connectedStore(tasks: [.fake(id: "1"), .fake(id: "2", status: .done)])
+
+        XCTAssertNil(store.connectFlow, "sheet kapanır")
+        XCTAssertEqual(store.sources.count, 1)
+        XCTAssertEqual(store.sources[0].phase, .ready)
+        XCTAssertEqual(store.sources[0].source.name, "Fake", "ad yazılmadıysa kaynağın kendi adı")
+        XCTAssertEqual(store.sources[0].users.map(\.id), ["me", "ada"])
+        XCTAssertEqual(Set(store.entries.map(\.item.id)), ["1", "2"])
+        XCTAssertEqual(toasts.toasts.last?.title, "Connected Fake")
+    }
+
+    func testFailedVerificationCannotConnect() async {
+        let provider = FakeTaskProvider()
+        await provider.setDiscoverError(.unauthorized)
+        let (store, _) = makeStore(provider)
+        store.beginConnect()
+        store.selectConnectKind(.demo)
+        await store.verifyConnect()
+
+        XCTAssertEqual(store.connectFlow?.canConnect, false)
+        await store.finishConnect()
+        XCTAssertTrue(store.sources.isEmpty)
+        XCTAssertNotNil(store.connectFlow, "sheet açık kalır, kullanıcı raporu görür")
+    }
+
+    func testCustomSourceRejectsInsecureAddressBeforeAnyRequest() async {
+        let provider = FakeTaskProvider()
+        let (store, _) = makeStore(provider)
+        store.beginConnect()
+        store.connectFlow?.address = "http://example.com"
+        store.connectFlow?.token = "secret"
+        await store.verifyConnect()
+
+        XCTAssertEqual(store.connectFlow?.addressProblem, TaskEndpoint.Problem.insecure.message)
+        XCTAssertNil(store.connectFlow?.report)
+        let discoverCount = await provider.discoverCount
+        XCTAssertEqual(discoverCount, 0)
+    }
+
+    func testCustomSourceNeedsAddressAndToken() {
+        var flow = TaskConnectFlow(kind: .custom)
+        XCTAssertFalse(flow.canVerify)
+        flow.address = "https://x.dev"
+        XCTAssertFalse(flow.canVerify)
+        flow.token = "t"
+        XCTAssertTrue(flow.canVerify)
+        XCTAssertTrue(TaskConnectFlow(kind: .demo).canVerify)
+        XCTAssertFalse(TaskConnectFlow(kind: .github).canVerify, "yazılmamış adapter")
+    }
+
+    func testEditingInputsInvalidatesThePreviousReport() async {
+        let (store, _) = makeStore(FakeTaskProvider())
+        store.beginConnect()
+        store.selectConnectKind(.demo)
+        await store.verifyConnect()
+        XCTAssertNotNil(store.connectFlow?.report)
+
+        store.connectInputsChanged()
+        XCTAssertNil(store.connectFlow?.report)
+        XCTAssertEqual(store.connectFlow?.canConnect, false)
+    }
+
+    // MARK: - Tazeleme (kullanıcı kararı 6)
+
+    func testNoRequestsHappenUnlessTheRouteKeepsItFresh() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let afterConnect = await provider.listCount
+
+        await provider.setTasks([.fake(id: "1"), .fake(id: "2")])
+        try? await Task.sleep(for: .milliseconds(20))
+        let idle = await provider.listCount
+        XCTAssertEqual(idle, afterConnect, "route kapalıyken istek yok")
+        XCTAssertEqual(store.entries.count, 1)
+
+        await store.keepFresh()
+        let refreshed = await provider.listCount
+        XCTAssertEqual(refreshed, afterConnect + 1, "route açılınca hemen güncel hâl")
+        XCTAssertEqual(store.entries.count, 2)
+    }
+
+    func testKeepFreshRepeatsUntilCancelled() async {
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        let sleeps = SleepRecorder()
+        let (store, _) = makeStore(provider, sleep: { duration in
+            try await sleeps.sleep(duration)
+        })
+        await connect(store)
+        let base = await provider.listCount
+
+        let loop = Task { await store.keepFresh() }
+        await sleeps.waitForCalls(3)
+        loop.cancel()
+        await loop.value
+
+        let count = await provider.listCount
+        XCTAssertGreaterThanOrEqual(count - base, 3)
+        let durations = await sleeps.durations
+        XCTAssertTrue(durations.allSatisfy { $0 == TasksStore.refreshInterval })
+    }
+
+    func testUnauthorizedRefreshAsksToReconnectAndKeepsTasks() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        await provider.setListError(.unauthorized)
+        await store.refreshAll()
+
+        XCTAssertEqual(store.sources[0].phase, .reconnect)
+        XCTAssertEqual(store.entries.count, 1, "veri silinmez")
+    }
+
+    func testOfflineRefreshKeepsLastList() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        await provider.setListError(.unreachable("timed out"))
+        await store.refreshAll()
+
+        guard case .offline(let message) = store.sources[0].phase else { return XCTFail("offline bekleniyordu") }
+        XCTAssertTrue(message.contains("timed out"))
+        XCTAssertEqual(store.entries.map(\.item.id), ["1"])
+        XCTAssertNotNil(store.sources[0].lastUpdated)
+    }
+
+    func testRecoveringFromReconnectRunsDiscoveryAgain() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        await provider.setListError(.unauthorized)
+        await store.refreshAll()
+        await provider.setListError(nil)
+        let before = await provider.discoverCount
+
+        await store.refreshAll()
+        let after = await provider.discoverCount
+        XCTAssertEqual(after, before + 1)
+        XCTAssertEqual(store.sources[0].phase, .ready)
+    }
+
+    // MARK: - Yazımlar
+
+    func testMoveIsOptimisticAndPersisted() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let key = store.entries[0].key
+        let before = await provider.updates.count
+        await store.move(key, to: .done)
+
+        XCTAssertEqual(store.entry(key)?.item.status, .done)
+        let updates = await provider.updates
+        XCTAssertEqual(updates.dropFirst(before).map(\.id), ["1"])
+        XCTAssertEqual(updates.last?.patch.status, .done)
+    }
+
+    func testFailedMoveRevertsAndShowsToast() async {
+        let (store, provider, toasts) = await connectedStore(tasks: [.fake(id: "1")])
+        await provider.setUpdateError(.unreachable("down"))
+        let key = store.entries[0].key
+        await store.move(key, to: .done)
+
+        XCTAssertEqual(store.entry(key)?.item.status, .todo)
+        XCTAssertEqual(toasts.toasts.last?.title, "Couldn't update task")
+    }
+
+    func testRefreshDuringInFlightWriteDoesNotClobberIt() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let key = store.entries[0].key
+        await provider.holdUpdates()
+
+        let write = Task { await store.move(key, to: .done) }
+        while await provider.updates.isEmpty { await Task.yield() }
+        XCTAssertEqual(store.entry(key)?.item.status, .done, "iyimser")
+
+        await store.refreshAll()
+        XCTAssertEqual(store.entry(key)?.item.status, .done, "sunucunun eski kopyası yazımı ezmez")
+
+        await provider.releaseUpdates()
+        await write.value
+        await store.refreshAll()
+        XCTAssertEqual(store.entry(key)?.item.status, .done)
+    }
+
+    func testDeleteRemovesAndUnselects() async {
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1"), .fake(id: "2")])
+        let key = store.entries.first { $0.item.id == "1" }!.key
+        store.selectedTask = key
+        await store.delete(key)
+
+        XCTAssertNil(store.entry(key))
+        XCTAssertNil(store.selectedTask)
+        let deleted = await provider.deleted
+        XCTAssertEqual(deleted.last, "1")
+    }
+
+    func testUnsupportedWritesAreNoOps() async {
+        let info = TaskSourceInfo(fields: [.assignee: .read, .priority: .read])
+        let (store, provider, _) = await connectedStore(tasks: [.fake(id: "1")], info: info)
+        let key = store.entries[0].key
+
+        await store.assign(key, to: ada)
+        await store.setPriority(key, to: .high)
+        await store.delete(key)
+
+        let updates = await provider.updates
+        let deleted = await provider.deleted
+        XCTAssertTrue(updates.isEmpty)
+        XCTAssertTrue(deleted.isEmpty)
+        XCTAssertNotNil(store.entry(key))
+    }
+
+    func testAssignOptionsPutYouFirst() async {
+        let (store, _, _) = await connectedStore(tasks: [])
+        let options = store.assignOptions(for: store.sources[0].id)
+        XCTAssertEqual(options.map(\.user.id), ["me", "ada"])
+        XCTAssertTrue(options[0].isMe)
+    }
+
+    func testMaskedCapabilityHidesCreate() async {
+        let (store, _, _) = await connectedStore(tasks: [])
+        XCTAssertFalse(store.creatableSources.isEmpty)
+
+        store.setCapability(.create, hidden: true, in: store.sources[0].id)
+        XCTAssertTrue(store.creatableSources.isEmpty)
+        store.beginNewTask()
+        XCTAssertNil(store.newTaskForm)
+    }
+
+    // MARK: - Yeni task
+
+    func testSubmittingNewTaskSendsOnlyWritableFields() async {
+        let info = TaskSourceInfo(capabilities: [.create], fields: [.priority: .read])
+        let (store, provider, _) = await connectedStore(tasks: [], info: info)
+        store.beginNewTask(status: .inProgress)
+        store.newTaskForm?.title = "  Ship it  "
+        store.newTaskForm?.body = "details"
+        store.newTaskForm?.priority = .high
+        await store.submitNewTask()
+
+        // İlk taslak Verify'ın kendi test task'idir.
+        let created = await provider.created
+        XCTAssertEqual(created.count, 2)
+        let draft = created[1]
+        XCTAssertEqual(draft.title, "Ship it")
+        XCTAssertEqual(draft.status, .inProgress)
+        XCTAssertNil(draft.body, "body beyan edilmedi")
+        XCTAssertNil(draft.priority, "priority salt okunur")
+        XCTAssertNil(store.newTaskForm)
+        XCTAssertEqual(store.selectedTask?.id, "NEW-2")
+        XCTAssertEqual(store.entries.map(\.item.id), ["NEW-1", "NEW-2"], "create'siz delete: verify task'i kalır")
+    }
+
+    func testRemovingSourceDropsItsTasksAndFilter() async {
+        let (store, _, _) = await connectedStore(tasks: [.fake(id: "1")])
+        let id = store.sources[0].id
+        store.filter.source = id
+        store.removeSource(id)
+
+        XCTAssertTrue(store.sources.isEmpty)
+        XCTAssertTrue(store.entries.isEmpty)
+        XCTAssertNil(store.filter.source)
+    }
+}
+
+/// `keepFresh`'in uykusunu kaydeder; iptal edilene kadar hemen döner ama her
+/// çağrıda kooperatif iptali kontrol eder.
+private actor SleepRecorder {
+    private(set) var durations: [Duration] = []
+
+    func sleep(_ duration: Duration) async throws {
+        durations.append(duration)
+        await Task.yield()
+        try Task.checkCancellation()
+    }
+
+    func waitForCalls(_ count: Int) async {
+        while durations.count < count { await Task.yield() }
+    }
+}
