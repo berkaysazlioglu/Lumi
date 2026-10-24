@@ -66,8 +66,8 @@ enum TUIColors {
     /// Claude brand orange (spinner/heading accents).
     static let claude = UIColor(hex: 0xD77757)
     /// The user prompt's band (`> …`).
-    static let userBand = LumiPalette.themed(light: 0xEFEFF4, dark: 0x2C2C2E, lumi: 0x24243A)
-    static let codeBand = LumiPalette.themed(light: 0xF4F4F8, dark: 0x1C1C1E, lumi: 0x1A1A2E)
+    static let userBand = LumiPalette.themed(light: 0xEFEFF4, dark: 0x24243A)
+    static let codeBand = LumiPalette.themed(light: 0xF4F4F8, dark: 0x1A1A2E)
 
     private static func pair(dark: UInt32, light: UInt32) -> UIColor {
         UIColor { UIColor(hex: $0.userInterfaceStyle == .dark ? dark : light) }

@@ -31,9 +31,8 @@ enum DemoMode {
     }
 }
 
-/// Applies the Appearance choice (color scheme + Lumi trait + accent). Sheets
-/// re-apply it: they are separate presentations and don't reliably inherit
-/// custom environment values.
+/// Applies the Appearance choice (color scheme + accent). Sheets re-apply it:
+/// they are separate presentations and don't reliably inherit it.
 private struct LumiThemed: ViewModifier {
     @AppStorage(AppearanceMode.storageKey) private var appearance = AppearanceMode.default
 
@@ -41,7 +40,6 @@ private struct LumiThemed: ViewModifier {
         content
             .tint(LumiPalette.accent)
             .preferredColorScheme(appearance.colorScheme)
-            .environment(\.isLumiTheme, appearance.isLumi)
     }
 }
 

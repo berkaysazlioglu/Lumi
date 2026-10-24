@@ -2,11 +2,10 @@ import SwiftUI
 import UIKit
 import LumiMobileKit
 
-/// Lumi colors for the phone. Three looks: light (system colors), dark
-/// (system black) and Lumi (the Mac's navy/purple surfaces — Projects panel
-/// `bgSurface` #12121F). Every color is a dynamic `UIColor` resolved from the
-/// interface style plus the `isLumiTheme` trait, so it follows the user's
-/// Appearance choice on its own.
+/// Lumi colors for the phone. Two looks: light (system colors) and dark —
+/// the Mac's navy/purple surfaces (Projects panel `bgSurface` #12121F).
+/// Every color is a dynamic `UIColor` resolved from the interface style, so
+/// it follows the user's Appearance choice on its own.
 enum LumiPalette {
     // Mac `Theme` hex values (LumiUI/Theme/Theme.swift).
     private static let bgDeepHex: UInt32 = 0x0A0A12
@@ -19,13 +18,12 @@ enum LumiPalette {
     /// Darker violet so the accent stays readable on white.
     private static let accentLightHex: UInt32 = 0x7C3AED
 
-    static let uiBackground = themed(light: .systemBackground, dark: .systemBackground, lumi: bgSurfaceHex)
-    static let uiElevated = themed(light: .secondarySystemBackground, dark: .secondarySystemBackground,
-                                   lumi: bgElevatedHex)
-    static let uiDeep = themed(light: .systemGroupedBackground, dark: .black, lumi: bgDeepHex)
-    static let uiBorder = themed(light: .separator, dark: .separator, lumi: borderHex)
-    static let uiTextPrimary = themed(light: .label, dark: .label, lumi: textPrimaryHex)
-    static let uiTextSecondary = themed(light: .secondaryLabel, dark: .secondaryLabel, lumi: textSecondaryHex)
+    static let uiBackground = themed(light: .systemBackground, dark: bgSurfaceHex)
+    static let uiElevated = themed(light: .secondarySystemBackground, dark: bgElevatedHex)
+    static let uiDeep = themed(light: .systemGroupedBackground, dark: bgDeepHex)
+    static let uiBorder = themed(light: .separator, dark: borderHex)
+    static let uiTextPrimary = themed(light: .label, dark: textPrimaryHex)
+    static let uiTextSecondary = themed(light: .secondaryLabel, dark: textSecondaryHex)
     static let uiAccent = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: accentDarkHex) : UIColor(hex: accentLightHex) }
 
     static let background = Color(uiBackground)
@@ -53,26 +51,27 @@ enum LumiPalette {
         }
     }
 
-    /// Light / dark (black) / Lumi (navy) variants of one color.
-    static func themed(light: UIColor, dark: UIColor, lumi hex: UInt32) -> UIColor {
+    /// Light / dark (Lumi navy) variants of one color.
+    static func themed(light: UIColor, dark hex: UInt32) -> UIColor {
         UIColor { traits in
-            guard traits.userInterfaceStyle == .dark else { return light.resolvedColor(with: traits) }
-            return traits.isLumiTheme ? UIColor(hex: hex) : dark.resolvedColor(with: traits)
+            traits.userInterfaceStyle == .dark ? UIColor(hex: hex) : light.resolvedColor(with: traits)
         }
     }
 
-    static func themed(light: UInt32, dark: UInt32, lumi: UInt32) -> UIColor {
-        themed(light: UIColor(hex: light), dark: UIColor(hex: dark), lumi: lumi)
+    static func themed(light: UInt32, dark: UInt32) -> UIColor {
+        themed(light: UIColor(hex: light), dark: dark)
     }
 }
 
-/// User-chosen appearance (Settings menu). `system` follows the phone with
-/// light and dark (black); Lumi is the navy theme and the default.
+/// User-chosen appearance (Settings). Dark is Lumi's navy look — the former
+/// separate black "Dark" and navy "Lumi" modes were one look in practice and
+/// became one (decision 134). A stored `lumi` no longer decodes and falls
+/// back to the default, which is dark — the same look.
 enum AppearanceMode: String, CaseIterable, Identifiable {
-    case system, light, dark, lumi
+    case system, light, dark
 
     static let storageKey = "appearanceMode"
-    static let `default` = AppearanceMode.lumi
+    static let `default` = AppearanceMode.dark
 
     var id: String { rawValue }
 
@@ -81,7 +80,6 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
         case .system: "System"
         case .light: "Light"
         case .dark: "Dark"
-        case .lumi: "Lumi"
         }
     }
 
@@ -89,44 +87,8 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
         switch self {
         case .system: nil
         case .light: .light
-        case .dark, .lumi: .dark
+        case .dark: .dark
         }
-    }
-
-    var isLumi: Bool { self == .lumi }
-}
-
-/// Custom trait (iOS 17): "the Lumi navy theme is on". Bridged to SwiftUI's
-/// environment so dynamic `UIColor`s in both worlds resolve with it.
-struct LumiThemeTrait: UITraitDefinition {
-    static let defaultValue = false
-    static let affectsColorAppearance = true
-}
-
-extension UITraitCollection {
-    var isLumiTheme: Bool { self[LumiThemeTrait.self] }
-}
-
-extension UIMutableTraits {
-    var isLumiTheme: Bool {
-        get { self[LumiThemeTrait.self] }
-        set { self[LumiThemeTrait.self] = newValue }
-    }
-}
-
-struct LumiThemeKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension LumiThemeKey: UITraitBridgedEnvironmentKey {
-    static func read(from traitCollection: UITraitCollection) -> Bool { traitCollection.isLumiTheme }
-    static func write(to mutableTraits: inout UIMutableTraits, value: Bool) { mutableTraits.isLumiTheme = value }
-}
-
-extension EnvironmentValues {
-    var isLumiTheme: Bool {
-        get { self[LumiThemeKey.self] }
-        set { self[LumiThemeKey.self] = newValue }
     }
 }
 
