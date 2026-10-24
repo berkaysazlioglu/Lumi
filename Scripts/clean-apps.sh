@@ -51,8 +51,7 @@ for id in "${BUNDLE_IDS[@]}"; do
   done < <(mdfind "kMDItemCFBundleIdentifier == '$id'" 2>/dev/null || true)
 done
 
-# Spotlight'ın atladığı yerler (indekslenmeyen build çıktıları, gizli
-# ~/.lumi/updates altında bekleyen güncelleme, harici diskler).
+# Spotlight'ın atladığı yerler (indekslenmeyen build çıktıları, harici diskler).
 typeset -a roots
 roots=(
   "/Applications"
@@ -61,7 +60,6 @@ roots=(
   "$HOME/Downloads"
   "$HOME/wkspaces"
   "$HOME/lumi"
-  "$HOME/.lumi/updates"
   "/Volumes"
 )
 for root in "${roots[@]}"; do
@@ -77,6 +75,8 @@ typeset -a apps
 apps=()
 for p in "${(@u)found}"; do
   p="${p#/System/Volumes/Data}"
+  # Uygulama içi güncellemenin beklettiği sürüm silinmez (AppUpdateInstaller'ın).
+  [[ "$p" == "$HOME/.lumi/updates/"* ]] && continue
   [ -d "$p" ] || continue
   [[ "$p" == *.app ]] || continue
   id="$(defaults read "$p/Contents/Info" CFBundleIdentifier 2>/dev/null || echo "")"
@@ -98,7 +98,6 @@ for p in "${apps[@]}"; do
   size="$(du -sh "$p" 2>/dev/null | cut -f1 || echo "?")"
   mtime="$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$p" 2>/dev/null || echo "?")"
   note=""
-  [[ "$p" == "$HOME/.lumi/updates/"* ]] && note=" · bekleyen güncelleme"
   pgrep -f "$p/Contents/MacOS/" >/dev/null 2>&1 && note="$note · ÇALIŞIYOR"
   printf "  %2d) %s\n      v%s · %s · %s%s\n" "$i" "$p" "$ver" "$size" "$mtime" "$note"
   i=$((i + 1))
