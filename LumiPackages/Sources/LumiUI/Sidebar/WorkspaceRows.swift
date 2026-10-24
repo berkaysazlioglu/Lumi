@@ -324,6 +324,7 @@ struct AgentRow: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
+                    viewMembershipBadge
                     Text(RelativeTimeFormatter.shortLabel(agent.meta.lastActivityAt))
                         .font(Theme.Typography.captionMono)
                         .foregroundStyle(Theme.textMuted)
@@ -351,6 +352,20 @@ struct AgentRow: View {
             CustomViewMenuItems(terminalID: agent.meta.id)
             Divider()
             Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }
+        }
+    }
+
+    /// Karar 135: ajan bir ya da daha çok Custom View'ın üyesiyse soluk view
+    /// glifi; ipucu view adlarını sayar.
+    @ViewBuilder
+    private var viewMembershipBadge: some View {
+        let names = shell.terminals.customViews(containing: agent.meta.id).map(\.name)
+        if !names.isEmpty {
+            Image(systemName: CustomViewRoute.icon)
+                .font(Theme.Typography.ui(.caption))
+                .foregroundStyle(Theme.textMuted)
+                .help("In \(names.joined(separator: ", "))")
+                .accessibilityLabel("In views \(names.joined(separator: ", "))")
         }
     }
 
