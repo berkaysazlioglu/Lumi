@@ -133,7 +133,7 @@ struct CheckoutRow: View {
     @ViewBuilder
     private var icon: some View {
         switch checkout {
-        case .original(let repo):
+        case .original:
             // Proje ikonu proje satırındadır (karar 120 eki); kök checkout sabit `house`.
             Image(systemName: "house").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
         case .workspace:

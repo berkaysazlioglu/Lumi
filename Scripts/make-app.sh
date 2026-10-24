@@ -71,11 +71,16 @@ echo "▸ Release build…"
 ARCH="$(uname -m)"
 DERIVED="$PKG/.build/xcode"
 cd "$PKG"
+# SPM paketi şemasında xcodebuild iki zararsız gürültü basar: boş "supported
+# platforms" IDE logu ve "Any Mac" / "Any Mac (Mac Catalyst)" belirsizliği
+# (ilki, yani native macOS seçilir; Catalyst'i dışlayan bir -destination yazımı
+# yok). Yalnız bu satırlar süzülür; çıkış kodu pipefail ile xcodebuild'inkidir.
+XCODEBUILD_NOISE='IDERunDestination: Supported platforms for the buildables|^--- xcodebuild: WARNING: Using the first of multiple matching destinations:|^\{ platform:macOS(, variant:Mac Catalyst)?, name:Any Mac \}$'
 xcodebuild -scheme Lumi -configuration Release \
   -destination "generic/platform=macOS" \
   -derivedDataPath "$DERIVED" \
   ARCHS="$ARCH" CODE_SIGNING_ALLOWED=NO \
-  -quiet build
+  -quiet build 2>&1 | { grep -Ev "$XCODEBUILD_NOISE" || true; }
 PRODUCTS="$DERIVED/Build/Products/Release"
 
 echo "▸ Bundle iskeleti…"
