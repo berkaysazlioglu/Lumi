@@ -233,7 +233,7 @@ struct TasksHeaderBar: View {
                         .font(Theme.Typography.mono(.caption))
                         .foregroundStyle(Theme.textMuted)
                 }
-                IconButton(systemName: "arrow.clockwise", label: "Refresh") {
+                IconButton(systemName: "arrow.clockwise", label: "Reload all tasks") {
                     Task { await store.refreshAll() }
                 }
                 .disabled(store.isRefreshing)

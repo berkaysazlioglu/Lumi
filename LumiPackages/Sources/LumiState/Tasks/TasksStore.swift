@@ -250,16 +250,18 @@ public final class TasksStore {
 
     /// Elle yenileme: başlık şeridinde spinner gösterir. Döngünün kendi
     /// tazelemesi sessizdir — her 15 sn'de "Updated…" yazısı yanıp sönmesin.
+    /// Delta değil TAM liste ister: sunucu `updatedAt`'i artırmadan bir şey
+    /// değiştirdiyse kullanıcının elinde bunu düzeltecek bir kapı olsun.
     public func refreshAll() async {
         guard !sources.isEmpty else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-        await refreshSources()
+        await refreshSources(fullList: true)
     }
 
-    private func refreshSources() async {
+    private func refreshSources(fullList: Bool = false) async {
         for id in sources.map(\.id) {
-            await refresh(id)
+            await refresh(id, fullList: fullList)
         }
     }
 
@@ -305,7 +307,7 @@ public final class TasksStore {
         }
     }
 
-    func refresh(_ id: TaskSourceID) async {
+    func refresh(_ id: TaskSourceID, fullList: Bool = false) async {
         guard let provider = providers[id], let current = state(of: id) else { return }
         let sequenceAtStart = writeSequence
         let needsDiscovery = current.declaredInfo == nil || current.phase == .reconnect
@@ -320,7 +322,7 @@ public final class TasksStore {
                 update(id) { $0.declaredInfo = info }
             }
             operation = .listTasks
-            let since = needsDiscovery ? nil : current.syncToken
+            let since = needsDiscovery || fullList ? nil : current.syncToken
             var listing = try await provider.listTasks(since: since)
             var items = listing.isDelta ? applyingDelta(listing, to: id) : listing.tasks
             if items == nil {

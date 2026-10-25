@@ -199,12 +199,12 @@ final class TasksStoreTests: XCTestCase {
         let (store, _) = makeStore(provider)
         await connect(store)
 
-        await store.refreshAll()
+        await store.refresh(store.sources[0].id)
         XCTAssertEqual(store.entries.map(\.item.id), ["1", "2"], "ids'te olmayan task silinmiştir")
         XCTAssertEqual(store.entries.first { $0.item.id == "2" }?.item.title, "Renamed")
         XCTAssertEqual(store.entries.first { $0.item.id == "1" }?.item.title, "Task 1", "değişmeyen yerel kopya kalır")
 
-        await store.refreshAll()
+        await store.refresh(store.sources[0].id)
         let sent = await provider.sinceTokens
         XCTAssertEqual(sent.dropFirst(), [nil, "t1", "t2"], "Verify'dan sonra ilk tazeleme tam liste, sonra her cevabın jetonu")
     }
@@ -217,7 +217,7 @@ final class TasksStoreTests: XCTestCase {
         await connect(store)
         await provider.setTasks([.fake(id: "1"), .fake(id: "9")])
 
-        await store.refreshAll()
+        await store.refresh(store.sources[0].id)
         XCTAssertEqual(Set(store.entries.map(\.item.id)), ["1", "9"])
         let sent = await provider.sinceTokens
         XCTAssertEqual(sent.suffix(2), ["t1", nil], "bilinmeyen kimlik → aynı tazelemede tam liste")
@@ -233,11 +233,22 @@ final class TasksStoreTests: XCTestCase {
         await connect(store)
         store.move(store.entries[0].key, to: .done)
 
-        await store.refreshAll()
+        await store.refresh(store.sources[0].id)
         XCTAssertEqual(store.entries[0].item.status, .done, "bekleyen yerel düzenleme ezilmez")
-        await store.refreshAll()
+        await store.refresh(store.sources[0].id)
         let sent = await provider.sinceTokens
         XCTAssertEqual(sent.suffix(2), ["t1", "t1"], "atılan sunucu kopyası sonraki deltada yeniden gelsin")
+    }
+
+    func testManualRefreshAlwaysAsksForTheFullList() async {
+        let provider = FakeTaskProvider(tasks: [.fake(id: "1")])
+        await provider.setSyncToken("t1")
+        let (store, _) = makeStore(provider)
+        await connect(store)
+
+        await store.refreshAll()
+        let sent = await provider.sinceTokens
+        XCTAssertEqual(sent.last, .some(nil), "Refresh butonu jeton göndermez — updatedAt değişmese de her şey gelir")
     }
 
     // MARK: - Yazımlar
