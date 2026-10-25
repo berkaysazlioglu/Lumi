@@ -5,9 +5,10 @@ import LumiKit
 /// Task görsellerinin disk önbelleği (Tasks planı: "Görseller").
 ///
 /// - `file://` adresleri olduğu gibi döner (demo kaynak, yerel sunucu).
-/// - `https` görseli bir kez indirilir, adresin SHA-256'sıyla adlandırılıp
-///   önbellek dizinine yazılır; sonraki istekler ağa çıkmaz.
-/// - Aynı adres için eşzamanlı istekler tek indirmeye bağlanır.
+/// - `https` görseli bir kez indirilir, kimliğinin (`TaskImageIdentity` —
+///   pre-signed imza parametreleri atılmış adres) SHA-256'sıyla adlandırılıp
+///   önbellek dizinine yazılır; imzası tazelenen aynı görsel ağa çıkmaz.
+/// - Aynı görsel için eşzamanlı istekler tek indirmeye bağlanır.
 /// - Dizin `maxBytes`'ı aşınca en eski dosyalar silinir.
 public actor TaskImageCache: TaskImageLoading {
     private let directory: URL
@@ -15,7 +16,7 @@ public actor TaskImageCache: TaskImageLoading {
     private let attachmentsRoot: URL
     private let session: URLSession
     private let maxBytes: Int
-    private var inFlight: [URL: Task<URL, any Error>] = [:]
+    private var inFlight: [String: Task<URL, any Error>] = [:]
 
     public init(
         directory: URL, attachmentsRoot: URL, session: URLSession = .shared, maxBytes: Int = 200 * 1024 * 1024
@@ -37,12 +38,13 @@ public actor TaskImageCache: TaskImageLoading {
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: target.path)
             return target
         }
-        if let running = inFlight[url] { return try await running.value }
+        let key = TaskImageIdentity.key(for: url)
+        if let running = inFlight[key] { return try await running.value }
         let download = Task { [session, directory] in
             try await Self.download(url, to: target, directory: directory, session: session, authorization: authorization)
         }
-        inFlight[url] = download
-        defer { inFlight[url] = nil }
+        inFlight[key] = download
+        defer { inFlight[key] = nil }
         let file = try await download.value
         prune()
         return file
@@ -107,7 +109,7 @@ public actor TaskImageCache: TaskImageLoading {
     }
 
     private func cachedPath(for url: URL) -> URL {
-        let digest = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }.joined()
+        let digest = SHA256.hash(data: Data(TaskImageIdentity.key(for: url).utf8)).map { String(format: "%02x", $0) }.joined()
         let ext = url.pathExtension.isEmpty ? "img" : url.pathExtension.lowercased()
         return directory.appendingPathComponent("\(digest).\(ext)")
     }

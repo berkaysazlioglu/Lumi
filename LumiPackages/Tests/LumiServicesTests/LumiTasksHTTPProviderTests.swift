@@ -71,6 +71,32 @@ final class LumiTasksHTTPProviderTests: XCTestCase {
         XCTAssertTrue(requests[0].url?.query?.contains("limit=200") == true)
     }
 
+    func testSinceIsSentAndIDsMakeADelta() async throws {
+        let transport = FakeHTTPTransport()
+        transport.respond("GET", "/lumi/v1/tasks", status: 200, json: [
+            "tasks": [["id": "2", "title": "B", "status": "done", "updatedAt": "2026-10-24T10:00:00Z"]],
+            "ids": ["1", 2], "nextCursor": NSNull(), "syncToken": "t2",
+        ])
+        let listing = try await make(transport).listTasks(since: "t1")
+
+        XCTAssertTrue(transport.requests[0].url?.query?.contains("since=t1") == true)
+        XCTAssertEqual(listing.allIDs, ["1", "2"])
+        XCTAssertEqual(listing.tasks.map(\.id), ["2"])
+        XCTAssertEqual(listing.syncToken, "t2")
+    }
+
+    func testIDsWithoutSinceAreAFullList() async throws {
+        let transport = FakeHTTPTransport()
+        transport.respond("GET", "/lumi/v1/tasks", status: 200, json: [
+            "tasks": [], "ids": ["1"], "syncToken": "t1",
+        ])
+        let listing = try await make(transport).listTasks(since: nil)
+
+        XCTAssertFalse(transport.requests[0].url?.query?.contains("since") == true)
+        XCTAssertFalse(listing.isDelta)
+        XCTAssertEqual(listing.syncToken, "t1")
+    }
+
     func testBrokenTasksAreFlaggedNotDropped() {
         let flagged = LumiTasksWire.task(["id": "1", "status": "blocked"])
         XCTAssertEqual(flagged?.status, .todo)

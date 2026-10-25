@@ -11,7 +11,7 @@ Protokolün **tek kaynağı** `LumiKit/Tasks/TaskSetupPrompt.swift`'teki metindi
 | Uç | Zorunlu mu |
 |---|---|
 | `GET /lumi/v1` — discovery: `protocol`, `version`, `name?`, `me?`, `capabilities`, `fields` | ✓ |
-| `GET /lumi/v1/tasks?status&project&cursor&limit` → `{ tasks, nextCursor }` | ✓ |
+| `GET /lumi/v1/tasks?status&project&cursor&limit&since` → `{ tasks, nextCursor, syncToken?, ids? }` | ✓ (`since` önerilir) |
 | `GET /lumi/v1/tasks/{id}` | ✓ |
 | `PATCH /lumi/v1/tasks/{id}` (kısmi; en az `status`) | ✓ |
 | `POST /lumi/v1/tasks` | `create` |
@@ -63,6 +63,8 @@ Görünümler alan/yetenek sorusunu yalnız `TaskSourceInfo`'ya sorar (`canRead`
 
 - İstek yalnız route görünürken: `TasksScreen`'in `.task`'ı `keepFresh` döngüsünü (hemen + 15 sn'de bir) yaşatır; route'tan çıkınca iptal.
 - Düzenleme anında görünür; sunucuya task başına 2 sn ertelenip tek `PATCH`'e birleşerek gider; route'tan çıkışta ve kapanışta `flushAll`. Bekleyen/uçuştaki yazım tazelemeyle ezilmez; ret halinde son onaylı hâle dönülür.
+- **Artımlı senkron (2026-10-25):** liste cevabı opak `syncToken` taşıyabilir; Lumi sonraki tazelemede `since=<syncToken>` gönderir. Delta cevabı yalnız değişen task'leri (`tasks`) ve kaynaktaki TÜM kimlikleri (`ids`) taşır — silinen kimlikten çıkarılır, sunucu mezar taşı tutmaz. `ids`'siz cevap tam listedir; `since`'i yok sayan eski sunucu bu yüzden değişmeden çalışır (`TaskListing`, `TasksStore.applyingDelta`). Delta yereldeki bilinmeyen bir kimliği gösterirse aynı tazelemede tam liste istenir; tazeleme bir sunucu kopyasını yerel yazım yüzünden attıysa jeton ilerlemez (değişiklik sonraki deltada yeniden gelir). Jeton discovery ve yeniden bağlanmada sıfırlanır, bellekte tutulur (açılışta ilk istek tam liste).
+- **Görsel kimliği:** pre-signed adresler (S3/GCS/CloudFront/Azure SAS) her listede yeniden imzalanır; önbellek ve görünüm kimliği bilinen imza parametreleri atılmış adrestir (`TaskImageIdentity`) — aynı görsel bir kez iner, imza tazelenince spinner çıkmaz. Bellekteki küçük resim hücrenin ilk karesinde çizilir.
 
 ## 7. Dogfood (2026-10-24)
 

@@ -18,6 +18,9 @@ public actor FakeTaskProvider: TaskProviding {
 
     public private(set) var discoverCount = 0
     public private(set) var listCount = 0
+    public private(set) var sinceTokens: [String?] = []
+    private var fullSyncToken: String?
+    private var deltas: [String: TaskListing] = [:]
     public private(set) var updates: [(id: String, patch: TaskPatch)] = []
     public private(set) var created: [TaskDraft] = []
     public private(set) var deleted: [String] = []
@@ -38,6 +41,10 @@ public actor FakeTaskProvider: TaskProviding {
     public func setInfo(_ info: TaskSourceInfo) { self.info = info }
     public func setDiscoverError(_ error: TaskProviderError?) { discoverError = error }
     public func setListError(_ error: TaskProviderError?) { listError = error }
+    /// Artımlı senkron: tam liste bu jetonu döner; `since` bir delta'nın
+    /// anahtarıysa o delta döner (yoksa tam liste — `since`'i yok sayan sunucu).
+    public func setSyncToken(_ token: String?) { fullSyncToken = token }
+    public func setDelta(_ delta: TaskListing, since token: String) { deltas[token] = delta }
     public func setUpdateError(_ error: TaskProviderError?) { updateError = error }
 
     public func holdUpdates() { holdsUpdates = true }
@@ -54,12 +61,14 @@ public actor FakeTaskProvider: TaskProviding {
         return info
     }
 
-    public func listTasks() async throws -> [TaskItem] {
+    public func listTasks(since syncToken: String?) async throws -> TaskListing {
         listCount += 1
+        sinceTokens.append(syncToken)
         // Gerçek URLSession / demo gecikmesi gibi: iptal edilmiş görevde istek düşer.
         try Task.checkCancellation()
         if let listError { throw listError }
-        return tasks
+        if let syncToken, let delta = deltas[syncToken] { return delta }
+        return TaskListing(tasks: tasks, syncToken: fullSyncToken)
     }
 
     public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem {

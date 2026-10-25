@@ -69,6 +69,7 @@ public enum TaskSetupPrompt {
     - `priority` is one of: `none`, `low`, `medium`, `high`, `urgent`.
     - `assignee` is `null` when unassigned.
     - `images` are absolute URLs. Images on this server may require the same Bearer token; images elsewhere (S3, CDN) must be public or pre-signed. Provide `thumbnailUrl` when the original is large.
+    - Lumi downloads each image once and caches it by its URL with the standard signing parameters removed (`X-Amz-*`, `X-Goog-*`, CloudFront `Expires`/`Signature`/`Key-Pair-Id`/`Policy`, Azure SAS). So a pre-signed URL may be re-signed on every request, but the rest of the URL must stay the same for the same image — and must change when the image content changes.
     - `project.repo` is the git remote of the code the task belongs to — Lumi uses it to open the right project.
     - `lumi` is an opaque object owned by Lumi. Store it as-is (a JSON column) and return it unchanged. Only needed if you declare the `lumiMetadata` capability.
     - Every write must bump `updatedAt`.
@@ -92,7 +93,13 @@ public enum TaskSetupPrompt {
 
     ### `GET /lumi/v1/tasks`
     Query (all optional): `status` (comma separated, e.g. `todo,in_progress`), `project` (project key), `cursor`, `limit` (Lumi sends 200).
-    Response: `{ "tasks": [ …task objects… ], "nextCursor": "opaque-string-or-null" }`. If you don't paginate, return everything with `"nextCursor": null`. Order by `updatedAt` descending.
+    Response: `{ "tasks": [ …task objects… ], "nextCursor": "opaque-string-or-null", "syncToken": "opaque-string" }`. If you don't paginate, return everything with `"nextCursor": null`. Order by `updatedAt` descending.
+
+    **Incremental sync (recommended).** Lumi refreshes every 15 seconds while the board is open. To avoid sending every task each time:
+    - Include `syncToken` in the response — an opaque string marking this moment. Simplest: the highest `updatedAt` across all tasks.
+    - Lumi then sends `since=<syncToken>`. Answer with only the tasks changed since then in `tasks` (with the token above: `updatedAt >= since`), plus `"ids"`: the ids of **all** tasks that currently exist (strings, same order as the full list), plus a new `syncToken`. Deleted tasks simply disappear from `ids` — no tombstones needed.
+    - If you can't honor a `since` value, ignore it and return the full list without `ids`; Lumi treats a response without `ids` as a full list. A server that ignores `since` entirely still works, just less efficiently.
+    - This only works if every change (including images and `lumi`) bumps `updatedAt`.
 
     ### `GET /lumi/v1/tasks/{id}`
     The task, or `404 not_found`.
@@ -120,6 +127,7 @@ public enum TaskSetupPrompt {
     3. `PATCH /lumi/v1/tasks/<id>` with `{"status":"in_review"}` → the task with `"status": "in_review"` and a newer `updatedAt`.
     4. `PATCH` with `{"status":"blocked"}` → 422 envelope.
     5. `GET /lumi/v1/tasks` → contains the task; `DELETE` it → 204; `GET` it again → 404.
+    6. `GET /lumi/v1/tasks` → note `syncToken`; `PATCH` one task; `GET /lumi/v1/tasks?since=<syncToken>` → `tasks` holds only that task, `ids` holds every task id.
     Add automated tests for these if the project has a test suite.
 
     ## When you're done, print

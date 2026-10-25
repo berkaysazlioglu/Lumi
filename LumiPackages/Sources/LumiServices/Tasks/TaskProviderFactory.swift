@@ -39,7 +39,7 @@ public struct UnavailableTaskProvider: TaskProviding {
     }
 
     public func discover() async throws -> TaskSourceInfo { throw error }
-    public func listTasks() async throws -> [TaskItem] { throw error }
+    public func listTasks(since syncToken: String?) async throws -> TaskListing { throw error }
     public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem { throw error }
     public func create(_ draft: TaskDraft) async throws -> TaskItem { throw error }
     public func delete(taskID: String) async throws { throw error }

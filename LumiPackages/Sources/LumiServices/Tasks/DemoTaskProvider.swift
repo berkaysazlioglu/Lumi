@@ -57,10 +57,10 @@ public actor DemoTaskProvider: TaskProviding, TaskProviderSimulating {
         )
     }
 
-    public func listTasks() async throws -> [TaskItem] {
+    public func listTasks(since syncToken: String?) async throws -> TaskListing {
         try await simulateLatency()
         try failIfSimulated(.listTasks, request: "GET /lumi/v1/tasks")
-        return tasks
+        return TaskListing(tasks: tasks)
     }
 
     public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem {

@@ -143,15 +143,20 @@ extension TasksStore {
     /// önbellekteki görselleri.
     func cleanUpImages(of removed: [TaskEntry]) {
         guard !removed.isEmpty else { return }
-        let stillUsed = Set(entries.flatMap { $0.item.images.flatMap { [$0.url] + ($0.thumbnailURL.map { [$0] } ?? []) } })
+        // Pre-signed adresler her listede değişir — karşılaştırma kimlikle.
+        let stillUsed = Set(entries.flatMap { Self.imageURLs(of: $0).map(TaskImageIdentity.key(for:)) })
         let urls = removed
-            .flatMap { $0.item.images.flatMap { [$0.url] + ($0.thumbnailURL.map { [$0] } ?? []) } }
-            .filter { !stillUsed.contains($0) }
+            .flatMap(Self.imageURLs(of:))
+            .filter { !stillUsed.contains(TaskImageIdentity.key(for: $0)) }
         let keys = removed.map(\.key)
         Task { [images] in
             await images.removeAttachments(for: keys)
             await images.evict(urls)
         }
+    }
+
+    private static func imageURLs(of entry: TaskEntry) -> [URL] {
+        entry.item.images.flatMap { [$0.url] + ($0.thumbnailURL.map { [$0] } ?? []) }
     }
 
     func replace(_ key: TaskKey, with item: TaskItem) {

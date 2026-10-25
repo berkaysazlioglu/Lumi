@@ -98,14 +98,7 @@ struct TaskDetailPanel: View {
                 property("Project") { TaskProjectChip(project: project).padding(.horizontal, Theme.Spacing.md) }
             }
             if info?.canRead(.labels) == true, !item.labels.isEmpty {
-                property("Labels") {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        ForEach(item.labels, id: \.self) {
-                            Badge(text: $0, color: Theme.accentCyan, shape: .capsule)
-                        }
-                    }
-                    .padding(.horizontal, Theme.Spacing.md)
-                }
+                labels
             }
             if info?.canRead(.dueDate) == true, let due = item.dueDate {
                 property("Due") { plain(TaskPresentation.day(due)) }
@@ -126,6 +119,27 @@ struct TaskDetailPanel: View {
             content()
             Spacer(minLength: 0)
         }
+        .frame(minHeight: Theme.Row.control)
+    }
+
+    /// Etiketler sığmayınca alt satıra iner; başlık ilk satırla hizalı kalır.
+    private var labels: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
+            Text("Labels")
+                .font(Theme.Typography.labelMono)
+                .foregroundStyle(Theme.textMuted)
+                .frame(width: Self.labelWidth, alignment: .leading)
+            FlowLayout(spacing: Theme.Spacing.xs) {
+                ForEach(item.labels, id: \.self) {
+                    Badge(text: $0, color: Theme.accentCyan, shape: .capsule)
+                        .lineLimit(1)
+                        .help($0)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, Theme.Spacing.xs)
         .frame(minHeight: Theme.Row.control)
     }
 

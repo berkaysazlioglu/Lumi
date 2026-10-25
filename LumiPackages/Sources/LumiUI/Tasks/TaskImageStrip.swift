@@ -54,6 +54,21 @@ private struct TaskImageThumbnail: View {
     @State private var thumbnail: NSImage?
     @State private var didFail = false
 
+    init(store: TasksStore, source: TaskSourceID, taskID: String, image: TaskImage, onOpen: @escaping () -> Void) {
+        self.store = store
+        self.source = source
+        self.taskID = taskID
+        self.image = image
+        self.onOpen = onOpen
+        // Önbellekteki önizleme ilk karede çizilir — spinner hiç yanıp sönmez.
+        _thumbnail = State(initialValue: TaskThumbnailCache.shared.object(forKey: Self.cacheKey(image)))
+    }
+
+    /// Önizlemenin kimliği: pre-signed adresin imzası değişse de aynı kalır.
+    private static func cacheKey(_ image: TaskImage) -> NSString {
+        TaskImageIdentity.key(for: image.thumbnailURL ?? image.url) as NSString
+    }
+
     static var width: CGFloat { Theme.scaled(112) }
     static var height: CGFloat { Theme.scaled(80) }
 
@@ -81,12 +96,13 @@ private struct TaskImageThumbnail: View {
         .buttonStyle(.plain)
         .help(image.displayName + (image.width.map { w in image.height.map { " · \(w)×\($0)" } ?? "" } ?? ""))
         .accessibilityLabel("Image \(image.displayName)")
-        .task(id: image.url) { await load() }
+        .task(id: image.id) { await load() }
     }
 
     private func load() async {
         let url = image.thumbnailURL ?? image.url
-        if let cached = TaskThumbnailCache.shared.object(forKey: url as NSURL) {
+        let key = Self.cacheKey(image)
+        if let cached = TaskThumbnailCache.shared.object(forKey: key) {
             thumbnail = cached
             return
         }
@@ -101,7 +117,7 @@ private struct TaskImageThumbnail: View {
             didFail = true
             return
         }
-        TaskThumbnailCache.shared.setObject(made, forKey: url as NSURL)
+        TaskThumbnailCache.shared.setObject(made, forKey: key)
         thumbnail = made
     }
 }
@@ -109,8 +125,8 @@ private struct TaskImageThumbnail: View {
 /// Küçültülmüş önizlemelerin bellek önbelleği (oturumluk; disk önbelleği
 /// servis katmanındadır).
 enum TaskThumbnailCache {
-    nonisolated(unsafe) static let shared: NSCache<NSURL, NSImage> = {
-        let cache = NSCache<NSURL, NSImage>()
+    nonisolated(unsafe) static let shared: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
         cache.countLimit = 200
         return cache
     }()

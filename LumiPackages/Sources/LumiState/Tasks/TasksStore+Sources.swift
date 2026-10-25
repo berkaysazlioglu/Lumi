@@ -47,6 +47,8 @@ extension TasksStore {
             $0.source = source
             $0.declaredInfo = info
             $0.phase = .loading
+            // Adres/token değişmiş olabilir — eski jetonla delta istenmez.
+            $0.syncToken = nil
         }
         await persist { config in
             guard let index = config.taskSources.firstIndex(where: { $0.id == source.id }) else { return }

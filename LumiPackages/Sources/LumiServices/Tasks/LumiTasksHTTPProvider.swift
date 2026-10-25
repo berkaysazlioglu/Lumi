@@ -39,12 +39,15 @@ public struct LumiTasksHTTPProvider: TaskProviding {
         }
     }
 
-    public func listTasks() async throws -> [TaskItem] {
+    public func listTasks(since syncToken: String?) async throws -> TaskListing {
         var tasks: [TaskItem] = []
+        var allIDs: [String]?
+        var nextSyncToken: String?
         var cursor: String?
         var seenCursors = Set<String>()
         for _ in 0..<Self.maxPages {
             var query = [URLQueryItem(name: "limit", value: String(Self.pageLimit))]
+            if let syncToken { query.append(URLQueryItem(name: "since", value: syncToken)) }
             if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
             let response = try await perform("GET", "/tasks", query: query, operation: .listTasks)
             guard let object = response.json as? [String: Any], let items = object["tasks"] as? [Any] else {
@@ -54,11 +57,14 @@ public struct LumiTasksHTTPProvider: TaskProviding {
                 )
             }
             tasks += items.compactMap(LumiTasksWire.task)
+            if let token = LumiTasksWire.string(object["syncToken"]), !token.isEmpty { nextSyncToken = token }
+            if let ids = object["ids"] as? [Any] { allIDs = (allIDs ?? []) + ids.compactMap(LumiTasksWire.string) }
             guard let next = LumiTasksWire.string(object["nextCursor"]), !next.isEmpty,
                   seenCursors.insert(next).inserted else { break }
             cursor = next
         }
-        return tasks
+        // `ids` yalnız `since` gönderildiyse delta demektir; aksi hâlde tam liste.
+        return TaskListing(tasks: tasks, allIDs: syncToken == nil ? nil : allIDs, syncToken: nextSyncToken)
     }
 
     public func update(taskID: String, patch: TaskPatch) async throws -> TaskItem {

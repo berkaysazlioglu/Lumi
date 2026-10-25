@@ -103,7 +103,9 @@ public struct TaskImage: Sendable, Hashable, Identifiable {
         self.height = height
     }
 
-    public var id: URL { url }
+    /// İmza parametrelerinden bağımsız kimlik (bkz. `TaskImageIdentity`) —
+    /// pre-signed adres her tazelemede değişse de görsel aynı görsel kalır.
+    public var id: String { TaskImageIdentity.key(for: url) }
 
     /// Dosya adı: sunucunun verdiği ad, yoksa adresin son parçası.
     public var displayName: String {

@@ -48,6 +48,9 @@ public final class TasksStore {
         var declaredInfo: TaskSourceInfo?
         public var phase: Phase
         public var lastUpdated: Date?
+        /// Son listenin senkron jetonu — bir sonraki tazeleme yalnız
+        /// değişenleri ister (bkz. `TaskListing`). Discovery'de sıfırlanır.
+        var syncToken: String?
         public var users: [TaskUser] = []
         public var projects: [TaskProjectRef] = []
         /// Demo kaynağın "X yoksa" anahtarları: kapatılan yetenek/alanlar.
@@ -317,11 +320,21 @@ public final class TasksStore {
                 update(id) { $0.declaredInfo = info }
             }
             operation = .listTasks
-            let items = try await provider.listTasks()
-            merge(items, from: id, sequenceAtStart: sequenceAtStart)
+            let since = needsDiscovery ? nil : current.syncToken
+            var listing = try await provider.listTasks(since: since)
+            var items = listing.isDelta ? applyingDelta(listing, to: id) : listing.tasks
+            if items == nil {
+                // Delta yerel listeyle örtüşmüyor (bilinmeyen kimlik) — tam liste.
+                listing = try await provider.listTasks(since: nil)
+                items = listing.tasks
+            }
+            let keptLocalCopies = merge(items ?? [], from: id, sequenceAtStart: sequenceAtStart)
             update(id) {
                 $0.phase = .ready
                 $0.lastUpdated = now()
+                // Sunucu kopyası yerel yazım yüzünden atıldıysa jeton ilerlemez:
+                // bir sonraki delta o değişikliği yeniden getirir.
+                if !keptLocalCopies { $0.syncToken = listing.syncToken }
             }
             lastRefreshAt = now()
         } catch {
@@ -344,14 +357,38 @@ public final class TasksStore {
         }
     }
 
+    /// Delta cevabını tam listeye çevirir: sunucudaki her kimlik için değişen
+    /// kopya, yoksa yereldeki. Yerelde de olmayan bir kimlik varsa nil.
+    func applyingDelta(_ listing: TaskListing, to id: TaskSourceID) -> [TaskItem]? {
+        let changed = Dictionary(listing.tasks.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        let local = Dictionary(
+            entries.filter { $0.source == id }.map { ($0.item.id, $0.item) }, uniquingKeysWith: { first, _ in first }
+        )
+        var items: [TaskItem] = []
+        for taskID in listing.allIDs ?? [] {
+            guard let item = changed[taskID] ?? local[taskID] else { return nil }
+            items.append(item)
+        }
+        return items
+    }
+
     /// Kaynağın task'lerini sunucunun listesiyle değiştirir; uçuştaki ya da
     /// tazeleme başladıktan sonra yapılmış yazımların yerel kopyası korunur.
-    func merge(_ items: [TaskItem], from id: TaskSourceID, sequenceAtStart: Int) {
+    /// Sunucu kopyası yerine yerel kopya tutulduysa true döner.
+    @discardableResult
+    func merge(_ items: [TaskItem], from id: TaskSourceID, sequenceAtStart: Int) -> Bool {
         let local = Dictionary(uniqueKeysWithValues: entries.filter { $0.source == id }.map { ($0.item.id, $0) })
+        var keptLocalCopies = false
         var merged: [TaskEntry] = items.compactMap { item in
             let key = TaskKey(source: id, id: item.id)
-            if let deletedAt = deletions[key], deletedAt > sequenceAtStart || inFlightWrites[key] != nil { return nil }
-            if isProtected(key, since: sequenceAtStart), let kept = local[item.id] { return kept }
+            if let deletedAt = deletions[key], deletedAt > sequenceAtStart || inFlightWrites[key] != nil {
+                keptLocalCopies = true
+                return nil
+            }
+            if isProtected(key, since: sequenceAtStart), let kept = local[item.id] {
+                keptLocalCopies = true
+                return kept
+            }
             return TaskEntry(source: id, item: item)
         }
         // Sunucunun listesinde henüz görünmeyen ama korunan yerel task'ler
@@ -371,6 +408,7 @@ public final class TasksStore {
         if let selectedTask, selectedTask.source == id, entry(selectedTask) == nil {
             self.selectedTask = nil
         }
+        return keptLocalCopies
     }
 
     private func isProtected(_ key: TaskKey, since sequence: Int) -> Bool {
