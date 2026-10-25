@@ -1,8 +1,9 @@
 import SwiftUI
 import LumiMobileKit
 
-/// One task on the phone's board: status, id, title, priority, assignee and
-/// — if an agent works on it — its state (Projects' glyph language).
+/// One task on the phone's board: status, title, a quiet meta line (id ·
+/// priority · project · age), the assignee and — if an agent works on it —
+/// its state (Projects' glyph language).
 struct TaskRowView: View {
     let task: RemoteTask
     let me: TaskUserRef?
@@ -10,50 +11,120 @@ struct TaskRowView: View {
     var sourceName: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             TaskStatusGlyph(status: task.status)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(task.id).font(.caption.monospaced()).foregroundStyle(.secondary)
-                    if task.needsAttention {
-                        Text("Needs attention").font(.caption2.weight(.semibold)).foregroundStyle(.orange)
-                    }
-                    if let priority = task.priority, priority != "none" {
-                        TaskPriorityGlyph(priority: priority)
-                    }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(task.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(task.status == .done ? .secondary : .primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                     Spacer(minLength: 0)
                     if let assignee = task.assignee {
                         TaskAvatarView(user: assignee, isMe: assignee.id == me?.id)
+                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
                     }
                 }
-                Text(task.title)
-                    .font(.body)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
+                meta
                 if let agent = task.agent {
                     TaskAgentBadge(agent: agent)
                 }
-                meta
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 
-    @ViewBuilder private var meta: some View {
-        let parts = [
+    private var meta: some View {
+        HStack(spacing: 6) {
+            if task.needsAttention {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    .accessibilityLabel("Needs attention")
+            }
+            Text(task.id).monospaced()
+            if let priority = task.priority, priority != "none" {
+                TaskPriorityGlyph(priority: priority)
+            }
+            ForEach(details, id: \.self) { part in
+                Text("·").foregroundStyle(.tertiary)
+                Text(part)
+            }
+            if task.imageCount > 0 {
+                Image(systemName: "photo").accessibilityLabel("\(task.imageCount) images")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    private var details: [String] {
+        [
             task.project?.displayName,
             showsSource ? sourceName : nil,
-            task.imageCount > 0 ? "\(task.imageCount) image\(task.imageCount == 1 ? "" : "s")" : nil,
-            task.labels.isEmpty ? nil : task.labels.prefix(2).joined(separator: ", "),
+            task.labels.first,
+            TaskDates.short(task.updatedAt),
         ].compactMap { $0 }
-        if !parts.isEmpty {
-            Text(parts.joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+    }
+}
+
+/// `updatedAt` (ms since 1970) as the board and the detail show it.
+enum TaskDates {
+    static func date(_ milliseconds: Double) -> Date? {
+        milliseconds > 0 ? Date(timeIntervalSince1970: milliseconds / 1000) : nil
+    }
+
+    /// `5m`, `3h`, `2d` — the row's meta line.
+    static func short(_ milliseconds: Double) -> String? {
+        guard let date = date(milliseconds) else { return nil }
+        let seconds = max(0, Date().timeIntervalSince(date))
+        switch seconds {
+        case ..<60: return "now"
+        case ..<3600: return "\(Int(seconds / 60))m"
+        case ..<86_400: return "\(Int(seconds / 3600))h"
+        case ..<(86_400 * 30): return "\(Int(seconds / 86_400))d"
+        default: return date.formatted(.dateTime.month(.abbreviated).day())
         }
+    }
+
+    /// `Updated 2 hours ago` — the detail's header.
+    static func relative(_ milliseconds: Double) -> String? {
+        date(milliseconds).map { "Updated " + $0.formatted(.relative(presentation: .named)) }
+    }
+}
+
+/// `● In Progress` on a tinted capsule — the detail's header.
+struct TaskStatusPill: View {
+    let status: RemoteTaskStatus
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: TaskStatusGlyph.icon(status))
+            Text(status.title)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(TaskStatusGlyph.color(status))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(TaskStatusGlyph.color(status).opacity(0.14), in: Capsule())
+    }
+}
+
+/// `↑ High` on a tinted capsule — the detail's header.
+struct TaskPriorityPill: View {
+    let priority: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            TaskPriorityGlyph(priority: priority)
+            Text(priority.capitalized)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(TaskPriorityGlyph.color(priority))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(TaskPriorityGlyph.color(priority).opacity(0.14), in: Capsule())
     }
 }
 
@@ -92,7 +163,7 @@ struct TaskPriorityGlyph: View {
     var body: some View {
         Image(systemName: icon)
             .font(.caption2.weight(.bold))
-            .foregroundStyle(color)
+            .foregroundStyle(Self.color(priority))
             .accessibilityLabel("Priority \(priority)")
     }
 
@@ -105,7 +176,7 @@ struct TaskPriorityGlyph: View {
         }
     }
 
-    private var color: Color {
+    static func color(_ priority: String) -> Color {
         switch priority {
         case "urgent": .red
         case "high": .orange

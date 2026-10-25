@@ -14,8 +14,11 @@ struct TasksView: View {
     @AppStorage("tasksSource") private var sourceFilter = ""
     @AppStorage("tasksShowDone") private var showDone = false
     @AppStorage("tasksMineOnly") private var mineOnly = false
-    @State private var selected: TaskSheetItem?
+    /// The task pushed full screen (its own Start sheet and chat live there).
+    @State private var selected: TaskRef?
     @State private var starting: TaskSheetItem?
+    /// Chat to open once the Start sheet is gone (a push mid-dismiss is dropped).
+    @State private var pendingChat: String?
     @State private var creating = false
     @State private var newTitle = ""
 
@@ -50,11 +53,7 @@ struct TasksView: View {
                         row(task)
                     }
                 } header: {
-                    HStack(spacing: 6) {
-                        TaskStatusGlyph(status: section.status)
-                        Text(section.status.title)
-                        Text("\(section.tasks.count)").foregroundStyle(.secondary)
-                    }
+                    TaskSectionHeader(status: section.status, count: section.tasks.count)
                 }
             }
             if showDone, let truncated = model.tasksSnapshot?.truncatedDone, truncated > 0 {
@@ -78,18 +77,17 @@ struct TasksView: View {
         .onAppear { model.setTasksVisible(true) }
         .onDisappear { model.setTasksVisible(false) }
         .onChange(of: scenePhase) { _, phase in model.setTasksVisible(phase == .active) }
-        .sheet(item: $selected) { item in
-            TaskDetailSheet(model: model, ref: item.ref, start: { starting = item }, openChat: { id in
-                selected = nil
-                openSession(id)
-            })
-            .lumiThemed()
+        .navigationDestination(item: $selected) { ref in
+            TaskDetailView(model: model, ref: ref)
         }
-        .sheet(item: $starting) { item in
+        // Start from a row's swipe / menu; the detail screen has its own.
+        .sheet(item: $starting, onDismiss: {
+            if let chat = pendingChat { openSession(chat) }
+            pendingChat = nil
+        }) { item in
             TaskStartSheet(model: model, ref: item.ref) { sessionId in
+                pendingChat = sessionId
                 starting = nil
-                selected = nil
-                if let sessionId { openSession(sessionId) }
             }
             .lumiThemed()
         }
@@ -161,8 +159,14 @@ struct TasksView: View {
 
     private func row(_ task: RemoteTask) -> some View {
         let source = model.taskSource(task.source)
-        return Button { selected = TaskSheetItem(ref: task.key) } label: {
-            TaskRowView(task: task, me: source?.me, showsSource: activeSource == nil && model.taskSources.count > 1, sourceName: source?.name)
+        return Button { selected = task.key } label: {
+            HStack(spacing: 8) {
+                TaskRowView(task: task, me: source?.me, showsSource: activeSource == nil && model.taskSources.count > 1,
+                            sourceName: source?.name)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -220,6 +224,28 @@ struct TasksView: View {
             ContentUnavailableView("Nothing here", systemImage: "checkmark.circle",
                                    description: Text(mineOnly ? "No open tasks are assigned to you." : "No open tasks."))
         }
+    }
+}
+
+/// `● In Progress  3` over a status's tasks.
+private struct TaskSectionHeader: View {
+    let status: RemoteTaskStatus
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TaskStatusGlyph(status: status)
+            Text(status.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text("\(count)")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(TaskStatusGlyph.color(status))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 1)
+                .background(TaskStatusGlyph.color(status).opacity(0.14), in: Capsule())
+        }
+        .textCase(nil)
     }
 }
 
