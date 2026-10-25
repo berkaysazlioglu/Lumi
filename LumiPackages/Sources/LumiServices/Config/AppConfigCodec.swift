@@ -74,6 +74,7 @@ enum AppConfigCodec {
         config.projectFavoriteFiles = FavoriteFileCodec.decodeList(dict["projectFavoriteFiles"])
         config.projectAppearance = ProjectAppearanceCodec.decodeMap(dict["projectAppearance"])
         config.taskSources = TaskSourceCodec.decodeList(dict["taskSources"])
+        config.sessionServer = SessionServerCodec.decode(dict["sessionServer"])
         return config
     }
 
@@ -113,6 +114,8 @@ enum AppConfigCodec {
         // merge'inde eski seçimi diskte bırakırdı (karar 9).
         overlay["activeClaudeAccountId"] = config.claudeAccountSelection.accountID ?? NSNull()
         overlay["activeCodexAccountId"] = config.codexAccountSelection.accountID ?? NSNull()
+        // Karar 138: bağlantı yoksa `null` — merge eski kaydı diskte bırakmasın.
+        overlay["sessionServer"] = config.sessionServer.map(SessionServerCodec.overlay) ?? NSNull()
         return overlay
     }
 

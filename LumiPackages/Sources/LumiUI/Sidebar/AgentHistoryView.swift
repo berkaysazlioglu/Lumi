@@ -16,6 +16,7 @@ struct AgentHistoryView: View {
     @State private var newestFirst = true
     @State private var showsFilter = false
     @State private var menuEntryID: String?
+    @State private var showsImportMenu = false
 
     private var entries: [AgentHistoryEntry] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -50,10 +51,13 @@ struct AgentHistoryView: View {
             Text((repoPath as NSString).lastPathComponent)
                 .font(Theme.Typography.ui(.body, weight: .medium)).lineLimit(1)
             Spacer(minLength: 0)
-            IconButton(systemName: "square.and.arrow.down", label: "Import session from file") {
-                importSession()
+            IconButton(systemName: "square.and.arrow.down", label: "Import session") {
+                showsImportMenu.toggle()
             }
             .disabled(shell.agentHistory.isTransferring)
+            .popover(isPresented: $showsImportMenu, arrowEdge: .bottom) {
+                PopoverMenu(items: importItems, dismiss: { showsImportMenu = false })
+            }
             IconButton(systemName: "arrow.clockwise", label: "Refresh agent history") {
                 Task { await shell.agentHistory.refresh(repoPath) }
             }
@@ -76,6 +80,23 @@ struct AgentHistoryView: View {
                 .toggle(agent.rawValue.capitalized, isOn: provider == agent) { provider = agent }
             }
             + [.divider, .section("Order"), .toggle("Newest First", isOn: newestFirst) { newestFirst.toggle() }]
+    }
+
+    /// Karar 138: dosyadan (karar 52) ya da oturum sunucusundan.
+    private var importItems: [PopoverMenu.Item] {
+        var items: [PopoverMenu.Item] = [
+            .action("Import from File…", icon: "doc") {
+                showsImportMenu = false
+                importSession()
+            },
+        ]
+        if let sessionShare = shell.sessionShare {
+            items.append(.action("Import from Server…", icon: "server.rack") {
+                showsImportMenu = false
+                sessionShare.openBrowser()
+            })
+        }
+        return items
     }
 
     private var searchField: some View {
@@ -227,8 +248,11 @@ struct AgentHistoryView: View {
             .action("Copy Log Path", icon: "doc.on.doc") { copy(entry.logPath) },
             .action("Reveal Log in Finder", icon: "folder") { revealLog(entry) },
             .divider,
-            .action("Export Session…", icon: "square.and.arrow.up", isEnabled: !shell.agentHistory.isTransferring) {
+            .action("Export as File…", icon: "square.and.arrow.up", isEnabled: !shell.agentHistory.isTransferring) {
                 exportSession(entry)
+            },
+            .action("Export to Server…", icon: "icloud.and.arrow.up", isEnabled: canExportToServer) {
+                exportToServer(entry)
             },
             .divider,
             .action("Delete Session…", icon: "trash", isDestructive: true, isEnabled: !shell.agentHistory.isTransferring) {
@@ -256,6 +280,18 @@ struct AgentHistoryView: View {
         menuEntryID = nil
         guard let destination = AgentSessionFilePanels.chooseExportDestination(for: entry) else { return }
         Task { await shell.agentHistory.exportSession(entry, to: destination) }
+    }
+
+    private var canExportToServer: Bool {
+        shell.sessionShare != nil && !shell.agentHistory.isTransferring && shell.sessionShare?.exportDraft == nil
+    }
+
+    /// Karar 138: onay penceresi; varsayılan proje adı Lumi'deki projenin adı.
+    private func exportToServer(_ entry: AgentHistoryEntry) {
+        menuEntryID = nil
+        let projectPath = shell.navigation.projectPath(containing: repoPath) ?? repoPath
+        let name = shell.repos.repo(at: projectPath)?.name ?? (projectPath as NSString).lastPathComponent
+        shell.sessionShare?.beginExport(entry, projectName: name)
     }
 
     private func importSession() {

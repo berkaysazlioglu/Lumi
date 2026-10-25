@@ -226,7 +226,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         taskSources: [
             TaskSource(id: TaskSourceID("ts"), name: "Team", kind: .custom, baseURL: "https://tasks.example.com"),
             TaskSource(id: TaskSourceID("demo"), name: "Demo", kind: .demo),
-        ]
+        ],
+        sessionServer: SessionServer(id: "ss", name: "Team sessions", baseURL: "https://sessions.example.com")
     )
 
     private static let fullyPopulatedUIState = UIState(

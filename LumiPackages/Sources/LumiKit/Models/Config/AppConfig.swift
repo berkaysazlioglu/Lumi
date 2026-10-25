@@ -93,6 +93,9 @@ public struct AppConfig: Sendable, Equatable {
     /// Bağlı task kaynakları (Tasks planı, Faz 2). Token burada DEĞİL,
     /// Keychain'dedir. Additive (karar 9): yoksa boş.
     public var taskSources: [TaskSource]
+    /// Bağlı oturum paylaşım sunucusu (karar 138). Token Keychain'de.
+    /// Additive (karar 9): yoksa nil.
+    public var sessionServer: SessionServer?
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
     /// (refactor 5.7). `SettingsStore` clamp'i ve `SettingsView` slider'ı
@@ -170,7 +173,8 @@ public struct AppConfig: Sendable, Equatable {
         projectQuickCommands: [ProjectQuickCommand] = [],
         projectFavoriteFiles: [ProjectFavoriteFile] = [],
         projectAppearance: [String: ProjectAppearance] = [:],
-        taskSources: [TaskSource] = []
+        taskSources: [TaskSource] = [],
+        sessionServer: SessionServer? = nil
     ) {
         self.projectsRoot = projectsRoot
         self.onboardingCompleted = onboardingCompleted
@@ -203,5 +207,6 @@ public struct AppConfig: Sendable, Equatable {
         self.projectFavoriteFiles = projectFavoriteFiles
         self.projectAppearance = projectAppearance
         self.taskSources = taskSources
+        self.sessionServer = sessionServer
     }
 }

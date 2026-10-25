@@ -24,6 +24,8 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     private(set) var plasticStore: PlasticStore!
     private(set) var commitAssistant: CommitMessageAssistant!
     private(set) var agentHistory: AgentHistoryStore!
+    /// Karar 138: Agent History'nin oturum sunucusu.
+    private(set) var sessionShare: SessionShareStore!
     private(set) var fileViewer: FileViewerStore!
 
     private var services: (any ServiceRegistry)!
@@ -56,6 +58,10 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         favoriteFiles = FavoriteFileStore(config: services.config, toasts: shared.toasts)
         agentHistory = AgentHistoryStore(
             service: services.agentHistory, transfer: services.agentSessionTransfer, toasts: shared.toasts
+        )
+        sessionShare = SessionShareStore(
+            factory: services.sessionSharing, credentials: services.sessionServerCredentials,
+            config: services.config, history: agentHistory, toasts: shared.toasts
         )
         gitStore = GitStore(git: services.git, toasts: shared.toasts)
         plasticStore = PlasticStore(service: services.plastic, toasts: shared.toasts)
@@ -103,6 +109,17 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             id: .deleteWorkspaceDialog,
             isPresented: { $0.dialogs.deleteWorkspaceDialog != nil },
             makeView: { AnyView(DeleteWorkspaceDialogOverlay()) }
+        ))
+        // Karar 138: oturum sunucusu popup'ı + yükleme onayı. Durum store'da.
+        registries.overlays.register(OverlayDescriptor(
+            id: .sessionShareBrowser,
+            isPresented: { $0.sessionShare?.isBrowserPresented == true },
+            makeView: { AnyView(SessionShareBrowserOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .sessionShareExport,
+            isPresented: { $0.sessionShare?.exportDraft != nil },
+            makeView: { AnyView(SessionShareExportOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
             id: .deleteAgentSessionDialog,
@@ -155,6 +172,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         await workspaceStore.load()
         await quickCommands.load()
         await favoriteFiles.load()
+        await sessionShare.load()
         // SIRA: workspace yüklemesi repoStore.reload'dan SONRA (migration repo
         // listesini okur); tek ui-state okumasıyla önce navigation, sonra layout.
         let uiState = await services.config.uiState()

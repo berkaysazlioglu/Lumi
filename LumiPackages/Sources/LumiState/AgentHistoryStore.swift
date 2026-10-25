@@ -84,17 +84,40 @@ public final class AgentHistoryStore {
     /// Paketi `projectPath` için içe alır ve listeyi yeniler.
     @discardableResult
     public func importSession(from source: URL, projectPath: String) async -> AgentSessionImportResult? {
+        await importing(projectPath: projectPath) {
+            try await self.transfer.importSession(from: source, projectPath: projectPath)
+        }
+    }
+
+    // MARK: - Oturum sunucusu (karar 138)
+
+    /// Yüklenecek paket — dosya dışa aktarımıyla aynı ayıklama.
+    public func exportArchive(_ entry: AgentHistoryEntry) async throws -> Data {
+        try await transfer.exportArchive(entry)
+    }
+
+    /// Sunucudan inen paketi `projectPath` için kurar ve listeyi yeniler.
+    @discardableResult
+    public func importArchive(_ data: Data, projectPath: String) async -> AgentSessionImportResult? {
+        await importing(projectPath: projectPath) {
+            try await self.transfer.importArchive(data, projectPath: projectPath)
+        }
+    }
+
+    private func importing(
+        projectPath: String,
+        _ operation: @escaping () async throws -> AgentSessionImportResult
+    ) async -> AgentSessionImportResult? {
         guard !isTransferring else { return nil }
         isTransferring = true
         var result: AgentSessionImportResult?
-        let succeeded = await toasts.reporting {
-            result = try await transfer.importSession(from: source, projectPath: projectPath)
-        }
+        let succeeded = await toasts.reporting { result = try await operation() }
         isTransferring = false
         guard succeeded, let result else { return nil }
         let renamed = result.didRenameSession ? " (renamed: a session with the same ID already existed)" : ""
         let subagents = result.subagentCount > 0 ? " with \(result.subagentCount) subagent(s)" : ""
-        toasts.show(.success, title: "Session imported", message: "\(result.provider.rawValue.capitalized) session\(subagents)\(renamed)")
+        let project = (projectPath as NSString).lastPathComponent
+        toasts.show(.success, title: "Session imported", message: "\(result.provider.rawValue.capitalized) session\(subagents) → \(project)\(renamed)")
         await refresh(projectPath)
         return result
     }

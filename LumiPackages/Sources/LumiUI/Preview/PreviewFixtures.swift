@@ -308,6 +308,10 @@ private final class PreviewTerminalViewProvider: TerminalViewProviding {
 private struct PreviewAgentSessionTransfer: AgentSessionTransferring {
     func exportSession(_ entry: AgentHistoryEntry, to destination: URL) async throws {}
     func importSession(from source: URL, projectPath: String) async throws -> AgentSessionImportResult {
+        try await importArchive(Data(), projectPath: projectPath)
+    }
+    func exportArchive(_ entry: AgentHistoryEntry) async throws -> Data { Data() }
+    func importArchive(_ data: Data, projectPath: String) async throws -> AgentSessionImportResult {
         AgentSessionImportResult(provider: .claude, sessionID: "preview", logPath: "/tmp/preview.jsonl", subagentCount: 0, didRenameSession: false)
     }
 }

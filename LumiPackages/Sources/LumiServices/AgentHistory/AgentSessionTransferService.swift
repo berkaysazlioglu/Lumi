@@ -28,6 +28,15 @@ public actor AgentSessionTransferService: AgentSessionTransferring {
     // MARK: - Export
 
     public func exportSession(_ entry: AgentHistoryEntry, to destination: URL) async throws {
+        let data = try exportArchive(entry)
+        do {
+            try data.write(to: destination, options: .atomic)
+        } catch {
+            throw LumiError.sessionTransferFailed(detail: "Could not write \(destination.lastPathComponent): \(error.localizedDescription)")
+        }
+    }
+
+    public func exportArchive(_ entry: AgentHistoryEntry) throws -> Data {
         let log = URL(fileURLWithPath: entry.logPath)
         let records = try readRecords(log)
         let isClaude = entry.provider == .claude
@@ -41,9 +50,9 @@ public actor AgentSessionTransferService: AgentSessionTransferring {
             subagents: isClaude ? try exportSubagents(entry.subagents) : []
         )
         do {
-            try archive.encode().write(to: destination, options: .atomic)
+            return try archive.encode()
         } catch {
-            throw LumiError.sessionTransferFailed(detail: "Could not write \(destination.lastPathComponent): \(error.localizedDescription)")
+            throw LumiError.sessionTransferFailed(detail: "Could not encode the session: \(error.localizedDescription)")
         }
     }
 
@@ -61,7 +70,14 @@ public actor AgentSessionTransferService: AgentSessionTransferring {
     // MARK: - Import
 
     public func importSession(from source: URL, projectPath: String) async throws -> AgentSessionImportResult {
-        let archive = try AgentSessionArchive.decode(readData(source))
+        try importArchive(readData(source), projectPath: projectPath)
+    }
+
+    public func importArchive(_ data: Data, projectPath: String) throws -> AgentSessionImportResult {
+        guard data.count <= Self.maxFileBytes else {
+            throw LumiError.sessionTransferFailed(detail: "The session exceeds the 64 MB limit.")
+        }
+        let archive = try AgentSessionArchive.decode(data)
         let project = URL(fileURLWithPath: projectPath).standardizedFileURL.path
         let target = try plan(archive, project: project)
         let rewriter = AgentSessionRewriter(replacements: replacements(archive, project: project, target: target))

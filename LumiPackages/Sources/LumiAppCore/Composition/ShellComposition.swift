@@ -60,6 +60,7 @@ struct ShellComposition {
             plastic: repo.plasticStore,
             commitAssistant: repo.commitAssistant,
             agentHistory: repo.agentHistory,
+            sessionShare: repo.sessionShare,
             fileViewer: repo.fileViewer,
             settings: shared.settings,
             remote: remote.remoteStore,

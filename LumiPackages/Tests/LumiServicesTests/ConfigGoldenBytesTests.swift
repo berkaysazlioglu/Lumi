@@ -92,6 +92,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.taskSources = [
                 TaskSource(id: TaskSourceID("ts-1"), name: "Team", kind: .custom, baseURL: "https://tasks.example.com"),
             ]
+            // Karar 138 additive anahtar — token asla yazılmaz.
+            config.sessionServer = SessionServer(id: "ss-1", name: "Team sessions", baseURL: "https://sessions.example.com")
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -185,6 +187,11 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
       ],
       "projectsRoot" : "/Users/dev/wkspaces/Unity",
+      "sessionServer" : {
+        "baseURL" : "https://sessions.example.com",
+        "id" : "ss-1",
+        "name" : "Team sessions"
+      },
       "sessionTrigger" : {
         "enabled" : true,
         "hour" : 22,

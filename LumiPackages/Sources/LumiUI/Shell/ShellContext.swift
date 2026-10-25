@@ -69,6 +69,9 @@ public final class ShellContext {
     /// Proje favori dosyaları (karar 107).
     public let favoriteFiles: FavoriteFileStore
     public let agentHistory: AgentHistoryStore
+    /// Agent History ▸ oturum sunucusu (karar 138). Önizleme/test
+    /// bağlamlarında nil — sunucu seçenekleri o zaman görünmez.
+    public let sessionShare: SessionShareStore?
     public let git: GitStore
     /// Plastic SCM panel store'u (karar 46).
     public let plastic: PlasticStore
@@ -129,6 +132,7 @@ public final class ShellContext {
         plastic: PlasticStore,
         commitAssistant: CommitMessageAssistant,
         agentHistory: AgentHistoryStore,
+        sessionShare: SessionShareStore? = nil,
         fileViewer: FileViewerStore,
         settings: SettingsStore,
         remote: RemoteStore,
@@ -164,6 +168,7 @@ public final class ShellContext {
         self.plastic = plastic
         self.commitAssistant = commitAssistant
         self.agentHistory = agentHistory
+        self.sessionShare = sessionShare
         self.fileViewer = fileViewer
         self.settings = settings
         self.remote = remote

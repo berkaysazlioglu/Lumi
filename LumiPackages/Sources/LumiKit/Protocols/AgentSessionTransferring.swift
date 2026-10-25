@@ -25,4 +25,8 @@ public struct AgentSessionImportResult: Sendable, Equatable {
 public protocol AgentSessionTransferring: Sendable {
     func exportSession(_ entry: AgentHistoryEntry, to destination: URL) async throws
     func importSession(from source: URL, projectPath: String) async throws -> AgentSessionImportResult
+    /// Aynı paket, dosyaya yazılmadan — oturum sunucusuna yükleme (karar 138).
+    func exportArchive(_ entry: AgentHistoryEntry) async throws -> Data
+    /// Sunucudan inen paketi `projectPath` için kurar (karar 138).
+    func importArchive(_ data: Data, projectPath: String) async throws -> AgentSessionImportResult
 }

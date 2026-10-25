@@ -32,6 +32,9 @@ public extension OverlayID {
     static let projectAppearance = OverlayID("projectAppearance")
     /// Karar 53: Agent History oturum silme onayı.
     static let deleteAgentSessionDialog = OverlayID("deleteAgentSessionDialog")
+    /// Karar 138: Agent History ▸ Import from Server popup'ı ve yükleme onayı.
+    static let sessionShareBrowser = OverlayID("sessionShareBrowser")
+    static let sessionShareExport = OverlayID("sessionShareExport")
     /// Karar 56: Claude hesabı silme onayı (geri alınamaz).
     static let removeClaudeAccountDialog = OverlayID("removeClaudeAccountDialog")
     static let removeCodexAccountDialog = OverlayID("removeCodexAccountDialog")

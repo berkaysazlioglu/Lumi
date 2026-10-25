@@ -32,6 +32,10 @@ public protocol ServiceRegistry: AnyObject {
     var agentHistory: any AgentHistoryServicing { get }
     /// Agent History oturumu dışa/içe aktarımı (karar 52).
     var agentSessionTransfer: any AgentSessionTransferring { get }
+    /// Oturum sunucusu istemcisi (karar 138, Lumi Sessions Protocol v1).
+    var sessionSharing: any SessionSharingMaking { get }
+    /// Oturum sunucusu token'ı (Keychain `com.lumi.sessions`).
+    var sessionServerCredentials: any SessionServerCredentialStoring { get }
     /// DeepSeek env dosyası kurulumu (karar 54).
     var deepSeek: any DeepSeekEnvironmentServicing { get }
     /// DeepSeek bakiye okuması (karar 75).
