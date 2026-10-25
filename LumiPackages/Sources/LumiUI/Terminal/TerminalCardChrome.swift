@@ -140,6 +140,8 @@ struct TerminalCardHeader: View {
     /// Karar 137: ajanın çalıştığı task (`DEMO-1`) — terminal listesinin
     /// özelliğe bağımsız rozet kanalından.
     @Shell private var shell
+    /// Sağ tık menüsünün bağlandığı tık noktası; `nil` → menü kapalı.
+    @State private var menuAnchor: CGPoint?
 
     var body: some View {
         HStack(spacing: style.spacing) {
@@ -222,11 +224,20 @@ struct TerminalCardHeader: View {
                 .frame(height: Theme.Stroke.hairline)
         }
         .contentShape(Rectangle())
-        // Karar 135: başlığa sağ tık — Edit modunda jestler çekildiği gibi menü de yok.
-        .contextMenu {
-            if !isArranging {
-                CustomViewMenuItems(terminalID: meta.id)
-            }
+        // Karar 135: başlığa sağ tık — Edit modunda jestler çekildiği gibi menü
+        // de yok. Lumi `PopoverMenu`, tıklanan noktaya bağlı açılır.
+        .onRightClick(at: { point in
+            if !isArranging { menuAnchor = point }
+        })
+        .popover(
+            isPresented: Binding(get: { menuAnchor != nil }, set: { if !$0 { menuAnchor = nil } }),
+            attachmentAnchor: .rect(.rect(CGRect(origin: menuAnchor ?? .zero, size: .zero))),
+            arrowEdge: .bottom
+        ) {
+            PopoverMenu(
+                items: CustomViewMenuItems.items(for: meta.id, shell: shell, dismiss: { menuAnchor = nil }),
+                dismiss: { menuAnchor = nil }
+            )
         }
         .onTapGesture { if !isArranging { onTap?() } }
         // Başlığa çift tık zoom'u çevirir (grid → maximize, maximize → grid)

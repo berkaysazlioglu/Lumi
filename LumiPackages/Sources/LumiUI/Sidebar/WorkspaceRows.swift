@@ -310,6 +310,7 @@ struct AgentRow: View {
     let agent: Model
     let onSelect: () -> Void
     @Shell private var shell
+    @State private var showsMenu = false
 
     var body: some View {
         HoverReader { isHovering in
@@ -346,13 +347,21 @@ struct AgentRow: View {
                 : "\(agent.state.title): \(agent.meta.displayTitle)"
         )
         .flightAnchor(.agentRow(agent.meta.id))
-        .contextMenu {
-            Button("Focus Session", action: onSelect)
-            // Karar 135
-            CustomViewMenuItems(terminalID: agent.meta.id)
-            Divider()
-            Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }
+        // Checkout satırıyla aynı: native `contextMenu` yerine Lumi `PopoverMenu`.
+        .onRightClick { showsMenu = true }
+        .popover(isPresented: $showsMenu, arrowEdge: .bottom) {
+            PopoverMenu(items: menuItems, dismiss: { showsMenu = false })
         }
+    }
+
+    private var menuItems: [PopoverMenu.Item] {
+        [.action("Focus Session", icon: "scope", action: onSelect)]
+            // Karar 135
+            + CustomViewMenuItems.items(for: agent.meta.id, shell: shell, dismiss: { showsMenu = false })
+            + [
+                .divider,
+                .action("Close Session", icon: "xmark", isDestructive: true) { shell.terminals.close(agent.meta.id) },
+            ]
     }
 
     /// Karar 135: ajan bir ya da daha çok Custom View'ın üyesiyse soluk view
