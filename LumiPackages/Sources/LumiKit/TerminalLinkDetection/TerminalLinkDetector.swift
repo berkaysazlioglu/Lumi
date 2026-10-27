@@ -11,6 +11,10 @@ public struct DetectedTerminalLink: Sendable, Equatable {
         case path
         /// Ayırıcısız dosya adı (`README.md`, `Makefile`).
         case bareFilename
+        /// Claude'un yapıştırılan görsel yer tutucusu `[Image #N]` (karar 139):
+        /// dosyası terminalin claude oturumunun görsel dizinindedir — yola
+        /// çeviren ve diske soran terminal katmanıdır.
+        case pastedImage
     }
 
     public let kind: Kind
@@ -41,7 +45,8 @@ public enum TerminalLinkDetector {
     public static let maxLineLength = 16_384
 
     /// Satırdaki tüm adaylar: URL'ler, ardından dosya adayları (`file://`,
-    /// ayırıcılı yollar, çıplak dosya adları). URL'yle çakışan dosya adayı düşer.
+    /// ayırıcılı yollar, çıplak dosya adları) ve görsel yer tutucuları. URL'yle
+    /// çakışan dosya adayı düşer.
     public static func links(in line: String) -> [DetectedTerminalLink] {
         let text = line as NSString
         guard text.length > 0, text.length <= maxLineLength else { return [] }
@@ -50,8 +55,12 @@ public enum TerminalLinkDetector {
         let paths = TerminalPathLinkScanner.links(in: text)
             .filter { !overlapsAny($0, urls) && !overlapsAny($0, uris) }
         let bare = TerminalBareFilenameScanner.links(in: text, excluding: urls + uris + paths)
+        let images = ClaudePastedImages.placeholderRanges(in: text).map {
+            TerminalLinkTextRange(start: $0.location, end: NSMaxRange($0), text: text.substring(with: $0))
+        }
         return urls.map { make(.url, $0) } + uris.map { make(.fileURI, $0) }
             + paths.map { make(.path, $0) } + bare.map { make(.bareFilename, $0) }
+            + images.map { make(.pastedImage, $0) }
     }
 
     /// `offset`'teki (UTF-16) karakteri kapsayan adaylar, denenme sırasıyla:

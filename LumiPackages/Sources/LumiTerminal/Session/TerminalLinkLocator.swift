@@ -47,6 +47,8 @@ struct TerminalLinkHit: Equatable {
     let requiresExistence: Bool
     /// Ayırıcısız dosya adı — diskin cevabı bilinmeden ASLA link sayılmaz.
     let isBareFilename: Bool
+    /// `[Image #N]` yer tutucusu (karar 139): metin yola çevrilmeden link olmaz.
+    var isPastedImage = false
 
     func contains(row: Int, col: Int) -> Bool {
         spans.contains { $0.row == row && $0.columns.contains(col) }
@@ -142,7 +144,8 @@ enum TerminalLinkLocator {
                 text: link.text,
                 spans: spans(for: link.range, cells: cells),
                 requiresExistence: link.requiresExistence,
-                isBareFilename: link.kind == .bareFilename
+                isBareFilename: link.kind == .bareFilename,
+                isPastedImage: link.kind == .pastedImage
             )
         }
     }

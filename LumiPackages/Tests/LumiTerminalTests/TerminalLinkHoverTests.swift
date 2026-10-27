@@ -145,6 +145,29 @@ final class TerminalLinkHoverTests: XCTestCase {
         XCTAssertNil(view.underlinedLinkText)
     }
 
+    /// Karar 139: `[Image #N]` oturumun görsel dizinindeki dosyaya bağlanır;
+    /// ilk var olan uzantı kazanır.
+    func testPastedImagePlaceholderLinksToSessionImage() {
+        view.pastedImagesDirectory = "/tmp/claude-1/-repo/s/images"
+        useDisk(["/tmp/claude-1/-repo/s/images/2.jpg"])
+        show("> [Image #2]  [Image #3]")
+
+        hover(at: point(column: 5))
+        XCTAssertEqual(view.underlinedLinkText, "/tmp/claude-1/-repo/s/images/2.jpg")
+
+        hover(at: point(column: 17))
+        XCTAssertNil(view.underlinedLinkText, "dosyası olmayan görsel link değildir")
+    }
+
+    func testPastedImagePlaceholderWithoutSessionIsNotALink() {
+        view.pastedImagesDirectory = nil
+        show("> [Image #1]")
+
+        hover(at: point(column: 5))
+
+        XCTAssertNil(view.underlinedLinkText)
+    }
+
     func testRoutePathWithParensAndBracketsIsOneLink() {
         let path = "/repo/app/(shop)/[id]/page.tsx"
         useDisk([path])

@@ -123,8 +123,21 @@ extension DropAwareTerminalView {
                 text: explicit.text, spans: [explicit.span], requiresExistence: isPath, isBareFilename: false
             ))
         }
-        return hits + TerminalLinkLocator.hits(rowCount: terminal.rows, row: cell.row, col: cell.col) {
+        let located = TerminalLinkLocator.hits(rowCount: terminal.rows, row: cell.row, col: cell.col) {
             TerminalLinkLocator.rowText(in: terminal, row: $0)
+        }
+        return hits + located.flatMap(pastedImageHits)
+    }
+
+    /// Karar 139: `[Image #N]` oturumun görsel dizinindeki `N.<uzantı>`
+    /// adaylarına açılır — her biri diske sorulan mutlak yol; tık popover'ı
+    /// sıradan bir dosya gibi açar. Dizin bilinmiyorsa yer tutucu link değildir.
+    private func pastedImageHits(_ hit: TerminalLinkHit) -> [TerminalLinkHit] {
+        guard hit.isPastedImage else { return [hit] }
+        guard let directory = pastedImagesDirectory,
+              let number = ClaudePastedImages.number(inReference: hit.text) else { return [] }
+        return ClaudePastedImages.candidatePaths(number: number, in: directory).map {
+            TerminalLinkHit(text: $0, spans: hit.spans, requiresExistence: true, isBareFilename: false)
         }
     }
 

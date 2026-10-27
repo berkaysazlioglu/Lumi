@@ -181,6 +181,10 @@ struct TerminalCardHeader: View {
             }
             Spacer()
             if !isArranging {
+                // Karar 139: yalnız Lumi'nin izlediği claude oturumunda.
+                if shell.pastedImages.hasImageDirectory(meta) {
+                    PastedImagesButton(meta: meta)
+                }
                 PromptQueueToggleButton(
                     count: promptQueue.count(for: meta.id),
                     isPaused: promptQueue.isPaused(meta.id),

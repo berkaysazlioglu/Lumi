@@ -120,6 +120,7 @@ final class TerminalSession {
             // Karar 116: hover'da göreli yollar terminalin açıldığı dizine göre
             // diske sorulur (store'un çözümüyle aynı taban).
             linkView.linkBaseDirectory = repoPath
+            linkView.pastedImagesDirectory = ClaudePastedImages.directory(for: self.meta)
             // Karar 57: link jestleri oturuma akar — düz tıkın fare raporu
             // popover'a dönüşürse PTY'ye hiç gitmez.
             linkView.onLinkGestureBegan = { [weak self] in self?.beginDeferringMouseReports() }
@@ -293,6 +294,8 @@ final class TerminalSession {
     private func applyClaudeSessionID(_ sessionID: String) {
         guard !isTerminated, let current = meta.claudeSessionID, current != sessionID else { return }
         meta.claudeSessionID = sessionID
+        // Karar 139: `/clear` sonrası görseller yeni oturumun dizinine düşer.
+        (presentation.view as? DropAwareTerminalView)?.pastedImagesDirectory = ClaudePastedImages.directory(for: meta)
         delegate?.session(self, didChangeClaudeSessionID: sessionID)
     }
 

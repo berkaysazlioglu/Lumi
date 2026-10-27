@@ -105,6 +105,8 @@ public final class ShellContext {
     public let appUpdate: AppUpdateStore
     /// Karar 114: orchestrator sohbeti.
     public let orchestrator: OrchestratorStore
+    /// Karar 139: claude terminaline yapıştırılan görseller.
+    public let pastedImages: ClaudePastedImageStore
 
     /// Karar 136: az önce `New View` ile doğan view — sol paneldeki satırı
     /// kısa bir süre parlayıp nabız atar. Oturumluk.
@@ -151,6 +153,7 @@ public final class ShellContext {
         resourceUsage: ResourceUsageStore,
         appUpdate: AppUpdateStore,
         orchestrator: OrchestratorStore,
+        pastedImages: ClaudePastedImageStore = ClaudePastedImageStore(),
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
         markdownParser: any MarkdownParsing,
@@ -187,6 +190,7 @@ public final class ShellContext {
         self.resourceUsage = resourceUsage
         self.appUpdate = appUpdate
         self.orchestrator = orchestrator
+        self.pastedImages = pastedImages
         self.viewProvider = viewProvider
         self.highlighter = highlighter
         self.markdownParser = markdownParser
@@ -604,6 +608,23 @@ public final class ShellContext {
               terminals.paste(reference, into: target.id) else { return }
         fileViewer.close()
         focusAgent(target)
+    }
+
+    /// Karar 139: yapıştırılan görselin `[Image #N]` referansını terminalin
+    /// prompt'una yapıştırır (göndermez) ve terminale odaklanır.
+    public func mentionPastedImage(_ image: ClaudePastedImage, in target: TerminalMeta) {
+        guard terminals.paste(image.reference + " ", into: target.id) else { return }
+        focusAgent(target)
+    }
+
+    /// Karar 139: görsel kök dışında (`/private/tmp`) durur; viewer dosyanın
+    /// dizinini kök sayar.
+    public func openPastedImage(_ image: ClaudePastedImage, revealInFinder: Bool) {
+        if revealInFinder {
+            actions.revealPath(image.path)
+        } else {
+            Task { await fileViewer.presentView(repoPath: image.directory, filePath: image.fileName) }
+        }
     }
 
     /// Karar 47: seçili değişikliklerden Claude ile mesaj üret ve alana yaz.

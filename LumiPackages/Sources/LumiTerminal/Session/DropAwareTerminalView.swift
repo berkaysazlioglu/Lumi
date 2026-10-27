@@ -136,6 +136,9 @@ final class DropAwareTerminalView: TerminalView {
     /// diske sorulan mutlak yol buradan türer (karar 116).
     var linkBaseDirectory = ""
     var linkHomeDirectory = NSHomeDirectory()
+    /// Karar 139: claude oturumunun görsel dizini — `[Image #N]` buradaki
+    /// dosyaya bağlanır. `nil` → Lumi'nin izlediği claude oturumu yok.
+    var pastedImagesDirectory: String?
     /// Yol adaylarının diskte olup olmadığı; testler satır içi bir fake verir.
     var linkPathCache = TerminalLinkPathCache()
     let linkUnderline = TerminalLinkUnderlineView()

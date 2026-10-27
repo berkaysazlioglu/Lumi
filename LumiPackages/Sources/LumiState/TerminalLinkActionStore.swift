@@ -253,6 +253,19 @@ public final class TerminalLinkActionStore {
                 let defaultApp = defaultAppAction(slot: .extra, path: path)
                 return (lumi, finder, defaultApp)
             }
+            // Kök dışındaki görsel (karar 139 — Claude'un `/private/tmp`'deki
+            // yapıştırılan görselleri): FileViewer önizlemesi diske doğrudan
+            // bakar, dosyanın dizinini kök sayarak Lumi'de açılır.
+            if FilePreviewKind.of(path: path) == .image {
+                let lumi = TerminalLinkAction(
+                    slot: .primary, title: "Open in Lumi",
+                    intent: .openFile(
+                        repoPath: (path as NSString).deletingLastPathComponent,
+                        filePath: (path as NSString).lastPathComponent
+                    )
+                )
+                return (lumi, finder, defaultAppAction(slot: .extra, path: path))
+            }
             // Kök dışı: FileViewer yok. Varsayılan uygulama güvenliyse birincil,
             // değilse tek seçenek Finder'dır.
             guard let defaultApp = defaultAppAction(slot: .primary, path: path) else {

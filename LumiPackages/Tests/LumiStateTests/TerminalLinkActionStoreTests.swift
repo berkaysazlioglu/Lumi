@@ -133,6 +133,19 @@ final class TerminalLinkActionStoreTests: XCTestCase {
         XCTAssertNil(store.request?.extra)
     }
 
+    /// Karar 139: kök dışındaki görsel (Claude'un yapıştırdığı) Lumi
+    /// viewer'ında, dosyanın dizini kök sayılarak açılır.
+    func testImageOutsideKnownRootsOpensInLumi() async {
+        await activate("/private/tmp/claude-1/-p/s/images/2.png", .actions)
+
+        XCTAssertEqual(store.request?.primary.intent, .openFile(
+            repoPath: "/private/tmp/claude-1/-p/s/images", filePath: "2.png"
+        ))
+        XCTAssertEqual(store.request?.actions.map(\.title), [
+            "Open in Lumi", "Open in Finder", "Open with default app",
+        ])
+    }
+
     /// Kök içindeki dosyada üçüncü satır: FileViewer'ın gösteremediği türler
     /// (PDF, görsel, ofis) için sistem uygulaması.
     func testFileInsideRootOffersLumiFinderAndDefaultApp() async {
