@@ -79,6 +79,9 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// hook'undan öğrenildi. Böyle kimlik claude çıkınca silinir ve yalnız
     /// terminalde claude koşarken resume listesine girer. Kalıcı değildir.
     public var isClaudeSessionAdopted: Bool
+    /// Karar 141: koşan claude'un argv'sinden süzülen bayraklar (`--model
+    /// opus`…) — resume aynı bayraklarla açılır. `nil` = henüz okunmadı.
+    public var claudeLaunchArguments: [String]?
     /// Codex thread learned from the provider hook. Fresh Codex sessions do
     /// not expose this at launch time, so it becomes available asynchronously.
     public var codexSessionID: String?
@@ -103,6 +106,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         status: TerminalStatus = .idle,
         claudeSessionID: String? = nil,
         isClaudeSessionAdopted: Bool = false,
+        claudeLaunchArguments: [String]? = nil,
         codexSessionID: String? = nil,
         codexHome: String? = nil,
         provider: AgentProvider? = nil,
@@ -117,6 +121,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.status = status
         self.claudeSessionID = claudeSessionID
         self.isClaudeSessionAdopted = isClaudeSessionAdopted
+        self.claudeLaunchArguments = claudeLaunchArguments
         self.codexSessionID = codexSessionID
         self.codexHome = codexHome
         self.provider = provider
@@ -151,6 +156,9 @@ public enum TerminalEvent: Sendable, Equatable {
     /// chat köprüsü bunu görünce yeni kimliğe geçer.
     /// Karar 140: `nil` = hook'tan öğrenilen kimlik, claude çıkınca silindi.
     case claudeSessionIDChanged(TerminalID, String?)
+    /// Karar 141: koşan claude'un bayrakları okundu/değişti — resume
+    /// checkpoint'i bunu görünce `ui-state.json`'ı yeniler.
+    case claudeLaunchArgumentsChanged(TerminalID)
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)

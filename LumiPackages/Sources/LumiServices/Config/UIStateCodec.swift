@@ -368,7 +368,9 @@ enum ResumeSessionCodec {
             repoPath: repoPath,
             sessionID: sessionID,
             provider: provider,
-            codexHome: dict["codexHome"] as? String
+            codexHome: dict["codexHome"] as? String,
+            // Karar 141: additive anahtar; String olmayan girdi düşer.
+            arguments: provider == .claude ? ((dict["arguments"] as? [Any])?.compactMap { $0 as? String } ?? []) : []
         )
     }
 
@@ -379,6 +381,7 @@ enum ResumeSessionCodec {
             "provider": session.provider.rawValue,
         ]
         result["codexHome"] = session.codexHome
+        if !session.arguments.isEmpty { result["arguments"] = session.arguments }
         return result
     }
 

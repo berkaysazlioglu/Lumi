@@ -320,7 +320,8 @@ public final class RemoteService: RemoteServicing {
             // Karar 105: telefon "karar bekliyor"u "bitti"den ayırır.
             let changed = awaiting ? awaitingDecision.insert(id).inserted : awaitingDecision.remove(id) != nil
             if changed { await sendSessions() }
-        case .titleChanged, .bell, .providerChanged, .codexSessionIDChanged, .writeFailed, .stalled,
+        case .titleChanged, .bell, .providerChanged, .codexSessionIDChanged, .claudeLaunchArgumentsChanged,
+             .writeFailed, .stalled,
              .viewFocused, .linkActivated:
             break
         }

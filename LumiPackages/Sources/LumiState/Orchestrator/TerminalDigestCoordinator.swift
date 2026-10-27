@@ -114,7 +114,8 @@ public final class TerminalDigestCoordinator {
             watchList.sessionChanged(id, to: session)
         case .interruptInferred(let id):
             if settleTasks[id] != nil { schedule(id, .interrupted) }
-        case .titleChanged, .providerChanged, .codexSessionIDChanged, .bell, .writeFailed, .viewFocused,
+        case .titleChanged, .providerChanged, .codexSessionIDChanged, .claudeLaunchArgumentsChanged, .bell,
+             .writeFailed, .viewFocused,
              .stalled, .linkActivated:
             break
         }

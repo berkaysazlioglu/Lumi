@@ -307,6 +307,13 @@ public final class PTYProcess: @unchecked Sendable {
         }
     }
 
+    /// Karar 141: ön plan süreç grubu (`tcgetpgrp`). Çağıran PTY queue'sundadır.
+    public var foregroundProcessGroup: Int32? {
+        guard !isCleanedUp else { return nil }
+        let group = tcgetpgrp(masterFD)
+        return group > 0 ? group : nil
+    }
+
     /// Boyutu değiştirmeden foreground process group'a SIGWINCH gönderir — TUI'yi
     /// (Claude Code) tüm ekranı yeniden çizmeye zorlar. Gizli→görünür geçişinde
     /// (maximize↔grid round-trip, fullscreen) boyut aynı kaldığında hiçbir resize

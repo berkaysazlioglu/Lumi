@@ -49,8 +49,19 @@ public enum ClaudeSessionCommand {
 
     /// Restore spawn komutu: resume dener; oturum yoksa claude exit 1 verir
     /// (ampirik) ve taze claude'a düşülür.
-    public static func resumeCommand(sessionID: String) -> String {
-        "claude --resume \(sessionID) || claude"
+    /// Karar 141: `arguments` koşan claude'dan okunan bayraklardır; kayıt
+    /// dosyadan geldiği için beyaz listeden yeniden geçer ve her biri tırnaklanır.
+    /// Taze claude'a düşüş de aynı bayraklarla açılır.
+    public static func resumeCommand(sessionID: String, arguments: [String] = []) -> String {
+        let flags = ClaudeLaunchArguments.filter(arguments).map { " " + quotedIfNeeded($0) }.joined()
+        return "claude\(flags) --resume \(sessionID) || claude\(flags)"
+    }
+
+    /// `--model opus` okunur kalsın: yalnız kabuğa özel karakter taşıyan
+    /// argüman tek tırnaklanır.
+    private static func quotedIfNeeded(_ argument: String) -> String {
+        let plain = argument.range(of: #"^[A-Za-z0-9_./:=,@%+-]+$"#, options: .regularExpression) != nil
+        return plain ? argument : shellQuoted(argument)
     }
 
     // MARK: - Private

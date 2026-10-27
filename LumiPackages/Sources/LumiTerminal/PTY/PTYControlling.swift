@@ -15,6 +15,9 @@ protocol PTYControlling: AnyObject, Sendable {
     func terminate()
     /// Çocuk sürecin pid'i (Resource Manager). Sahte PTY'de `nil`.
     var processID: Int32? { get }
+    /// Karar 141: terminalin ön plan süreç grubu (shell'de koşan iş — claude).
+    /// PTY'nin io queue'sunda okunur; kapanmış ya da sahte PTY'de `nil`.
+    var foregroundProcessGroup: Int32? { get }
 }
 
 extension PTYProcess: PTYControlling {

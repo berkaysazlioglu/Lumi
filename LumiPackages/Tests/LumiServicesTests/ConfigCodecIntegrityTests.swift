@@ -373,8 +373,25 @@ extension ConfigCodecIntegrityTests {
         let value = ResumeSession(
             repoPath: "/r/alpha", sessionID: "s-1", provider: .codex, codexHome: "/codex-home"
         )
-        assertOverlayMatchesFields(value, overlay: ResumeSessionCodec.overlay(value))
+        // Karar 141: `arguments` yalnız doluyken yazılır (eski kayıtlar bayt bayt aynı).
+        assertOverlayMatchesFields(value, overlay: ResumeSessionCodec.overlay(value), exempt: ["arguments"])
         XCTAssertEqual(ResumeSessionCodec.decode(ResumeSessionCodec.overlay(value)), value)
+
+        let claude = ResumeSession(repoPath: "/r/alpha", sessionID: "s-2", arguments: ["--model", "opus"])
+        assertOverlayMatchesFields(claude, overlay: ResumeSessionCodec.overlay(claude), exempt: ["codexHome"])
+        XCTAssertEqual(ResumeSessionCodec.decode(ResumeSessionCodec.overlay(claude)), claude)
+    }
+
+    /// Karar 141: dosyadaki String olmayan bayrak düşer; Codex kaydı bayrak taşımaz.
+    func testResumeSessionArgumentsDecodeDefensively() {
+        let claude = ResumeSessionCodec.decode([
+            "repoPath": "/r", "sessionID": "s", "arguments": ["--model", 3, "opus"],
+        ])
+        XCTAssertEqual(claude?.arguments, ["--model", "opus"])
+        let codex = ResumeSessionCodec.decode([
+            "repoPath": "/r", "sessionID": "s", "provider": "codex", "arguments": ["--model", "x"],
+        ])
+        XCTAssertEqual(codex?.arguments, [])
     }
 
     /// Kök `AppConfig` overlay'i alt bölümleri gerçekten alt codec'lerin

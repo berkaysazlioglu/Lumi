@@ -241,6 +241,77 @@ final class TerminalSessionInjectionTests: XCTestCase {
         XCTAssertFalse(session.meta.isClaudeSessionAdopted)
     }
 
+    // Karar 141: ön plandaki claude'un argv'si bir kez okunur, beyaz listeden
+    // süzülür; claude çıkınca öğrenilen kimlikle birlikte düşer ve yeni claude
+    // yeniden okunur.
+    func testClaudeLaunchArgumentsAreCapturedFromForegroundProcess() async throws {
+        let pty = FakePTY()
+        pty.foregroundProcessGroup = 4242
+        let reads = ReadCounter()
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "shell",
+            task: nil,
+            processArguments: { pid in
+                reads.increment()
+                return pid == 4242 ? ["claude", "--model", "opus", "fix the bug", "--session-id", "x"] : nil
+            },
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: pty)
+        )
+        let spy = SpyDelegate()
+        session.delegate = spy
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "manual", source: "startup"
+        ))
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .userPromptSubmit, sessionID: "manual"
+        ))
+        let captured = await waitUntil { session.meta.claudeLaunchArguments == ["--model", "opus"] }
+        XCTAssertTrue(captured)
+        XCTAssertEqual(reads.value, 1, "claude başına bir kez okunur")
+        XCTAssertEqual(spy.claudeLaunchArgumentChanges, 1)
+
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionEnd, sessionID: "manual"
+        ))
+        let released = await waitUntil { session.meta.claudeSessionID == nil }
+        XCTAssertTrue(released)
+        XCTAssertNil(session.meta.claudeLaunchArguments)
+    }
+
+    // Karar 141: kimliği olmayan (sarmalanmış) claude'un bayrakları saklanmaz;
+    // ön planda claude yoksa okuma sonraki hook'ta yeniden denenir.
+    func testClaudeLaunchArgumentsNeedASessionAndAForegroundClaude() async throws {
+        let pty = FakePTY()
+        let reads = ReadCounter()
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "deepseek",
+            task: nil,
+            adoptsClaudeSession: false,
+            processArguments: { _ in
+                reads.increment()
+                return ["claude", "--model", "deepseek"]
+            },
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: pty)
+        )
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "d", source: "startup"
+        ))
+        try? await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(reads.value, 0, "ön plan grubu yokken okunmaz")
+        pty.foregroundProcessGroup = 7
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .userPromptSubmit, sessionID: "d"
+        ))
+        let read = await waitUntil { reads.value == 1 }
+        XCTAssertTrue(read)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertNil(session.meta.claudeLaunchArguments)
+    }
+
     // Karar 140: spawn'da bilinen kimlik (karar 23) claude çıkınca silinmez.
     func testLaunchedClaudeSessionSurvivesSessionEnd() async throws {
         let session = try TerminalSession(
@@ -383,6 +454,11 @@ final class SpyDelegate: TerminalSessionDelegate {
         claudeSessionIDs.append(sessionID)
     }
 
+    private(set) var claudeLaunchArgumentChanges = 0
+    func sessionDidChangeClaudeLaunchArguments(_ session: TerminalSession) {
+        claudeLaunchArgumentChanges += 1
+    }
+
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool) {
         stalls.append(stalled)
     }
@@ -401,4 +477,11 @@ final class SpyDelegate: TerminalSessionDelegate {
     func session(_ session: TerminalSession, didActivateLink activation: TerminalLinkActivation) {
         linkActivations.append(activation)
     }
+}
+
+final class ReadCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.withLock { count } }
+    func increment() { lock.withLock { count += 1 } }
 }

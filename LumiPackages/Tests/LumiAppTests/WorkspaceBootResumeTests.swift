@@ -52,6 +52,18 @@ final class WorkspaceBootResumeTests: XCTestCase {
         XCTAssertTrue(WorkspaceBootAssembly.resumeSessions(from: [codex]).isEmpty)
     }
 
+    /// Karar 141: koşan claude'dan okunan bayraklar resume kaydına taşınır.
+    func testClaudeLaunchArgumentsReachTheResumeEntry() {
+        let meta = TerminalMeta(
+            id: TerminalID(), name: "Claude", repoPath: "/repo", createdAt: .distantPast,
+            claudeSessionID: "s", claudeLaunchArguments: ["--model", "opus"], provider: .claude
+        )
+        XCTAssertEqual(WorkspaceBootAssembly.resumeSessions(from: [meta]), [
+            ResumeSession(repoPath: "/repo", sessionID: "s", arguments: ["--model", "opus"]),
+        ])
+        XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.claudeLaunchArgumentsChanged(meta.id)))
+    }
+
     /// Karar 140: hook'tan öğrenilen kimlik yalnız claude hâlâ koşarken yazılır.
     func testAdoptedClaudeSessionResumesOnlyWhileClaudeRuns() {
         let running = TerminalMeta(

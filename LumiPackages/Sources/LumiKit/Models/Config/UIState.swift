@@ -169,17 +169,21 @@ public struct ResumeSession: Sendable, Equatable {
     public let provider: AgentProvider
     /// Yalnız Codex için; thread'in rollout/auth kökünü sabitler.
     public let codexHome: String?
+    /// Karar 141: yalnız Claude için; resume'a taşınan bayraklar (`--model opus`).
+    public let arguments: [String]
 
     public init(
         repoPath: String,
         sessionID: String,
         provider: AgentProvider = .claude,
-        codexHome: String? = nil
+        codexHome: String? = nil,
+        arguments: [String] = []
     ) {
         self.repoPath = repoPath
         self.sessionID = sessionID
         self.provider = provider
         self.codexHome = codexHome
+        self.arguments = arguments
     }
 }
 

@@ -510,6 +510,8 @@ public final class TerminalListStore: StoreLifecycle {
             return "codexSessionID \(LumiLog.short(id))"
         case .claudeSessionIDChanged(let id, _):
             return "claudeSessionID \(LumiLog.short(id))"
+        case .claudeLaunchArgumentsChanged(let id):
+            return "claudeLaunchArguments \(LumiLog.short(id))"
         case .awaitingDecisionChanged(let id, let awaiting):
             return "awaitingDecision \(LumiLog.short(id)) \(awaiting)"
         case .interruptInferred(let id):
@@ -560,6 +562,7 @@ public final class TerminalListStore: StoreLifecycle {
         case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged:
             return true
         case .statusChanged, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
+             .claudeLaunchArgumentsChanged,
              .writeFailed, .stalled, .viewFocused, .linkActivated, .interruptInferred:
             return false
         }
@@ -599,6 +602,9 @@ public final class TerminalListStore: StoreLifecycle {
             // Karar 94: `/clear` sonrası store kopyası da yeni konuşmayı taşısın.
             // Karar 140: elle başlatılan claude'un kimliği gelir / çıkınca düşer.
             update(id) { $0.claudeSessionID = sessionID }
+        case .claudeLaunchArgumentsChanged:
+            // Karar 141: bayraklar yalnız resume'un işi (servis meta'sından okunur).
+            break
         case .awaitingDecisionChanged(let id, let awaiting):
             if awaiting {
                 awaitingDecisionIDs.insert(id)

@@ -110,7 +110,8 @@ final class WorkspaceBootAssembly: FeatureAssembly {
     static func affectsResumeSessions(_ event: TerminalEvent) -> Bool {
         switch event {
         // Karar 140: sağlayıcı da girer — resume kapısı (`provider`) ona bakar.
-        case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged, .providerChanged:
+        case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged, .providerChanged,
+             .claudeLaunchArgumentsChanged:
             return true
         case .statusChanged, .titleChanged, .awaitingDecisionChanged, .bell,
              .writeFailed, .stalled, .viewFocused, .linkActivated, .interruptInferred:
@@ -146,7 +147,7 @@ final class WorkspaceBootAssembly: FeatureAssembly {
             // Karar 140: hook'tan öğrenilen kimlik yalnız claude hâlâ koşarken —
             // `SessionEnd` gelmeden ölen claude'un shell'i claude olarak dönmesin.
             if meta.isClaudeSessionAdopted, meta.provider != .claude { return nil }
-            return ResumeSession(repoPath: meta.repoPath, sessionID: id)
+            return ResumeSession(repoPath: meta.repoPath, sessionID: id, arguments: meta.claudeLaunchArguments ?? [])
         }
     }
 
@@ -207,7 +208,7 @@ final class WorkspaceBootAssembly: FeatureAssembly {
             case .claude:
                 shared.terminals.spawn(
                     in: entry.repoPath,
-                    command: ClaudeSessionCommand.resumeCommand(sessionID: entry.sessionID)
+                    command: ClaudeSessionCommand.resumeCommand(sessionID: entry.sessionID, arguments: entry.arguments)
                 )
             case .codex:
                 let pinnedHome = await services.codexAccounts.resolvedResumeHome(entry.codexHome)

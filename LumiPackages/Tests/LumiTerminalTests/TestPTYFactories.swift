@@ -129,6 +129,7 @@ final class RecordingPTY: PTYControlling, @unchecked Sendable {
     }
 
     var processID: Int32? { wrapped.processID }
+    var foregroundProcessGroup: Int32? { wrapped.foregroundProcessGroup }
 }
 
 /// Süreç açmayan tamamen sahte PTY: `TerminalSession`'ı gerçek fork/exec
@@ -187,6 +188,12 @@ final class FakePTY: PTYControlling, @unchecked Sendable {
     }
 
     var processID: Int32? { nil }
+    /// Karar 141: testin "ön planda koşan claude"u.
+    var foregroundProcessGroup: Int32? {
+        get { lock.withLock { foregroundGroup } }
+        set { lock.withLock { foregroundGroup = newValue } }
+    }
+    private var foregroundGroup: Int32?
 
     var resumes: Int { counted { resumeCount } }
     var pokes: Int { counted { pokeCount } }

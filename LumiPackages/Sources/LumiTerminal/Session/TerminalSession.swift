@@ -18,6 +18,8 @@ protocol TerminalSessionDelegate: AnyObject {
     /// Karar 94: lider Claude hook'u terminalin yeni konuşma kimliğini bildirdi.
     /// Karar 140: `nil` = hook'tan öğrenilen kimlik claude çıkınca silindi.
     func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String?)
+    /// Karar 141: koşan claude'un bayrakları okundu/değişti.
+    func sessionDidChangeClaudeLaunchArguments(_ session: TerminalSession)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
     /// Karar 104: Esc/Ctrl+C sonrası hook gelmedi, lider turn kesilmiş sayıldı.
     func sessionDidInferInterrupt(_ session: TerminalSession)
@@ -64,6 +66,8 @@ final class TerminalSession {
     /// Karar 140: elle başlatılan claude'un kimliği hook'tan öğrenilebilir mi
     /// (DeepSeek gibi sarmalanmış claude launch'ında hayır).
     private let adoptsClaudeSession: Bool
+    /// Karar 141: koşan claude'un argv'si (yalnız io queue'da kullanılır).
+    private let claudeArguments: ClaudeArgumentsProbe
 
     init(
         repoPath: String,
@@ -76,6 +80,7 @@ final class TerminalSession {
         provider: AgentProvider? = nil,
         environment: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
+        processArguments: @escaping @Sendable (Int32) -> [String]? = { ProcessArguments.read(pid: $0) },
         font: NSFont,
         ptySpawner: any PTYSpawning = SystemPTYSpawner(),
         viewMaker: any TerminalViewMaking = DropAwareTerminalViewMaker(),
@@ -111,6 +116,8 @@ final class TerminalSession {
             rows: Self.initialRows,
             queue: queue
         )
+
+        self.claudeArguments = ClaudeArgumentsProbe(pty: pty, read: processArguments)
 
         let view = viewMaker.makeView(
             frame: NSRect(x: 0, y: 0, width: 800, height: 480),
@@ -281,17 +288,23 @@ final class TerminalSession {
     /// aynı serial io queue'da uygulanır — OSC ve hook birbirini yarıştırmaz.
     func applyHookEvent(_ event: AgentHookEvent) {
         guard !isTerminated else { return }
-        ioQueue.async { [weak self, pipeline] in
+        ioQueue.async { [weak self, pipeline, claudeArguments] in
             pipeline.processHookEvent(event)
             guard event.isLead, let sessionID = event.sessionID else { return }
             switch event.provider {
             case .codex: hopToMain { self?.applyCodexSessionID(sessionID) }
             case .claude:
                 if event.kind == .sessionEnd {
+                    // Karar 141: sonraki claude (başka bayraklarla) yeniden okunur.
+                    claudeArguments.reset()
                     hopToMain { self?.releaseAdoptedClaudeSession(sessionID) }
                 } else {
                     let switches = event.switchesClaudeConversation
-                    hopToMain { self?.applyClaudeSessionID(sessionID, switchesConversation: switches) }
+                    let arguments = claudeArguments.capture()
+                    hopToMain {
+                        self?.applyClaudeSessionID(sessionID, switchesConversation: switches)
+                        if let arguments { self?.applyClaudeLaunchArguments(arguments) }
+                    }
                 }
             }
         }
@@ -323,8 +336,17 @@ final class TerminalSession {
         publishClaudeSessionID(nil)
     }
 
+    /// Karar 141: bayraklar oturum kimliğine bağlıdır — kimliksiz terminalde
+    /// (DeepSeek, kimliği silinmiş shell) resume yok, saklanmaz.
+    private func applyClaudeLaunchArguments(_ arguments: [String]) {
+        guard !isTerminated, meta.claudeSessionID != nil, meta.claudeLaunchArguments != arguments else { return }
+        meta.claudeLaunchArguments = arguments
+        delegate?.sessionDidChangeClaudeLaunchArguments(self)
+    }
+
     private func publishClaudeSessionID(_ sessionID: String?) {
         meta.claudeSessionID = sessionID
+        if sessionID == nil { meta.claudeLaunchArguments = nil }
         // Karar 139: görseller oturumun dizinindedir (`/clear` sonrası yenisi).
         (presentation.view as? DropAwareTerminalView)?.pastedImagesDirectory = ClaudePastedImages.directory(for: meta)
         delegate?.session(self, didChangeClaudeSessionID: sessionID)
@@ -467,5 +489,31 @@ final class TerminalSession {
     /// SIGWINCH poke'u (görsel uzantıdan çağrılır; PTY erişimi burada kapalı kalır).
     func pokePTYRepaint() {
         pty.pokeRepaint()
+    }
+}
+
+/// Karar 141: terminalin ön planındaki claude'un argv'sinden resume bayrakları.
+/// Yalnız PTY'nin io queue'sunda kullanılır; claude başına bir kez okunur
+/// (`SessionEnd` sıfırlar). Ön planda claude yoksa okuma sonraki hook'ta denenir.
+private final class ClaudeArgumentsProbe: @unchecked Sendable {
+    private let pty: any PTYControlling
+    private let read: @Sendable (Int32) -> [String]?
+    private var isCaptured = false
+
+    init(pty: any PTYControlling, read: @escaping @Sendable (Int32) -> [String]?) {
+        self.pty = pty
+        self.read = read
+    }
+
+    func capture() -> [String]? {
+        guard !isCaptured, let group = pty.foregroundProcessGroup,
+              let argv = read(group),
+              let arguments = ClaudeLaunchArguments.resumable(fromProcessArguments: argv) else { return nil }
+        isCaptured = true
+        return arguments
+    }
+
+    func reset() {
+        isCaptured = false
     }
 }
