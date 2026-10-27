@@ -15,13 +15,14 @@ let package = Package(
         .executable(name: "Lumi", targets: ["LumiApp"]),
     ],
     dependencies: [
-        // v1.13.0 sonrası release'lenmemiş kritik düzeltmeler için revision pin'i:
-        // 94b6356 CSI T alt-screen scroll (yukarı scroll'da bayat satırlar),
-        // 9446f60/468d0a8 DEC 2026 synchronized output render, 551bfcc Shift+mouse
-        // ile raporlama baypası (TUI çalışırken text seçimi).
+        // Dayanılan düzeltmeler: 94b6356 CSI T alt-screen scroll (yukarı scroll'da
+        // bayat satırlar), 9446f60/468d0a8 DEC 2026 synchronized output render,
+        // 551bfcc Shift+mouse ile raporlama baypası (TUI çalışırken text seçimi),
+        // 64dc185a kitty Unicode placeholder kimliği RGB sırasıyla (Claude Code'un
+        // terminal görselleri 24-bit renkle kimlik taşır; eski pin ters okuyordu).
         .package(
             url: "https://github.com/migueldeicaza/SwiftTerm.git",
-            revision: "24a68bcadc479d945c7ca32f21ac0a8ab895c690"
+            exact: "1.20.0"
         ),
         // GFM ayrıştırması (cmark-gfm) — yalnız LumiServices'te, `MarkdownParsing`
         // dikişinin arkasında (karar 109).
