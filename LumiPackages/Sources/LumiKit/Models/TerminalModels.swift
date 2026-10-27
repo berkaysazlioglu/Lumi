@@ -75,6 +75,10 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// Claude hook'u yeni kimliği bildirince güncellenir — resume ve telefon
     /// transcript takibi hep terminalin ŞU ANKİ konuşmasını izler.
     public var claudeSessionID: String?
+    /// Karar 140: kimlik spawn'da bilinmiyordu, elle başlatılan claude'un lider
+    /// hook'undan öğrenildi. Böyle kimlik claude çıkınca silinir ve yalnız
+    /// terminalde claude koşarken resume listesine girer. Kalıcı değildir.
+    public var isClaudeSessionAdopted: Bool
     /// Codex thread learned from the provider hook. Fresh Codex sessions do
     /// not expose this at launch time, so it becomes available asynchronously.
     public var codexSessionID: String?
@@ -98,6 +102,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         oscTitle: String? = nil,
         status: TerminalStatus = .idle,
         claudeSessionID: String? = nil,
+        isClaudeSessionAdopted: Bool = false,
         codexSessionID: String? = nil,
         codexHome: String? = nil,
         provider: AgentProvider? = nil,
@@ -111,6 +116,7 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.oscTitle = oscTitle
         self.status = status
         self.claudeSessionID = claudeSessionID
+        self.isClaudeSessionAdopted = isClaudeSessionAdopted
         self.codexSessionID = codexSessionID
         self.codexHome = codexHome
         self.provider = provider
@@ -143,7 +149,8 @@ public enum TerminalEvent: Sendable, Equatable {
     /// Karar 94: Lumi'nin izlediği claude terminalinde konuşma değişti (`/clear`
     /// yeni kimlikle yeni transcript açar). Resume checkpoint'i ve telefon
     /// chat köprüsü bunu görünce yeni kimliğe geçer.
-    case claudeSessionIDChanged(TerminalID, String)
+    /// Karar 140: `nil` = hook'tan öğrenilen kimlik, claude çıkınca silindi.
+    case claudeSessionIDChanged(TerminalID, String?)
     /// "Karar bekliyor" (izin promptu) sinyali — status'ten ayrı.
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)

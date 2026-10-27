@@ -52,6 +52,21 @@ final class WorkspaceBootResumeTests: XCTestCase {
         XCTAssertTrue(WorkspaceBootAssembly.resumeSessions(from: [codex]).isEmpty)
     }
 
+    /// Karar 140: hook'tan öğrenilen kimlik yalnız claude hâlâ koşarken yazılır.
+    func testAdoptedClaudeSessionResumesOnlyWhileClaudeRuns() {
+        let running = TerminalMeta(
+            id: TerminalID(), name: "Shell", repoPath: "/repo", createdAt: .distantPast,
+            claudeSessionID: "manual", isClaudeSessionAdopted: true, provider: .claude
+        )
+        var exited = running
+        exited.provider = nil
+
+        XCTAssertEqual(WorkspaceBootAssembly.resumeSessions(from: [running]), [
+            ResumeSession(repoPath: "/repo", sessionID: "manual"),
+        ])
+        XCTAssertTrue(WorkspaceBootAssembly.resumeSessions(from: [exited]).isEmpty)
+    }
+
     // MARK: - Karar 90: crash checkpoint'i
 
     private func makeHarness(
@@ -315,6 +330,8 @@ final class WorkspaceBootResumeTests: XCTestCase {
         XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.exited(id, code: 0)))
         XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.codexSessionIDChanged(id, "t")))
         XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.claudeSessionIDChanged(id, "c")))
+        XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.claudeSessionIDChanged(id, nil)))
+        XCTAssertTrue(WorkspaceBootAssembly.affectsResumeSessions(.providerChanged(id, nil)))
         XCTAssertFalse(WorkspaceBootAssembly.affectsResumeSessions(.statusChanged(id, .idle)))
         XCTAssertFalse(WorkspaceBootAssembly.affectsResumeSessions(.bell(id)))
     }

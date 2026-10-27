@@ -16,7 +16,8 @@ protocol TerminalSessionDelegate: AnyObject {
     /// Karar 90: doğrulanmış lider Codex hook'undan thread kimliği geldi.
     func session(_ session: TerminalSession, didChangeCodexSessionID sessionID: String)
     /// Karar 94: lider Claude hook'u terminalin yeni konuşma kimliğini bildirdi.
-    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String)
+    /// Karar 140: `nil` = hook'tan öğrenilen kimlik claude çıkınca silindi.
+    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String?)
     func session(_ session: TerminalSession, didChangeStalled stalled: Bool)
     /// Karar 104: Esc/Ctrl+C sonrası hook gelmedi, lider turn kesilmiş sayıldı.
     func sessionDidInferInterrupt(_ session: TerminalSession)
@@ -60,12 +61,16 @@ final class TerminalSession {
     private(set) var surfaceState: TerminalSurfaceState = .background
     private var pendingResize: DispatchWorkItem?
     private var launchGate: LaunchCommandGate?
+    /// Karar 140: elle başlatılan claude'un kimliği hook'tan öğrenilebilir mi
+    /// (DeepSeek gibi sarmalanmış claude launch'ında hayır).
+    private let adoptsClaudeSession: Bool
 
     init(
         repoPath: String,
         name: String,
         task: String?,
         claudeSessionID: String? = nil,
+        adoptsClaudeSession: Bool = true,
         codexSessionID: String? = nil,
         codexHome: String? = nil,
         provider: AgentProvider? = nil,
@@ -78,6 +83,7 @@ final class TerminalSession {
     ) throws {
         let id = TerminalID()
         self.id = id
+        self.adoptsClaudeSession = adoptsClaudeSession
         self.meta = TerminalMeta(
             id: id,
             name: name,
@@ -281,20 +287,45 @@ final class TerminalSession {
             switch event.provider {
             case .codex: hopToMain { self?.applyCodexSessionID(sessionID) }
             case .claude:
-                guard event.switchesClaudeConversation else { return }
-                hopToMain { self?.applyClaudeSessionID(sessionID) }
+                if event.kind == .sessionEnd {
+                    hopToMain { self?.releaseAdoptedClaudeSession(sessionID) }
+                } else {
+                    let switches = event.switchesClaudeConversation
+                    hopToMain { self?.applyClaudeSessionID(sessionID, switchesConversation: switches) }
+                }
             }
         }
     }
 
-    /// Karar 94: yalnız Lumi'nin zaten izlediği claude oturumu (spawn'da kimlik
-    /// taşıyan terminal) takip edilir. Düz shell'de elle koşulan claude'a kimlik
-    /// atanmaz — aksi hâlde claude çıktıktan sonra shell terminali açılışta
-    /// `claude --resume` ile geri gelirdi (karar 23 kapsamı).
-    private func applyClaudeSessionID(_ sessionID: String) {
-        guard !isTerminated, let current = meta.claudeSessionID, current != sessionID else { return }
+    /// Karar 94: kimlik taşıyan terminalde konuşma yalnız `SessionStart`'ta
+    /// değişir (`/clear`, claude içi `/resume`). Karar 140: kimliği olmayan
+    /// terminalde (elle yazılan `claude`) lider hook'un herhangi bir olayı
+    /// kimliği öğretir; `isClaudeSessionAdopted` ile işaretlenir.
+    private func applyClaudeSessionID(_ sessionID: String, switchesConversation: Bool) {
+        guard !isTerminated, meta.claudeSessionID != sessionID else { return }
+        if meta.claudeSessionID == nil {
+            guard adoptsClaudeSession else { return }
+            meta.isClaudeSessionAdopted = true
+        } else if !switchesConversation {
+            return
+        }
+        publishClaudeSessionID(sessionID)
+    }
+
+    /// Karar 140: claude çıktı (`SessionEnd`) — hook'tan öğrenilen kimlik
+    /// silinir ki geride kalan shell açılışta `claude --resume` ile geri
+    /// gelmesin. `/clear`'ın `SessionEnd`'i de buradan geçer; ardından gelen
+    /// `SessionStart` yeni kimliği yeniden öğretir. Spawn'da bilinen kimlik
+    /// (karar 23) dokunulmaz.
+    private func releaseAdoptedClaudeSession(_ sessionID: String) {
+        guard !isTerminated, meta.isClaudeSessionAdopted, meta.claudeSessionID == sessionID else { return }
+        meta.isClaudeSessionAdopted = false
+        publishClaudeSessionID(nil)
+    }
+
+    private func publishClaudeSessionID(_ sessionID: String?) {
         meta.claudeSessionID = sessionID
-        // Karar 139: `/clear` sonrası görseller yeni oturumun dizinine düşer.
+        // Karar 139: görseller oturumun dizinindedir (`/clear` sonrası yenisi).
         (presentation.view as? DropAwareTerminalView)?.pastedImagesDirectory = ClaudePastedImages.directory(for: meta)
         delegate?.session(self, didChangeClaudeSessionID: sessionID)
     }

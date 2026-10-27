@@ -314,7 +314,8 @@ public final class RemoteService: RemoteServicing {
             // yarışında yeni turn'ü düşürürdü; yalnız gerçek kesme çıkarımı kapatır.
             await settleInterruptIfNeeded(id: id)
         case .claudeSessionIDChanged(let id, let sessionID):
-            await retargetChat(id: id, sessionID: sessionID)
+            // Karar 140: `nil` = claude çıktı; izlenen transcript zaten bitti.
+            if let sessionID { await retargetChat(id: id, sessionID: sessionID) }
         case .awaitingDecisionChanged(let id, let awaiting):
             // Karar 105: telefon "karar bekliyor"u "bitti"den ayırır.
             let changed = awaiting ? awaitingDecision.insert(id).inserted : awaitingDecision.remove(id) != nil

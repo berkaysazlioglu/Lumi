@@ -108,6 +108,8 @@ public final class TerminalDigestCoordinator {
             // Açılışta resume edilen terminal diskteki izleme kaydına bağlanır.
             watchList.adopt(meta)
         case .claudeSessionIDChanged(let id, let session):
+            // Karar 140: claude çıkınca (`nil`) izleme kaydı yerinde kalır.
+            guard let session else { break }
             if let meta = terminals.meta(for: id) { watchList.adopt(meta) }
             watchList.sessionChanged(id, to: session)
         case .interruptInferred(let id):

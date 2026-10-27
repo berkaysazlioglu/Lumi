@@ -14,7 +14,7 @@ import LumiTerminal
 ///   olduğu için persist, terminal feature'ının `killAll()`'undan ÖNCE koşar.
 /// - **Karar 90 crash checkpoint'i:** aynı liste yalnız quit'te değil, canlı
 ///   küme her değiştiğinde (`.spawned` / `.exited` / `.codexSessionIDChanged` /
-///   `.claudeSessionIDChanged`)
+///   `.claudeSessionIDChanged` / `.providerChanged`)
 ///   yeniden yazılır; böylece crash / SIGKILL / güç kesintisinde de son
 ///   snapshot diskte durur. Kapanışta tüketici ÖNCE susturulur ki `killAll()`'ın
 ///   `.exited`'ları son snapshot'ı boş listeyle ezmesin.
@@ -109,9 +109,10 @@ final class WorkspaceBootAssembly: FeatureAssembly {
 
     static func affectsResumeSessions(_ event: TerminalEvent) -> Bool {
         switch event {
-        case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged:
+        // Karar 140: sağlayıcı da girer — resume kapısı (`provider`) ona bakar.
+        case .spawned, .exited, .codexSessionIDChanged, .claudeSessionIDChanged, .providerChanged:
             return true
-        case .statusChanged, .titleChanged, .providerChanged, .awaitingDecisionChanged, .bell,
+        case .statusChanged, .titleChanged, .awaitingDecisionChanged, .bell,
              .writeFailed, .stalled, .viewFocused, .linkActivated, .interruptInferred:
             return false
         }
@@ -142,6 +143,9 @@ final class WorkspaceBootAssembly: FeatureAssembly {
                 )
             }
             guard meta.provider != .codex, let id = meta.claudeSessionID else { return nil }
+            // Karar 140: hook'tan öğrenilen kimlik yalnız claude hâlâ koşarken —
+            // `SessionEnd` gelmeden ölen claude'un shell'i claude olarak dönmesin.
+            if meta.isClaudeSessionAdopted, meta.provider != .claude { return nil }
             return ResumeSession(repoPath: meta.repoPath, sessionID: id)
         }
     }

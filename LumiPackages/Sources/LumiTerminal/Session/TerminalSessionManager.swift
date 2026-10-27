@@ -118,6 +118,7 @@ public final class TerminalSessionManager: TerminalServicing {
             name: "Terminal \(spawnCounter)",
             task: task,
             claudeSessionID: prepared.sessionID,
+            adoptsClaudeSession: ClaudeSessionCommand.allowsAdoptingSession(launchCommand: prepared.command),
             codexSessionID: codexSessionID,
             codexHome: provider == .codex ? effectiveEnvironment["CODEX_HOME"] : nil,
             provider: provider,
@@ -303,7 +304,7 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.codexSessionIDChanged(session.id, sessionID))
     }
 
-    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String) {
+    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String?) {
         guard isRegistered(session) else { return }
         broadcaster.send(.claudeSessionIDChanged(session.id, sessionID))
     }

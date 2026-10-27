@@ -148,4 +148,14 @@ final class ClaudeSessionCommandTests: XCTestCase {
         XCTAssertEqual(result.command, resume)
         XCTAssertEqual(result.sessionID, fixedID)
     }
+
+    // Karar 140: yalnız sarmalanmış claude launch'ı (DeepSeek) kimlik öğrenmez.
+    func testAllowsAdoptingSessionExceptForWrappedClaude() {
+        XCTAssertTrue(ClaudeSessionCommand.allowsAdoptingSession(launchCommand: nil))
+        XCTAssertTrue(ClaudeSessionCommand.allowsAdoptingSession(launchCommand: "claude --continue"))
+        XCTAssertTrue(ClaudeSessionCommand.allowsAdoptingSession(launchCommand: "codex"))
+        XCTAssertFalse(ClaudeSessionCommand.allowsAdoptingSession(
+            launchCommand: "source \"/Users/dev/.claude/deepseek.env\" && claude"
+        ))
+    }
 }

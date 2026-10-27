@@ -597,6 +597,7 @@ public final class TerminalListStore: StoreLifecycle {
             update(id) { $0.codexSessionID = sessionID }
         case .claudeSessionIDChanged(let id, let sessionID):
             // Karar 94: `/clear` sonrası store kopyası da yeni konuşmayı taşısın.
+            // Karar 140: elle başlatılan claude'un kimliği gelir / çıkınca düşer.
             update(id) { $0.claudeSessionID = sessionID }
         case .awaitingDecisionChanged(let id, let awaiting):
             if awaiting {

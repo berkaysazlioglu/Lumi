@@ -191,14 +191,90 @@ final class TerminalSessionInjectionTests: XCTestCase {
         XCTAssertEqual(spy.claudeSessionIDs, ["resumed"])
     }
 
-    // Karar 94 / karar 23: düz shell'de elle koşulan claude'a kimlik atanmaz —
-    // aksi hâlde shell terminali açılışta `claude --resume` ile geri gelirdi.
-    func testClaudeHookDoesNotAdoptSessionForUntrackedTerminal() async throws {
+    // Karar 140: düz shell'de elle koşulan claude'un kimliği lider hook'tan
+    // öğrenilir; alt ajan ve başka kimliğin `SessionEnd`'i ona dokunmaz.
+    func testClaudeHookAdoptsSessionForHandStartedClaude() async throws {
         let session = try makeSession(pty: FakePTY())
         let spy = SpyDelegate()
         session.delegate = spy
         session.applyHookEvent(AgentHookEvent(
-            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "manual"
+            provider: .claude, terminalID: session.id, kind: .subagentStart, sessionID: "child", agentID: "a1"
+        ))
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "manual", source: "startup"
+        ))
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionEnd, sessionID: "nested"
+        ))
+
+        let adopted = await waitUntil { session.meta.claudeSessionID == "manual" }
+        XCTAssertTrue(adopted)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertTrue(session.meta.isClaudeSessionAdopted)
+        XCTAssertEqual(spy.claudeSessionIDs, ["manual"])
+    }
+
+    // Karar 140: claude çıkınca öğrenilen kimlik silinir (shell claude olarak
+    // resume edilmesin); `/clear` ise `SessionEnd` + yeni `SessionStart`'la
+    // yeni kimliği öğretir.
+    func testAdoptedClaudeSessionIsReleasedOnExitAndFollowsClear() async throws {
+        let session = try makeSession(pty: FakePTY())
+        let spy = SpyDelegate()
+        session.delegate = spy
+        for event in [
+            AgentHookEvent(provider: .claude, terminalID: session.id, kind: .userPromptSubmit, sessionID: "first"),
+            AgentHookEvent(provider: .claude, terminalID: session.id, kind: .sessionEnd, sessionID: "first"),
+            AgentHookEvent(provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "second", source: "clear"),
+        ] {
+            session.applyHookEvent(event)
+        }
+        let followed = await waitUntil { session.meta.claudeSessionID == "second" }
+        XCTAssertTrue(followed)
+
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionEnd, sessionID: "second"
+        ))
+        let released = await waitUntil { spy.claudeSessionIDs.count == 4 }
+        XCTAssertTrue(released)
+        XCTAssertEqual(spy.claudeSessionIDs, ["first", nil, "second", nil])
+        XCTAssertNil(session.meta.claudeSessionID)
+        XCTAssertFalse(session.meta.isClaudeSessionAdopted)
+    }
+
+    // Karar 140: spawn'da bilinen kimlik (karar 23) claude çıkınca silinmez.
+    func testLaunchedClaudeSessionSurvivesSessionEnd() async throws {
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "claude",
+            task: nil,
+            claudeSessionID: "launched",
+            provider: .claude,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: FakePTY())
+        )
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionEnd, sessionID: "launched"
+        ))
+        try? await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(session.meta.claudeSessionID, "launched")
+        XCTAssertFalse(session.meta.isClaudeSessionAdopted)
+    }
+
+    // Karar 140 / karar 54: sarmalanmış claude launch'ı (DeepSeek) kimlik öğrenmez.
+    func testWrappedClaudeLaunchDoesNotAdoptSession() async throws {
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "deepseek",
+            task: nil,
+            adoptsClaudeSession: false,
+            provider: .claude,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: FakePTY())
+        )
+        let spy = SpyDelegate()
+        session.delegate = spy
+        session.applyHookEvent(AgentHookEvent(
+            provider: .claude, terminalID: session.id, kind: .sessionStart, sessionID: "deepseek", source: "startup"
         ))
         try? await Task.sleep(for: .milliseconds(30))
         XCTAssertNil(session.meta.claudeSessionID)
@@ -293,7 +369,7 @@ final class SpyDelegate: TerminalSessionDelegate {
     private(set) var stalls: [Bool] = []
     private(set) var linkActivations: [TerminalLinkActivation] = []
     private(set) var codexSessionIDs: [String] = []
-    private(set) var claudeSessionIDs: [String] = []
+    private(set) var claudeSessionIDs: [String?] = []
 
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus) {}
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool) {}
@@ -303,7 +379,7 @@ final class SpyDelegate: TerminalSessionDelegate {
         codexSessionIDs.append(sessionID)
     }
 
-    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String) {
+    func session(_ session: TerminalSession, didChangeClaudeSessionID sessionID: String?) {
         claudeSessionIDs.append(sessionID)
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import LumiKit
 
 /// Karar 23: claude launch komutuna oturum kimliği enjeksiyonu/çıkarımı.
 ///
@@ -34,6 +35,16 @@ public enum ClaudeSessionCommand {
         }
         let id = generateID()
         return ("\(command) --session-id \(id)", id)
+    }
+
+    /// Karar 140: kimliği spawn'da bilinmeyen terminal, içinde koşan claude'un
+    /// kimliğini lider hook'tan öğrenebilir mi. Hayır yalnız claude'un
+    /// sarmalanarak açıldığı launch'ta (`source deepseek.env && claude`):
+    /// resume düz `claude --resume` olurdu ve DeepSeek yerine aboneliğe
+    /// geçerdi (karar 54). Düz shell, `-c/--continue` ve başka ajanlar öğrenir.
+    public static func allowsAdoptingSession(launchCommand: String?) -> Bool {
+        guard let launchCommand, firstToken(of: launchCommand) != "claude" else { return true }
+        return AgentProvider.detect(launchCommand: launchCommand) != .claude
     }
 
     /// Restore spawn komutu: resume dener; oturum yoksa claude exit 1 verir
