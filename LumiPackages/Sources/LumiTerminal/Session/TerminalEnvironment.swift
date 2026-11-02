@@ -47,6 +47,11 @@ enum TerminalEnvironment {
         for key in environment.keys where key.hasPrefix("CLAUDE_CODE_") {
             environment[key] = nil
         }
+        // Claude Code terminal görsellerini (kitty grafikleri) yalnız XTVERSION
+        // cevabı kitty/ghostty diyen terminalde açar; SwiftTerm kendi adını
+        // söyler ama kitty Unicode placeholder'larını çizer. Mod'ların `Image`
+        // öğesi (yapıştırılan görsel önizlemesi) bu kapıdan geçer.
+        environment["CLAUDE_CODE_FORCE_TERMINAL_IMAGES"] = "1"
         environment[AgentHookEndpoint.EnvironmentKey.terminalID] = nil
         environment[AgentHookEndpoint.EnvironmentKey.port] = nil
         environment[AgentHookEndpoint.EnvironmentKey.token] = nil

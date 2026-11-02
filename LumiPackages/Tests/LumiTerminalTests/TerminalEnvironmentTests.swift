@@ -109,6 +109,13 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(env["CLAUDE_CONFIG_DIR"], "/keep/me")   // meşru ayar korunur
     }
 
+    func testDeclaresTerminalImageSupportToClaudeCode() {
+        // SwiftTerm XTVERSION'da kitty/ghostty demediği için Claude Code
+        // görselleri kendiliğinden açmaz; miras temizliğinden sonra yazılmalı.
+        let env = TerminalEnvironment.childEnvironment(base: ["CLAUDE_CODE_FORCE_TERMINAL_IMAGES": "0"])
+        XCTAssertEqual(env["CLAUDE_CODE_FORCE_TERMINAL_IMAGES"], "1")
+    }
+
     func testLaunchOverridesReplaceInheritedCodexHome() {
         let env = TerminalEnvironment.childEnvironment(
             base: ["CODEX_HOME": "/system"], overrides: ["CODEX_HOME": "/managed"]

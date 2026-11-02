@@ -76,7 +76,18 @@ cd "$PKG"
 # (ilki, yani native macOS seçilir; Catalyst'i dışlayan bir -destination yazımı
 # yok). Yalnız bu satırlar süzülür; çıkış kodu pipefail ile xcodebuild'inkidir.
 XCODEBUILD_NOISE='IDERunDestination: Supported platforms for the buildables|^--- xcodebuild: WARNING: Using the first of multiple matching destinations:|^\{ platform:macOS(, variant:Mac Catalyst)?, name:Any Mac \}$'
+# SwiftTerm 1.20 `Apple/Metal/Shaders.metal`'i resource olarak derler; Xcode 26+
+# Metal derleyicisini ayrı indirilen bir bileşen yapar ("missing Metal Toolchain").
+# Yerelde ve CI runner'ında eksikse bir kez indirilir.
+if ! xcodebuild -showComponent MetalToolchain 2>/dev/null | grep -q "Status: installed"; then
+  echo "▸ Metal Toolchain indiriliyor…"
+  xcodebuild -downloadComponent MetalToolchain
+fi
+# -skipPackagePluginValidation: SwiftTerm 1.20'nin build-tool eklentisi
+# (SwiftTermBuildInfoPlugin — yalnız git dal/commit bilgisini Swift dosyasına
+# yazar) etkileşimsiz xcodebuild'de "Validate plug-in" onayında takılıyordu.
 xcodebuild -scheme Lumi -configuration Release \
+  -skipPackagePluginValidation \
   -destination "generic/platform=macOS" \
   -derivedDataPath "$DERIVED" \
   ARCHS="$ARCH" CODE_SIGNING_ALLOWED=NO \
