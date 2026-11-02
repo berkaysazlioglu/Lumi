@@ -99,7 +99,13 @@ final class MainWindowControllerTests: XCTestCase {
         controller.scheduleBoundsPersist()
         controller.scheduleBoundsPersist()
 
-        try? await Task.sleep(for: .milliseconds(120))
+        // Yazım beklenir (sabit bekleme yavaş CI runner'ında yetişmiyordu), sonra
+        // geç kalan ikinci bir yazım olmadığını görmek için bir debounce daha.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while await config.uiStateUpdateCount == before, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        try? await Task.sleep(for: .seconds(Self.testDebounce * 2))
         let writes = await config.uiStateUpdateCount - before
         XCTAssertEqual(writes, 1, "üç tetikleme tek yazıma çökmeli")
 
