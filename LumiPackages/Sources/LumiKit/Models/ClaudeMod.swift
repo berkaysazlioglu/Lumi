@@ -37,14 +37,15 @@ public enum ClaudeMods {
     /// mutlak klasör yolları.
     public static let pluginDirsVariable = "CLAUDE_CODE_PLUGIN_DIRS"
 
-    /// Config'de kaydı olmayan mod açıktır — klasöre konan mod kullanılmak
-    /// içindir; Lumi'nin kendi modları da varsayılan açık gelir.
-    public static func isEnabled(_ modID: String, in config: AppConfig) -> Bool {
-        config.claudeMods[modID] ?? true
+    /// Config'de kaydı olmayan mod: Lumi'ninki açık, kullanıcınınki kapalı —
+    /// klasöre dosya bırakabilen her süreç (ör. bir ajan) kendi kodunu sonraki
+    /// her claude'a onaysız yükletemesin; kullanıcının modu anahtarla açılır.
+    public static func isEnabled(_ mod: ClaudeMod, in config: AppConfig) -> Bool {
+        config.claudeMods[mod.id] ?? mod.isBundled
     }
 
     /// Yeni terminallerin `CLAUDE_CODE_PLUGIN_DIRS`'ine yazılacak yollar.
     public static func enabledPaths(_ mods: [ClaudeMod], config: AppConfig) -> [String] {
-        mods.filter { isEnabled($0.id, in: config) }.map(\.path)
+        mods.filter { isEnabled($0, in: config) }.map(\.path)
     }
 }

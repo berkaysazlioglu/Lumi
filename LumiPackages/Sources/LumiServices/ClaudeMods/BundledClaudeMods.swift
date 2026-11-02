@@ -8,6 +8,9 @@ import Foundation
 struct BundledClaudeMod: Sendable {
     let id: String
     let version: String
+    /// İşaret dosyasından (`.lumi-bundled`) önce kurulmuş sürümler: o
+    /// manifest'i taşıyan işaretsiz klasör yine Lumi'nindir ve güncellenir.
+    var legacyVersions: [String] = []
     /// Mod klasörüne göre yol → içerik.
     let files: [String: String]
 }
@@ -21,12 +24,13 @@ enum BundledClaudeMods {
     /// `ClaudePastedImages` ile aynıdır.
     static let imagePreview = BundledClaudeMod(
         id: "image-preview",
-        version: "1.0.0",
+        version: "1.0.1",
+        legacyVersions: ["1.0.0"],
         files: [
             ".claude-plugin/plugin.json": #"""
             {
               "name": "image-preview",
-              "version": "1.0.0",
+              "version": "1.0.1",
               "description": "Shows a small preview of each pasted image under the [Image #N] line of your prompt."
             }
 
@@ -43,18 +47,27 @@ enum BundledClaudeMods {
             // Claude Code yapıştırılan görseli /private/tmp/claude-<uid>/<cwd kodlaması>/<oturum>/images/N.png'ye yazar.
             const PLACEHOLDER = /\[Image #([1-9][0-9]{0,5})\]/g
             const TMP = '/private/tmp'
+            let roots: string[] | undefined
+
+            // Yalnız kullanıcının kendi prompt'u: görev bildirimi / başka oturumun
+            // mesajındaki [Image #N] bu oturumun görseli değildir. Damgasız eski
+            // kayıtlar (unclassified) gönderen/görev taşımıyorsa prompt sayılır.
+            const isOwnPrompt = (props: { origin: { kind: string }, from?: unknown, task?: unknown }) =>
+              props.origin.kind === 'composer' || props.origin.kind === 'bridge'
+                || (props.origin.kind === 'unclassified' && !props.from && !props.task)
 
             export const register: Register = on => {
               on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
                 const numbers = [...e.props.text.matchAll(PLACEHOLDER)].map(m => m[1])
-                if (e.surface !== 'terminal' || numbers.length === 0) return next(e)
+                if (e.surface !== 'terminal' || numbers.length === 0 || !isOwnPrompt(e.props)) return next(e)
 
                 const encoded = (await $.session.cwd()).replace(/[^a-zA-Z0-9]/g, '-')
                 const sessionID = await $.session.id()
-                const roots = (await $.fs.list(TMP)).filter(d => /^claude-\d+$/.test(d.name))
+                // Boşsa önbelleklenmez: ilk görselden önce kök henüz yoktur.
+                if (!roots?.length) roots = (await $.fs.list(TMP)).filter(d => /^claude-\d+$/.test(d.name)).map(d => d.name)
                 const paths: string[] = []
                 for (const n of numbers) for (const r of roots) {
-                  const path = `${TMP}/${r.name}/${encoded}/${sessionID}/images/${n}.png`
+                  const path = `${TMP}/${r}/${encoded}/${sessionID}/images/${n}.png`
                   if (await $.fs.exists(path)) { paths.push(path); break }
                 }
                 if (paths.length === 0) return next(e)

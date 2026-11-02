@@ -34,6 +34,19 @@ public final class ClaudeModStore {
         await reload()
     }
 
+    /// Finder'da açılacak klasör; yoksa yaratılır. Hata toast'tır, `nil` döner.
+    public func folderForOpening() -> URL? {
+        guard !directory.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: directory, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            return url
+        } catch {
+            toasts?.show(.error, title: "Mods folder could not be created", message: error.localizedDescription)
+            return nil
+        }
+    }
+
     /// Klasörü yeniden tarar (kullanıcı mod ekledi/sildi).
     public func reload() async {
         let value = await service.list()

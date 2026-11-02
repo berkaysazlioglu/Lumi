@@ -37,6 +37,31 @@ final class TerminalSessionManagerSpawnTests: XCTestCase {
         )
     }
 
+    /// Karar 142: açık modların klasörleri spawn'ın shell'ine ulaşır.
+    func testSpawnExportsClaudePluginDirectoriesToShell() async throws {
+        let manager = TerminalSessionManager()
+        let marker = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lumi-plugin-dirs-\(UUID().uuidString)")
+        defer {
+            manager.killAll()
+            try? FileManager.default.removeItem(at: marker)
+        }
+        manager.setClaudePluginDirectories(["/m/a", "/m/b"])
+
+        _ = try manager.spawn(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            task: nil,
+            command: "printenv CLAUDE_CODE_PLUGIN_DIRS > \(marker.path)"
+        )
+
+        let deadline = ContinuousClock.now + .seconds(10)
+        while (try? String(contentsOf: marker, encoding: .utf8))?.isEmpty ?? true,
+              ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertEqual(try? String(contentsOf: marker, encoding: .utf8), "/m/a:/m/b\n")
+    }
+
     func testClaudeSpawnCarriesInjectedSessionID() async throws {
         // Arrange — komut yazımını görmek için marker'lı sahte claude komutu
         // kullanılamaz (ilk token claude olmalı); yalnız meta enjeksiyonu doğrulanır.

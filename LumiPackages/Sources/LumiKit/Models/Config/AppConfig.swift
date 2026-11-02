@@ -70,7 +70,8 @@ public struct AppConfig: Sendable, Equatable {
     /// Sonnet / Haiku — karar 121). Additive (karar 9): yoksa açık.
     public var claudeModelShortcutsEnabled: Bool
     /// Mod klasörü adı → Lumi terminallerindeki Claude'a yüklensin mi (karar
-    /// 142). Kaydı olmayan mod açıktır. Additive (karar 9): yoksa boş.
+    /// 142). Kaydı olmayan mod Lumi'ninse açık, kullanıcınınsa kapalıdır.
+    /// Additive (karar 9): yoksa boş.
     public var claudeMods: [String: Bool]
     /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
     /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.

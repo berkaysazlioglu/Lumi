@@ -30,11 +30,7 @@ final class ClaudeModsAssemblyTests: XCTestCase {
         registry.removeTemporaryDirectories()
     }
 
-    func testStartInstallsBundledModsAndPublishesEnabledFolders() async {
-        var config = AppConfig.defaults
-        config.claudeMods = ["mine": false]
-        await registry.fakeConfig.seed(config)
-
+    func testStartPublishesLumiModsButNotUserModsByDefault() async {
         await assembly.start()
 
         let installs = await modService.installCount
@@ -51,18 +47,24 @@ final class ClaudeModsAssemblyTests: XCTestCase {
         assembly.configDidChange(old: .defaults, new: unrelated)
         XCTAssertEqual(registry.fakeTerminal.claudePluginDirectories.count, afterStart)
 
-        var disabled = unrelated
-        disabled.claudeMods = ["image-preview": false]
-        assembly.configDidChange(old: unrelated, new: disabled)
+        var swapped = unrelated
+        swapped.claudeMods = ["image-preview": false, "mine": true]
+        assembly.configDidChange(old: unrelated, new: swapped)
         XCTAssertEqual(registry.fakeTerminal.claudePluginDirectories.last, ["/m/mine"])
     }
 
-    func testRescanPublishesNewlyAddedMod() async {
+    func testRescanRepublishesAndKeepsNewUserModOffUntilEnabled() async {
+        var config = AppConfig.defaults
+        config.claudeMods = ["enabled-new": true]
+        await registry.fakeConfig.seed(config)
         await assembly.start()
-        await modService.setMods([ClaudeMod(id: "new", name: "new", path: "/m/new")])
+        await modService.setMods([
+            ClaudeMod(id: "new", name: "new", path: "/m/new"),
+            ClaudeMod(id: "enabled-new", name: "enabled-new", path: "/m/enabled-new"),
+        ])
 
         await assembly.store.reload()
 
-        XCTAssertEqual(registry.fakeTerminal.claudePluginDirectories.last, ["/m/new"])
+        XCTAssertEqual(registry.fakeTerminal.claudePluginDirectories.last, ["/m/enabled-new"])
     }
 }

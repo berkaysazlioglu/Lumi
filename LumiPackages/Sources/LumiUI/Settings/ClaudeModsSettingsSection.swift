@@ -5,7 +5,8 @@ import SwiftUI
 
 /// Settings ▸ Agent ▸ Claude Mods (karar 142): mod klasöründeki her mod için
 /// bir anahtar. Açık modlar yeni Lumi terminallerindeki claude'a
-/// `CLAUDE_CODE_PLUGIN_DIRS` ile yüklenir; çalışan claude'lar etkilenmez.
+/// `CLAUDE_CODE_PLUGIN_DIRS` ile yüklenir; kullanıcının eklediği mod açılana
+/// kadar kapalıdır.
 struct ClaudeModsSettingsSection: View {
     @Shell private var shell
 
@@ -17,14 +18,14 @@ struct ClaudeModsSettingsSection: View {
                 .padding(.bottom, Theme.Spacing.md)
             if store.mods.isEmpty {
                 InfoCard("No mods in \(store.directory). A Claude Code plugin folder placed there "
-                    + "appears here.")
+                    + "appears here, switched off until you turn it on.")
                     .padding(.bottom, Theme.Spacing.lg)
             }
             ForEach(store.mods) { mod in
                 LumiField(title: mod.name, hint: hint(for: mod)) {
                     LumiToggleSwitch(
                         isOn: Binding(
-                            get: { ClaudeMods.isEnabled(mod.id, in: shell.settings.current) },
+                            get: { ClaudeMods.isEnabled(mod, in: shell.settings.current) },
                             set: { shell.settings.setClaudeModEnabled(mod.id, $0) }
                         ),
                         label: mod.name
@@ -33,8 +34,8 @@ struct ClaudeModsSettingsSection: View {
             }
             LumiField(
                 title: "Mods Folder",
-                hint: "Applies to Claude sessions started after a change — running sessions keep "
-                    + "their mods until restarted.",
+                hint: "Mods you add start switched off. Turning a mod on or off applies to Claude "
+                    + "sessions started afterwards; edits to a mod's files reload in running sessions.",
                 isLast: true
             ) {
                 HStack(spacing: Theme.Spacing.md) {
@@ -49,15 +50,13 @@ struct ClaudeModsSettingsSection: View {
     }
 
     private func hint(for mod: ClaudeMod) -> String {
-        let source = mod.isBundled ? "Lumi" : (mod.version.map { "v\($0)" } ?? mod.id)
+        let source = mod.isBundled ? "Lumi" : (mod.version.map { "v\($0)" } ?? "Your mod")
         guard let description = mod.description, !description.isEmpty else { return source }
         return "\(description) · \(source)"
     }
 
     private func openFolder() {
-        guard !store.directory.isEmpty else { return }
-        let url = URL(fileURLWithPath: store.directory, isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        guard let url = store.folderForOpening() else { return }
         NSWorkspace.shared.open(url)
     }
 }
