@@ -83,6 +83,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.orchestratorDigestsEnabled = false
             // Karar 121 additive anahtar.
             config.claudeModelShortcutsEnabled = false
+            // Karar 142 additive anahtar: mod klasörü adı → açık mı.
+            config.claudeMods = ["image-preview": false]
             // Karar 120 additive anahtar: proje yolu → görünüm (boş alan yazılmaz).
             config.projectAppearance = [
                 "/Users/dev/selected": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
@@ -155,6 +157,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
       ],
       "claudeModelShortcutsEnabled" : false,
+      "claudeMods" : {
+        "image-preview" : false
+      },
       "codexAccounts" : [
 
       ],

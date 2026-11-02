@@ -29,6 +29,9 @@ public struct LumiPaths: Sendable {
     public var orchestratorDir: URL { configDir.appendingPathComponent("orchestrator") }
     /// Isolated Codex homes: `<id>/home/auth.json`.
     public var codexAccountsDir: URL { configDir.appendingPathComponent("codex-accounts") }
+    /// Lumi terminallerindeki Claude'a yüklenen modlar (karar 142): `<id>/`
+    /// başına bir Claude Code plugin klasörü.
+    public var claudeModsDir: URL { configDir.appendingPathComponent("mods") }
 
     public init(
         mode: Mode,

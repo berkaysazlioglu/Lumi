@@ -190,6 +190,7 @@ private final class PreviewTerminalService: TerminalServicing {
     func processID(for id: TerminalID) -> Int32? { nil }
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {}
     func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {}
+    func setClaudePluginDirectories(_ paths: [String]) {}
     func applyAgentHookEvent(_ event: AgentHookEvent) {}
     func killAll() {}
     func resize(id: TerminalID, cols: Int, rows: Int) {}

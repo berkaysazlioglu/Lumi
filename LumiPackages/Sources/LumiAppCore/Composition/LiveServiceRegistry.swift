@@ -32,6 +32,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let appUpdateInstaller: any AppUpdateInstalling
     let claudeAccounts: any ClaudeAccountServicing
     let codexAccounts: any CodexAccountServicing
+    let claudeMods: any ClaudeModServicing
     let git: any GitServicing
     let plastic: any PlasticServicing
     let commitMessages: any CommitMessageGenerating
@@ -112,6 +113,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
         let codexAccountService = CodexAccountService(config: configService, paths: paths)
         codexAccounts = codexAccountService
+        claudeMods = ClaudeModService(directory: paths.claudeModsDir)
         highlighter = HighlightJSEngine(style: HighlightStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }

@@ -116,6 +116,21 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(env["CLAUDE_CODE_FORCE_TERMINAL_IMAGES"], "1")
     }
 
+    func testWritesClaudePluginDirectoriesAfterStrippingInheritedValue() {
+        // Karar 142: açık modlar `--plugin-dir` vermeden her claude'a; dış
+        // ortamdan miras kalan değer Lumi'ninkini ezmez.
+        let env = TerminalEnvironment.childEnvironment(
+            base: ["CLAUDE_CODE_PLUGIN_DIRS": "/outer"],
+            claudePluginDirectories: ["/m/a", "/m/b"]
+        )
+        XCTAssertEqual(env["CLAUDE_CODE_PLUGIN_DIRS"], "/m/a:/m/b")
+    }
+
+    func testOmitsClaudePluginDirectoriesWhenNoModIsEnabled() {
+        let env = TerminalEnvironment.childEnvironment(base: ["CLAUDE_CODE_PLUGIN_DIRS": "/outer"])
+        XCTAssertNil(env["CLAUDE_CODE_PLUGIN_DIRS"])
+    }
+
     func testLaunchOverridesReplaceInheritedCodexHome() {
         let env = TerminalEnvironment.childEnvironment(
             base: ["CODEX_HOME": "/system"], overrides: ["CODEX_HOME": "/managed"]

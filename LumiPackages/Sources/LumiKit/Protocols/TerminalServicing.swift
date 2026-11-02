@@ -54,6 +54,9 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?)
     /// Environment applied only to future sessions of a provider.
     func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider)
+    /// Karar 142: açık Claude modlarının klasörleri; sonraki spawn'ların
+    /// `CLAUDE_CODE_PLUGIN_DIRS`'ine yazılır. Boş = değişken yazılmaz.
+    func setClaudePluginDirectories(_ paths: [String])
     /// Karar 45: sunucudan gelen hook olayını ilgili oturumun durum
     /// makinesine iletir. Tanınmayan terminal kimliği sessizce düşer (kapanmış
     /// terminalin geç gelen hook'u).

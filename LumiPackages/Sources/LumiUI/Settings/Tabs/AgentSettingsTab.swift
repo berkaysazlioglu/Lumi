@@ -2,7 +2,7 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Ajan ayarları: Claude model kısayolları (karar 121), orchestrator Activity özetleri (karar 114) ve ek ajan arka
+/// Ajan ayarları: Claude model kısayolları (karar 121), Claude modları (karar 142), orchestrator Activity özetleri (karar 114) ve ek ajan arka
 /// uçları (karar 54 — DeepSeek'i Claude Code CLI'ı üzerinden çalıştıran env).
 struct AgentSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .agent
@@ -37,6 +37,8 @@ struct AgentSettingsTab: SettingsTabContent {
                 )
             }
             .padding(.bottom, Theme.Spacing.xxl)
+            ClaudeModsSettingsSection()
+                .padding(.bottom, Theme.Spacing.xxl)
             SectionHeader(title: "Orchestrator", icon: OrchestratorToolbarItem.iconName)
                 .padding(.bottom, Theme.Spacing.md)
             LumiField(

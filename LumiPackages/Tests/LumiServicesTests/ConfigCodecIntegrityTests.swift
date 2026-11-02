@@ -192,6 +192,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         terminalLinkActionsEnabled: false,
         orchestratorDigestsEnabled: false,
         claudeModelShortcutsEnabled: false,
+        claudeMods: ["image-preview": false, "mine": true],
         claudeAccounts: [
             ClaudeAccount(
                 id: ConfigCodecIntegrityTests.accountID,

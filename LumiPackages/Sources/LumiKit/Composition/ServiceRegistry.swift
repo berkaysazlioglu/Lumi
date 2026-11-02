@@ -48,6 +48,8 @@ public protocol ServiceRegistry: AnyObject {
     var claudeAccounts: any ClaudeAccountServicing { get }
     /// Codex accounts stored as isolated CODEX_HOME directories.
     var codexAccounts: any CodexAccountServicing { get }
+    /// Lumi terminallerine yüklenen Claude modları (karar 142).
+    var claudeMods: any ClaudeModServicing { get }
     /// Tasks planı: bağlı task kaynağı → adapter.
     var taskProviders: any TaskProviderMaking { get }
     /// Task görsellerinin indirme/önbelleği.

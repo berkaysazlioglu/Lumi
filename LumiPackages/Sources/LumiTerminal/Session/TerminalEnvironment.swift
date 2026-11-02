@@ -20,7 +20,8 @@ enum TerminalEnvironment {
         base: [String: String] = ProcessInfo.processInfo.environment,
         overrides: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
-        terminalID: TerminalID? = nil
+        terminalID: TerminalID? = nil,
+        claudePluginDirectories: [String] = []
     ) -> [String: String] {
         var environment = base
         environment.merge(overrides) { _, new in new }
@@ -52,6 +53,10 @@ enum TerminalEnvironment {
         // söyler ama kitty Unicode placeholder'larını çizer. Mod'ların `Image`
         // öğesi (yapıştırılan görsel önizlemesi) bu kapıdan geçer.
         environment["CLAUDE_CODE_FORCE_TERMINAL_IMAGES"] = "1"
+        // Karar 142: açık Lumi modları, `--plugin-dir` vermeden her claude'a.
+        if !claudePluginDirectories.isEmpty {
+            environment[ClaudeMods.pluginDirsVariable] = claudePluginDirectories.joined(separator: ":")
+        }
         environment[AgentHookEndpoint.EnvironmentKey.terminalID] = nil
         environment[AgentHookEndpoint.EnvironmentKey.port] = nil
         environment[AgentHookEndpoint.EnvironmentKey.token] = nil

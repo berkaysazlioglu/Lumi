@@ -127,6 +127,12 @@ public final class FakeTerminalService: TerminalServicing {
         launchEnvironments[provider] = environment
     }
 
+    public private(set) var claudePluginDirectories: [[String]] = []
+
+    public func setClaudePluginDirectories(_ paths: [String]) {
+        claudePluginDirectories.append(paths)
+    }
+
     public func applyAgentHookEvent(_ event: AgentHookEvent) {
         appliedHookEvents.append(event)
     }

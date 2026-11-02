@@ -37,6 +37,7 @@ struct AppComposition {
             viewProvider: registry.viewProvider
         )
         let agentHooks = AgentHooksAssembly()
+        let claudeMods = ClaudeModsAssembly()
         let terminal = TerminalFeatureAssembly()
         let notifications = NotificationAssembly()
         let sessionSchedule = SessionScheduleAssembly()
@@ -63,7 +64,7 @@ struct AppComposition {
             services: registry,
             shared: shared,
             assemblies: [
-                agentHooks, terminal, notifications, sessionSchedule, usage, repo, codexAccounts,
+                agentHooks, claudeMods, terminal, notifications, sessionSchedule, usage, repo, codexAccounts,
                 workspaceBoot, statusBar, remote, deepSeek, tasks, claudeAccounts, terminalLinks,
                 appUpdate, orchestrator,
             ]
@@ -79,6 +80,7 @@ struct AppComposition {
             statusBar: statusBar,
             remote: remote,
             deepSeek: deepSeek,
+            claudeMods: claudeMods,
             claudeAccounts: claudeAccounts,
             codexAccounts: codexAccounts,
             terminalLinks: terminalLinks,

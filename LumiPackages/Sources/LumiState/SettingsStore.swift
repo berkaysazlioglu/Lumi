@@ -139,6 +139,11 @@ public final class SettingsStore: StoreLifecycle {
         apply { $0.claudeModelShortcutsEnabled = enabled }
     }
 
+    /// Karar 142: modun Lumi terminallerindeki Claude'a yüklenmesi.
+    public func setClaudeModEnabled(_ modID: String, _ enabled: Bool) {
+        apply { $0.claudeMods[modID] = enabled }
+    }
+
     /// Karar 57: düz tıkla açılan terminal link eylemleri.
     public func setTerminalLinkActionsEnabled(_ enabled: Bool) {
         apply { $0.terminalLinkActionsEnabled = enabled }

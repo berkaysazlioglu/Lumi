@@ -92,6 +92,8 @@ public final class ShellContext {
     public let deepSeek: DeepSeekStore
     /// DeepSeek bakiye göstergesi (karar 75).
     public let deepSeekBalance: DeepSeekBalanceStore
+    /// Claude modları (karar 142) — Settings ▸ Agent ▸ Claude Mods.
+    public let claudeMods: ClaudeModStore
     /// Claude hesapları (karar 56) — Settings ▸ Accounts + usage popover'ı.
     public let claudeAccounts: ClaudeAccountStore
     /// Codex isolated-home account selection.
@@ -146,6 +148,7 @@ public final class ShellContext {
         usage: [AgentProvider: UsageStore],
         deepSeek: DeepSeekStore,
         deepSeekBalance: DeepSeekBalanceStore,
+        claudeMods: ClaudeModStore = ClaudeModStore(),
         claudeAccounts: ClaudeAccountStore,
         codexAccounts: CodexAccountStore,
         terminalLinks: TerminalLinkActionStore,
@@ -183,6 +186,7 @@ public final class ShellContext {
         self.usage = usage
         self.deepSeek = deepSeek
         self.deepSeekBalance = deepSeekBalance
+        self.claudeMods = claudeMods
         self.claudeAccounts = claudeAccounts
         self.codexAccounts = codexAccounts
         self.terminalLinks = terminalLinks

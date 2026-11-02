@@ -191,6 +191,7 @@ final class FakeTerminalServicing: TerminalServicing {
     func setSurfaceState(_ state: TerminalSurfaceState, in sessionID: String?) {}
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {}
     func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {}
+    func setClaudePluginDirectories(_ paths: [String]) {}
     func applyAgentHookEvent(_ event: AgentHookEvent) {}
     func shutdown() {}
     func applyFont(_ font: NSFont) {}

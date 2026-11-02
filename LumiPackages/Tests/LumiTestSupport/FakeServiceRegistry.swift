@@ -25,6 +25,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var appUpdateInstaller: any AppUpdateInstalling = FakeAppUpdateInstaller()
     public var claudeAccounts: any ClaudeAccountServicing = FakeClaudeAccountService()
     public var codexAccounts: any CodexAccountServicing = FakeCodexAccountService()
+    public var claudeMods: any ClaudeModServicing = FakeClaudeModService()
     public var taskProviders: any TaskProviderMaking = FakeTaskProviderFactory()
     public var taskImages: any TaskImageLoading = FakeTaskImageLoader()
     public var taskCredentials: any TaskCredentialStoring = FakeTaskCredentialStore()

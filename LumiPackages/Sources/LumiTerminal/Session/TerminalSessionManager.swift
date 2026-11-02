@@ -35,6 +35,9 @@ public final class TerminalSessionManager: TerminalServicing {
     /// yazılır. `nil` = hook'lar kapalı.
     private var hookEndpoint: AgentHookEndpoint?
     private var launchEnvironments: [AgentProvider: [String: String]] = [:]
+    /// Karar 142: açık Claude modlarının klasörleri; sonraki spawn'ların
+    /// `CLAUDE_CODE_PLUGIN_DIRS`'ine yazılır (çalışan claude etkilenmez).
+    private var claudePluginDirectories: [String] = []
     /// Terminal alt sisteminin tek uygulama-seviyesi NSEvent monitörü (refactor 4.7):
     /// klavye eşlemesi, kart odağı, tekerlek/hover. Enjekte edilir ki testler gerçek
     /// bir global monitör kurmadan (ya da kurulumu doğrulayarak) koşabilsin.
@@ -124,6 +127,7 @@ public final class TerminalSessionManager: TerminalServicing {
             provider: provider,
             environment: effectiveEnvironment,
             hookEndpoint: hookEndpoint,
+            claudePluginDirectories: claudePluginDirectories,
             font: font
         )
         session.delegate = self
@@ -188,6 +192,11 @@ public final class TerminalSessionManager: TerminalServicing {
 
     public func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {
         launchEnvironments[provider] = environment
+    }
+
+    public func setClaudePluginDirectories(_ paths: [String]) {
+        Self.logger.log("claude plugin dirs \(paths.count)")
+        claudePluginDirectories = paths
     }
 
     /// Kapanmış terminalin geç gelen hook'u sessizce düşer.

@@ -80,6 +80,7 @@ final class TerminalSession {
         provider: AgentProvider? = nil,
         environment: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
+        claudePluginDirectories: [String] = [],
         processArguments: @escaping @Sendable (Int32) -> [String]? = { ProcessArguments.read(pid: $0) },
         font: NSFont,
         ptySpawner: any PTYSpawning = SystemPTYSpawner(),
@@ -110,7 +111,8 @@ final class TerminalSession {
             args: ["-l"],
             cwd: repoPath,
             env: TerminalEnvironment.childEnvironment(
-                overrides: environment, hookEndpoint: hookEndpoint, terminalID: id
+                overrides: environment, hookEndpoint: hookEndpoint, terminalID: id,
+                claudePluginDirectories: claudePluginDirectories
             ),
             cols: Self.initialCols,
             rows: Self.initialRows,
