@@ -1,5 +1,5 @@
 import XCTest
-@testable import LumiMobileKit
+import LumiWire
 
 final class ChatMarkdownTests: XCTestCase {
     func testSplitsFencedCodeBlocks() {

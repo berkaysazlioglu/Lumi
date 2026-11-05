@@ -1,5 +1,4 @@
 import Foundation
-import LumiWire
 
 // Swift port of orca's mobile chat render logic (source:
 // orca `mobile/src/session/mobile-native-chat-{streaming-gate,pending-echo,

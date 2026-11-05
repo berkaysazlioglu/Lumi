@@ -1,5 +1,4 @@
 import Foundation
-import LumiWire
 
 /// One line group of the Claude-TUI-style transcript.
 public enum TUIItem: Sendable, Equatable {

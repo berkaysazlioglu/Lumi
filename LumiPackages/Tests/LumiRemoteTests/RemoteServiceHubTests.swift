@@ -216,6 +216,20 @@ struct RemoteServiceHubTests {
         f.service.stop()
     }
 
+    /// Controller'ın chat görünümünden gelen mesaj telefonunki gibi PTY'ye yazılır:
+    /// önce metin, kısa beklemeyle ayrı bir Enter (karar 143 ek).
+    @Test func controllerChatSendTypesIntoTheTerminal() async throws {
+        let f = try await HubFixture()
+        let session = f.makeSession()
+        await f.service.start()
+        await f.hub.injectInbound(type: "chat_send", payload: [
+            "sessionId": session.raw, "text": "testleri koş", "from": "conn-1",
+        ])
+        try await waitUntil { f.term.writes.count == 2 }
+        #expect(f.term.writes.map(\.1) == ["testleri koş", "\r"])
+        f.service.stop()
+    }
+
     @Test func hubDisconnectReleasesControllersAndTheirFeeds() async throws {
         let f = try await HubFixture()
         let session = f.makeSession()

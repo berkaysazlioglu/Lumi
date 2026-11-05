@@ -34,6 +34,14 @@ public protocol RemoteControllerServicing: AnyObject {
     /// Terminalin içeriğini bir kez okur (aynayı etkilemez).
     func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading
 
+    /// Claude terminalinin chat akışı (`subscribe` mode `chat`; `afterId` → yalnız o
+    /// mesajdan sonrası). Akış bitince `unsubscribe{mode:chat}` gider; ayna etkilenmez.
+    func chatEvents(hubId: String, sessionId: String, afterId: String?) -> AsyncStream<RemoteChatEvent>
+    /// Chat'ten mesaj: hub metni PTY'ye yazar, kısa bir beklemeyle Enter basar.
+    func sendChat(hubId: String, sessionId: String, text: String)
+    /// İzin / soru kartını cevaplar (`prompt_respond`).
+    func respondPrompt(hubId: String, sessionId: String, itemId: String, revision: Int, answer: RemotePromptAnswer)
+
     func events() -> AsyncStream<RemoteControllerEvent>
 }
 

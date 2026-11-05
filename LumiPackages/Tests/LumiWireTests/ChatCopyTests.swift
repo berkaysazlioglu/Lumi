@@ -1,6 +1,5 @@
 // LumiMobile/LumiMobileKit/Tests/LumiMobileKitTests/ChatCopyTests.swift
 import XCTest
-@testable import LumiMobileKit
 import LumiWire
 
 final class ChatCopyTests: XCTestCase {

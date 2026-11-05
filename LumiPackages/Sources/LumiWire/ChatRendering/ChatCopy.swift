@@ -1,5 +1,4 @@
 import Foundation
-import LumiWire
 
 /// The plain-text prose of a folded turn's owner message: `.text` blocks joined
 /// with newlines, tool blocks skipped. `nil` when the result is effectively empty

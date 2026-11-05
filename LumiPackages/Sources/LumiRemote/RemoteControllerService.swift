@@ -159,6 +159,19 @@ public final class RemoteControllerService: RemoteControllerServicing {
         links[hubId]?.sendInput(sessionId: sessionId, data: data)
     }
 
+    public func chatEvents(hubId: String, sessionId: String, afterId: String?) -> AsyncStream<RemoteChatEvent> {
+        guard let link = links[hubId] else { return AsyncStream { $0.finish() } }
+        return link.chatEvents(sessionId: sessionId, afterId: afterId)
+    }
+
+    public func sendChat(hubId: String, sessionId: String, text: String) {
+        links[hubId]?.sendChat(sessionId: sessionId, text: text)
+    }
+
+    public func respondPrompt(hubId: String, sessionId: String, itemId: String, revision: Int, answer: RemotePromptAnswer) {
+        links[hubId]?.respondPrompt(sessionId: sessionId, itemId: itemId, revision: revision, answer: answer)
+    }
+
     public func startSession(
         hubId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String
     ) async throws -> String? {

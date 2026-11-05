@@ -44,6 +44,9 @@ private final class ScriptedController: RemoteControllerServicing {
     func closeSession(hubId: String, sessionId: String) async throws {}
     func sendText(hubId: String, sessionId: String, text: String, submit: Bool) async throws { sent.append((sessionId, text, submit)) }
     func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading { reading }
+    func chatEvents(hubId: String, sessionId: String, afterId: String?) -> AsyncStream<RemoteChatEvent> { AsyncStream { $0.finish() } }
+    func sendChat(hubId: String, sessionId: String, text: String) {}
+    func respondPrompt(hubId: String, sessionId: String, itemId: String, revision: Int, answer: RemotePromptAnswer) {}
     func events() -> AsyncStream<RemoteControllerEvent> { AsyncStream { $0.finish() } }
 }
 

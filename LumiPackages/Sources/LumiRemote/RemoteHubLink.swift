@@ -20,6 +20,8 @@ final class RemoteHubLink {
     /// Açık aynalar — oturum kimliği → (ayna kimliği, akış). Kimlik, eski aynanın geç gelen
     /// bitişinin aynı oturuma açılmış yeni aynayı kapatmasını önler.
     private var terminalSinks: [String: (token: UUID, continuation: AsyncStream<RemoteTerminalChunk>.Continuation)] = [:]
+    /// Açık chat görünümleri (Claude terminalleri) — aynalarla aynı kimlik kuralı.
+    private var chatSinks: [String: (token: UUID, continuation: AsyncStream<RemoteChatEvent>.Continuation)] = [:]
     /// Giden frame'ler tek tüketicili kuyruktan sırayla gider (tuş vuruşlarının sırası korunur).
     private let outbox: AsyncStream<OutboundFrame>.Continuation
     private var outboxTask: Task<Void, Never>?
@@ -79,6 +81,8 @@ final class RemoteHubLink {
         await close(forgetPassword: true)
         for sink in terminalSinks.values { sink.continuation.finish() }
         terminalSinks.removeAll()
+        for sink in chatSinks.values { sink.continuation.finish() }
+        chatSinks.removeAll()
         snapshot = RemoteHubSnapshot()
         setState(.disconnected)
     }
@@ -98,6 +102,34 @@ final class RemoteHubLink {
         return stream
     }
 
+    /// Chat akışı: `subscribe{mode:chat, afterId?}`; hub'da bu bağlantının chat modu
+    /// aynadan ayrı izleyicidir. Akış bitince `unsubscribe{mode:chat}`.
+    func chatEvents(sessionId: String, afterId: String?) -> AsyncStream<RemoteChatEvent> {
+        let (stream, continuation) = AsyncStream.makeStream(of: RemoteChatEvent.self)
+        let token = UUID()
+        let previous = chatSinks[sessionId]
+        chatSinks[sessionId] = (token, continuation)
+        previous?.continuation.finish()
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor in self?.releaseChat(sessionId, token: token) }
+        }
+        if state.isConnected {
+            send(type: "subscribe", payload: RemoteControllerWire.chatSubscribe(sessionId: sessionId, afterId: afterId))
+        }
+        return stream
+    }
+
+    func sendChat(sessionId: String, text: String) {
+        guard state.isConnected else { return }
+        send(type: "chat_send", payload: ["sessionId": sessionId, "text": text])
+    }
+
+    func respondPrompt(sessionId: String, itemId: String, revision: Int, answer: RemotePromptAnswer) {
+        guard state.isConnected else { return }
+        send(type: "prompt_respond", payload: RemoteControllerWire.promptRespond(
+            sessionId: sessionId, itemId: itemId, revision: revision, answer: answer))
+    }
+
     func sendInput(sessionId: String, data: Data) {
         guard state.isConnected else { return }
         send(type: "input", payload: ["sessionId": sessionId, "data": data.base64EncodedString()])
@@ -114,7 +146,10 @@ final class RemoteHubLink {
         }
         let messages = await withCheckedContinuation { transcriptWaiters[sessionId] = $0 }
         timer.cancel()
-        send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "chat"])
+        // Açık chat görünümü aynı izleyici anahtarını kullanır; onu koparma.
+        if chatSinks[sessionId] == nil {
+            send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "chat"])
+        }
         return messages
     }
 
@@ -194,8 +229,11 @@ final class RemoteHubLink {
             snapshot.projects = tree.projects
             snapshot.others = tree.others
             setState(.connected)
-            // Yeniden bağlanma: açık aynalar taze scrollback alsın.
+            // Yeniden bağlanma: açık aynalar taze scrollback, chat'ler tam liste alsın.
             for sessionId in terminalSinks.keys { sendSubscribe(sessionId) }
+            for sessionId in chatSinks.keys {
+                send(type: "subscribe", payload: RemoteControllerWire.chatSubscribe(sessionId: sessionId, afterId: nil))
+            }
         case "sessions":
             snapshot.sessions = RemoteControllerWire.sessions(payload)
             onChange(self)
@@ -208,9 +246,12 @@ final class RemoteHubLink {
             guard let (sessionId, chunk) = RemoteControllerWire.terminalChunk(type: type, payload: payload) else { return }
             terminalSinks[sessionId]?.continuation.yield(chunk)
             if chunk.isSnapshot { screenWaiters.removeValue(forKey: sessionId)?.resume(returning: chunk) }
-        case "chat":
-            guard let (sessionId, messages) = RemoteControllerWire.chatSnapshot(payload) else { return }
-            transcriptWaiters.removeValue(forKey: sessionId)?.resume(returning: messages)
+        case "chat", "chat_append", "chat_status", "prompt":
+            guard let (sessionId, event) = RemoteControllerWire.chatEvent(type: type, payload: payload) else { return }
+            chatSinks[sessionId]?.continuation.yield(event)
+            if case .snapshot(let messages, _) = event {
+                transcriptWaiters.removeValue(forKey: sessionId)?.resume(returning: messages)
+            }
         case "command_result":
             guard let reply = RemoteControllerWire.commandReply(payload) else { return }
             resolveCommand(reply.commandId, reply: reply)
@@ -230,6 +271,15 @@ final class RemoteHubLink {
         guard terminalSinks[sessionId]?.token == token else { return }
         terminalSinks[sessionId] = nil
         if state.isConnected { send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "terminal"]) }
+    }
+
+    private func releaseChat(_ sessionId: String, token: UUID) {
+        guard chatSinks[sessionId]?.token == token else { return }
+        chatSinks[sessionId] = nil
+        // Süren tek seferlik okuma kendi unsubscribe'ını gönderecek.
+        if state.isConnected, transcriptWaiters[sessionId] == nil {
+            send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "chat"])
+        }
     }
 
     private func send(type: String, payload: [String: Any]) {

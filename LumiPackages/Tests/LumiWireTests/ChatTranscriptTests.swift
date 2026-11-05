@@ -1,6 +1,5 @@
 import XCTest
 import LumiWire
-@testable import LumiMobileKit
 
 final class ChatTranscriptTests: XCTestCase {
 

@@ -66,7 +66,7 @@ public struct RemoteRouteView: View {
             }
         case .terminal:
             if let ref = controller.selectedSession {
-                RemoteMirrorPane(ref: ref, controller: controller, mirrors: mirrors)
+                RemoteSessionPane(ref: ref, controller: controller, mirrors: mirrors)
                     .id(ref)
             } else {
                 EmptyStatePlaceholder(placeholderText, density: .full)
@@ -99,15 +99,15 @@ private struct RemotePageScroll<Content: View>: View {
     private static var readableWidth: CGFloat { Theme.scaled(560) }
 }
 
-/// Uzak terminalin aynası + başlığı.
-struct RemoteMirrorPane: View {
+/// Uzak terminalin başlığı + gövdesi: Claude terminalinde chat (varsayılan) ya da ayna,
+/// diğerlerinde ayna (karar 143 ek).
+struct RemoteSessionPane: View {
     let ref: RemoteSessionRef
     let controller: RemoteControllerStore
     let mirrors: any RemoteTerminalMirrorMaking
 
     @Shell private var shell
-    @State private var mirror: (any RemoteTerminalMirroring)?
-    /// Arttıkça abonelik yeniden kurulur (hub tarafında terminal yeniden boyutlandıysa taze snapshot).
+    /// Arttıkça ayna aboneliği yeniden kurulur (hub tarafında terminal yeniden boyutlandıysa taze snapshot).
     @State private var reloadToken = 0
 
     var body: some View {
@@ -118,8 +118,12 @@ struct RemoteMirrorPane: View {
                 errorBanner(error)
             }
             ZStack {
-                if let mirror {
-                    RemoteMirrorHost(mirror: mirror)
+                switch mode {
+                case .chat:
+                    RemoteChatView(chat: controller.chatSession(ref), style: RemoteChatStyle(family: fontFamily))
+                case .terminal:
+                    RemoteMirrorBody(ref: ref, controller: controller, mirrors: mirrors, fontFamily: fontFamily)
+                        .id(reloadToken)
                 }
                 if controller.linkState(ref.hubId) != .connected {
                     EmptyStatePlaceholder(linkText, density: .full)
@@ -127,13 +131,15 @@ struct RemoteMirrorPane: View {
                 }
             }
         }
-        .onAppear(perform: makeMirror)
-        .task(id: reloadToken) { await stream() }
     }
 
     private var session: RemoteSessionInfo? {
         controller.snapshots[ref.hubId]?.session(ref.sessionId)
     }
+
+    private var mode: RemoteSessionViewMode { controller.viewMode(ref) }
+
+    private var fontFamily: String { shell.settings.current.terminalFontFamily }
 
     private var header: some View {
         HStack(spacing: Theme.Spacing.md) {
@@ -149,13 +155,26 @@ struct RemoteMirrorPane: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: Theme.Spacing.md)
-            Button {
-                reloadToken &+= 1
-            } label: {
-                Image(systemName: "arrow.clockwise")
+            if session?.provider == .claude {
+                SegmentedModeSwitch(
+                    options: [RemoteSessionViewMode.chat, .terminal],
+                    selection: Binding(get: { mode }, set: { controller.setViewMode($0, for: ref) }),
+                    title: { $0 == .chat ? "Chat" : "Terminal" },
+                    help: { $0 == .chat
+                        ? "Claude's conversation, laid out for this window"
+                        : "The hub's raw terminal (menus, trust prompts, /model)" },
+                    accessibilityLabel: "View")
+                    .frame(width: Self.switchWidth)
             }
-            .buttonStyle(.borderless)
-            .help("Reload the mirror (use after the terminal was resized on the hub)")
+            if mode == .terminal {
+                Button {
+                    reloadToken &+= 1
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Reload the mirror (use after the terminal was resized on the hub)")
+            }
             Button {
                 Task { await controller.closeSession(ref) }
             } label: {
@@ -167,7 +186,7 @@ struct RemoteMirrorPane: View {
         .font(Theme.Typography.ui(.label))
         .foregroundStyle(Theme.textSecondary)
         .padding(.horizontal, Theme.Spacing.xl)
-        .frame(height: Theme.Row.control)
+        .frame(height: Theme.Row.control + Theme.Spacing.sm)
         .background(Theme.bgSurface)
     }
 
@@ -204,17 +223,39 @@ struct RemoteMirrorPane: View {
         }
     }
 
+    private static let overlayOpacity = 0.85
+    private static let bannerOpacity = 0.15
+    private static var switchWidth: CGFloat { Theme.scaled(150) }
+}
+
+/// Ham PTY aynası. Görev iptal edilince (pane kapandı / yeniden yükleme / görünüm değişti)
+/// akış biter ve hub'a `unsubscribe` gider.
+private struct RemoteMirrorBody: View {
+    let ref: RemoteSessionRef
+    let controller: RemoteControllerStore
+    let mirrors: any RemoteTerminalMirrorMaking
+    let fontFamily: String
+
+    @State private var mirror: (any RemoteTerminalMirroring)?
+
+    var body: some View {
+        ZStack {
+            if let mirror { RemoteMirrorHost(mirror: mirror) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear(perform: makeMirror)
+        .task { await stream() }
+    }
+
     private func makeMirror() {
         guard mirror == nil else { return }
         let made = mirrors.makeMirror()
-        made.setFont(LumiFonts.mono(family: shell.settings.current.terminalFontFamily, size: Theme.Typography.Size.base.scaledPoints))
+        made.setFont(LumiFonts.mono(family: fontFamily, size: Theme.Typography.Size.base.scaledPoints))
         let controller = controller, ref = ref
         made.onInput = { data in controller.sendInput(ref, data: data) }
         mirror = made
     }
 
-    /// Ayna parçalarını uygular; görev iptal edilince (pane kapandı / yeniden yükleme)
-    /// akış biter ve hub'a `unsubscribe` gider.
     private func stream() async {
         makeMirror()
         for await chunk in controller.terminalOutput(ref) {
@@ -222,9 +263,6 @@ struct RemoteMirrorPane: View {
             if chunk.isSnapshot { mirror?.focus() }
         }
     }
-
-    private static let overlayOpacity = 0.85
-    private static let bannerOpacity = 0.15
 }
 
 /// `RemoteTerminalMirroring.view`'ını SwiftUI'ye taşır.

@@ -1,6 +1,5 @@
-// LumiMobile/LumiMobileKit/Tests/LumiMobileKitTests/ChatFoldTests.swift
+// LumiPackages/Tests/LumiWireTests/ChatFoldTests.swift
 import XCTest
-@testable import LumiMobileKit
 import LumiWire
 
 final class ChatFoldTests: XCTestCase {

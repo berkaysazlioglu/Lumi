@@ -1,5 +1,4 @@
 import XCTest
-@testable import LumiMobileKit
 import LumiWire
 
 final class ChatStreamingGateTests: XCTestCase {

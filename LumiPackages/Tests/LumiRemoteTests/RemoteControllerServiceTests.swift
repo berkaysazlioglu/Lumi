@@ -242,6 +242,60 @@ struct RemoteControllerServiceTests {
         #expect(try await read.value == .screen("$ ls\n"))
     }
 
+    /// Claude chat görünümü: chat aboneliği, gelen dört frame tipi, gönderim ve bırakış.
+    @Test func chatViewStreamsTheHubsChatFramesAndAnswers() async throws {
+        let f = ControllerFixture()
+        try await f.configure()
+        try await f.connectAccepted()
+        var stream: AsyncStream<RemoteChatEvent>? = f.service.chatEvents(hubId: "build", sessionId: "s1", afterId: "m9")
+        try await f.link.waitForSent(types: ["subscribe"])
+        #expect(await f.link.lastStrings(type: "subscribe") == ["sessionId": "s1", "mode": "chat", "afterId": "m9"])
+
+        let reply = ChatMessage(id: "m10", role: .assistant, blocks: [.text("ok", presentation: nil)], timestampMs: nil, turnId: nil)
+        await f.link.injectInbound(type: "chat_append", payload: RemoteProtocol.chatAppendPayload(sessionId: "s1", messages: [reply], afterId: "m9"))
+        await f.link.injectInbound(type: "chat_status", payload: RemoteProtocol.chatStatusPayload(
+            sessionId: "s1", status: ChatTurnStatus(working: true, startedAtMs: 5, tool: "Bash")))
+        let prompt = ChatPrompt(itemId: "p1", revision: 2, kind: .approval, title: "Bash", detail: nil,
+                                options: [], state: .pending, selectedOptionId: nil)
+        await f.link.injectInbound(type: "prompt", payload: RemoteProtocol.promptPayload(sessionId: "s1", prompt: prompt))
+        await f.link.injectInbound(type: "chat", payload: RemoteProtocol.chatPayload(sessionId: "other", messages: []))
+        await f.link.injectInbound(type: "chat", payload: RemoteProtocol.chatPayload(sessionId: "s1", messages: [reply], hasEarlier: true))
+
+        var iterator = stream!.makeAsyncIterator()
+        var events: [RemoteChatEvent] = []
+        for _ in 0..<4 { if let event = await iterator.next() { events.append(event) } }
+        #expect(events == [
+            .append([reply], afterId: "m9"),
+            .status(ChatTurnStatus(working: true, startedAtMs: 5, tool: "Bash")),
+            .prompt(prompt),
+            .snapshot([reply], hasEarlier: true),
+        ])
+
+        f.service.sendChat(hubId: "build", sessionId: "s1", text: "devam")
+        f.service.respondPrompt(hubId: "build", sessionId: "s1", itemId: "p1", revision: 2, answer: .option("yes"))
+        f.service.respondPrompt(hubId: "build", sessionId: "s1", itemId: "q1", revision: 1,
+                                answer: .selections([RemotePromptSelection(indices: [0, 2], other: "not")]))
+        try await f.link.waitForSent(types: ["chat_send"])
+        try await f.link.waitForCount(type: "prompt_respond", atLeast: 2)
+        #expect(await f.link.lastStrings(type: "chat_send") == ["sessionId": "s1", "text": "devam"])
+        let responses = await f.link.allStrings(type: "prompt_respond")
+        #expect(responses.first == ["sessionId": "s1", "itemId": "p1", "optionId": "yes"])
+        #expect(await f.link.firstInt(type: "prompt_respond", key: "expectedRevision") == 2)
+
+        // Okuma açık chat'i koparmaz; görünüm kapanınca chat aboneliği bırakılır.
+        let service = f.service!
+        let read = Task { try await service.readTerminal(hubId: "build", sessionId: "s1") }
+        try await f.link.waitForCount(type: "subscribe", atLeast: 2)
+        await f.link.injectInbound(type: "chat", payload: RemoteProtocol.chatPayload(sessionId: "s1", messages: [reply]))
+        _ = try await read.value
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(await f.link.count(type: "unsubscribe") == 0)
+        iterator = AsyncStream<RemoteChatEvent> { $0.finish() }.makeAsyncIterator()
+        stream = nil
+        try await f.link.waitForSent(types: ["unsubscribe"])
+        #expect(await f.link.lastStrings(type: "unsubscribe") == ["sessionId": "s1", "mode": "chat"])
+    }
+
     @Test func changingTheNetworkDropsOpenLinks() async throws {
         let f = ControllerFixture()
         try await f.configure()

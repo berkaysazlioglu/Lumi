@@ -156,6 +156,36 @@ public enum RemoteTerminalReading: Sendable, Equatable {
     case screen(String)
 }
 
+/// Uzak Claude terminalinin chat akışının bir olayı — telefonun chat hattıyla aynı
+/// frame'ler (karar 88/104/105/130): `chat`, `chat_append`, `chat_status`, `prompt`.
+public enum RemoteChatEvent: Sendable, Equatable {
+    /// Tam liste; `hasEarlier` ise frame bütçesi yüzünden eski mesajlar düştü.
+    case snapshot([ChatMessage], hasEarlier: Bool)
+    /// Kuyruğa gelen mesajlar (kimliğe göre güncellenir). `afterId` varsa fark
+    /// aboneliğinin cevabıdır: listede o kimlikten sonrası bunlarla değişir.
+    case append([ChatMessage], afterId: String?)
+    case status(ChatTurnStatus)
+    case prompt(ChatPrompt)
+}
+
+/// İzin / soru kartının cevabı.
+public enum RemotePromptAnswer: Sendable, Equatable {
+    /// Onay kartında seçilen seçenek.
+    case option(String)
+    /// Soru kartında soru başına seçilen indeksler + serbest metin.
+    case selections([RemotePromptSelection])
+}
+
+public struct RemotePromptSelection: Sendable, Equatable {
+    public var indices: [Int]
+    public var other: String?
+
+    public init(indices: [Int], other: String? = nil) {
+        self.indices = indices
+        self.other = other
+    }
+}
+
 public enum RemoteControllerEvent: Sendable, Equatable {
     case directoryStateChanged(RemoteConnectionState)
     case hubsChanged([RemoteHubInfo])

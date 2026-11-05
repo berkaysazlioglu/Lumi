@@ -12,6 +12,14 @@ public struct RemoteSessionRef: Sendable, Equatable, Hashable {
     }
 }
 
+/// Uzak terminalin sağ taraftaki görünümü (karar 143 ek).
+public enum RemoteSessionViewMode: Sendable, Hashable {
+    /// Claude terminali için telefonla aynı chat hattı (boyuttan bağımsız).
+    case chat
+    /// Ham PTY aynası (TUI menüleri, trust ekranı, `/model` gibi durumlar için).
+    case terminal
+}
+
 /// Mac'ten Mac'e remote'un controller tarafının UI köprüsü (docs/design/08):
 /// hub listesi, bağlantı durumları, hub anlık görüntüleri ve Remote route'undaki seçim.
 @Observable @MainActor
@@ -24,11 +32,14 @@ public final class RemoteControllerStore {
     public var selectedHubId: String?
     /// Sağ sütunda aynası gösterilen terminal.
     public var selectedSession: RemoteSessionRef?
+    /// Kullanıcının terminal başına seçtiği görünüm; seçilmemişse Claude → chat.
+    public private(set) var viewModes: [RemoteSessionRef: RemoteSessionViewMode] = [:]
     /// Son başarısız eylemin kullanıcıya gösterilecek açıklaması.
     public private(set) var lastError: String?
 
     private let service: any RemoteControllerServicing
     private var consumeTask: Task<Void, Never>?
+    @ObservationIgnored private var chatSessions: [RemoteSessionRef: RemoteChatSession] = [:]
 
     public init(service: any RemoteControllerServicing) {
         self.service = service
@@ -119,6 +130,24 @@ public final class RemoteControllerStore {
         service.sendInput(hubId: ref.hubId, sessionId: ref.sessionId, data: data)
     }
 
+    public func viewMode(_ ref: RemoteSessionRef) -> RemoteSessionViewMode {
+        if let mode = viewModes[ref] { return mode }
+        return snapshots[ref.hubId]?.session(ref.sessionId)?.provider == .claude ? .chat : .terminal
+    }
+
+    public func setViewMode(_ mode: RemoteSessionViewMode, for ref: RemoteSessionRef) {
+        viewModes[ref] = mode
+    }
+
+    /// Claude terminalinin chat durumu. Oturum başına bir tane tutulur: terminaller arasında
+    /// gidip gelince liste kalır, yeniden açılışta yalnız eksikler istenir (karar 130).
+    public func chatSession(_ ref: RemoteSessionRef) -> RemoteChatSession {
+        if let existing = chatSessions[ref] { return existing }
+        let session = RemoteChatSession(ref: ref, service: service)
+        chatSessions[ref] = session
+        return session
+    }
+
     public func dismissError() {
         lastError = nil
     }
@@ -133,14 +162,26 @@ public final class RemoteControllerStore {
             hubs = list
         case .linkChanged(let hubId, let state):
             links[hubId] = state
-            if state == .disconnected { snapshots[hubId] = nil }
+            if state == .disconnected {
+                snapshots[hubId] = nil
+                dropChatSessions { $0.hubId == hubId }
+            }
         case .snapshotChanged(let hubId, let snapshot):
             snapshots[hubId] = snapshot
+            if links[hubId] == .connected {
+                dropChatSessions { $0.hubId == hubId && snapshot.session($0.sessionId) == nil }
+            }
             // Seçili terminal hub'da kapandıysa seçimi bırak.
             if let selected = selectedSession, selected.hubId == hubId,
                links[hubId] == .connected, snapshot.session(selected.sessionId) == nil {
                 selectedSession = nil
             }
+        }
+    }
+
+    private func dropChatSessions(where matches: (RemoteSessionRef) -> Bool) {
+        for ref in chatSessions.keys where matches(ref) {
+            chatSessions.removeValue(forKey: ref)?.stop()
         }
     }
 

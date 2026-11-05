@@ -116,11 +116,45 @@ enum RemoteControllerWire {
         ["commandId": commandId, "action": "read_screen", "sessionId": sessionId]
     }
 
-    /// `chat` frame'i → oturum kimliği + mesajlar (`ChatMessage.decode`; bozuk mesaj düşer).
-    static func chatSnapshot(_ payload: [String: Any]) -> (sessionId: String, messages: [ChatMessage])? {
+    /// Chat frame'leri (`chat`, `chat_append`, `chat_status`, `prompt`) → oturum + olay.
+    /// Telefonun çözümleyicisiyle (`PhoneProtocol`) aynı alanlar.
+    static func chatEvent(type: String, payload: [String: Any]) -> (sessionId: String, event: RemoteChatEvent)? {
         guard let sessionId = payload["sessionId"] as? String else { return nil }
-        let messages = (payload["messages"] as? [[String: Any]] ?? []).compactMap(ChatMessage.decode)
-        return (sessionId, messages)
+        switch type {
+        case "chat":
+            let messages = (payload["messages"] as? [[String: Any]] ?? []).compactMap(ChatMessage.decode)
+            return (sessionId, .snapshot(messages, hasEarlier: payload["hasEarlier"] as? Bool ?? false))
+        case "chat_append":
+            let messages = (payload["messages"] as? [[String: Any]] ?? []).compactMap(ChatMessage.decode)
+            return (sessionId, .append(messages, afterId: payload["afterId"] as? String))
+        case "chat_status":
+            return (sessionId, .status(ChatTurnStatus.decode(payload)))
+        case "prompt":
+            return ChatPrompt.decode(payload).map { (sessionId, .prompt($0)) }
+        default:
+            return nil
+        }
+    }
+
+    static func chatSubscribe(sessionId: String, afterId: String?) -> [String: Any] {
+        var payload: [String: Any] = ["sessionId": sessionId, "mode": "chat"]
+        if let afterId { payload["afterId"] = afterId }
+        return payload
+    }
+
+    static func promptRespond(sessionId: String, itemId: String, revision: Int, answer: RemotePromptAnswer) -> [String: Any] {
+        var payload: [String: Any] = ["sessionId": sessionId, "itemId": itemId, "expectedRevision": revision]
+        switch answer {
+        case .option(let optionId):
+            payload["optionId"] = optionId
+        case .selections(let selections):
+            payload["selections"] = selections.map { selection -> [String: Any] in
+                var entry: [String: Any] = ["indices": selection.indices]
+                if let other = selection.other { entry["other"] = other }
+                return entry
+            }
+        }
+        return payload
     }
 
     static func deleteSessionCommand(commandId: String, sessionId: String) -> [String: Any] {

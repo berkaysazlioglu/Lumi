@@ -1,11 +1,16 @@
 import Foundation
-import LumiWire
 
 /// A folded turn: one "owner" message plus its tool-only activity messages.
 public struct FoldedTurn: Identifiable, Sendable, Equatable {
     public let id: String
     public let message: ChatMessage
     public let toolActivity: [ChatMessage]
+
+    public init(id: String, message: ChatMessage, toolActivity: [ChatMessage]) {
+        self.id = id
+        self.message = message
+        self.toolActivity = toolActivity
+    }
 }
 
 /// Folds tool-only messages (containing only tool-call/tool-result blocks) into the
