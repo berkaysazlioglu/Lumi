@@ -137,6 +137,17 @@ final class RemoteCommandHandler {
         }
         let launch = model?.launchCommand ?? AgentProvider.claude.launchCommand
 
+        if kind == "shell" {
+            // Mac controller'ın `New Bash`'i (docs/design/08) — additive; telefon göndermez.
+            // Düz shell açılır ve controller yeni terminali seçebilsin diye kimliği döner.
+            do {
+                let meta = try terminal.spawn(repoPath: repoPath, task: nil, command: nil)
+                return .ok(commandId, sessionId: meta.id.description)
+            } catch {
+                return .failure(commandId, "\(error)")
+            }
+        }
+
         if kind == "chat" {
             // Karar 80: telefon-başlatılan chat, başsız stream-json alt-süreci DEĞİL,
             // masaüstü grid'de de görünen bir claude TERMİNALİ olarak açılır — böylece

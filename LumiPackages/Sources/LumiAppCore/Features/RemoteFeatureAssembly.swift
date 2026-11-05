@@ -15,7 +15,11 @@ final class RemoteFeatureAssembly: FeatureAssembly {
     let bootstrapPhase = BootstrapPhase.config
 
     private(set) var remoteStore: RemoteStore!
+    /// Mac'ten Mac'e remote'un controller tarafı (docs/design/08).
+    private(set) var controllerStore: RemoteControllerStore!
     private var remoteService: RemoteService!
+    private var controllerService: RemoteControllerService!
+    private var configTask: Task<Void, Never>?
     private var services: (any ServiceRegistry)!
     /// Kota göstergeleri → telefon (karar 128).
     private let usageBridge: RemoteUsageBridge
@@ -40,12 +44,23 @@ final class RemoteFeatureAssembly: FeatureAssembly {
             config: services.config
         )
         remoteStore = RemoteStore(service: remoteService)
+        controllerService = RemoteControllerService(keychain: services.remoteKeychain)
+        controllerStore = RemoteControllerStore(service: controllerService)
     }
 
     func start() async {
         // store event köprüsü (senkron); servis bağlantısı ayrı Task'ta (bloke etmez).
         // config.enabled=false ise start() içi no-op.
         remoteStore.start()
+        controllerStore.start()
+        // Controller ağ token'ını / relay adresini RemoteService'in config'inden alır;
+        // config her değiştiğinde (ve ilk açılışta, hubId üretilince) yeniden kurulur.
+        let configStream = remoteService.events()
+        configTask = Task { [weak self] in
+            for await event in configStream {
+                if case .configChanged = event { self?.configureController() }
+            }
+        }
         Task { [remoteService] in await remoteService?.start() }
         let service = remoteService!
         usageBridge.start { report in await service.publishUsage(report) }
@@ -56,6 +71,19 @@ final class RemoteFeatureAssembly: FeatureAssembly {
 
     func shutdown() async {
         usageBridge.stop()
+        configTask?.cancel()
+        controllerStore.stop()
         remoteService.stop()
+    }
+
+    private func configureController() {
+        let config = remoteService.currentConfig
+        controllerStore.configure(
+            relayUrl: config.relayUrl,
+            networkToken: config.networkToken,
+            identity: RemoteControllerIdentity(
+                controllerId: config.hubId,
+                name: remoteService.effectiveHubName,
+                ownHubId: config.hubId))
     }
 }

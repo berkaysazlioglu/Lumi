@@ -143,7 +143,9 @@ public final class RemoteService: RemoteServicing {
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
 
     public func start() async {
+        let previous = currentConfig
         currentConfig = await configService.ensureToken()
+        if currentConfig != previous { broadcaster.send(.configChanged(currentConfig)) }
         guard !running else { return }
         let hubHello = await hubHelloIfReady()
         let mobileOn = currentConfig.enabled
@@ -296,6 +298,7 @@ public final class RemoteService: RemoteServicing {
         await configService.save(config)
         currentConfig = config
         guard old != config else { return }
+        broadcaster.send(.configChanged(config))
         // Yalnız hub adı değiştiyse bağlantılar kopmaz — relay'e bildirilir (docs/design/08).
         var renamedOnly = old
         renamedOnly.hubName = config.hubName
@@ -329,6 +332,8 @@ public final class RemoteService: RemoteServicing {
                 // Relay hub soketi düşünce controller'larını da kapatır; izleyicileri bırak.
                 if newState == .disconnected { dropHubControllers(where: { _ in true }) }
             }
+        case .closed(let code, _):
+            rlog("inbound[\(channel)] relay kapattı code=\(code)")
         case .message(let type, let payload):
             let from = payload["from"] as? String
             let subscriber = channel == .mobile ? RemoteSubscribers.phone : RemoteSubscribers.hubSubscriber(from)

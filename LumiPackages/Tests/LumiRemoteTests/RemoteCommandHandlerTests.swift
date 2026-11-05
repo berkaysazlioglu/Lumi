@@ -39,6 +39,19 @@ struct RemoteCommandHandlerTests {
         #expect(meta?.claudeSessionID != nil)   // chat modu bağlanabilsin
     }
 
+    /// docs/design/08: Mac controller'ın `New Bash`'i düz shell açar ve kimliği döner.
+    @Test func startSessionKindShellSpawnsPlainShellAndReturnsId() async throws {
+        let term = FakeTerminalService()
+        let handler = RemoteCommandHandler(terminal: term, trust: FakeClaudeWorkspaceTrust(), config: FakeConfigService())
+        let result = await handler.handle([
+            "action": "start_session", "kind": "shell", "repoPath": "/repo", "prompt": "", "commandId": "cmd-1",
+        ])
+        #expect(result.ok)
+        let meta = try #require(term.spawnedMetas.last)
+        #expect(result.sessionId == meta.id.description)
+        #expect(meta.provider == nil)
+    }
+
     // MARK: - kind=chat start_session (karar 80: telefon chat'i de claude TERMİNALİ açar)
 
     /// Karar 80: telefon-başlatılan chat, başsız stream-json değil, masaüstünde de

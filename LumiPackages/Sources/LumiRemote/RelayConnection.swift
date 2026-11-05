@@ -4,6 +4,9 @@ import LumiKit
 public enum RelayInbound: @unchecked Sendable {
     case stateChanged(RemoteConnectionState)
     case message(type: String, payload: [String: Any])
+    /// Relay soketi kapattı; `code` WebSocket kapanış kodudur (relay'in 4000–4005'i,
+    /// docs/design/08). Ardından yeniden bağlanma denenir — çağıran `stop()` ile keser.
+    case closed(code: Int, reason: String?)
 }
 
 public protocol RelayConnecting: Actor {
@@ -100,6 +103,10 @@ actor RelayConnection: RelayConnecting {
             }
         }
         guard !stopped, wsTask === task else { return }
+        if wsTask.closeCode != .invalid {
+            let reason = wsTask.closeReason.flatMap { String(data: $0, encoding: .utf8) }
+            continuation?.yield(.closed(code: wsTask.closeCode.rawValue, reason: reason))
+        }
         continuation?.yield(.stateChanged(.disconnected))
         scheduleReconnect()
     }

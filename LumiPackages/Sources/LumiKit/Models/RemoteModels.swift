@@ -65,4 +65,6 @@ public enum RemoteEvent: Sendable, Equatable {
     case hubStateChanged(RemoteConnectionState)
     /// Hub'a bağlı controller'lar değişti.
     case hubControllersChanged([RemoteHubController])
+    /// `remote.json` değişti (ağ token'ı, hub ayarları…) — controller kendini yeniden kurar.
+    case configChanged(RemoteConfig)
 }

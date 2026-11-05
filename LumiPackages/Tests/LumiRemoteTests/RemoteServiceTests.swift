@@ -35,9 +35,24 @@ final actor FakeRelayConnection: RelayConnecting {
 
     func start(url: URL, hello: [String: Any]) {
         self.hello = hello.compactMapValues { $0 as? String }
+        self.attach = (hello["attach"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
         startCount += 1
     }
     func stop() { stopCount += 1 }
+
+    /// Test API — relay'in soketi kapatmasını enjekte et (kapanış kodu + neden).
+    func injectClosed(code: Int, reason: String?) {
+        continuation?.yield(.closed(code: code, reason: reason))
+        continuation?.yield(.stateChanged(.disconnected))
+    }
+
+    /// Son `start`'ın hello'sundaki `attach` sözlüğünün string alanları.
+    private(set) var attach: [String: String] = [:]
+
+    /// Belirli tipteki tüm mesajların string alanları, gönderim sırasıyla.
+    func allStrings(type: String) -> [[String: String]] {
+        sent.filter { $0.type == type }.map { $0.payload.compactMapValues { $0 as? String } }
+    }
 
     /// Test API — bağlantı durumu olayını enjekte et.
     func injectState(_ state: RemoteConnectionState) {

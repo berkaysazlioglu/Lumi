@@ -10,7 +10,7 @@ enum RemoteChannel: String, Sendable {
 /// Bu Mac'in hub olarak paylaşılması (docs/design/08-mac-remote.md, "Hub tarafı").
 extension RemoteService {
     /// Listede görünen ad: kullanıcının verdiği ad, yoksa bilgisayar adı.
-    var effectiveHubName: String {
+    public var effectiveHubName: String {
         let trimmed = currentConfig.hubName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         return Host.current().localizedName ?? "Mac"

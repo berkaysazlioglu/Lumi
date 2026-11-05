@@ -32,6 +32,8 @@ public final class RemoteStore {
                     self.hubState = newState
                 case .hubControllersChanged(let controllers):
                     self.hubControllers = controllers
+                case .configChanged:
+                    break
                 }
                 self.config = self.service.currentConfig
             }
