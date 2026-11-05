@@ -1,13 +1,15 @@
 import { WebSocketServer, WebSocket } from 'ws'
-import { Bridge, type PushSender, type Session } from './bridge.js'
-import { Registry } from './registry.js'
-import { parseEnvelope } from './protocol.js'
+import { Bridge, type PushSender } from './bridge.js'
+import { HubBridge, type Conn } from './hubs.js'
+import { Registry, type ClientLike } from './registry.js'
+import { parseEnvelope, type Envelope } from './protocol.js'
 
 export interface ServerOptions {
   port: number
   push: PushSender
   helloTimeoutMs?: number
   heartbeatMs?: number
+  attachTimeoutMs?: number
 }
 
 const MAX_FAILED_HELLOS = 5
@@ -16,6 +18,7 @@ const FAILURE_WINDOW_MS = 60_000
 export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(): void } {
   const registry = new Registry()
   const bridge = new Bridge(registry, opts.push)
+  const hubs = new HubBridge({ attachTimeoutMs: opts.attachTimeoutMs })
   const wss = new WebSocketServer({ port: opts.port, maxPayload: 1_000_000 })
   const failedHellos = new Map<string, { count: number; resetAt: number }>()
 
@@ -28,7 +31,7 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
       send: (d: string) => { if (ws.readyState === WebSocket.OPEN) ws.send(d) },
       close: (c?: number, r?: string) => ws.close(c, r),
     }
-    let session: Session | null = null
+    let session: Conn | null = null
     ws.isAlive = true
 
     const helloTimer = setTimeout(() => {
@@ -42,16 +45,16 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
       if (!env) { ws.close(4002, 'bad message'); return }
       if (!session) {
         if (tooManyFailures(ip)) { ws.close(); return }
-        session = bridge.handleHello(client, env)
+        session = hello(client, env, ip)
         if (session) clearTimeout(helloTimer)
         else { recordFailure(ip); ws.close() }
         return
       }
-      bridge.handleMessage(session, env)
+      session.message(env)
     })
     ws.on('close', () => {
       clearTimeout(helloTimer)
-      if (session) bridge.handleClose(session)
+      session?.close()
     })
   })
 
@@ -61,7 +64,16 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
       ws.isAlive = false
       ws.ping()
     }
+    hubs.sweep()
   }, opts.heartbeatMs ?? 30_000)
+
+  /** `hub`/`controller` rolleri Mac'ten Mac'e kanala (docs/design/08), diğerleri telefon odasına. */
+  function hello(client: ClientLike, env: Envelope, ip: string): Conn | null {
+    if (HubBridge.claims(env)) return hubs.handleHello(client, env, () => recordFailure(ip))
+    const session = bridge.handleHello(client, env)
+    if (!session) return null
+    return { message: (e) => bridge.handleMessage(session, e), close: () => bridge.handleClose(session) }
+  }
 
   function tooManyFailures(ip: string): boolean {
     const entry = failedHellos.get(ip)

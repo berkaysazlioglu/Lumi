@@ -11,6 +11,77 @@ export interface Session {
   room: Room
 }
 
+/** Mac'in yayınlayıp relay'in cache'lediği anlık görüntüler (oda ya da hub başına). */
+export interface SnapshotCache {
+  sessions: unknown[] | null
+  repos: unknown[] | null
+  projects: unknown | null
+  usage: unknown | null
+  tasks: unknown | null
+}
+
+/**
+ * Telefonun (ve hub'a bağlanan controller'ın — docs/design/08) `welcome` gövdesi.
+ * İki kanal aynı şekli alır ki istemci tarafındaki çözümleme ortak kalsın.
+ */
+export function welcomePayload(cache: SnapshotCache, macOnline: boolean, lastSeenAt: number | null): Record<string, unknown> {
+  const proj = (cache.projects as {
+    projects?: unknown; others?: unknown; addable?: unknown; looseLocations?: unknown; display?: unknown
+  } | null) ?? null
+  return {
+    sessions: cache.sessions ?? [],
+    repos: cache.repos ?? [],
+    projects: proj?.projects ?? [],
+    addable: proj?.addable ?? [],
+    // Projects ▸ Other (Mac karar 108/114) — additive; eski Mac'te boş.
+    others: proj?.others ?? [],
+    // Serbest terminal konumları + Mac terminal fontu (2026-10-23) — additive.
+    looseLocations: proj?.looseLocations ?? [],
+    display: proj?.display ?? {},
+    // Kota göstergeleri (Mac top bar paritesi) — additive; Mac henüz göndermediyse null.
+    usage: cache.usage ?? null,
+    // Tasks (karar 137 mobil ek) — additive; Mac henüz göndermediyse null.
+    tasks: cache.tasks ?? null,
+    macOnline,
+    lastSeenAt,
+  }
+}
+
+/** Mac'ten kontrol tarafına (telefon / controller) aynen yayınlanan akış frame'leri. */
+const STREAM_FRAMES = new Set([
+  'scrollback', 'data', 'chat', 'chat_append', 'chat_status', 'prompt', 'command_result',
+])
+
+/**
+ * Mac'in yayın frame'ini işler: anlık görüntüleri cache'ler (sonradan bağlanan
+ * `welcome`'da bulsun) ve frame'i `broadcast` ile iletir. Tanınmayan tip
+ * düşer (`false`). Telefon odası ve hub kanalı (docs/design/08) ortak kullanır.
+ */
+export function relayMacFrame(cache: SnapshotCache, env: Envelope, broadcast: (data: string) => void): boolean {
+  switch (env.type) {
+    case 'sessions':
+      // payload.sessions dizidir (welcome ile simetrik `sessions` anahtarı)
+      cache.sessions = Array.isArray(env.payload.sessions) ? env.payload.sessions : null
+      break
+    case 'repos':
+      cache.repos = Array.isArray(env.payload.repos) ? env.payload.repos : null
+      break
+    case 'projects':
+      cache.projects = env.payload
+      break
+    case 'usage':
+      cache.usage = env.payload
+      break
+    case 'tasks':
+      cache.tasks = env.payload
+      break
+    default:
+      if (!STREAM_FRAMES.has(env.type)) return false
+  }
+  broadcast(envelope(env.type, env.payload))
+  return true
+}
+
 export class Bridge {
   constructor(private registry: Registry, private push: PushSender) {}
 
@@ -22,26 +93,7 @@ export class Bridge {
       ? this.registry.attachMac(hello.token, client)
       : this.registry.attachPhone(hello.token, client)
     if (hello.role === 'phone') {
-      const proj = (room.projects as {
-        projects?: unknown; others?: unknown; addable?: unknown; looseLocations?: unknown; display?: unknown
-      } | null) ?? null
-      client.send(envelope('welcome', {
-        sessions: room.sessions ?? [],
-        repos: room.repos ?? [],
-        projects: proj?.projects ?? [],
-        addable: proj?.addable ?? [],
-        // Projects ▸ Other (Mac karar 108/114) — additive; eski Mac'te boş.
-        others: proj?.others ?? [],
-        // Serbest terminal konumları + Mac terminal fontu (2026-10-23) — additive.
-        looseLocations: proj?.looseLocations ?? [],
-        display: proj?.display ?? {},
-        // Kota göstergeleri (Mac top bar paritesi) — additive; Mac henüz göndermediyse null.
-        usage: room.usage ?? null,
-        // Tasks (karar 137 mobil ek) — additive; Mac henüz göndermediyse null.
-        tasks: room.tasks ?? null,
-        macOnline: room.mac !== null,
-        lastSeenAt: room.lastSeenAt,
-      }))
+      client.send(envelope('welcome', welcomePayload(room, room.mac !== null, room.lastSeenAt)))
     } else {
       client.send(envelope('welcome', { phoneCount: room.phones.size }))
     }
@@ -59,60 +111,7 @@ export class Bridge {
 
   private fromMac(session: Session, env: Envelope): void {
     const { room } = session
-    switch (env.type) {
-      case 'sessions': {
-        // Cache the sessions list from the payload (payload.sessions is the array;
-        // symmetric with welcome payload which also uses the `sessions` key)
-        const list = Array.isArray(env.payload.sessions) ? env.payload.sessions : null
-        room.sessions = list
-        this.broadcast(room, envelope('sessions', env.payload))
-        break
-      }
-      case 'repos': {
-        // Cache the repo list (symmetric with sessions) so phones that connect
-        // later receive it in their welcome; broadcast to already-connected phones.
-        const list = Array.isArray(env.payload.repos) ? env.payload.repos : null
-        room.repos = list
-        this.broadcast(room, envelope('repos', env.payload))
-        break
-      }
-      case 'projects': {
-        room.projects = env.payload
-        this.broadcast(room, envelope('projects', env.payload))
-        break
-      }
-      case 'usage': {
-        room.usage = env.payload
-        this.broadcast(room, envelope('usage', env.payload))
-        break
-      }
-      case 'tasks': {
-        room.tasks = env.payload
-        this.broadcast(room, envelope('tasks', env.payload))
-        break
-      }
-      case 'scrollback':
-        this.broadcast(room, envelope('scrollback', env.payload))
-        break
-      case 'data':
-        this.broadcast(room, envelope('data', env.payload))
-        break
-      case 'chat':
-        this.broadcast(room, envelope('chat', env.payload))
-        break
-      case 'chat_append':
-        this.broadcast(room, envelope('chat_append', env.payload))
-        break
-      case 'chat_status':
-        this.broadcast(room, envelope('chat_status', env.payload))
-        break
-      case 'prompt':
-        this.broadcast(room, envelope('prompt', env.payload))
-        break
-      case 'command_result':
-        this.broadcast(room, envelope('command_result', env.payload))
-        break
-    }
+    relayMacFrame(room, env, (data) => this.broadcast(room, data))
   }
 
   private fromPhone(session: Session, env: Envelope): void {
