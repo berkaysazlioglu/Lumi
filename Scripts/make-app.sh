@@ -6,7 +6,7 @@
 #   Scripts/make-app.sh --install                # + /Applications/Lumi.app'e kur
 #   Scripts/make-app.sh --slot 2 [--open]        # ayrı kimlikli test kopyası → dist/slot-2/Lumi 2.app
 #       # (bundle id com.lumi.app.slot2, config ~/.lumi-slot2, numaralı ikon — slot 1–2 kendi
-#       #  karakteri: Assets/icon-variants/icon-a|b.png, sonrakiler tonu kaydırılmış Lumi).
+#       #  karakteri: Assets/icon-variants/icon-a|b.png; 3 yeşil, 4 turuncu, sonrası tonu kaydırılmış Lumi).
 #       # Aynı Mac'te birbirine ve gerçek Lumi'ye karışmayan birden çok Lumi koşturmak içindir
 #       # (örn. Mac'ten Mac'e remote'u hub + controller olarak denemek, karar 143).
 #   --open                                        # build bitince uygulamayı aç
@@ -97,14 +97,14 @@ if [ -n "$SLOT" ]; then
   BUNDLE_ID="com.lumi.app.slot$SLOT"
   CONFIG_DIR="$HOME/.lumi-slot$SLOT"
   BADGE="$SLOT"
-  # Slot 1–2 kendi karakterini taşır (Assets/icon-variants: hayalet, küp); sonrakiler
-  # mor Lumi ikonunun tonu kaydırılarak ayrışır: yeşil, turuncu, pembe, mavi…
+  # Slot 1–2 kendi karakterini taşır (Assets/icon-variants: hayalet, küp); 3'ten
+  # itibaren mor Lumi ikonunun tonu kaydırılır: 3 yeşil, 4 turuncu, sonra pembe, mavi…
   VARIANTS=("$ROOT/Assets/icon-variants/icon-a.png" "$ROOT/Assets/icon-variants/icon-b.png")
   if [ "$SLOT" -le ${#VARIANTS[@]} ] && [ -f "${VARIANTS[$SLOT]}" ]; then
     BASE_ICON="${VARIANTS[$SLOT]}"
   else
     HUES=(250 150 60 200 320 100)
-    HUE="${HUES[$(( (SLOT - 1) % ${#HUES[@]} + 1 ))]}"
+    HUE="${HUES[$(( (SLOT - ${#VARIANTS[@]} - 1) % ${#HUES[@]} + 1 ))]}"
   fi
 elif [ "$INSTALL" -eq 0 ] && [ "$NOTARIZE" -eq 0 ]; then
   BADGE="dev"
