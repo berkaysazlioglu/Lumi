@@ -4,6 +4,14 @@
 # Kullanım:
 #   Scripts/make-app.sh                          # release build + imza → dist/Lumi.app
 #   Scripts/make-app.sh --install                # + /Applications/Lumi.app'e kur
+#   Scripts/make-app.sh --slot 2 [--open]        # ayrı kimlikli test kopyası → dist/slot-2/Lumi 2.app
+#       # (bundle id com.lumi.app.slot2, config ~/.lumi-slot2, numaralı + farklı renkli ikon).
+#       # Aynı Mac'te birbirine ve gerçek Lumi'ye karışmayan birden çok Lumi koşturmak içindir
+#       # (örn. Mac'ten Mac'e remote'u hub + controller olarak denemek, karar 143).
+#   --open                                        # build bitince uygulamayı aç
+#
+# Applications'a kurulmayan ve notarize edilmeyen build'lerin ikonu farklıdır (rozet:
+# slot numarası ya da "dev") — Dock'ta gerçek Lumi ile karışmasın.
 #   IDENTITY="Developer ID Application: ..." Scripts/make-app.sh   # gerçek imza + hardened runtime
 #   IDENTITY="Developer ID Application: ..." Scripts/make-app.sh --notarize
 #       # + notarize + staple + dağıtım paketleri:
@@ -22,13 +30,30 @@ set -euo pipefail
 
 INSTALL=0
 NOTARIZE=0
-for arg in "$@"; do
-  case "$arg" in
+OPEN=0
+SLOT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --install) INSTALL=1 ;;
     --notarize) NOTARIZE=1 ;;
-    *) echo "Bilinmeyen parametre: $arg (desteklenen: --install, --notarize)" >&2; exit 1 ;;
+    --open) OPEN=1 ;;
+    --slot) shift; SLOT="${1:-}" ;;
+    --slot=*) SLOT="${1#--slot=}" ;;
+    *) echo "Bilinmeyen parametre: $1 (desteklenen: --install, --notarize, --slot N, --open)" >&2; exit 1 ;;
   esac
+  shift
 done
+
+if [ -n "$SLOT" ]; then
+  if ! [[ "$SLOT" =~ ^[1-9][0-9]?$ ]]; then
+    echo "HATA: --slot 1–99 arası bir sayı ister (verilen: '$SLOT')." >&2
+    exit 1
+  fi
+  if [ "$INSTALL" -eq 1 ] || [ "$NOTARIZE" -eq 1 ]; then
+    echo "HATA: --slot test kopyası içindir; --install / --notarize ile birlikte kullanılmaz." >&2
+    exit 1
+  fi
+fi
 
 if [ "$NOTARIZE" -eq 1 ] && [ -z "${IDENTITY:-}" ]; then
   echo "HATA: --notarize için IDENTITY (Developer ID Application sertifikası) gerekli." >&2
@@ -38,7 +63,6 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
 DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
-APP="$DIST/Lumi.app"
 VERSION="${VERSION:-0.9.6}"
 GIT_COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
@@ -58,7 +82,27 @@ if [ "$INSTALL" -eq 1 ] && [ "$NOTARIZE" -eq 0 ]; then
   DIST="$(mktemp -d -t lumi-build)"
   trap 'rm -rf "$DIST"' EXIT
 fi
-APP="$DIST/Lumi.app"
+# Kimlik: gerçek Lumi ya da ayrı bir test kopyası (--slot). Rozet yalnız
+# Applications'a kurulmayan ve notarize edilmeyen build'lere basılır.
+APP_NAME="Lumi"
+BUNDLE_ID="com.lumi.app"
+CONFIG_DIR=""
+BADGE=""
+HUE=0
+if [ -n "$SLOT" ]; then
+  DIST="$DIST/slot-$SLOT"
+  APP_NAME="Lumi $SLOT"
+  BUNDLE_ID="com.lumi.app.slot$SLOT"
+  CONFIG_DIR="$HOME/.lumi-slot$SLOT"
+  BADGE="$SLOT"
+  # Slot başına ayrı ton (mor ikondan): yeşil, turuncu, pembe, mavi…
+  HUES=(250 150 60 200 320 100)
+  HUE="${HUES[$(( (SLOT - 1) % ${#HUES[@]} + 1 ))]}"
+elif [ "$INSTALL" -eq 0 ] && [ "$NOTARIZE" -eq 0 ]; then
+  BADGE="dev"
+  HUE=100
+fi
+APP="$DIST/$APP_NAME.app"
 
 echo "▸ Release build…"
 # NEDEN xcodebuild (swift build DEĞİL): `swift build`'in ürettiği Bundle.module
@@ -108,6 +152,12 @@ done
 
 echo "▸ App icon (.icns)…"
 ICON_SRC="$ROOT/Assets/icon.png"
+if [ -n "$BADGE" ]; then
+  BADGED="$DIST/icon-$BADGE.png"
+  swift "$ROOT/Scripts/badge-icon.swift" "$ICON_SRC" "$BADGED" "$BADGE" "$HUE"
+  ICON_SRC="$BADGED"
+  echo "  Rozetli ikon: $BADGE"
+fi
 ICONSET="$DIST/AppIcon.iconset"
 rm -rf "$ICONSET"
 mkdir -p "$ICONSET"
@@ -125,11 +175,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.lumi.app</string>
+    <string>${BUNDLE_ID}</string>
     <key>CFBundleName</key>
-    <string>Lumi</string>
+    <string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>Lumi</string>
+    <string>${APP_NAME}</string>
     <key>CFBundleExecutable</key>
     <string>Lumi</string>
     <key>CFBundlePackageType</key>
@@ -173,6 +223,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+if [ -n "$CONFIG_DIR" ]; then
+  # Test kopyası kendi config dizinini kullanır (LumiPaths.configDirectoryVariable).
+  /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" \
+    -c "Add :LSEnvironment:LUMI_CONFIG_DIR string $CONFIG_DIR" "$APP/Contents/Info.plist"
+  echo "  Config dizini: $CONFIG_DIR"
+fi
 
 # Entitlements (spec/30): yalnız audio-input — V8'e özgü JIT/unsigned-memory/
 # dyld/library-validation entitlement'ları bilinçli olarak YOK; App Sandbox yok.
@@ -279,4 +335,12 @@ if [ "$INSTALL" -eq 1 ]; then
   echo "✓ /Applications/Lumi.app kuruldu"
   # Yerel ayarlar dosyası tanımladıysa kurulum sonrası kancası
   if typeset -f post_install >/dev/null 2>&1; then post_install; fi
+fi
+
+if [ "$OPEN" -eq 1 ]; then
+  if [ "$INSTALL" -eq 1 ]; then
+    open /Applications/Lumi.app
+  else
+    open "$APP"
+  fi
 fi

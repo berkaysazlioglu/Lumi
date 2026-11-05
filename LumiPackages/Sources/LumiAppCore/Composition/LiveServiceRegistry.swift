@@ -72,7 +72,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         mode: LumiPaths.Mode,
         notificationPresenter: any NotificationPresenting = LogNotificationPresenter()
     ) {
-        paths = LumiPaths(mode: mode)
+        paths = LumiPaths.app(mode: mode)
         let configService = ConfigService(paths: paths)
         config = configService
         // Refactor 3.9: trash/reveal path guard'ının "bilinen kökler" kaynağı

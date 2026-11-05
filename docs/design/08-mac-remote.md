@@ -68,15 +68,14 @@ Sınırlar: ağ başına 50 hub, hub başına 20 controller, ad 64 karakter. Çe
 
 ## Arayüz
 
-**Remote route'u** (karar 55'in yer tutucusu, `ContentRouteID("remote")`) iki sütundan oluşur:
+**Remote route'u** (karar 55'in yer tutucusu, `ContentRouteID("remote")`) iki parçadan oluşur:
 
-- **Sol sütun:**
-  - **Network:** token yoksa `Create Network` / `Join Network…`; varsa `Copy Token` / `Leave Network` ve relay bağlantı durumu.
-  - **This Mac:** `Share This Mac` anahtarı, hub adı (düzenlenebilir), şifre (`Set Password…` / `Change…`), bağlı controller'lar ve `Disconnect All`.
-  - **Hubs:** ağdaki hub'lar. Satırda çevrimiçi noktası, ad ve bağlı controller sayısı. Tıklayınca şifre sorulur (hatırlanmışsa sorulmaz) ve hub'un `Proje → Checkout → Ajan` ağacı açılır. Checkout'ta `+` menüsü telefon karar 133'ün aynısıdır: Claude, Bash, model kısayolları. Ajan satırının sağ tıkında `Close Terminal` bulunur.
-- **Sağ sütun:** seçili ajanın **terminal aynası**. Mac'te Claude TUI'si SwiftTerm'de birebir çizildiği için Claude dahil her terminal ham PTY aynası olarak gösterilir; telefonun chat görünümüne gerek yoktur. Ayna hub'un `cols×rows` boyutundadır (scrollback frame'i otoriterdir); controller pencereyi hub PTY'sini yeniden boyutlandırmadan ölçekleyerek sığdırır. Klavye girişi `input` olarak gider. Başlıkta `hub / proje / ajan` ve bağlantı durumu gösterilir.
+- **Sol sütun (`RemoteSidebar`):** üstte daraltma düğmesi; altında `Mobile` ve `This Mac` sekmeleri, ağ varsa **Hubs** (çevrimiçi noktası, ad, bağlı controller sayısı; tıklayınca şifre sorulur — hatırlanmışsa sorulmaz — ve hub'un `Proje → Checkout → Ajan` ağacı açılır; checkout'ta `+` menüsü telefon karar 133'ün aynısıdır: Claude, Bash, model kısayolları; ajan satırının sağ tıkında `Close Terminal`). Daraltılınca sütun kapanmaz, yalnız ikonlar kalır: sekmeler, hub'lar (çevrimiçi noktasıyla) ve açık hub'ın terminalleri (kimlik + durum ikonu, ipucunda başlık). Daraltılmışken şifre gereken bir hub'a tıklamak sütunu açar.
+- **Sağ taraf (`RemotePage`):** `Mobile` → telefon eşleştirmesi (Settings ▸ Remote ile ortak `RemoteMobilePane`: Mobile anahtarı, relay adresi, durum, QR, token yenileme); `This Mac` → **Network** (token yoksa `Create Network` / `Join Network…`; varsa `Copy Token` / `Leave`) + **This Mac** (`Share This Mac` anahtarı, hub adı, şifre `Set Password…` / `Change…` / `Remove`, bağlı controller'lar ve `Disconnect All`); terminal seçilince **terminal aynası**. Mac'te Claude TUI'si SwiftTerm'de birebir çizildiği için Claude dahil her terminal ham PTY aynası olarak gösterilir; telefonun chat görünümüne gerek yoktur. Ayna hub'un `cols×rows` boyutundadır (scrollback frame'i otoriterdir); controller pencereyi hub PTY'sini yeniden boyutlandırmadan ölçekleyerek sığdırır. Klavye girişi `input` olarak gider. Başlıkta `hub / proje / ajan` ve bağlantı durumu gösterilir.
 
-**Settings ▸ Remote** yalnız telefonla ilgili ayarları ve ortak relay adresini tutar: `Mobile` anahtarı (eski `Remote'u etkinleştir`), relay adresi, eşleştirme QR'ı, token yenileme. Ağ ve hub ayarları Remote route'una taşınır.
+**Settings ▸ Remote** telefonla ilgili ayarları ve ortak relay adresini tutmaya devam eder (Remote route'unun `Mobile` sekmesiyle aynı görünüm). Ağ ve hub ayarları Remote route'unun `This Mac` sekmesindedir.
+
+**Aynı Mac'te deneme.** `Scripts/make-app.sh --slot N [--open]` ayrı kimlikli bir test kopyası üretir: `dist/slot-N/Lumi N.app`, bundle id `com.lumi.app.slotN`, Info.plist `LSEnvironment` ile `LUMI_CONFIG_DIR=~/.lumi-slotN` (`LumiPaths.app(mode:)` okur; terminallere miras geçmez) ve numaralı, farklı renkli ikon (`Scripts/badge-icon.swift`). Applications'a kurulmayan ve notarize edilmeyen düz dist build'i "dev" rozetli ikon alır. Bundle'lı build'de Dock ikonu artık runtime'da ezilmez (yalnız `swift run`'da atanır). Kopyalar Keychain'i paylaşır (hub şifresi, `hubKey`, hatırlanan şifreler) — test için zararsızdır.
 
 ## Claude / MCP (Faz 5)
 

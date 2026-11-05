@@ -259,6 +259,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Dock ikonu: bundle'lıyken Info.plist'teki .icns geçerlidir; `swift run`
     /// (bundle'sız dev akışı) için ikon resource'tan runtime'da atanır.
     private func installDockIcon() {
+        // Bundle'lı build'de .icns geçerlidir — test build'lerinin numaralı ikonu
+        // (Scripts/make-app.sh `--slot`) burada ezilmesin.
+        guard Bundle.main.bundleURL.pathExtension != "app" else { return }
         guard let url = Bundle.module.url(forResource: "icon", withExtension: "png"),
               let image = NSImage(contentsOf: url) else {
             fputs("[lumi] dock ikonu yüklenemedi (resource eksik)\n", stderr)

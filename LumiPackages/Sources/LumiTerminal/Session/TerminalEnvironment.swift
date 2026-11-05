@@ -24,6 +24,12 @@ enum TerminalEnvironment {
         claudePluginDirectories: [String] = []
     ) -> [String: String] {
         var environment = base
+        // Bu Lumi'ye özgü değerler miras geçmez (karar 143): config dizini geçersiz
+        // kılması, terminalden başlatılan başka bir Lumi'yi aynı dizine düşürürdü;
+        // remote araç sunucusunun adresi/token'ı yalnız `overrides`'tan (Claude) gelir.
+        for key in [LumiPaths.configDirectoryVariable, RemoteMCPEndpoint.urlVariable, RemoteMCPEndpoint.tokenVariable] {
+            environment[key] = nil
+        }
         environment.merge(overrides) { _, new in new }
         environment["TERM"] = "xterm-256color"
         environment["COLORTERM"] = "truecolor"

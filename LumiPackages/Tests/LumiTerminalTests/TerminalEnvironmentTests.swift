@@ -137,4 +137,17 @@ final class TerminalEnvironmentTests: XCTestCase {
         )
         XCTAssertEqual(env["CODEX_HOME"], "/managed")
     }
+
+    /// Karar 143: config dizini geçersiz kılması ve remote MCP değerleri miras geçmez;
+    /// remote değerleri yalnız Lumi'nin Claude ortamı (`overrides`) yazar.
+    func testLumiInstanceValuesDoNotLeakIntoChildren() {
+        let base = ["LUMI_CONFIG_DIR": "/x", "LUMI_REMOTE_MCP_URL": "http://old", "LUMI_REMOTE_MCP_TOKEN": "old", "PATH": "/bin"]
+        let plain = TerminalEnvironment.childEnvironment(base: base)
+        XCTAssertNil(plain["LUMI_CONFIG_DIR"])
+        XCTAssertNil(plain["LUMI_REMOTE_MCP_URL"])
+        XCTAssertNil(plain["LUMI_REMOTE_MCP_TOKEN"])
+        XCTAssertEqual(plain["PATH"], "/bin")
+        let claude = TerminalEnvironment.childEnvironment(base: base, overrides: ["LUMI_REMOTE_MCP_URL": "http://new"])
+        XCTAssertEqual(claude["LUMI_REMOTE_MCP_URL"], "http://new")
+    }
 }

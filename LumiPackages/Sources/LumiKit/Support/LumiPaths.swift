@@ -33,13 +33,37 @@ public struct LumiPaths: Sendable {
     /// başına bir Claude Code plugin klasörü.
     public var claudeModsDir: URL { configDir.appendingPathComponent("mods") }
 
+    /// Config dizinini geçersiz kılan ortam değişkeni (mutlak yol, `~` açılır). Aynı Mac'te
+    /// birbirine karışmayan birden çok Lumi koşturmak içindir — örn. Mac'ten Mac'e remote'u
+    /// (karar 143) tek makinede hub + controller olarak denemek; `.app`'e Info.plist
+    /// `LSEnvironment` ile verilir. Boşsa mod'un varsayılan dizini kullanılır.
+    public static let configDirectoryVariable = "LUMI_CONFIG_DIR"
+
+    /// Uygulamanın kendi yolları: `LUMI_CONFIG_DIR` varsa o dizin, yoksa mod'un dizini.
+    public static func app(
+        mode: Mode,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> LumiPaths {
+        let raw = environment[configDirectoryVariable]?.trimmingCharacters(in: .whitespaces) ?? ""
+        guard !raw.isEmpty else { return LumiPaths(mode: mode) }
+        let expanded = (raw as NSString).expandingTildeInPath
+        guard expanded.hasPrefix("/") else { return LumiPaths(mode: mode) }
+        return LumiPaths(mode: mode, configDirectoryOverride: URL(fileURLWithPath: expanded, isDirectory: true))
+    }
+
     public init(
         mode: Mode,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         temporaryDirectory: URL = URL(fileURLWithPath: NSTemporaryDirectory()),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        configDirectoryOverride: URL? = nil
     ) {
         self.mode = mode
+        if let configDirectoryOverride {
+            self.configDir = configDirectoryOverride
+            self.tempDir = temporaryDirectory.appendingPathComponent("lumi-" + configDirectoryOverride.lastPathComponent)
+            return
+        }
         switch mode {
         case .development:
             self.configDir = homeDirectory.appendingPathComponent(".lumi-dev")

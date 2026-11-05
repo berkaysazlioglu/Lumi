@@ -2,12 +2,25 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Remote route'u (karar 55'in yer tutucusu; docs/design/08): solda bu Mac'in
-/// ağ/hub ayarları ve ağdaki hub'lar, sağda seçili uzak terminalin aynası.
+/// Remote route'unun sağ tarafında gösterilen sayfa (karar 143).
+enum RemotePage: Hashable {
+    /// Telefon eşleştirmesi (Settings ▸ Remote ile aynı görünüm).
+    case mobile
+    /// Mac'ten Mac'e ağ + bu Mac'in hub olarak paylaşılması.
+    case thisMac
+    /// Seçili uzak terminalin aynası.
+    case terminal
+}
+
+/// Remote route'u (karar 55'in yer tutucusu; docs/design/08): solda daraltılabilir
+/// sidebar (`Mobile`, `This Mac`, hub'lar ve terminalleri), sağda seçili sayfa.
 public struct RemoteRouteView: View {
     let remote: RemoteStore
     let controller: RemoteControllerStore
     let mirrors: any RemoteTerminalMirrorMaking
+
+    @State private var page: RemotePage = .thisMac
+    @State private var isCollapsed = false
 
     public init(remote: RemoteStore, controller: RemoteControllerStore, mirrors: any RemoteTerminalMirrorMaking) {
         self.remote = remote
@@ -17,46 +30,73 @@ public struct RemoteRouteView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
-                    RemoteNetworkSection(remote: remote)
-                    if remote.hasNetwork {
-                        RemoteThisMacSection(remote: remote)
-                        RemoteHubsSection(controller: controller)
-                    }
-                }
-                .padding(Theme.Spacing.xl)
-            }
-            .frame(width: Self.sidebarWidth)
-            .background(Theme.bgSurface)
-
+            RemoteSidebar(remote: remote, controller: controller, page: $page, isCollapsed: $isCollapsed)
             Rectangle()
                 .fill(Theme.border)
                 .frame(width: Theme.Stroke.hairline)
-
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.bgDeep)
+        .onAppear { if controller.selectedSession != nil { page = .terminal } }
+        .onChange(of: controller.selectedSession) { _, selected in
+            if selected != nil { page = .terminal }
+        }
     }
 
     @ViewBuilder
     private var detail: some View {
-        if let ref = controller.selectedSession {
-            RemoteMirrorPane(ref: ref, controller: controller, mirrors: mirrors)
-                .id(ref)
-        } else {
-            EmptyStatePlaceholder(placeholderText, density: .full)
+        switch page {
+        case .mobile:
+            RemotePageScroll {
+                LumiSectionTitle(
+                    title: "Mobile",
+                    description: "Telefondan bağlan: QR'ı Lumi mobil uygulamasında okut. Aynı ayarlar Settings ▸ Remote'ta da var.")
+                RemoteMobilePane(remote: remote)
+            }
+        case .thisMac:
+            RemotePageScroll {
+                LumiSectionTitle(
+                    title: "This Mac",
+                    description: "Bu Mac'i aynı ağdaki diğer Mac'lerle paylaş ya da onların terminallerine bağlan.")
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
+                    RemoteNetworkSection(remote: remote)
+                    if remote.hasNetwork { RemoteThisMacSection(remote: remote) }
+                }
+            }
+        case .terminal:
+            if let ref = controller.selectedSession {
+                RemoteMirrorPane(ref: ref, controller: controller, mirrors: mirrors)
+                    .id(ref)
+            } else {
+                EmptyStatePlaceholder(placeholderText, density: .full)
+            }
         }
     }
 
     private var placeholderText: String {
-        if !remote.hasNetwork { return "Create or join a network to see other Macs." }
+        if !remote.hasNetwork { return "Create or join a network in This Mac to see other Macs." }
         if controller.hubs.isEmpty { return "No other Mac is sharing on this network yet." }
         return "Pick a terminal on a hub to mirror it here."
     }
+}
 
-    private static var sidebarWidth: CGFloat { Theme.scaled(320) }
+/// Sağ taraftaki ayar sayfalarının ortak kaydırma + okunabilir genişlik kabı.
+private struct RemotePageScroll<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                content()
+            }
+            .frame(maxWidth: Self.readableWidth, alignment: .leading)
+            .padding(Theme.Spacing.xxl)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private static var readableWidth: CGFloat { Theme.scaled(560) }
 }
 
 /// Uzak terminalin aynası + başlığı.

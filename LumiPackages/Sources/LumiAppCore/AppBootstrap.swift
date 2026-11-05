@@ -27,7 +27,7 @@ public enum AppBootstrap {
     public static func run() {
         // Harness çıktısı dosyaya yönlendirildiğinde de satır satır aksın
         setvbuf(stdout, nil, _IOLBF, 0)
-        redirectStandardErrorIfDetached(paths: LumiPaths(mode: defaultPathsMode))
+        redirectStandardErrorIfDetached(paths: LumiPaths.app(mode: defaultPathsMode))
 
         // Font smoothing'i kapat (v1 paritesi): SwiftTerm draw'da macOS'a özgü
         // setShouldSmoothFonts(true) hardcoded — koyu zeminde yazıyı kalınlaştırıp

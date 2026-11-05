@@ -5,18 +5,29 @@ import SwiftUI
 /// Ağdaki hub'lar ve bağlı hub'ın `Proje → Checkout → Ajan` ağacı (docs/design/08).
 struct RemoteHubsSection: View {
     let controller: RemoteControllerStore
+    /// Sidebar daraltılmış: yalnız ikonlar.
+    let isCollapsed: Bool
+    /// Sağda terminal sayfası açık mı (seçili terminal yalnız o zaman vurgulanır).
+    let isTerminalPage: Bool
+    /// Daraltılmışken şifre gerekirse sidebar'ı açar.
+    let expand: () -> Void
+    /// Terminal seçilince sağı terminal sayfasına çevirir.
+    let showTerminal: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            RemoteSectionHeader(title: "Hubs", trailing: directoryLabel)
-            if controller.hubs.isEmpty {
-                Text(controller.directoryState == .connected
-                     ? "No other Mac is sharing on this network."
-                     : "Connecting to the relay…")
-                    .modifier(RemoteHintStyle())
+        VStack(alignment: isCollapsed ? .center : .leading, spacing: Theme.Spacing.sm) {
+            if !isCollapsed {
+                RemoteSectionHeader(title: "Hubs", trailing: directoryLabel)
+                if controller.hubs.isEmpty {
+                    Text(controller.directoryState == .connected
+                         ? "No other Mac is sharing on this network."
+                         : "Connecting to the relay…")
+                        .modifier(RemoteHintStyle())
+                }
             }
             ForEach(controller.hubs) { hub in
-                RemoteHubRow(hub: hub, controller: controller)
+                RemoteHubRow(hub: hub, controller: controller, isCollapsed: isCollapsed,
+                             isTerminalPage: isTerminalPage, expand: expand, showTerminal: showTerminal)
             }
         }
     }
@@ -30,6 +41,10 @@ struct RemoteHubsSection: View {
 private struct RemoteHubRow: View {
     let hub: RemoteHubInfo
     let controller: RemoteControllerStore
+    let isCollapsed: Bool
+    let isTerminalPage: Bool
+    let expand: () -> Void
+    let showTerminal: () -> Void
 
     @State private var isAskingPassword = false
     @State private var passwordDraft = ""
@@ -39,20 +54,51 @@ private struct RemoteHubRow: View {
     private var isExpanded: Bool { controller.selectedHubId == hub.id && link == .connected }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            row
-            if case .rejected(let reason) = link {
-                Text(RemoteControllerStore.describeRejection(reason))
-                    .font(Theme.Typography.labelMono)
-                    .foregroundStyle(Theme.error)
-            }
-            if isAskingPassword {
-                passwordForm
+        VStack(alignment: isCollapsed ? .center : .leading, spacing: Theme.Spacing.xs) {
+            if isCollapsed {
+                collapsedRow
+            } else {
+                row
+                if case .rejected(let reason) = link {
+                    Text(RemoteControllerStore.describeRejection(reason))
+                        .font(Theme.Typography.labelMono)
+                        .foregroundStyle(Theme.error)
+                }
+                if isAskingPassword {
+                    passwordForm
+                }
             }
             if isExpanded, let snapshot = controller.snapshots[hub.id] {
-                RemoteHubTree(hubId: hub.id, snapshot: snapshot, controller: controller)
-                    .padding(.leading, Theme.Spacing.lg)
+                if isCollapsed {
+                    RemoteCollapsedAgents(hubId: hub.id, snapshot: snapshot, controller: controller,
+                                          isTerminalPage: isTerminalPage, showTerminal: showTerminal)
+                } else {
+                    RemoteHubTree(hubId: hub.id, snapshot: snapshot, controller: controller,
+                                  isTerminalPage: isTerminalPage, showTerminal: showTerminal)
+                        .padding(.leading, Theme.Spacing.lg)
+                }
             }
+        }
+    }
+
+    /// Daraltılmış sidebar: bilgisayar ikonu + çevrimiçi noktası; ipucunda ad ve durum.
+    private var collapsedRow: some View {
+        HoverReader { isHovering in
+            Image(systemName: "desktopcomputer")
+                .font(Theme.Typography.ui(.body))
+                .foregroundStyle(hub.isOnline ? Theme.textPrimary : Theme.textMuted)
+                .frame(width: Theme.Row.control, height: Theme.Row.control)
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(link == .connected ? Theme.success : (hub.isOnline ? Theme.accentCyan : Theme.textMuted))
+                        .frame(width: Theme.Spacing.sm, height: Theme.Spacing.sm)
+                        .padding(Theme.Spacing.xxs)
+                }
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.md)
+                    .fill(isHovering || isExpanded ? Theme.bgElevated : Color.clear))
+                .contentShape(Rectangle())
+                .onTapGesture(perform: activate)
+                .help([hub.name, linkLabel].filter { !$0.isEmpty }.joined(separator: " — "))
         }
     }
 
@@ -128,10 +174,12 @@ private struct RemoteHubRow: View {
         case .disconnected, .rejected:
             guard hub.isOnline else { return }
             Task {
-                // Hatırlanan şifre varsa sormadan dene; yoksa (ya da reddedildiyse) sor.
+                // Hatırlanan şifre varsa sormadan dene; yoksa (ya da reddedildiyse) sor —
+                // daraltılmış sidebar'da form görünmediği için önce açılır.
                 if case .disconnected = link, await controller.hasRememberedPassword(hubId: hub.id) {
                     await controller.connect(hubId: hub.id, password: nil, remember: true)
                 } else {
+                    if isCollapsed { expand() }
                     isAskingPassword = true
                 }
             }
@@ -152,6 +200,8 @@ private struct RemoteHubTree: View {
     let hubId: String
     let snapshot: RemoteHubSnapshot
     let controller: RemoteControllerStore
+    let isTerminalPage: Bool
+    let showTerminal: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
@@ -213,8 +263,11 @@ private struct RemoteHubTree: View {
             if let session = snapshot.session(id) {
                 RemoteAgentRow(
                     session: session,
-                    isSelected: controller.selectedSession == RemoteSessionRef(hubId: hubId, sessionId: id),
-                    select: { controller.select(RemoteSessionRef(hubId: hubId, sessionId: id)) },
+                    isSelected: isTerminalPage && controller.selectedSession == RemoteSessionRef(hubId: hubId, sessionId: id),
+                    select: {
+                        controller.select(RemoteSessionRef(hubId: hubId, sessionId: id))
+                        showTerminal()
+                    },
                     close: { Task { await controller.closeSession(RemoteSessionRef(hubId: hubId, sessionId: id)) } })
             }
         }
@@ -222,6 +275,50 @@ private struct RemoteHubTree: View {
 
     private func start(_ checkout: RemoteCheckoutNode, _ kind: RemoteSessionKind) {
         Task { await controller.startSession(hubId: hubId, checkoutPath: checkout.path, kind: kind) }
+    }
+}
+
+/// Daraltılmış sidebar'da bağlı hub'ın terminalleri: durum + kimlik ikonu, ipucunda başlık.
+private struct RemoteCollapsedAgents: View {
+    let hubId: String
+    let snapshot: RemoteHubSnapshot
+    let controller: RemoteControllerStore
+    let isTerminalPage: Bool
+    let showTerminal: () -> Void
+
+    /// Ağaç sırasıyla (projeler → checkout'lar → Other) tekil terminal kimlikleri.
+    private var ids: [String] {
+        var seen = Set<String>()
+        let all = snapshot.projects.flatMap { $0.checkouts.flatMap(\.agentIds) } + snapshot.others.flatMap(\.agentIds)
+        return all.filter { seen.insert($0).inserted }
+    }
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.xxs) {
+            ForEach(ids, id: \.self) { id in
+                if let session = snapshot.session(id) {
+                    let ref = RemoteSessionRef(hubId: hubId, sessionId: id)
+                    let isSelected = isTerminalPage && controller.selectedSession == ref
+                    HoverReader { isHovering in
+                        VStack(spacing: 0) {
+                            TerminalIdentityIcon(provider: session.provider)
+                            AgentActivityIcon(state: AgentActivityState(
+                                status: TerminalStatus(rawValue: session.status) ?? .idle,
+                                isAwaitingDecision: session.awaitingDecision), size: .caption)
+                        }
+                        .frame(width: Theme.Row.control, height: Theme.Row.control)
+                        .background(RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .fill(isSelected || isHovering ? Theme.bgElevated : Color.clear))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            controller.select(ref)
+                            showTerminal()
+                        }
+                        .help("\(session.repoName) / \(session.title?.isEmpty == false ? session.title! : (session.provider?.rawValue.capitalized ?? "Shell"))")
+                    }
+                }
+            }
+        }
     }
 }
 

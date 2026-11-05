@@ -62,4 +62,20 @@ final class LumiPathsTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: paths.configDir.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: paths.tempDir.path))
     }
+
+    /// Karar 143 test kurulumu: aynı Mac'te ayrı config dizinli Lumi kopyaları.
+    func testConfigDirectoryOverrideFromEnvironment() {
+        let paths = LumiPaths.app(mode: .production, environment: ["LUMI_CONFIG_DIR": "/tmp/lumi-hub-test"])
+        XCTAssertEqual(paths.configDir.path, "/tmp/lumi-hub-test")
+        XCTAssertEqual(paths.remoteFile.path, "/tmp/lumi-hub-test/remote.json")
+        XCTAssertTrue(paths.tempDir.lastPathComponent.hasPrefix("lumi-"))
+
+        let tilde = LumiPaths.app(mode: .production, environment: ["LUMI_CONFIG_DIR": "~/.lumi-hub"])
+        XCTAssertEqual(tilde.configDir.path, (NSHomeDirectory() as NSString).appendingPathComponent(".lumi-hub"))
+
+        for ignored in ["", "  ", "relative/dir"] {
+            XCTAssertEqual(LumiPaths.app(mode: .development, environment: ["LUMI_CONFIG_DIR": ignored]).configDir.lastPathComponent,
+                           ".lumi-dev", ignored)
+        }
+    }
 }
