@@ -28,8 +28,26 @@ final actor FakeRelayConnection: RelayConnecting {
     private var continuation: AsyncStream<RelayInbound>.Continuation?
     private(set) var sent: [(type: String, payload: [String: Any])] = []
 
-    func start(url: URL, hello: [String: Any]) {}
-    func stop() {}
+    /// Son `start`'ın hello'sundaki string alanlar ve start/stop sayıları (hub testleri).
+    private(set) var hello: [String: String] = [:]
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start(url: URL, hello: [String: Any]) {
+        self.hello = hello.compactMapValues { $0 as? String }
+        startCount += 1
+    }
+    func stop() { stopCount += 1 }
+
+    /// Test API — bağlantı durumu olayını enjekte et.
+    func injectState(_ state: RemoteConnectionState) {
+        continuation?.yield(.stateChanged(state))
+    }
+
+    /// Belirli tipteki son mesajın payload'ındaki string alanlar.
+    func lastStrings(type: String) -> [String: String] {
+        (sent.last { $0.type == type }?.payload ?? [:]).compactMapValues { $0 as? String }
+    }
 
     func send(type: String, payload: [String: Any]) {
         sent.append((type, payload))

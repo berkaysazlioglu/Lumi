@@ -21,13 +21,29 @@ func rlog(_ message: @autoclosure () -> String) {
 @MainActor
 public final class RemoteService: RemoteServicing {
     public private(set) var state: RemoteConnectionState = .disconnected
+    /// Hub kanalının durumu (docs/design/08).
+    public private(set) var hubState: RemoteConnectionState = .disconnected
+    /// Bu Mac hub iken ona bağlı controller'lar.
+    public private(set) var hubControllers: [RemoteHubController] = []
+    /// Keychain'de hub şifresi var mı (hub olarak paylaşmanın ön koşulu).
+    public internal(set) var hasHubPassword = false
     public private(set) var currentConfig: RemoteConfig = .defaults
 
-    private let configService: RemoteConfigService
+    let configService: RemoteConfigService
     private let appConfig: any ConfigServicing
     private let terminal: any TerminalServicing
     private let repos: any RepoServicing
     private let connection: any RelayConnecting
+    /// Mac'ten Mac'e kanalı (docs/design/08) — telefon kanalından ayrı ikinci relay bağlantısı.
+    private let hubConnection: any RelayConnecting
+    /// Hub şifresi + `hubKey`; `nil` ise (Keychain enjekte edilmedi) hub kanalı hiç açılmaz.
+    let hubSecrets: RemoteHubSecrets?
+    private var hubInboundTask: Task<Void, Never>?
+    private var mobileActive = false
+    private(set) var hubActive = false
+    /// Kim hangi terminali hangi modda izliyor — bir izleyicinin çıkışı diğerini kesmez.
+    private var subscribers = RemoteSubscribers()
+    var attemptLimiter = HubAttemptLimiter()
     private let commandHandler: RemoteCommandHandler
     private let broadcaster = EventBroadcaster<RemoteEvent>()
     private let chatSource: any ChatTranscriptSourcing
@@ -49,7 +65,7 @@ public final class RemoteService: RemoteServicing {
     /// kesilir (2026-09-17 cihaz teşhisi). Her start() taze stream alır
     /// (terminal.events() ile aynı desen).
     private let hookEvents: () -> AsyncStream<AgentHookEvent>
-    private let turnClock: @Sendable () -> Date
+    let turnClock: @Sendable () -> Date
     private var turnReducers: [TerminalID: TurnStatusReducer] = [:]
     /// Faz 3: session başına etkileşimli prompt journal'ı.
     private var promptJournals: [TerminalID: PromptJournal] = [:]
@@ -66,7 +82,7 @@ public final class RemoteService: RemoteServicing {
 
     private var inboundTask: Task<Void, Never>?
     private var terminalTask: Task<Void, Never>?
-    private var running = false
+    private(set) var running = false
     private var epoch = 0
 
     /// Aktif abonelikler: session başına canlı-çıktı stream task'ı.
@@ -92,6 +108,8 @@ public final class RemoteService: RemoteServicing {
         terminal: any TerminalServicing,
         repos: any RepoServicing,
         connection: (any RelayConnecting)? = nil,
+        hubConnection: (any RelayConnecting)? = nil,
+        hubSecrets: RemoteHubSecrets? = nil,
         chatSource: any ChatTranscriptSourcing,
         trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust(),
         hookEvents: @escaping () -> AsyncStream<AgentHookEvent> = { AsyncStream { _ in } },
@@ -108,6 +126,8 @@ public final class RemoteService: RemoteServicing {
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
+        self.hubConnection = hubConnection ?? RelayConnection()
+        self.hubSecrets = hubSecrets
         self.commandHandler = RemoteCommandHandler(
             terminal: terminal, trust: trust, chatSessions: chatSessions,
             repos: repos, workspaces: workspaces, config: config)
@@ -124,17 +144,31 @@ public final class RemoteService: RemoteServicing {
 
     public func start() async {
         currentConfig = await configService.ensureToken()
-        guard currentConfig.enabled, !running else { return }
+        guard !running else { return }
+        let hubHello = await hubHelloIfReady()
+        let mobileOn = currentConfig.enabled
+        guard mobileOn || hubHello != nil else { return }
         guard let url = URL(string: currentConfig.relayUrl) else { return }
         running = true
         epoch &+= 1
         let myEpoch = epoch
 
-        let inboundStream = await connection.inbound()
-        guard myEpoch == epoch else { return }
-        inboundTask = Task { [weak self] in
-            for await inbound in inboundStream {
-                await self?.handleInbound(inbound)
+        if mobileOn {
+            let inboundStream = await connection.inbound()
+            guard myEpoch == epoch else { return }
+            inboundTask = Task { [weak self] in
+                for await inbound in inboundStream {
+                    await self?.handleInbound(inbound, channel: .mobile)
+                }
+            }
+        }
+        if hubHello != nil {
+            let hubStream = await hubConnection.inbound()
+            guard myEpoch == epoch else { return }
+            hubInboundTask = Task { [weak self] in
+                for await inbound in hubStream {
+                    await self?.handleInbound(inbound, channel: .hub)
+                }
             }
         }
         let terminalStream = terminal.events()
@@ -160,9 +194,19 @@ public final class RemoteService: RemoteServicing {
                 }
             }
         }
-        await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
-        guard myEpoch == epoch else { return }
-        setState(.connecting)
+        if mobileOn {
+            mobileActive = true
+            await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
+            guard myEpoch == epoch else { return }
+            setState(.connecting)
+        }
+        if let hubHello {
+            hubActive = true
+            nonisolated(unsafe) let hello = hubHello
+            await hubConnection.start(url: url, hello: hello)
+            guard myEpoch == epoch else { return }
+            setHubState(.connecting)
+        }
     }
 
     public func stop() {
@@ -180,7 +224,7 @@ public final class RemoteService: RemoteServicing {
 
     private func sendUsage() async {
         guard running, let lastUsage else { return }
-        await connection.send(type: "usage", payload: lastUsage.payload())
+        await broadcast(type: "usage", payload: lastUsage.payload())
     }
 
     /// Telefondaki Tasks komutlarının yürütücüsü (karar 137 mobil ek).
@@ -198,7 +242,7 @@ public final class RemoteService: RemoteServicing {
     private func sendTasks() async {
         guard running, let lastTasksPayload,
               let object = try? JSONSerialization.jsonObject(with: lastTasksPayload) as? [String: Any] else { return }
-        await connection.send(type: "tasks", payload: object)
+        await broadcast(type: "tasks", payload: object)
     }
 
     /// `projects` anlık görüntüsünü değiştiren config alanları: ağaç (favoriler,
@@ -233,8 +277,16 @@ public final class RemoteService: RemoteServicing {
         promptWriteTasks.removeAll()
         seqCounters.removeAll()
         awaitingDecision.removeAll()
-        await connection.stop()
+        subscribers.removeAll()
+        hubInboundTask?.cancel(); hubInboundTask = nil
+        let wasMobile = mobileActive, wasHub = hubActive
+        mobileActive = false
+        hubActive = false
+        if wasMobile { await connection.stop() }
+        if wasHub { await hubConnection.stop() }
         setState(.disconnected)
+        setHubState(.disconnected)
+        setHubControllers([])
     }
 
     public func updateConfig(_ mutate: @Sendable (inout RemoteConfig) -> Void) async {
@@ -244,8 +296,20 @@ public final class RemoteService: RemoteServicing {
         await configService.save(config)
         currentConfig = config
         guard old != config else { return }
+        // Yalnız hub adı değiştiyse bağlantılar kopmaz — relay'e bildirilir (docs/design/08).
+        var renamedOnly = old
+        renamedOnly.hubName = config.hubName
+        if renamedOnly == config, hubActive {
+            await sendOnHub(type: "hub_update", payload: ["name": effectiveHubName])
+            return
+        }
+        await restart()
+    }
+
+    /// Kanalları güncel config ve Keychain'e göre yeniden kurar.
+    func restart() async {
         if running { await shutdown() }
-        if config.enabled { await start() }
+        await start()
     }
 
     public func regenerateToken() async {
@@ -254,24 +318,38 @@ public final class RemoteService: RemoteServicing {
 
     // MARK: - Inbound
 
-    private func handleInbound(_ inbound: RelayInbound) async {
+    private func handleInbound(_ inbound: RelayInbound, channel: RemoteChannel) async {
         switch inbound {
         case .stateChanged(let newState):
-            setState(newState)
+            switch channel {
+            case .mobile:
+                setState(newState)
+            case .hub:
+                setHubState(newState)
+                // Relay hub soketi düşünce controller'larını da kapatır; izleyicileri bırak.
+                if newState == .disconnected { dropHubControllers(where: { _ in true }) }
+            }
         case .message(let type, let payload):
-            rlog("inbound message type=\(type) action=\(payload["action"] as? String ?? "-") session=\(payload["sessionId"] as? String ?? "-")")
+            let from = payload["from"] as? String
+            let subscriber = channel == .mobile ? RemoteSubscribers.phone : RemoteSubscribers.hubSubscriber(from)
+            rlog("inbound[\(channel)] message type=\(type) action=\(payload["action"] as? String ?? "-") session=\(payload["sessionId"] as? String ?? "-")")
             switch type {
             case "welcome":
+                if channel == .hub { dropHubControllers(where: { _ in true }) }
                 await sendSessions()
                 await sendRepos()
                 await sendProjects()
                 await sendUsage()
                 await sendTasks()
                 await resyncChatSubscriptions()
+            case "attach_request" where channel == .hub:
+                await handleAttachRequest(payload)
+            case "controller_left" where channel == .hub:
+                if let from { dropHubControllers(where: { $0 == from }) }
             case "subscribe":
-                await handleSubscribe(payload)
+                await handleSubscribe(payload, subscriber: subscriber)
             case "unsubscribe":
-                handleUnsubscribe(payload)
+                handleUnsubscribe(payload, subscriber: subscriber)
             case "input":
                 handleInput(payload)
             case "prompt_respond":
@@ -282,7 +360,7 @@ public final class RemoteService: RemoteServicing {
                 let result = await commandHandler.handle(payload)
                 let createdChatSession = result.sessionId != nil
                 cacheModelIfSet(payload, ok: result.ok)
-                await connection.send(type: "command_result", payload: result.payload)
+                await reply(type: "command_result", payload: result.payload, to: from, on: channel)
                 // Chat oturumu yaratıldı → güncel listeyi yayınla ki telefon oturumu
                 // kind:"chat" ile görsün (final review #1).
                 if createdChatSession { await sendSessions() }
@@ -298,6 +376,7 @@ public final class RemoteService: RemoteServicing {
         switch event {
         case .spawned, .exited, .statusChanged:
             if case let .exited(id, _) = event {
+                subscribers.remove(id)
                 chatModeTerminals.remove(id)
                 cancelSubscription(id)
                 cancelChatSubscription(id)
@@ -337,7 +416,7 @@ public final class RemoteService: RemoteServicing {
         let raw = id.description
         rlog("chat retarget: /clear sonrası yeni oturum sid=\(sessionID.prefix(8)) terminal=\(raw.prefix(8))")
         cancelChatSubscription(id)
-        await connection.send(type: "chat",
+        await broadcast(type: "chat",
             payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
         startTranscriptBridge(id: id, raw: raw, meta: meta)
     }
@@ -405,7 +484,7 @@ public final class RemoteService: RemoteServicing {
                 title: nil, model: nil, cols: 80, rows: 24, kind: "chat"
             ))
         }
-        await connection.send(type: "sessions", payload: RemoteProtocol.sessionsPayload(metas))
+        await broadcast(type: "sessions", payload: RemoteProtocol.sessionsPayload(metas))
     }
 
     private func repoNameLookup() async -> [String: String] {
@@ -418,7 +497,7 @@ public final class RemoteService: RemoteServicing {
     /// cache'ler → sonradan bağlanan telefon welcome ile alır; bağlı telefonlara yayınlar.
     private func sendRepos() async {
         let list = await repos.repos().map { ["name": $0.name, "path": $0.path] }
-        await connection.send(type: "repos", payload: RemoteProtocol.reposPayload(list))
+        await broadcast(type: "repos", payload: RemoteProtocol.reposPayload(list))
     }
 
     /// Favorites tree (karar 48–51 parite): favorited projeler → checkout'lar
@@ -477,14 +556,14 @@ public final class RemoteService: RemoteServicing {
             projectsRoot: cfg.projectsRoot, additionalPaths: cfg.additionalPaths, recent: []
         ).map { ["path": $0.path, "label": $0.label] }
 
-        await connection.send(type: "projects", payload: RemoteProtocol.projectsPayload(
+        await broadcast(type: "projects", payload: RemoteProtocol.projectsPayload(
             projects: projects, others: others, addable: addable,
             looseLocations: looseLocations, terminalFontFamily: cfg.terminalFontFamily))
     }
 
     // MARK: - Subscribe / Unsubscribe
 
-    private func handleSubscribe(_ payload: [String: Any]) async {
+    private func handleSubscribe(_ payload: [String: Any], subscriber: String) async {
         guard let raw = RemoteProtocol.decodeSubscribe(payload) else { return }
 
         if RemoteProtocol.decodeSubscribeMode(payload) == "chat" {
@@ -514,7 +593,10 @@ public final class RemoteService: RemoteServicing {
             }
             // Terminal ID olarak dene
             guard let id = terminalID(from: raw) else { return }
-            cancelSubscription(id)
+            // Başka bir izleyici aynı terminali ayna olarak izliyorsa onun akışı sürer (docs/design/08).
+            if subscribers.subscribe(id, subscriber: subscriber, mode: .chat).contains(.terminal) {
+                cancelSubscription(id)
+            }
             cancelChatSubscription(id)
             // Karar 79: Claude terminali → transcript-tail köprüsü kur (Faz 2 geri alındı).
             // Non-claude terminal → eski mirror-only davranış korunur (boş chat + idle).
@@ -526,7 +608,7 @@ public final class RemoteService: RemoteServicing {
             // Karar 130: Claude terminalinde boş yer tutucu YOK — telefon eldeki sohbeti
             // transcript snapshot'ı gelene kadar gösterir (yeniden abonelikte silinmez).
             if !isClaude {
-                await connection.send(type: "chat",
+                await broadcast(type: "chat",
                     payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
             }
             // Karar 130: önce koşulsuz idle gitmez; gerçek durum her zaman TEK frame'de gider
@@ -545,10 +627,13 @@ public final class RemoteService: RemoteServicing {
             return
         }
 
-        // terminal mode (mevcut davranış)
+        // terminal mode (mevcut davranış). Yeni izleyici taze scrollback alır — diğer
+        // izleyiciler de aynı snapshot'la emülatörünü baştan kurar (zararsız).
         guard let id = terminalID(from: raw) else { return }
+        if subscribers.subscribe(id, subscriber: subscriber, mode: .terminal).contains(.chat) {
+            cancelChatSubscription(id)
+        }
         cancelSubscription(id)
-        cancelChatSubscription(id)
         await startFeedEmission(id: id, raw: raw)
     }
 
@@ -560,7 +645,7 @@ public final class RemoteService: RemoteServicing {
 
         // (a) scrollback (seq=0, otoriter cols/rows)
         let (data, cols, rows) = terminal.serializeScrollback(id)
-        await connection.send(
+        await broadcast(
             type: "scrollback",
             payload: RemoteProtocol.scrollbackPayload(sessionId: raw, seq: 0, cols: cols, rows: rows, data: data)
         )
@@ -602,7 +687,7 @@ public final class RemoteService: RemoteServicing {
             await sendChatSnapshot(sessionId: sessionId, messages: messages)
         case .delta(let delta):
             rlog("chat sync: fark sid=\(sessionId.prefix(8)) +\(delta.count)")
-            await connection.send(type: "chat_append",
+            await broadcast(type: "chat_append",
                 payload: RemoteProtocol.chatAppendPayload(
                     sessionId: sessionId, messages: delta.map { ChatFrameBudget.clamp($0) }, afterId: afterId))
         }
@@ -624,7 +709,7 @@ public final class RemoteService: RemoteServicing {
         if fit.hasEarlier {
             rlog("chat snapshot kırpıldı: sid=\(sessionId.prefix(8)) \(messages.count)→\(fit.messages.count)")
         }
-        await connection.send(type: "chat",
+        await broadcast(type: "chat",
             payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: fit.messages,
                                                 hasEarlier: fit.hasEarlier))
     }
@@ -632,7 +717,7 @@ public final class RemoteService: RemoteServicing {
     /// Karar 130: append bütçe altı parçalarla gider.
     private func sendChatAppend(sessionId: String, messages: [ChatMessage]) async {
         for chunk in ChatFrameBudget.chunkAppend(messages) {
-            await connection.send(type: "chat_append",
+            await broadcast(type: "chat_append",
                 payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: chunk))
         }
     }
@@ -682,7 +767,7 @@ public final class RemoteService: RemoteServicing {
                 streamingText: snap.streamingText
             )
             rlog("chat-bridge: status sid=\(sessionId.prefix(8)) working=\(snap.turnActive) streaming=\(snap.streamingText?.prefix(20) ?? "-")")
-            await connection.send(type: "chat_status",
+            await broadcast(type: "chat_status",
                 payload: RemoteProtocol.chatStatusPayload(sessionId: sessionId, status: status))
             prev.lastStreaming = snap.streamingText
             prev.lastWorking = snap.turnActive
@@ -741,7 +826,7 @@ public final class RemoteService: RemoteServicing {
         // Karar 130: telefon "Syncing…"te asılı kalmasın — boş snapshot gerçeği söyler.
         guard !Task.isCancelled else { return }
         rlog("chat subscribe: transcript bulunamadı, boş chat gönderiliyor repo=\(meta.repoPath)")
-        await connection.send(type: "chat",
+        await broadcast(type: "chat",
             payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
     }
 
@@ -796,14 +881,14 @@ public final class RemoteService: RemoteServicing {
     }
 
     private func emitTurnStatus(id: TerminalID, status: ChatTurnStatus) async {
-        await connection.send(
+        await broadcast(
             type: "chat_status",
             payload: RemoteProtocol.chatStatusPayload(sessionId: id.description, status: status)
         )
     }
 
     private func emitPrompt(id: TerminalID, prompt: ChatPrompt) async {
-        await connection.send(
+        await broadcast(
             type: "prompt",
             payload: RemoteProtocol.promptPayload(sessionId: id.description, prompt: prompt)
         )
@@ -897,24 +982,31 @@ public final class RemoteService: RemoteServicing {
         guard subscriptions[id] != nil else { return }
         let seq = (seqCounters[id] ?? 0) + 1
         seqCounters[id] = seq
-        await connection.send(
+        await broadcast(
             type: "data",
             payload: RemoteProtocol.dataPayload(sessionId: sessionId, seq: seq, data: batch)
         )
     }
 
-    private func handleUnsubscribe(_ payload: [String: Any]) {
+    private func handleUnsubscribe(_ payload: [String: Any], subscriber: String) {
         guard let raw = RemoteProtocol.decodeSubscribe(payload) else { return }
         // Chat oturumu bridge task'ını iptal et
         chatBridgeTasks[raw]?.cancel()
         chatBridgeTasks[raw] = nil
         chatBridgeState[raw] = nil
-        // Terminal aboneliğini iptal et
+        // Terminal aboneliğini yalnız son izleyici çıkınca iptal et
         if let id = terminalID(from: raw) {
+            closeOrphanedStreams(id, modes: subscribers.unsubscribe(id, subscriber: subscriber))
+        }
+    }
+
+    /// İzleyicisi kalmayan modların akışlarını kapatır.
+    private func closeOrphanedStreams(_ id: TerminalID, modes: Set<RemoteSubscribers.Mode>) {
+        if modes.contains(.chat) {
             chatModeTerminals.remove(id)
-            cancelSubscription(id)
             cancelChatSubscription(id)
         }
+        if modes.contains(.terminal) { cancelSubscription(id) }
     }
 
     private func cancelSubscription(_ id: TerminalID) {
@@ -966,6 +1058,54 @@ public final class RemoteService: RemoteServicing {
         guard state != newState else { return }
         state = newState
         broadcaster.send(.stateChanged(newState))
+    }
+
+    func setHubState(_ newState: RemoteConnectionState) {
+        guard hubState != newState else { return }
+        hubState = newState
+        broadcaster.send(.hubStateChanged(newState))
+    }
+
+    func setHubControllers(_ controllers: [RemoteHubController]) {
+        guard hubControllers != controllers else { return }
+        hubControllers = controllers
+        broadcaster.send(.hubControllersChanged(controllers))
+    }
+
+    /// Ayrılan controller'ları listeden ve izleyicilerden düşürür; sahipsiz kalan akışları kapatır.
+    func dropHubControllers(where matches: (String) -> Bool) {
+        setHubControllers(hubControllers.filter { !matches($0.id) })
+        let orphaned = subscribers.removeSubscribers { key in
+            key.hasPrefix("hub:") && matches(String(key.dropFirst(4)))
+        }
+        for (id, modes) in orphaned { closeOrphanedStreams(id, modes: modes) }
+    }
+
+    /// Yayın: açık her kanala (telefon + hub'a bağlı controller'lar) gider.
+    ///
+    /// `[String: Any]` Sendable değildir; payload gönderildikten sonra hiçbir yerde
+    /// değiştirilmediği (her çağrı taze bir sözlük kurar) için iki actor'e aynı kopya gider.
+    private func broadcast(type: String, payload: [String: Any]) async {
+        nonisolated(unsafe) let frame = payload
+        if mobileActive { await connection.send(type: type, payload: frame) }
+        if hubActive { await hubConnection.send(type: type, payload: frame) }
+    }
+
+    /// Cevap: yalnız isteğin geldiği kanala; hub kanalında yalnız isteyen controller'a (`to`).
+    private func reply(type: String, payload: [String: Any], to from: String?, on channel: RemoteChannel) async {
+        var targeted = payload
+        if channel == .hub, let from { targeted["to"] = from }
+        nonisolated(unsafe) let frame = targeted
+        switch channel {
+        case .mobile: await connection.send(type: type, payload: frame)
+        case .hub: await hubConnection.send(type: type, payload: frame)
+        }
+    }
+
+    func sendOnHub(type: String, payload: [String: Any]) async {
+        guard hubActive else { return }
+        nonisolated(unsafe) let frame = payload
+        await hubConnection.send(type: type, payload: frame)
     }
 
     /// Test hook'u — verilen chat sessionId'si için aktif köprü task'ı var mı.

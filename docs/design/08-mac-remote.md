@@ -38,7 +38,7 @@ Telefonun `Registry`/`Room` yapısına dokunulmaz. Yanına token başına ayrı 
 **`hubs` frame'i:** `{hubs:[{hubId, name, online, lastSeenAt, controllerCount}]}`, yalnız o ağın hub'ları. Çevrimdışı hub relay belleğinde 24 saat `online:false` ile durur (relay yeniden başlarsa liste hub'lar yeniden bağlandıkça dolar).
 
 **Bağlanma el sıkışması.** Şifreyi relay değil hub doğrular:
-1. Controller `attach` ile hello gönderir. Relay soketi bekletir ve hub'a `attach_request{requestId, controllerId, controllerName, password}` iletir. Hub o ağda çevrimdışıysa relay `4004 hub_offline` ile kapatır.
+1. Controller `attach` ile hello gönderir. Relay soketi bekletir ve hub'a `attach_request{requestId, connectionId, controllerId, controllerName, password}` iletir. Hub o ağda çevrimdışıysa relay `4004 hub_offline` ile kapatır.
 2. Hub `attach_result{requestId, ok, error?}` döner. 10 sn içinde cevap gelmezse relay `4005 attach_timeout` ile kapatır.
 3. `ok` ise relay controller'ı hub'un yayın kümesine ekler ve telefon `welcome`'ının aynısını gönderir: hub'un cache'lenmiş `sessions`, `projects`, `usage`, `tasks` verisi, `hub:{hubId, name}` ve controller'ın bağlantı kimliği `connectionId` (hub'ın gördüğü `from`). Red gelirse `4003 unauthorized` ile kapatır ve IP başına başarısızlık sayacını artırır (mevcut `MAX_FAILED_HELLOS` kalıbı).
 
@@ -54,6 +54,7 @@ Sınırlar: ağ başına 50 hub, hub başına 20 controller, ad 64 karakter. Çe
 - **Şifre:** Hiçbir zaman düz yazılmaz. PBKDF2-HMAC-SHA256 (rastgele 16 bayt salt) hash'i Keychain'de `com.lumi.remote-hub` altında durur. Şifresi olmayan Mac hub olarak paylaşılamaz (`Share This Mac` önce şifre ister). Karşılaştırma sabit zamanlıdır. Aynı `controllerId` için dakikada 5 yanlış denemeden sonra 1 dk kilit uygulanır (relay'in IP sınırına ek).
 - **İkinci kanal:** `RemoteService` bugün tek bir `RelayConnecting` üzerinden yayın yapıyor. Hub kanalı ikinci bir `RelayConnection`'dır. Yayınlar her iki açık kanala gider (telefon + controller'lar), gelen frame'ler aynı `handleInbound`'a akar. `attach_request` yalnız hub kanalında işlenir. Komut yüzeyi (`RemoteCommandHandler`) aynıdır: controller'ın yapabildiği her şeyi telefon zaten yapabiliyor.
 - **Abonelik sayımı:** Bugün `unsubscribe` terminal aboneliğini küresel olarak iptal ediyor; iki telefon aynı terminale bakarken birinin çıkması diğerininkini de kesiyor. Abonelik `(terminal, from)` çiftleriyle sayılır, son abone çıkınca iptal edilir. Telefon kanalında `from` yoksa tek bir "phone" abonesi sayılır (bugünkü davranış).
+- **Yayın ve cevap:** Anlık görüntüler ve akış frame'leri açık her kanala gider (`RemoteService.broadcast`). `command_result` yalnız isteğin geldiği kanala, hub kanalında `to` ile yalnız isteyen controller'a gider (`reply`). Hub'a özgü kod `RemoteService+Hub.swift`'tedir; şifre katmanı `RemoteHubAuth.swift` (`HubPasswordHash`, `RemoteHubSecrets`, `HubAttemptLimiter`), izleyici sayımı `RemoteSubscribers.swift`'tedir. Keychain registry'den gelir (`ServiceRegistry.remoteKeychain`).
 - **Görünürlük:** Hub, bağlı controller adlarını tutar (`attach_result ok` ile eklenir, `controller_left` ile düşer) ve Remote route'unda gösterir.
 
 ## Controller tarafı (Mac)

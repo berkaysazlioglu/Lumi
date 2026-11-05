@@ -164,6 +164,7 @@ describe('bağlanma (attach)', () => {
     const c = controller(bridge, 'gizli')
     const request = h.last('attach_request')!
     expect(request.payload).toMatchObject({ controllerId: 'ctrl-0001-laptop', controllerName: 'Laptop', password: 'gizli' })
+    expect(typeof request.payload.connectionId).toBe('string')
     expect(c.sent).toEqual([]) // hub cevap verene kadar sessiz
 
     answer(h, true)
@@ -171,7 +172,7 @@ describe('bağlanma (attach)', () => {
     expect(welcome.payload.sessions).toEqual([{ id: 's1' }])
     expect(welcome.payload.macOnline).toBe(true)
     expect(welcome.payload.hub).toEqual({ hubId: HUB_ID, name: 'Build Mac' })
-    expect(typeof welcome.payload.connectionId).toBe('string')
+    expect(welcome.payload.connectionId).toBe(request.payload.connectionId)
     expect((b.last('hubs')!.payload.hubs as { controllerCount: number }[])[0]!.controllerCount).toBe(1)
   })
 

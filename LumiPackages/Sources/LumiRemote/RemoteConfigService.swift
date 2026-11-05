@@ -22,10 +22,15 @@ public actor RemoteConfigService {
 
     public func load() -> RemoteConfig {
         guard let dict = readRaw() else { return .defaults }
+        let defaults = RemoteConfig.defaults
         return RemoteConfig(
-            enabled: dict["enabled"] as? Bool ?? RemoteConfig.defaults.enabled,
-            relayUrl: dict["relayUrl"] as? String ?? RemoteConfig.defaults.relayUrl,
-            token: dict["token"] as? String ?? RemoteConfig.defaults.token
+            enabled: dict["enabled"] as? Bool ?? defaults.enabled,
+            relayUrl: dict["relayUrl"] as? String ?? defaults.relayUrl,
+            token: dict["token"] as? String ?? defaults.token,
+            networkToken: dict["networkToken"] as? String ?? defaults.networkToken,
+            hubEnabled: dict["hubEnabled"] as? Bool ?? defaults.hubEnabled,
+            hubId: dict["hubId"] as? String ?? defaults.hubId,
+            hubName: dict["hubName"] as? String ?? defaults.hubName
         )
     }
 
@@ -34,6 +39,11 @@ public actor RemoteConfigService {
         merged["enabled"] = config.enabled
         merged["relayUrl"] = config.relayUrl
         merged["token"] = config.token
+        // Hub alanları (docs/design/08) — additive; eski Lumi bunları yok sayar.
+        merged["networkToken"] = config.networkToken
+        merged["hubEnabled"] = config.hubEnabled
+        merged["hubId"] = config.hubId
+        merged["hubName"] = config.hubName
         guard let data = try? JSONSerialization.data(
             withJSONObject: merged,
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -41,13 +51,19 @@ public actor RemoteConfigService {
         try? data.write(to: paths.remoteFile, options: .atomic)
     }
 
-    /// Token boşsa üretip kaydeder; her durumda güncel config'i döner.
+    /// Telefon token'ı ve hub kimliği boşsa üretip kaydeder; her durumda güncel config'i döner.
     public func ensureToken() -> RemoteConfig {
         var config = load()
+        var changed = false
         if config.token.isEmpty {
             config.token = generateToken()
-            save(config)
+            changed = true
         }
+        if config.hubId.isEmpty {
+            config.hubId = UUID().uuidString
+            changed = true
+        }
+        if changed { save(config) }
         return config
     }
 

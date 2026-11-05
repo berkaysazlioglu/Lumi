@@ -229,6 +229,8 @@ export class HubBridge {
     hub.pending.set(requestId, { connId, client, timer, onRejected: onAuthFailure })
     hub.client.send(envelope('attach_request', {
       requestId,
+      // Kabulde hub bu kimliği controller listesine yazar; `from` ve `controller_left` aynı kimliği taşır.
+      connectionId: connId,
       controllerId: hello.controllerId,
       controllerName: hello.name,
       password: attach.password,

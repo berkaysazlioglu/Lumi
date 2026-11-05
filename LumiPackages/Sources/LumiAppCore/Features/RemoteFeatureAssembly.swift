@@ -30,6 +30,7 @@ final class RemoteFeatureAssembly: FeatureAssembly {
             paths: services.paths,
             terminal: services.terminal,
             repos: services.repo,
+            hubSecrets: RemoteHubSecrets(keychain: services.remoteKeychain),
             chatSource: TranscriptChatSource(),
             trust: ClaudeWorkspaceTrust(),
             hookEvents: { services.agentHooks.events() },

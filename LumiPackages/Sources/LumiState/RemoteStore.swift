@@ -6,6 +6,9 @@ import LumiKit
 public final class RemoteStore {
     public private(set) var state: RemoteConnectionState
     public private(set) var config: RemoteConfig
+    /// Hub kanalının durumu ve bağlı controller'lar (docs/design/08).
+    public private(set) var hubState: RemoteConnectionState = .disconnected
+    public private(set) var hubControllers: [RemoteHubController] = []
 
     private let service: any RemoteServicing
     private var consumeTask: Task<Void, Never>?
@@ -25,6 +28,10 @@ public final class RemoteStore {
                 switch event {
                 case .stateChanged(let newState):
                     self.state = newState
+                case .hubStateChanged(let newState):
+                    self.hubState = newState
+                case .hubControllersChanged(let controllers):
+                    self.hubControllers = controllers
                 }
                 self.config = self.service.currentConfig
             }

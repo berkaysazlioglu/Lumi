@@ -37,6 +37,33 @@ final class RemoteConfigServiceTests: XCTestCase {
         XCTAssertEqual(loaded, config)
     }
 
+    func testHubFieldsRoundTripAndOldFilesDefaultThem() async throws {
+        let service = RemoteConfigService(paths: paths)
+        // Hub alanları olmayan eski dosya varsayılanlara düşer (karar 9).
+        try Data(#"{"enabled":true,"relayUrl":"wss://r.test","token":"tok"}"#.utf8).write(to: paths.remoteFile)
+        let old = await service.load()
+        XCTAssertEqual(old.networkToken, "")
+        XCTAssertFalse(old.hubEnabled)
+
+        var config = old
+        config.networkToken = "network-token-1234567890"
+        config.hubEnabled = true
+        config.hubId = "hub-1"
+        config.hubName = "Build Mac"
+        await service.save(config)
+        let loaded = await service.load()
+        XCTAssertEqual(loaded, config)
+    }
+
+    func testEnsureTokenCreatesAStableHubId() async {
+        let service = RemoteConfigService(paths: paths)
+        let first = await service.ensureToken()
+        XCTAssertFalse(first.hubId.isEmpty)
+        let second = await service.ensureToken()
+        XCTAssertEqual(second.hubId, first.hubId)
+        XCTAssertEqual(second.token, first.token)
+    }
+
     func testUnknownKeysPreservedOnSave() async throws {
         let raw = #"{"enabled": false, "relayUrl": "wss://x", "token": "t-1234567890123456", "futureKey": {"a": 1}}"#
         try raw.data(using: .utf8)!.write(to: paths.remoteFile)
