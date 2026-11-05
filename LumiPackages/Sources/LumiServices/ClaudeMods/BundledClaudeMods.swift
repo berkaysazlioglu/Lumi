@@ -16,7 +16,38 @@ struct BundledClaudeMod: Sendable {
 }
 
 enum BundledClaudeMods {
-    static let all: [BundledClaudeMod] = [imagePreview]
+    static let all: [BundledClaudeMod] = [imagePreview, lumiRemote]
+
+    /// Mac'ten Mac'e remote araçları (karar 143, Faz 5): Lumi'nin loopback MCP
+    /// sunucusunu tanıtır. Adres ve token terminalin ortamından açılır
+    /// (`RemoteMCPEndpoint.environment`); yoksa varsayılan kapalı porta düşer ve
+    /// Claude Code sunucuyu yalnız "bağlanamadı" gösterir.
+    static let lumiRemote = BundledClaudeMod(
+        id: "lumi-remote",
+        version: "1.0.0",
+        files: [
+            ".claude-plugin/plugin.json": #"""
+            {
+              "name": "lumi-remote",
+              "version": "1.0.0",
+              "description": "Drive terminals on your other Macs (Lumi hubs): list, read, send prompts, open and close terminals."
+            }
+
+            """#,
+            ".mcp.json": #"""
+            {
+              "mcpServers": {
+                "lumi-remote": {
+                  "type": "http",
+                  "url": "${LUMI_REMOTE_MCP_URL:-http://127.0.0.1:9/mcp}",
+                  "headers": { "Authorization": "Bearer ${LUMI_REMOTE_MCP_TOKEN:-unset}" }
+                }
+              }
+            }
+
+            """#,
+        ]
+    )
 
     /// Prompt'taki `[Image #N]` satırının altına yapıştırılan görselin küçük
     /// önizlemesi. Görsel Claude Code'un kitty grafikleriyle çizilir

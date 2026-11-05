@@ -159,12 +159,41 @@ public final class RemoteControllerService: RemoteControllerServicing {
         links[hubId]?.sendInput(sessionId: sessionId, data: data)
     }
 
-    public func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind) async throws -> String? {
+    public func startSession(
+        hubId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String
+    ) async throws -> String? {
         guard let link = links[hubId] else { throw RemoteControllerError.notConnected }
         return try await link.command {
-            RemoteControllerWire.startSessionCommand(commandId: $0, checkoutPath: checkoutPath, kind: kind)
+            RemoteControllerWire.startSessionCommand(commandId: $0, checkoutPath: checkoutPath, kind: kind, prompt: prompt)
         }.sessionId
     }
+
+    public func sendText(hubId: String, sessionId: String, text: String, submit: Bool) async throws {
+        guard let link = links[hubId] else { throw RemoteControllerError.notConnected }
+        guard submit else {
+            link.sendInput(sessionId: sessionId, data: Data(text.utf8))
+            return
+        }
+        _ = try await link.command {
+            RemoteControllerWire.sendTextCommand(commandId: $0, sessionId: sessionId, text: text)
+        }
+    }
+
+    /// Claude terminalinde transcript (yoksa ekran), diğerlerinde ekran.
+    public func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading {
+        guard let link = links[hubId], link.state.isConnected else { throw RemoteControllerError.notConnected }
+        if link.snapshot.session(sessionId)?.provider == .claude,
+           let messages = await link.readTranscript(sessionId: sessionId, timeout: Self.readTimeout),
+           !messages.isEmpty {
+            return .transcript(messages)
+        }
+        guard let chunk = await link.readScreen(sessionId: sessionId, timeout: Self.readTimeout) else {
+            throw RemoteControllerError.timedOut
+        }
+        return .screen(String(decoding: chunk.data, as: UTF8.self))
+    }
+
+    static let readTimeout: Duration = .seconds(8)
 
     public func closeSession(hubId: String, sessionId: String) async throws {
         guard let link = links[hubId] else { throw RemoteControllerError.notConnected }

@@ -24,6 +24,9 @@ final class RemoteHubLink {
     private let outbox: AsyncStream<OutboundFrame>.Continuation
     private var outboxTask: Task<Void, Never>?
     private var pendingCommands: [String: CheckedContinuation<RemoteControllerWire.CommandReply?, Never>] = [:]
+    /// Tek seferlik okumalar: oturum → ilk `chat` / `scrollback` frame'ini bekleyen.
+    private var transcriptWaiters: [String: CheckedContinuation<[ChatMessage]?, Never>] = [:]
+    private var screenWaiters: [String: CheckedContinuation<RemoteTerminalChunk?, Never>] = [:]
     private var commandSeq = 0
 
     init(hubId: String, connection: any RelayConnecting, onChange: @escaping @MainActor (RemoteHubLink) -> Void) {
@@ -100,6 +103,38 @@ final class RemoteHubLink {
         send(type: "input", payload: ["sessionId": sessionId, "data": data.base64EncodedString()])
     }
 
+    /// Claude terminalinin transcript'ini bir kez okur (chat aboneliği; hub'da bu bağlantının
+    /// chat modu ayrı izleyicidir, aynayı koparmaz). Zaman aşımında `nil`.
+    func readTranscript(sessionId: String, timeout: Duration) async -> [ChatMessage]? {
+        guard state.isConnected, transcriptWaiters[sessionId] == nil else { return nil }
+        send(type: "subscribe", payload: ["sessionId": sessionId, "mode": "chat"])
+        let timer = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            self?.transcriptWaiters.removeValue(forKey: sessionId)?.resume(returning: nil)
+        }
+        let messages = await withCheckedContinuation { transcriptWaiters[sessionId] = $0 }
+        timer.cancel()
+        send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "chat"])
+        return messages
+    }
+
+    /// Terminal ekranını (scrollback dahil düz metin) bir kez okur. Açık ayna varsa
+    /// abonelik bırakılmaz.
+    func readScreen(sessionId: String, timeout: Duration) async -> RemoteTerminalChunk? {
+        guard state.isConnected, screenWaiters[sessionId] == nil else { return nil }
+        sendSubscribe(sessionId)
+        let timer = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            self?.screenWaiters.removeValue(forKey: sessionId)?.resume(returning: nil)
+        }
+        let chunk = await withCheckedContinuation { screenWaiters[sessionId] = $0 }
+        timer.cancel()
+        if terminalSinks[sessionId] == nil {
+            send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "terminal"])
+        }
+        return chunk
+    }
+
     /// Komut gönderir ve `command_result`'ı bekler (en fazla `commandTimeout`).
     func command(_ build: (String) -> [String: Any]) async throws -> RemoteControllerWire.CommandReply {
         guard state.isConnected else { throw RemoteControllerError.notConnected }
@@ -172,6 +207,10 @@ final class RemoteHubLink {
         case "scrollback", "data":
             guard let (sessionId, chunk) = RemoteControllerWire.terminalChunk(type: type, payload: payload) else { return }
             terminalSinks[sessionId]?.continuation.yield(chunk)
+            if chunk.isSnapshot { screenWaiters.removeValue(forKey: sessionId)?.resume(returning: chunk) }
+        case "chat":
+            guard let (sessionId, messages) = RemoteControllerWire.chatSnapshot(payload) else { return }
+            transcriptWaiters.removeValue(forKey: sessionId)?.resume(returning: messages)
         case "command_result":
             guard let reply = RemoteControllerWire.commandReply(payload) else { return }
             resolveCommand(reply.commandId, reply: reply)
@@ -190,7 +229,7 @@ final class RemoteHubLink {
         // Aynı oturuma yeni bir ayna açıldıysa eskisinin bitişi onu kapatmamalı.
         guard terminalSinks[sessionId]?.token == token else { return }
         terminalSinks[sessionId] = nil
-        if state.isConnected { send(type: "unsubscribe", payload: ["sessionId": sessionId]) }
+        if state.isConnected { send(type: "unsubscribe", payload: ["sessionId": sessionId, "mode": "terminal"]) }
     }
 
     private func send(type: String, payload: [String: Any]) {
@@ -205,6 +244,11 @@ final class RemoteHubLink {
         let pending = pendingCommands
         pendingCommands.removeAll()
         for continuation in pending.values { continuation.resume(returning: nil) }
+        let transcripts = transcriptWaiters, screens = screenWaiters
+        transcriptWaiters.removeAll()
+        screenWaiters.removeAll()
+        for continuation in transcripts.values { continuation.resume(returning: nil) }
+        for continuation in screens.values { continuation.resume(returning: nil) }
     }
 
     private func stopReconnecting() {

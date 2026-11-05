@@ -26,6 +26,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let taskImages: any TaskImageLoading
     let taskCredentials: any TaskCredentialStoring = KeychainTaskCredentialStore()
     let remoteKeychain: any KeychainAccessing = SecurityKeychain()
+    let remoteMCP: any RemoteMCPServing = RemoteMCPServer()
     let sessionSharing: any SessionSharingMaking = LiveSessionSharingFactory()
     let sessionServerCredentials: any SessionServerCredentialStoring = KeychainSessionServerCredentialStore()
     let taskAgentTools: any TaskAgentToolServing

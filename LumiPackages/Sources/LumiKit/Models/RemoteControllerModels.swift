@@ -149,6 +149,13 @@ public enum RemoteSessionKind: Sendable, Equatable {
     case shell
 }
 
+/// Uzak terminalin okunmuş hâli: Claude terminalinde yapılandırılmış transcript,
+/// diğerlerinde ekranın (scrollback dahil) düz metni.
+public enum RemoteTerminalReading: Sendable, Equatable {
+    case transcript([ChatMessage])
+    case screen(String)
+}
+
 public enum RemoteControllerEvent: Sendable, Equatable {
     case directoryStateChanged(RemoteConnectionState)
     case hubsChanged([RemoteHubInfo])

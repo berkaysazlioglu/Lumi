@@ -25,11 +25,22 @@ public protocol RemoteControllerServicing: AnyObject {
     /// Akış bitince (view kapandı) `unsubscribe` gönderilir.
     func terminalOutput(hubId: String, sessionId: String) -> AsyncStream<RemoteTerminalChunk>
     func sendInput(hubId: String, sessionId: String, data: Data)
-    /// Yeni terminal; Claude ve shell için yeni terminalin kimliğini döner.
-    func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind) async throws -> String?
+    /// Yeni terminal; Claude ve shell için yeni terminalin kimliğini döner. Claude'da
+    /// boş olmayan `prompt` ilk mesaj olarak gider.
+    func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String) async throws -> String?
     func closeSession(hubId: String, sessionId: String) async throws
+    /// Metni terminale yazar; `submit` ise Enter da basılır.
+    func sendText(hubId: String, sessionId: String, text: String, submit: Bool) async throws
+    /// Terminalin içeriğini bir kez okur (aynayı etkilemez).
+    func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading
 
     func events() -> AsyncStream<RemoteControllerEvent>
+}
+
+public extension RemoteControllerServicing {
+    func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind) async throws -> String? {
+        try await startSession(hubId: hubId, checkoutPath: checkoutPath, kind: kind, prompt: "")
+    }
 }
 
 /// Controller'ın relay'e kendini tanıttığı kimlik (hub tarafındaki listede görünür).

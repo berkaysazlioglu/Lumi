@@ -336,7 +336,6 @@ public final class RemoteService: RemoteServicing {
             rlog("inbound[\(channel)] relay kapattı code=\(code)")
         case .message(let type, let payload):
             let from = payload["from"] as? String
-            let subscriber = channel == .mobile ? RemoteSubscribers.phone : RemoteSubscribers.hubSubscriber(from)
             rlog("inbound[\(channel)] message type=\(type) action=\(payload["action"] as? String ?? "-") session=\(payload["sessionId"] as? String ?? "-")")
             switch type {
             case "welcome":
@@ -352,9 +351,11 @@ public final class RemoteService: RemoteServicing {
             case "controller_left" where channel == .hub:
                 if let from { dropHubControllers(where: { $0 == from }) }
             case "subscribe":
+                let mode: RemoteSubscribers.Mode = RemoteProtocol.decodeSubscribeMode(payload) == "chat" ? .chat : .terminal
+                let subscriber = channel == .mobile ? RemoteSubscribers.phone : RemoteSubscribers.hubSubscriber(from, mode: mode)
                 await handleSubscribe(payload, subscriber: subscriber)
             case "unsubscribe":
-                handleUnsubscribe(payload, subscriber: subscriber)
+                handleUnsubscribe(payload, subscribers: Self.unsubscribers(payload, from: from, channel: channel))
             case "input":
                 handleInput(payload)
             case "prompt_respond":
@@ -993,7 +994,18 @@ public final class RemoteService: RemoteServicing {
         )
     }
 
-    private func handleUnsubscribe(_ payload: [String: Any], subscriber: String) {
+    /// Telefon tek izleyicidir. Hub'da additive `mode` yalnız o modu bırakır; yoksa
+    /// controller'ın iki modu da bırakılır.
+    static func unsubscribers(_ payload: [String: Any], from: String?, channel: RemoteChannel) -> [String] {
+        guard channel == .hub else { return [RemoteSubscribers.phone] }
+        switch payload["mode"] as? String {
+        case "chat": return [RemoteSubscribers.hubSubscriber(from, mode: .chat)]
+        case "terminal": return [RemoteSubscribers.hubSubscriber(from, mode: .terminal)]
+        default: return [RemoteSubscribers.hubSubscriber(from, mode: .terminal), RemoteSubscribers.hubSubscriber(from, mode: .chat)]
+        }
+    }
+
+    private func handleUnsubscribe(_ payload: [String: Any], subscribers keys: [String]) {
         guard let raw = RemoteProtocol.decodeSubscribe(payload) else { return }
         // Chat oturumu bridge task'ını iptal et
         chatBridgeTasks[raw]?.cancel()
@@ -1001,7 +1013,10 @@ public final class RemoteService: RemoteServicing {
         chatBridgeState[raw] = nil
         // Terminal aboneliğini yalnız son izleyici çıkınca iptal et
         if let id = terminalID(from: raw) {
-            closeOrphanedStreams(id, modes: subscribers.unsubscribe(id, subscriber: subscriber))
+            var orphaned: Set<RemoteSubscribers.Mode> = []
+            for key in keys { orphaned.formUnion(subscribers.unsubscribe(id, subscriber: key)) }
+            // Bir anahtarın bıraktığı mod diğer anahtarın hâlâ izlediği mod olabilir.
+            closeOrphanedStreams(id, modes: orphaned.filter { !subscribers.has(id, mode: $0) })
         }
     }
 
@@ -1081,7 +1096,7 @@ public final class RemoteService: RemoteServicing {
     func dropHubControllers(where matches: (String) -> Bool) {
         setHubControllers(hubControllers.filter { !matches($0.id) })
         let orphaned = subscribers.removeSubscribers { key in
-            key.hasPrefix("hub:") && matches(String(key.dropFirst(4)))
+            RemoteSubscribers.hubConnection(of: key).map(matches) ?? false
         }
         for (id, modes) in orphaned { closeOrphanedStreams(id, modes: modes) }
     }

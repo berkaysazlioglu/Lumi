@@ -56,6 +56,8 @@ public protocol ServiceRegistry: AnyObject {
     var taskImages: any TaskImageLoading { get }
     /// Task kaynağı token'ları (Keychain).
     var taskCredentials: any TaskCredentialStoring { get }
+    /// Claude terminallerinin remote araçları için loopback MCP sunucusu (karar 143, Faz 5).
+    var remoteMCP: any RemoteMCPServing { get }
     /// Mac'ten Mac'e remote'un gizli kayıtları — hub şifre hash'i ve `hubKey` (docs/design/08).
     var remoteKeychain: any KeychainAccessing { get }
     /// Task ajanlarının MCP sunucusu (`get_task`, `submit_for_review`).

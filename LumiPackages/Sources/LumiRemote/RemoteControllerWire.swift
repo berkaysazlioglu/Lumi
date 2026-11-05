@@ -91,8 +91,10 @@ enum RemoteControllerWire {
 
     // MARK: - Controller → hub
 
-    static func startSessionCommand(commandId: String, checkoutPath: String, kind: RemoteSessionKind) -> [String: Any] {
-        var payload: [String: Any] = ["commandId": commandId, "action": "start_session", "repoPath": checkoutPath, "prompt": ""]
+    static func startSessionCommand(
+        commandId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String = ""
+    ) -> [String: Any] {
+        var payload: [String: Any] = ["commandId": commandId, "action": "start_session", "repoPath": checkoutPath, "prompt": prompt]
         switch kind {
         case .claude(let model):
             // `chat` türü Mac'te bir claude TERMİNALİ açar ve kimliğini döner (karar 89).
@@ -102,6 +104,17 @@ enum RemoteControllerWire {
             payload["kind"] = "shell"
         }
         return payload
+    }
+
+    static func sendTextCommand(commandId: String, sessionId: String, text: String) -> [String: Any] {
+        ["commandId": commandId, "action": "send_text", "sessionId": sessionId, "text": text]
+    }
+
+    /// `chat` frame'i → oturum kimliği + mesajlar (`ChatMessage.decode`; bozuk mesaj düşer).
+    static func chatSnapshot(_ payload: [String: Any]) -> (sessionId: String, messages: [ChatMessage])? {
+        guard let sessionId = payload["sessionId"] as? String else { return nil }
+        let messages = (payload["messages"] as? [[String: Any]] ?? []).compactMap(ChatMessage.decode)
+        return (sessionId, messages)
     }
 
     static func deleteSessionCommand(commandId: String, sessionId: String) -> [String: Any] {

@@ -142,7 +142,8 @@ final class ClaudeModServiceTests: XCTestCase {
             // Sürüm farkı kurulumda üzerine yazmanın tek tetiğidir.
             XCTAssertEqual(manifest["version"] as? String, mod.version)
             XCTAssertFalse(mod.legacyVersions.contains(mod.version))
-            XCTAssertNotNil(mod.files["hooks/hooks.json"])
+            // Her mod en az bir yetenek taşır: hook (image-preview) ya da MCP sunucusu (lumi-remote, karar 143).
+            XCTAssertTrue(mod.files["hooks/hooks.json"] != nil || mod.files[".mcp.json"] != nil, mod.id)
         }
     }
 }

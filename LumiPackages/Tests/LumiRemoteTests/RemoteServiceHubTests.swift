@@ -163,6 +163,23 @@ struct RemoteServiceHubTests {
         f.service.stop()
     }
 
+    /// Aynı controller bir terminali hem ayna (terminal) hem okuma (chat) olarak izler;
+    /// okumanın `unsubscribe{mode:chat}`'i aynayı koparmaz.
+    @Test func chatReadDoesNotCutTheSameControllersMirror() async throws {
+        let f = try await HubFixture()
+        let session = f.makeSession()
+        await f.service.start()
+        await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
+        try await f.hub.waitForSent(types: ["scrollback"])
+        await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "mode": "chat", "from": "conn-1"])
+        await f.hub.injectInbound(type: "unsubscribe", payload: ["sessionId": session.raw, "mode": "chat", "from": "conn-1"])
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(f.service.hasActiveSubscription(session.id))
+        await f.hub.injectInbound(type: "unsubscribe", payload: ["sessionId": session.raw, "mode": "terminal", "from": "conn-1"])
+        try await waitUntil { !f.service.hasActiveSubscription(session.id) }
+        f.service.stop()
+    }
+
     @Test func hubDisconnectReleasesControllersAndTheirFeeds() async throws {
         let f = try await HubFixture()
         let session = f.makeSession()

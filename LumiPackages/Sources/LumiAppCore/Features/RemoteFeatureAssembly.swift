@@ -52,6 +52,11 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
     }
 
     func start() async {
+        // Claude terminallerinin remote araçları (karar 143, Faz 5): sunucu terminaller
+        // açılmadan önce kalkar ki adres + token ilk spawn'ların ortamına girsin.
+        if let endpoint = try? await services.remoteMCP.start(handler: RemoteMCPToolbox(controller: controllerService)) {
+            services.terminal.setLaunchEnvironment(endpoint.environment, for: .claude)
+        }
         // store event köprüsü (senkron); servis bağlantısı ayrı Task'ta (bloke etmez).
         // config.enabled=false ise start() içi no-op.
         remoteStore.start()
@@ -97,6 +102,7 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
     var service: RemoteService { remoteService }
 
     func shutdown() async {
+        await services.remoteMCP.stop()
         usageBridge.stop()
         configTask?.cancel()
         controllerStore.stop()

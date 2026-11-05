@@ -14,7 +14,17 @@ struct RemoteSubscribers {
     /// Telefon kanalının izleyici anahtarı — bütün telefonlar bugünkü gibi tek izleyici sayılır.
     static let phone = "phone"
 
-    static func hubSubscriber(_ from: String?) -> String { "hub:\(from ?? "")" }
+    /// Hub kanalında izleyici = controller bağlantısı + mod: aynı controller bir terminali
+    /// hem ayna (terminal) hem okuma (chat) olarak izleyebilir, biri diğerini koparmaz.
+    static func hubSubscriber(_ from: String?, mode: Mode) -> String {
+        "hub:\(from ?? "")#\(mode == .chat ? "chat" : "terminal")"
+    }
+
+    /// Hub izleyici anahtarındaki controller bağlantı kimliği (`hub:<from>#<mod>`).
+    static func hubConnection(of key: String) -> String? {
+        guard key.hasPrefix("hub:"), let hash = key.lastIndex(of: "#") else { return nil }
+        return String(key[key.index(key.startIndex, offsetBy: 4)..<hash])
+    }
 
     private var byTerminal: [TerminalID: [String: Mode]] = [:]
 

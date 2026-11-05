@@ -93,7 +93,7 @@ public final class RemoteControllerStore {
     public func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind) async {
         lastError = nil
         do {
-            if let sessionId = try await service.startSession(hubId: hubId, checkoutPath: checkoutPath, kind: kind) {
+            if let sessionId = try await service.startSession(hubId: hubId, checkoutPath: checkoutPath, kind: kind, prompt: "") {
                 select(RemoteSessionRef(hubId: hubId, sessionId: sessionId))
             }
         } catch {

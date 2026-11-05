@@ -20,6 +20,7 @@ public final class FakeServiceRegistry: ServiceRegistry {
     public var sessionSharing: any SessionSharingMaking = FakeSessionSharingFactory()
     public var sessionServerCredentials: any SessionServerCredentialStoring = FakeSessionServerCredentialStore()
     public var remoteKeychain: any KeychainAccessing = FakeKeychain()
+    public var remoteMCP: any RemoteMCPServing = FakeRemoteMCPServer()
     public var deepSeek: any DeepSeekEnvironmentServicing = FakeDeepSeekEnvironmentService()
     public var deepSeekBalance: any DeepSeekBalanceServicing = FakeDeepSeekBalanceService()
     public var appReleases: any AppReleaseChecking = FakeAppReleaseService()

@@ -185,6 +185,43 @@ struct RemoteControllerServiceTests {
         try await f.link.waitForSent(types: ["unsubscribe"])
     }
 
+    @Test func claudeTerminalsAreReadFromTheirTranscript() async throws {
+        let f = ControllerFixture()
+        try await f.configure()
+        try await f.connectAccepted()
+        let service = f.service!
+        let read = Task { try await service.readTerminal(hubId: "build", sessionId: "s1") }
+        try await f.link.waitForSent(types: ["subscribe"])
+        #expect(await f.link.lastStrings(type: "subscribe") == ["sessionId": "s1", "mode": "chat"])
+        await f.link.injectInbound(type: "chat", payload: RemoteProtocol.chatPayload(sessionId: "s1", messages: [
+            ChatMessage(id: "m1", role: .assistant, blocks: [.text("Build done", presentation: nil)], timestampMs: nil, turnId: nil),
+        ]))
+        guard case .transcript(let messages) = try await read.value else {
+            Issue.record("transcript bekleniyordu")
+            return
+        }
+        #expect(messages.map(\.id) == ["m1"])
+        try await f.link.waitForSent(types: ["unsubscribe"])
+        #expect(await f.link.lastStrings(type: "unsubscribe") == ["sessionId": "s1", "mode": "chat"])
+    }
+
+    @Test func screenReadKeepsAnOpenMirrorSubscribed() async throws {
+        let f = ControllerFixture()
+        try await f.configure()
+        try await f.connectAccepted()
+        let service = f.service!
+        await f.link.injectInbound(type: "sessions", payload: ["sessions": [["id": "sh", "repoName": "lumi", "status": "idle"]]])
+        let mirror = service.terminalOutput(hubId: "build", sessionId: "sh")
+        let read = Task { try await service.readTerminal(hubId: "build", sessionId: "sh") }
+        try await f.link.waitForCount(type: "subscribe", atLeast: 2)
+        await f.link.injectInbound(type: "scrollback", payload: RemoteProtocol.scrollbackPayload(
+            sessionId: "sh", seq: 0, cols: 80, rows: 24, data: Data("$ ls\nREADME.md\n".utf8)))
+        #expect(try await read.value == .screen("$ ls\nREADME.md\n"))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await f.link.count(type: "unsubscribe") == 0, "açık ayna varken abonelik bırakılmaz")
+        _ = mirror
+    }
+
     @Test func changingTheNetworkDropsOpenLinks() async throws {
         let f = ControllerFixture()
         try await f.configure()

@@ -23,7 +23,9 @@ private final class FakeController: RemoteControllerServicing {
     func hasRememberedPassword(hubId: String) async -> Bool { false }
     func terminalOutput(hubId: String, sessionId: String) -> AsyncStream<RemoteTerminalChunk> { AsyncStream { $0.finish() } }
     func sendInput(hubId: String, sessionId: String, data: Data) {}
-    func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind) async throws -> String? {
+    func sendText(hubId: String, sessionId: String, text: String, submit: Bool) async throws {}
+    func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading { .screen("") }
+    func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String) async throws -> String? {
         if let startError { throw startError }
         return nextSessionId
     }
