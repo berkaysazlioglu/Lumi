@@ -136,7 +136,9 @@ final class ClaudeSessionCommandTests: XCTestCase {
     func testResumeCommandFallsBackToFreshClaude() {
         let command = ClaudeSessionCommand.resumeCommand(sessionID: fixedID)
 
-        XCTAssertEqual(command, "claude --resume \(fixedID) || claude")
+        // Transcript'i hiç yazılmamış oturumda resume düşer; taze claude AYNI kimlikle açılır
+        // ki terminalin tuttuğu kimlik ile claude'un yazdığı transcript ayrışmasın.
+        XCTAssertEqual(command, "claude --resume \(fixedID) || claude --session-id \(fixedID) || claude")
     }
 
     func testResumeCommandRoundTripKeepsSameID() {

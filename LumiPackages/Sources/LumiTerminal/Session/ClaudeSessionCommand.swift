@@ -48,13 +48,19 @@ public enum ClaudeSessionCommand {
     }
 
     /// Restore spawn komutu: resume dener; oturum yoksa claude exit 1 verir
-    /// (ampirik) ve taze claude'a düşülür.
+    /// (ampirik) ve AYNI kimlikle taze claude'a düşülür (`--session-id`).
+    /// Hiç mesaj almamış oturumun transcript'i yazılmamış olur; eskiden düşüş
+    /// kimliksiz `claude`'du — claude rastgele bir kimlikle başlıyor, terminal
+    /// ise eski kimliği tutuyordu: chat köprüsü (telefon, Mac controller)
+    /// olmayan transcript'i izleyip hiçbir cevabı göstermiyordu. Kimlik zaten
+    /// kullanımdaysa (resume edilen claude sıfırdan farklı kodla çıktı) son
+    /// çare kimliksiz claude'dur.
     /// Karar 141: `arguments` koşan claude'dan okunan bayraklardır; kayıt
     /// dosyadan geldiği için beyaz listeden yeniden geçer ve her biri tırnaklanır.
     /// Taze claude'a düşüş de aynı bayraklarla açılır.
     public static func resumeCommand(sessionID: String, arguments: [String] = []) -> String {
         let flags = ClaudeLaunchArguments.filter(arguments).map { " " + quotedIfNeeded($0) }.joined()
-        return "claude\(flags) --resume \(sessionID) || claude\(flags)"
+        return "claude\(flags) --resume \(sessionID) || claude\(flags) --session-id \(sessionID) || claude\(flags)"
     }
 
     /// `--model opus` okunur kalsın: yalnız kabuğa özel karakter taşıyan

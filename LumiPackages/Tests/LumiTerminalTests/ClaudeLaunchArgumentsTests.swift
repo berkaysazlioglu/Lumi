@@ -37,9 +37,12 @@ final class ClaudeLaunchArgumentsTests: XCTestCase {
             ClaudeSessionCommand.resumeCommand(
                 sessionID: "s1", arguments: ["--model", "opus", "--append-system-prompt", "be brief", "--worktree", "w"]
             ),
-            "claude --model opus --append-system-prompt 'be brief' --resume s1 || claude --model opus --append-system-prompt 'be brief'"
+            "claude --model opus --append-system-prompt 'be brief' --resume s1"
+                + " || claude --model opus --append-system-prompt 'be brief' --session-id s1"
+                + " || claude --model opus --append-system-prompt 'be brief'"
         )
-        XCTAssertEqual(ClaudeSessionCommand.resumeCommand(sessionID: "s1"), "claude --resume s1 || claude")
+        XCTAssertEqual(ClaudeSessionCommand.resumeCommand(sessionID: "s1"),
+                       "claude --resume s1 || claude --session-id s1 || claude")
     }
 
     func testResumeCommandRoundTripsThroughPrepare() {
