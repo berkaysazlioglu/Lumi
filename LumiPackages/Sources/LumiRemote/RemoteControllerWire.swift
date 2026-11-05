@@ -80,13 +80,15 @@ enum RemoteControllerWire {
         let ok: Bool
         let error: String?
         let sessionId: String?
+        var data: [String: String] = [:]
     }
 
     static func commandReply(_ payload: [String: Any]) -> CommandReply? {
         guard let commandId = payload["commandId"] as? String else { return nil }
         return CommandReply(
             commandId: commandId, ok: payload["ok"] as? Bool ?? false,
-            error: payload["error"] as? String, sessionId: payload["sessionId"] as? String)
+            error: payload["error"] as? String, sessionId: payload["sessionId"] as? String,
+            data: payload["data"] as? [String: String] ?? [:])
     }
 
     // MARK: - Controller → hub
@@ -108,6 +110,10 @@ enum RemoteControllerWire {
 
     static func sendTextCommand(commandId: String, sessionId: String, text: String) -> [String: Any] {
         ["commandId": commandId, "action": "send_text", "sessionId": sessionId, "text": text]
+    }
+
+    static func readScreenCommand(commandId: String, sessionId: String) -> [String: Any] {
+        ["commandId": commandId, "action": "read_screen", "sessionId": sessionId]
     }
 
     /// `chat` frame'i → oturum kimliği + mesajlar (`ChatMessage.decode`; bozuk mesaj düşer).

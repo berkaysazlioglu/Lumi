@@ -649,12 +649,20 @@ public final class RemoteService: RemoteServicing {
     private func startFeedEmission(id: TerminalID, raw: String) async {
         seqCounters[id] = 0
 
-        // (a) scrollback (seq=0, otoriter cols/rows)
-        let (data, cols, rows) = terminal.serializeScrollback(id)
-        await broadcast(
-            type: "scrollback",
-            payload: RemoteProtocol.scrollbackPayload(sessionId: raw, seq: 0, cols: cols, rows: rows, data: data)
-        )
+        // (a) scrollback (seq=0, otoriter cols/rows). Telefon düz metni alır (değişmez);
+        // controller'lar ekranı renk/imleç/modlarıyla kuran VT durumunu (karar 143 ek).
+        if mobileActive {
+            let (data, cols, rows) = terminal.serializeScrollback(id)
+            nonisolated(unsafe) let payload = RemoteProtocol.scrollbackPayload(
+                sessionId: raw, seq: 0, cols: cols, rows: rows, data: data)
+            await connection.send(type: "scrollback", payload: payload)
+        }
+        if hubActive {
+            let (data, cols, rows) = terminal.serializeScreenState(id)
+            await sendOnHub(
+                type: "scrollback",
+                payload: RemoteProtocol.scrollbackPayload(sessionId: raw, seq: 0, cols: cols, rows: rows, data: data))
+        }
 
         // (b) canlı çıktı stream'i — batch başına artan seq ile `data`.
         // subscribeOutput terminal exit'inde BİTMEZ; iptal .exited event'inde

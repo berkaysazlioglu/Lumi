@@ -187,6 +187,14 @@ public final class RemoteControllerService: RemoteControllerServicing {
            !messages.isEmpty {
             return .transcript(messages)
         }
+        do {
+            let reply = try await link.command {
+                RemoteControllerWire.readScreenCommand(commandId: $0, sessionId: sessionId)
+            }
+            return .screen(reply.data["text"] ?? "")
+        } catch RemoteControllerError.failed("unknown_action") {
+            // `read_screen`'i bilmeyen eski hub: düz scrollback snapshot'ı.
+        }
         guard let chunk = await link.readScreen(sessionId: sessionId, timeout: Self.readTimeout) else {
             throw RemoteControllerError.timedOut
         }

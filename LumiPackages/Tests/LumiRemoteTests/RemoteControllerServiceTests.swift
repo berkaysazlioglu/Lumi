@@ -50,12 +50,14 @@ private final class ControllerFixture {
     }
 
     /// Son gönderilen komutu cevaplar.
-    func answerLastCommand(ok: Bool = true, sessionId: String? = nil, error: String? = nil) async throws {
+    func answerLastCommand(ok: Bool = true, sessionId: String? = nil, error: String? = nil,
+                           data: [String: String]? = nil) async throws {
         try await link.waitForSent(types: ["command"])
         let commandId = try #require(await link.allStrings(type: "command").last?["commandId"])
         var payload: [String: Any] = ["commandId": commandId, "ok": ok]
         if let sessionId { payload["sessionId"] = sessionId }
         if let error { payload["error"] = error }
+        if let data { payload["data"] = data }
         await link.injectInbound(type: "command_result", payload: payload)
     }
 }
@@ -205,21 +207,39 @@ struct RemoteControllerServiceTests {
         #expect(await f.link.lastStrings(type: "unsubscribe") == ["sessionId": "s1", "mode": "chat"])
     }
 
-    @Test func screenReadKeepsAnOpenMirrorSubscribed() async throws {
+    /// Ekran okuması `read_screen` komutuyla düz metin alır; açık aynanın aboneliğine dokunmaz.
+    @Test func screenReadUsesTheReadScreenCommand() async throws {
         let f = ControllerFixture()
         try await f.configure()
         try await f.connectAccepted()
         let service = f.service!
         await f.link.injectInbound(type: "sessions", payload: ["sessions": [["id": "sh", "repoName": "lumi", "status": "idle"]]])
         let mirror = service.terminalOutput(hubId: "build", sessionId: "sh")
+        try await f.link.waitForSent(types: ["subscribe"])
         let read = Task { try await service.readTerminal(hubId: "build", sessionId: "sh") }
-        try await f.link.waitForCount(type: "subscribe", atLeast: 2)
-        await f.link.injectInbound(type: "scrollback", payload: RemoteProtocol.scrollbackPayload(
-            sessionId: "sh", seq: 0, cols: 80, rows: 24, data: Data("$ ls\nREADME.md\n".utf8)))
+        try await f.answerLastCommand(data: ["text": "$ ls\nREADME.md\n"])
         #expect(try await read.value == .screen("$ ls\nREADME.md\n"))
-        try await Task.sleep(for: .milliseconds(50))
+        let command = try #require(await f.link.allStrings(type: "command").last)
+        #expect(command["action"] == "read_screen")
+        #expect(command["sessionId"] == "sh")
+        #expect(await f.link.count(type: "subscribe") == 1)
         #expect(await f.link.count(type: "unsubscribe") == 0, "açık ayna varken abonelik bırakılmaz")
         _ = mirror
+    }
+
+    /// `read_screen`'i bilmeyen eski hub'da scrollback snapshot'ına düşülür.
+    @Test func screenReadFallsBackToScrollbackOnOldHubs() async throws {
+        let f = ControllerFixture()
+        try await f.configure()
+        try await f.connectAccepted()
+        let service = f.service!
+        await f.link.injectInbound(type: "sessions", payload: ["sessions": [["id": "sh", "repoName": "lumi", "status": "idle"]]])
+        let read = Task { try await service.readTerminal(hubId: "build", sessionId: "sh") }
+        try await f.answerLastCommand(ok: false, error: "unknown_action")
+        try await f.link.waitForSent(types: ["subscribe"])
+        await f.link.injectInbound(type: "scrollback", payload: RemoteProtocol.scrollbackPayload(
+            sessionId: "sh", seq: 0, cols: 80, rows: 24, data: Data("$ ls\n".utf8)))
+        #expect(try await read.value == .screen("$ ls\n"))
     }
 
     @Test func changingTheNetworkDropsOpenLinks() async throws {

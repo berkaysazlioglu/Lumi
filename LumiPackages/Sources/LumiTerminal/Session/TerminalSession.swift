@@ -379,6 +379,14 @@ final class TerminalSession {
         return (data: terminal.getBufferAsData(), cols: dims.cols, rows: dims.rows)
     }
 
+    /// Controller aynasının snapshot'ı: renkli hücreler + modlar + imleç (karar 143 ek).
+    func serializeScreenState() -> (data: Data, cols: Int, rows: Int) {
+        let terminal = presentation.view.getTerminal()
+        let dims = terminal.getDims()
+        let hidden = (presentation.view as? DropAwareTerminalView)?.isCursorHidden ?? false
+        return (TerminalStateSnapshot.serialize(terminal, isCursorHidden: hidden), dims.cols, dims.rows)
+    }
+
     /// Karar 57: düz tıkla açılan link eylemleri (Settings ▸ Terminal).
     func setLinkActionsEnabled(_ enabled: Bool) {
         (terminalView as? DropAwareTerminalView)?.isLinkActionsEnabled = enabled

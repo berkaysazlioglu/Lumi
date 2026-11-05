@@ -99,6 +99,8 @@ final class RemoteCommandHandler {
                 let id = try self.session(from: payload)
                 try self.terminal.kill(id: id)
             })
+        case "read_screen":
+            return readScreen(payload, commandId: commandId)
         case "start_session":
             return await startSession(payload, commandId: commandId)
         case "set_model":
@@ -277,6 +279,22 @@ final class RemoteCommandHandler {
             return .failure(commandId, "\(error)")
         }
     }
+
+    /// Ekranın (scrollback dahil) düz metni — controller'ın `read_terminal` aracı
+    /// (karar 143 ek). Aynanın snapshot'ı VT durumu taşıdığı için metin buradan okunur;
+    /// relay frame sınırına karşı yalnız son `readScreenLimit` bayt döner.
+    private func readScreen(_ payload: [String: Any], commandId: String?) -> CommandResult {
+        let id: TerminalID
+        do { id = try session(from: payload) } catch { return .failure(commandId, "session_not_found") }
+        let data = terminal.serializeScrollback(id).data
+        var text = String(decoding: data.suffix(Self.readScreenLimit), as: UTF8.self)
+        while text.hasSuffix("\n\n") { text.removeLast() }
+        var result = CommandResult.ok(commandId)
+        result.data = ["text": text]
+        return result
+    }
+
+    static let readScreenLimit = 256 * 1024
 
     private func session(from payload: [String: Any]) throws -> TerminalID {
         guard let raw = payload["sessionId"] as? String,

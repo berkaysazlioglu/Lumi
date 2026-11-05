@@ -9,6 +9,20 @@ final class DropAwareTerminalView: TerminalView {
     /// Main thread'de çağrılır; path'ler quote'lanmamış ham halleriyle gelir.
     var onFileDrop: (([String]) -> Void)?
 
+    /// DECTCEM (`CSI ?25l/h`) durumu — SwiftTerm bunu dışarı vermez; remote
+    /// snapshot'ı (`TerminalStateSnapshot`) imlecin gizli olduğunu buradan bilir.
+    private(set) var isCursorHidden = false
+
+    override func showCursor(source: Terminal) {
+        isCursorHidden = false
+        super.showCursor(source: source)
+    }
+
+    override func hideCursor(source: Terminal) {
+        isCursorHidden = true
+        super.hideCursor(source: source)
+    }
+
     override init(frame: CGRect, font: NSFont?) {
         super.init(frame: frame, font: font)
         configureLumiDefaults()

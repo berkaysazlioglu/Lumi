@@ -77,6 +77,11 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Bilinmeyen id → (Data(), 0, 0).
     func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int)
 
+    /// Tek atış ekran durumu: boş bir emülatöre beslenince aynı ekranı kuran VT akışı
+    /// (renkler, `\r\n`, alt-screen, modlar, imleç). Controller aynası kullanır
+    /// (karar 143 ek); telefon düz `serializeScrollback`'te kalır.
+    func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int)
+
     /// Kapanış simetrisi: global NSEvent monitörleri gibi process-ömürlü
     /// kaynakları bırakır. Idempotent'tir; composition root `shutdown()`
     /// yolunda çağırır (refactor 3.2 — somut tipe inmemek için protokolde).
@@ -143,4 +148,11 @@ public protocol TerminalViewProviding: AnyObject {
 
 public extension TerminalViewProviding {
     func fulfillPendingKeyboardFocus() {}
+}
+
+public extension TerminalSessionControlling {
+    /// Emülatörü olmayan implementasyonlar (fake'ler, önizleme) düz snapshot'a düşer.
+    func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
+        serializeScrollback(id)
+    }
 }

@@ -68,6 +68,11 @@ final actor FakeRelayConnection: RelayConnecting {
         sent.append((type, payload))
     }
 
+    /// Belirli tipteki son mesajın iç içe string sözlüğü (ör. `command_result.data`).
+    func lastStringMap(type: String, key: String) -> [String: String] {
+        sent.last { $0.type == type }?.payload[key] as? [String: String] ?? [:]
+    }
+
     func inbound() -> AsyncStream<RelayInbound> {
         let (stream, continuation) = AsyncStream.makeStream(of: RelayInbound.self)
         self.continuation = continuation
@@ -243,6 +248,13 @@ final class FakeTerminalServicing: TerminalServicing {
 
     func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
         scrollback
+    }
+
+    /// Controller kanalının VT snapshot'ı; nil → düz snapshot (protokol varsayılanı).
+    var screenState: (data: Data, cols: Int, rows: Int)?
+
+    func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
+        screenState ?? scrollback
     }
 
     // MARK: Test API

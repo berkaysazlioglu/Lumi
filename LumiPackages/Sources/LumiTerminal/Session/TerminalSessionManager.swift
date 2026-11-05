@@ -280,6 +280,11 @@ public final class TerminalSessionManager: TerminalServicing {
         return s.serializeScrollback()
     }
 
+    public func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
+        guard let s = session(for: id) else { return (Data(), 0, 0) }
+        return s.serializeScreenState()
+    }
+
     private func session(for id: TerminalID) -> TerminalSession? {
         sessions.first { $0.id == id }
     }

@@ -180,6 +180,42 @@ struct RemoteServiceHubTests {
         f.service.stop()
     }
 
+    /// Controller'lar ekranı VT durumuyla alır (karar 143 ek); telefonun düz snapshot'ı değişmez.
+    @Test func controllersGetScreenStateWhilePhoneKeepsPlainScrollback() async throws {
+        let f = try await HubFixture(paths: .hubDefaults(mobile: true))
+        let session = f.makeSession()
+        f.term.scrollback = (Data("düz".utf8), 80, 24)
+        f.term.screenState = (Data("\u{1B}[1;31mvt".utf8), 100, 30)
+        await f.service.start()
+
+        await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
+        try await f.hub.waitForSent(types: ["scrollback"])
+        try await f.mobile.waitForSent(types: ["scrollback"])
+
+        #expect(await f.hub.lastStrings(type: "scrollback")["data"] == Data("\u{1B}[1;31mvt".utf8).base64EncodedString())
+        #expect(await f.hub.firstInt(type: "scrollback", key: "cols") == 100)
+        #expect(await f.mobile.lastStrings(type: "scrollback")["data"] == Data("düz".utf8).base64EncodedString())
+        #expect(await f.mobile.firstInt(type: "scrollback", key: "cols") == 80)
+        f.service.stop()
+    }
+
+    /// `read_screen`: ekranın düz metni yalnız isteyen controller'a döner.
+    @Test func readScreenRepliesWithPlainText() async throws {
+        let f = try await HubFixture()
+        let session = f.makeSession()
+        f.term.scrollback = (Data("$ make build\nok\n\n\n".utf8), 80, 24)
+        await f.service.start()
+
+        await f.hub.injectInbound(type: "command", payload: [
+            "commandId": "r1", "action": "read_screen", "sessionId": session.raw, "from": "conn-1",
+        ])
+        try await f.hub.waitForSent(types: ["command_result"])
+        #expect(await f.hub.lastBool(type: "command_result", key: "ok") == true)
+        #expect(await f.hub.lastStrings(type: "command_result")["to"] == "conn-1")
+        #expect(await f.hub.lastStringMap(type: "command_result", key: "data")["text"] == "$ make build\nok\n")
+        f.service.stop()
+    }
+
     @Test func hubDisconnectReleasesControllersAndTheirFeeds() async throws {
         let f = try await HubFixture()
         let session = f.makeSession()
