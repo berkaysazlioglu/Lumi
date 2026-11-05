@@ -5,7 +5,8 @@
 #   Scripts/make-app.sh                          # release build + imza → dist/Lumi.app
 #   Scripts/make-app.sh --install                # + /Applications/Lumi.app'e kur
 #   Scripts/make-app.sh --slot 2 [--open]        # ayrı kimlikli test kopyası → dist/slot-2/Lumi 2.app
-#       # (bundle id com.lumi.app.slot2, config ~/.lumi-slot2, numaralı + farklı renkli ikon).
+#       # (bundle id com.lumi.app.slot2, config ~/.lumi-slot2, numaralı ikon — slot 1–2 kendi
+#       #  karakteri: Assets/icon-variants/icon-a|b.png, sonrakiler tonu kaydırılmış Lumi).
 #       # Aynı Mac'te birbirine ve gerçek Lumi'ye karışmayan birden çok Lumi koşturmak içindir
 #       # (örn. Mac'ten Mac'e remote'u hub + controller olarak denemek, karar 143).
 #   --open                                        # build bitince uygulamayı aç
@@ -89,15 +90,22 @@ BUNDLE_ID="com.lumi.app"
 CONFIG_DIR=""
 BADGE=""
 HUE=0
+BASE_ICON="$ROOT/Assets/icon.png"
 if [ -n "$SLOT" ]; then
   DIST="$DIST/slot-$SLOT"
   APP_NAME="Lumi $SLOT"
   BUNDLE_ID="com.lumi.app.slot$SLOT"
   CONFIG_DIR="$HOME/.lumi-slot$SLOT"
   BADGE="$SLOT"
-  # Slot başına ayrı ton (mor ikondan): yeşil, turuncu, pembe, mavi…
-  HUES=(250 150 60 200 320 100)
-  HUE="${HUES[$(( (SLOT - 1) % ${#HUES[@]} + 1 ))]}"
+  # Slot 1–2 kendi karakterini taşır (Assets/icon-variants: hayalet, küp); sonrakiler
+  # mor Lumi ikonunun tonu kaydırılarak ayrışır: yeşil, turuncu, pembe, mavi…
+  VARIANTS=("$ROOT/Assets/icon-variants/icon-a.png" "$ROOT/Assets/icon-variants/icon-b.png")
+  if [ "$SLOT" -le ${#VARIANTS[@]} ] && [ -f "${VARIANTS[$SLOT]}" ]; then
+    BASE_ICON="${VARIANTS[$SLOT]}"
+  else
+    HUES=(250 150 60 200 320 100)
+    HUE="${HUES[$(( (SLOT - 1) % ${#HUES[@]} + 1 ))]}"
+  fi
 elif [ "$INSTALL" -eq 0 ] && [ "$NOTARIZE" -eq 0 ]; then
   BADGE="dev"
   HUE=100
@@ -151,7 +159,7 @@ for bundle in "$PRODUCTS"/*.bundle; do
 done
 
 echo "▸ App icon (.icns)…"
-ICON_SRC="$ROOT/Assets/icon.png"
+ICON_SRC="$BASE_ICON"
 if [ -n "$BADGE" ]; then
   BADGED="$DIST/icon-$BADGE.png"
   swift "$ROOT/Scripts/badge-icon.swift" "$ICON_SRC" "$BADGED" "$BADGE" "$HUE"

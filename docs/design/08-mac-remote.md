@@ -75,7 +75,7 @@ Sınırlar: ağ başına 50 hub, hub başına 20 controller, ad 64 karakter. Çe
 
 **Settings ▸ Remote** telefonla ilgili ayarları ve ortak relay adresini tutmaya devam eder (Remote route'unun `Mobile` sekmesiyle aynı görünüm). Ağ ve hub ayarları Remote route'unun `This Mac` sekmesindedir.
 
-**Aynı Mac'te deneme.** `Scripts/make-app.sh --slot N [--open]` ayrı kimlikli bir test kopyası üretir: `dist/slot-N/Lumi N.app`, bundle id `com.lumi.app.slotN`, Info.plist `LSEnvironment` ile `LUMI_CONFIG_DIR=~/.lumi-slotN` (`LumiPaths.app(mode:)` okur; terminallere miras geçmez) ve numaralı, farklı renkli ikon (`Scripts/badge-icon.swift`). Applications'a kurulmayan ve notarize edilmeyen düz dist build'i "dev" rozetli ikon alır. Bundle'lı build'de Dock ikonu artık runtime'da ezilmez (yalnız `swift run`'da atanır). Kopyalar Keychain'i paylaşır (hub şifresi, `hubKey`, hatırlanan şifreler) — test için zararsızdır.
+**Aynı Mac'te deneme.** `Scripts/make-app.sh --slot N [--open]` ayrı kimlikli bir test kopyası üretir: `dist/slot-N/Lumi N.app`, bundle id `com.lumi.app.slotN`, Info.plist `LSEnvironment` ile `LUMI_CONFIG_DIR=~/.lumi-slotN` (`LumiPaths.app(mode:)` okur; terminallere miras geçmez) ve numaralı ikon (`Scripts/badge-icon.swift`; slot 1–2 `Assets/icon-variants/` karakterleri, sonrakiler tonu kaydırılmış Lumi). Applications'a kurulmayan ve notarize edilmeyen düz dist build'i "dev" rozetli ikon alır. Bundle'lı build'de Dock ikonu artık runtime'da ezilmez (yalnız `swift run`'da atanır). Kopyalar Keychain'i paylaşır (hub şifresi, `hubKey`, hatırlanan şifreler) — test için zararsızdır.
 
 ## Claude / MCP (Faz 5)
 
