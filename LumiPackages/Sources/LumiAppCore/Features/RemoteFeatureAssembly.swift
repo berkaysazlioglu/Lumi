@@ -3,6 +3,9 @@ import LumiKit
 import LumiRemote
 import LumiServices
 import LumiState
+import LumiTerminal
+import LumiUI
+import SwiftUI
 
 /// Remote (terminal-ayna) özelliği: RemoteService + RemoteStore kurar, config
 /// etkinse relay'e bağlanır. bootstrapPhase.config — terminal (system) kurulduktan
@@ -11,7 +14,7 @@ import LumiState
 /// Bağlantı ayrı Task'a alınır (eski AppContainer'ın `Task { await remoteService.start() }`
 /// deseni): relay el sıkışması / ulaşılamayan relay bootstrap loop'unu bloke etmez.
 @MainActor
-final class RemoteFeatureAssembly: FeatureAssembly {
+final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.config
 
     private(set) var remoteStore: RemoteStore!
@@ -64,6 +67,30 @@ final class RemoteFeatureAssembly: FeatureAssembly {
         Task { [remoteService] in await remoteService?.start() }
         let service = remoteService!
         usageBridge.start { report in await service.publishUsage(report) }
+    }
+
+    /// Remote route'u (docs/design/08): bu Mac'in ağ/hub ayarları + ağdaki hub'lar.
+    func registerShellItems(into registries: ShellRegistries) {
+        let section = TasksPanelSection.remote
+        let mirrors = RemoteTerminalMirrorFactory()
+        registries.routes.register(ContentRouteDescriptor(
+            id: section.routeID,
+            title: section.title,
+            icon: section.icon,
+            makeView: { [weak self] _ in
+                guard let self, let remote = self.remoteStore, let controller = self.controllerStore else {
+                    return AnyView(TasksRouteView(section: section))
+                }
+                return AnyView(RemoteRouteView(remote: remote, controller: controller, mirrors: mirrors))
+            }
+        ))
+        registries.toolbar.register(ToolbarItemDescriptor(
+            id: ToolbarItemID("route.\(section.rawValue)"),
+            region: .center,
+            order: ShellToolbarItems.Order.routeTitle,
+            isVisible: { $0.navigation.activeRoute == .content(section.routeID) },
+            makeView: { AnyView(TasksRouteToolbarItem(section: section)) }
+        ))
     }
 
     /// Telefondaki Tasks köprüsü (karar 137 mobil ek) buradan bağlanır.

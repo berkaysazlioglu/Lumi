@@ -18,14 +18,14 @@ struct RemoteSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
             LumiSectionTitle(
                 title: "Remote",
-                description: "Telefondan bağlan: QR'ı Lumi mobil uygulamasında okut."
+                description: "Telefondan bağlan: QR'ı Lumi mobil uygulamasında okut. Mac'ten Mac'e ağ ve bu Mac'in hub olarak paylaşılması soldaki Remote'tadır; relay adresi ikisinde ortaktır."
             )
 
             Toggle(isOn: Binding(
                 get: { remote.config.enabled },
                 set: { value in Task { await remote.setEnabled(value) } }
             )) {
-                Text("Remote'u etkinleştir")
+                Text("Mobile")
                     .font(Theme.Typography.bodyMono)
                     .foregroundStyle(Theme.textPrimary)
             }

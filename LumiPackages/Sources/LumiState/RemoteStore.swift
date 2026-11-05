@@ -55,6 +55,61 @@ public final class RemoteStore {
         config = service.currentConfig
     }
 
+    // MARK: - Hub (docs/design/08)
+
+    /// Keychain'de hub şifresi var mı — eylemlerden sonra servisten tazelenir.
+    public var hasHubPassword: Bool { refreshTick >= 0 && service.hasHubPassword }
+    public var hubDisplayName: String { refreshTick >= 0 ? service.effectiveHubName : "" }
+    public var hasNetwork: Bool { !config.networkToken.isEmpty }
+    /// Observation'ın servisten okunan değerleri yeniden okuması için sayaç.
+    private var refreshTick = 0
+
+    public func setHubEnabled(_ enabled: Bool) async {
+        await service.setHubEnabled(enabled)
+        refresh()
+    }
+
+    public func setHubName(_ name: String) async {
+        await service.setHubName(name)
+        refresh()
+    }
+
+    /// Hata kullanıcıya gösterilmek üzere fırlatılır (Keychain yazımı başarısız olabilir).
+    public func setHubPassword(_ password: String) async throws {
+        defer { refresh() }
+        try await service.setHubPassword(password)
+    }
+
+    public func removeHubPassword() async throws {
+        defer { refresh() }
+        try await service.removeHubPassword()
+    }
+
+    public func disconnectAllControllers() async {
+        await service.disconnectAllControllers()
+    }
+
+    public func createNetwork() async {
+        await service.createNetwork()
+        refresh()
+    }
+
+    public func joinNetwork(_ token: String) async -> Bool {
+        let ok = await service.joinNetwork(token)
+        refresh()
+        return ok
+    }
+
+    public func leaveNetwork() async {
+        await service.leaveNetwork()
+        refresh()
+    }
+
+    private func refresh() {
+        config = service.currentConfig
+        refreshTick &+= 1
+    }
+
     public var pairingString: String {
         func encode(_ s: String) -> String {
             var allowed = CharacterSet.urlQueryAllowed

@@ -13,4 +13,34 @@ public protocol RemoteServicing: AnyObject, Sendable {
     func start() async
     func stop()
     func events() -> AsyncStream<RemoteEvent>
+
+    // MARK: Hub (docs/design/08) — bu Mac'in Mac'ten Mac'e ağda paylaşılması
+
+    /// Keychain'de hub şifresi var mı (paylaşmanın ön koşulu).
+    var hasHubPassword: Bool { get }
+    /// Listede görünen ad: verilen ad, yoksa bilgisayar adı.
+    var effectiveHubName: String { get }
+    func setHubEnabled(_ enabled: Bool) async
+    func setHubName(_ name: String) async
+    func setHubPassword(_ password: String) async throws
+    func removeHubPassword() async throws
+    func disconnectAllControllers() async
+    func createNetwork() async
+    /// Ağ token'ı geçersizse (kısa / boşluklu) `false`.
+    func joinNetwork(_ token: String) async -> Bool
+    func leaveNetwork() async
+}
+
+/// Hub'ı olmayan istemciler (önizleme, test sahteleri) için no-op'lar.
+public extension RemoteServicing {
+    var hasHubPassword: Bool { false }
+    var effectiveHubName: String { "Mac" }
+    func setHubEnabled(_ enabled: Bool) async {}
+    func setHubName(_ name: String) async {}
+    func setHubPassword(_ password: String) async throws {}
+    func removeHubPassword() async throws {}
+    func disconnectAllControllers() async {}
+    func createNetwork() async {}
+    func joinNetwork(_ token: String) async -> Bool { false }
+    func leaveNetwork() async {}
 }

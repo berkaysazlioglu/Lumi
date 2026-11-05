@@ -26,6 +26,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
             contributors: [
                 TasksFeatureAssembly(repo: RepoFeatureAssembly()), TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(),
                 StatusBarFeatureAssembly(), TerminalLinkActionsAssembly(), AppUpdateFeatureAssembly(),
+                RemoteFeatureAssembly(usage: UsageFeatureAssembly()),
             ]
         )
     }

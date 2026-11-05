@@ -64,8 +64,9 @@ final class TasksFeatureAssembly: FeatureAssembly, ShellContributing {
             sizing: .fit,
             makeView: { AnyView(TasksPanelItem()) }
         ))
-        // Her bölüm orta alanın bir route'u + o route'un toolbar öğesidir.
-        for section in TasksPanelSection.allCases {
+        // Her bölüm orta alanın bir route'u + o route'un toolbar öğesidir. Remote
+        // route'unu `RemoteFeatureAssembly` kaydeder (docs/design/08).
+        for section in [TasksPanelSection.tasks] {
             registries.routes.register(ContentRouteDescriptor(
                 id: section.routeID,
                 title: section.title,
