@@ -13,6 +13,10 @@ final class DropAwareTerminalView: TerminalView {
     /// snapshot'ı (`TerminalStateSnapshot`) imlecin gizli olduğunu buradan bilir.
     private(set) var isCursorHidden = false
 
+    /// "Yazan kazanır" (karar 143 ek): uzak yazarın ızgarası ve o sürede saklanan
+    /// kullanıcı fontu — bkz. `DropAwareTerminalView+GridOverride`.
+    var gridOverrideState = GridOverrideState()
+
     override func showCursor(source: Terminal) {
         isCursorHidden = false
         super.showCursor(source: source)

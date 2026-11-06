@@ -11,6 +11,8 @@ public protocol RemoteTerminalMirroring: AnyObject {
     var onInput: ((Data) -> Void)? { get set }
     /// ⌘V / ⌃V'de yerel panodaki görselin ham baytları (karar 143 ek).
     var onPasteImage: ((Data) -> Void)? { get set }
+    /// "Yazan kazanır" (karar 143 ek): klavyeyle yazılınca aynanın sığdığı ızgara istenir.
+    var onGridRequest: ((TerminalGrid) -> Void)? { get set }
     func apply(_ chunk: RemoteTerminalChunk)
     /// Klavye odağını aynaya verir.
     func focus()

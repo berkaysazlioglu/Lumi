@@ -376,6 +376,16 @@ final class TerminalSession {
         mirrorFeed.subscribe()
     }
 
+    /// "Yazan kazanır" (karar 143 ek).
+    func setRemoteGrid(_ grid: TerminalGrid) {
+        guard !isTerminated else { return }
+        (terminalView as? DropAwareTerminalView)?.setGridOverride(grid)
+    }
+
+    func clearRemoteGrid() {
+        (terminalView as? DropAwareTerminalView)?.releaseGridOverride()
+    }
+
     func writeRemoteInput(_ data: Data) {
         write(data)
     }

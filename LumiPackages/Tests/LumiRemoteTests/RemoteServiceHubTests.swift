@@ -249,6 +249,34 @@ struct RemoteServiceHubTests {
         f.service.stop()
     }
 
+    /// "Yazan kazanır": controller'ın `input`'undaki ızgara baytlardan önce uygulanır;
+    /// yazar aynayı bırakınca terminal yerel boyutuna döner. Telefonun ızgarası yok sayılır.
+    @Test func writerGridFollowsTheTypingControllerAndReleasesWhenItLeaves() async throws {
+        let f = try await HubFixture(paths: .hubDefaults(mobile: true))
+        let session = f.makeSession()
+        await f.service.start()
+        await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
+        try await f.hub.waitForSent(types: ["scrollback"])
+
+        await f.hub.injectInbound(type: "input", payload: [
+            "sessionId": session.raw, "data": Data("a".utf8).base64EncodedString(),
+            "cols": 140, "rows": 42, "from": "conn-1",
+        ])
+        await f.mobile.injectInbound(type: "input", payload: [
+            "sessionId": session.raw, "data": "", "cols": 50, "rows": 10,
+        ])
+        await f.hub.injectInbound(type: "input", payload: [
+            "sessionId": session.raw, "data": "", "cols": 5, "rows": 2, "from": "conn-1", // aralık dışı
+        ])
+        try await waitUntil { f.term.writtenInput[session.id] == Data("a".utf8) }
+        #expect(f.term.remoteGridHistory(session.id) == [TerminalGrid(cols: 140, rows: 42)])
+
+        await f.hub.injectInbound(type: "unsubscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
+        try await waitUntil { f.term.remoteGridHistory(session.id).count == 2 }
+        #expect(f.term.remoteGridHistory(session.id).last == .some(nil))
+        f.service.stop()
+    }
+
     /// `read_screen`: ekranın düz metni yalnız isteyen controller'a döner.
     @Test func readScreenRepliesWithPlainText() async throws {
         let f = try await HubFixture()

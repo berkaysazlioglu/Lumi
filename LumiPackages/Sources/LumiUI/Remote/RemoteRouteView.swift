@@ -173,7 +173,7 @@ struct RemoteSessionPane: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("Reload the mirror (use after the terminal was resized on the hub)")
+                .help("Reload the mirror")
             }
             Button {
                 Task { await controller.closeSession(ref) }
@@ -254,6 +254,7 @@ private struct RemoteMirrorBody: View {
         let controller = controller, ref = ref
         made.onInput = { data in controller.sendInput(ref, data: data) }
         made.onPasteImage = { data in controller.pasteImage(ref, rawImage: data) }
+        made.onGridRequest = { grid in controller.requestGrid(ref, grid: grid) }
         mirror = made
     }
 

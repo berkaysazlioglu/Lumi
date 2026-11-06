@@ -205,6 +205,17 @@ enum RemoteProtocol {
         return (sessionId, data)
     }
 
+    /// Uzak yazarın ızgarası için kabul edilen aralık (karar 143 ek).
+    static let inputGridCols = 20...1000
+    static let inputGridRows = 5...500
+
+    /// `input`'un additive ızgara isteği; aralık dışı ya da eksikse nil.
+    static func decodeInputGrid(_ payload: [String: Any]) -> TerminalGrid? {
+        guard let cols = payload["cols"] as? Int, let rows = payload["rows"] as? Int,
+              inputGridCols.contains(cols), inputGridRows.contains(rows) else { return nil }
+        return TerminalGrid(cols: cols, rows: rows)
+    }
+
     /// `subscribe` payload'ından mode; yoksa geriye-uyumlu `terminal`.
     static func decodeSubscribeMode(_ payload: [String: Any]) -> String {
         payload["mode"] as? String ?? "terminal"

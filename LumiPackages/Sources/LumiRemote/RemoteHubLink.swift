@@ -130,9 +130,14 @@ final class RemoteHubLink {
             sessionId: sessionId, itemId: itemId, revision: revision, answer: answer))
     }
 
-    func sendInput(sessionId: String, data: Data) {
+    func sendInput(sessionId: String, data: Data, grid: TerminalGrid? = nil) {
         guard state.isConnected else { return }
-        send(type: "input", payload: ["sessionId": sessionId, "data": data.base64EncodedString()])
+        var payload: [String: Any] = ["sessionId": sessionId, "data": data.base64EncodedString()]
+        if let grid {
+            payload["cols"] = grid.cols
+            payload["rows"] = grid.rows
+        }
+        send(type: "input", payload: payload)
     }
 
     /// Claude terminalinin transcript'ini bir kez okur (chat aboneliği; hub'da bu bağlantının

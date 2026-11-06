@@ -9,6 +9,27 @@ public protocol TerminalGridSizing: AnyObject {
     var cellSize: CGSize { get }
 }
 
+/// Satır × sütun ızgarası.
+public struct TerminalGrid: Sendable, Equatable, Hashable {
+    public let cols: Int
+    public let rows: Int
+
+    public init(cols: Int, rows: Int) {
+        self.cols = cols
+        self.rows = rows
+    }
+}
+
+/// Uzak yazarın ızgarasını taşıyabilen terminal view'ı (karar 143 ek, "yazan kazanır").
+/// Override doluyken emülatör o ızgarada kalır; host view'ı ızgarayı alana sığdıran
+/// fontla ortalar (kendi alanından türettiği ızgarayı değil).
+@MainActor
+public protocol TerminalGridOverriding: TerminalGridSizing {
+    var gridOverride: TerminalGrid? { get }
+    /// Override ızgarasını `size`'a sığdıran fontu uygular; yeni hücre boyutunu döner.
+    func fitOverrideFont(in size: CGSize) -> CGSize
+}
+
 /// Terminal view'ını host container'ına oturtan tek yerleşim otoritesi.
 ///
 /// Emülatör satır/sütun sayısını `Int(boyut / hücre)` ile AŞAĞI yuvarlar ve ızgarayı
@@ -47,6 +68,9 @@ public enum TerminalGridFit {
         scale: CGFloat?
     ) -> CGRect {
         guard let sizing = view as? any TerminalGridSizing else { return bounds }
+        if let overriding = view as? any TerminalGridOverriding, let grid = overriding.gridOverride {
+            return overrideFrame(overriding, grid: grid, in: bounds, host: host, scale: scale)
+        }
         let cell = sizing.cellSize
         guard cell.width > 0, cell.height > 0 else { return bounds }
 
@@ -64,6 +88,25 @@ public enum TerminalGridFit {
             size: grid
         )
     }
+
+    /// Uzak ızgara: hücre × ızgara kadar alan, ortada. Çeyrek puanlık pay SwiftTerm'in
+    /// `Int(genişlik / hücre)` tabanının kayan nokta artığıyla bir sütun kaybetmesini önler.
+    private static func overrideFrame(
+        _ view: any TerminalGridOverriding, grid: TerminalGrid, in bounds: CGRect, host: NSView, scale: CGFloat?
+    ) -> CGRect {
+        let cell = view.fitOverrideFont(in: bounds.size)
+        let size = CGSize(width: cell.width * CGFloat(grid.cols) + overrideSlack,
+                          height: cell.height * CGFloat(grid.rows) + overrideSlack)
+        return CGRect(
+            origin: CGPoint(
+                x: bounds.minX + pixelAligned(max(0, (bounds.width - size.width) / 2), in: host, scale: scale),
+                y: bounds.minY + pixelAligned(max(0, (bounds.height - size.height) / 2), in: host, scale: scale)
+            ),
+            size: size
+        )
+    }
+
+    static let overrideSlack: CGFloat = 0.25
 
     /// Ortalama artığı backing piksel ızgarasına indirilir; yarım piksellik kayma
     /// glyph'leri bulanıklaştırırdı.

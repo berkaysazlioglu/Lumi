@@ -151,3 +151,46 @@ import Testing
         #expect(RemoteMirrorTerminalView.imageData(from: onlyText).isEmpty)
     }
 }
+
+@MainActor
+@Suite struct RemoteMirrorWriterTests {
+    private func mirror(grid: TerminalGrid) -> RemoteTerminalMirror {
+        let mirror = RemoteTerminalMirror(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
+        mirror.apply(RemoteTerminalChunk(data: Data(), cols: grid.cols, rows: grid.rows, isSnapshot: true))
+        return mirror
+    }
+
+    @Test func typingAsksForThisPanesGridAndBecomesTheWriter() throws {
+        let mirror = mirror(grid: TerminalGrid(cols: 200, rows: 60))
+        var requests: [TerminalGrid] = []
+        var inputs: [Data] = []
+        mirror.onGridRequest = { requests.append($0) }
+        mirror.onInput = { inputs.append($0) }
+
+        mirror.typeForTesting("a")
+
+        let local = try #require(mirror.localGrid)
+        #expect(requests == [local])
+        #expect(inputs == [Data("a".utf8)])
+        #expect(!mirror.isWriter)
+        mirror.apply(RemoteTerminalChunk(data: Data(), cols: local.cols, rows: local.rows, isSnapshot: true))
+        #expect(mirror.isWriter)
+
+        // Aynı ızgarada yazmak yeni istek doğurmaz.
+        mirror.typeForTesting("b")
+        #expect(requests.count == 1)
+
+        // Hub kullanıcısı yazdı → hub kendi boyutuna döndü → yazarlık düşer.
+        mirror.apply(RemoteTerminalChunk(data: Data(), cols: 120, rows: 30, isSnapshot: true))
+        #expect(!mirror.isWriter)
+    }
+
+    @Test func emulatorAutoRepliesDuringTheFeedAreNotSentToTheHub() {
+        let mirror = mirror(grid: TerminalGrid(cols: 80, rows: 24))
+        var inputs: [Data] = []
+        mirror.onInput = { inputs.append($0) }
+        // DA1 + imleç konumu sorgusu: yanıtı hub'ın emülatörü verir.
+        mirror.apply(RemoteTerminalChunk(data: Data("\u{1B}[c\u{1B}[6n".utf8), isSnapshot: false))
+        #expect(inputs.isEmpty)
+    }
+}

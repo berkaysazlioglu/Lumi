@@ -54,6 +54,8 @@ final class TerminalPresentation {
     /// işaretler; ardından host'tan yeniden yerleşim istenir (ortalama yalnız
     /// layout'ta yapılır — istenmezse boşluk bir sonraki resize'a dek kalırdı).
     func setFont(_ font: NSFont) {
+        // Uzak ızgara sürüyorsa (karar 143 ek) font saklanır; sığdırma ona göre yenilenir.
+        if let view = view as? DropAwareTerminalView, view.adoptUserFont(font) { return }
         view.font = font
         onLayoutInvalidated?()
     }

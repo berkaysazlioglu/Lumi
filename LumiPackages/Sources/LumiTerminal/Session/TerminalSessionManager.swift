@@ -276,6 +276,14 @@ public final class TerminalSessionManager: TerminalServicing {
         return s.subscribeScreenMirror()
     }
 
+    public func setRemoteGrid(_ id: TerminalID, grid: TerminalGrid) {
+        session(for: id)?.setRemoteGrid(grid)
+    }
+
+    public func clearRemoteGrid(_ id: TerminalID) {
+        session(for: id)?.clearRemoteGrid()
+    }
+
     public func writeInput(_ data: Data, to id: TerminalID) {
         session(for: id)?.writeRemoteInput(data)
     }

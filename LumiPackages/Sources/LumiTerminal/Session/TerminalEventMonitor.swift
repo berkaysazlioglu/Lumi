@@ -102,6 +102,8 @@ public final class TerminalEventMonitor {
     private static let vKeyCode: UInt16 = 9
 
     func routeKeyDown(_ event: NSEvent) -> Bool {
+        // "Yazan kazanır" (karar 143 ek): yerelde yazılınca uzak ızgara bırakılır.
+        (event.window?.firstResponder as? DropAwareTerminalView)?.releaseGridOverride()
         // Claude'un görsel tuşu ⌃V uzak aynada yerel panodaki görseli hub'a taşır.
         if let mirror = event.window?.firstResponder as? RemoteMirrorTerminalView,
            event.keyCode == Self.vKeyCode,

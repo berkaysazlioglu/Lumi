@@ -288,6 +288,14 @@ final class FakeTerminalServicing: TerminalServicing {
         for await _ in stream { return }
     }
 
+    /// "Yazan kazanır" çağrıları (karar 143 ek): `nil` = yerel boyuta dönüş.
+    private(set) var remoteGrids: [(id: TerminalID, grid: TerminalGrid?)] = []
+    func setRemoteGrid(_ id: TerminalID, grid: TerminalGrid) { remoteGrids.append((id, grid)) }
+    func clearRemoteGrid(_ id: TerminalID) { remoteGrids.append((id, nil)) }
+    func remoteGridHistory(_ id: TerminalID) -> [TerminalGrid?] {
+        remoteGrids.filter { $0.id == id }.map(\.grid)
+    }
+
     /// Hub emülatörü boyut değiştirdi: aynalara yeni boyutta snapshot (karar 143 ek).
     func emitMirrorSnapshot(_ id: TerminalID, data: Data, cols: Int, rows: Int) {
         mirrorBroadcaster(for: id).send(.snapshot(data: data, cols: cols, rows: rows))

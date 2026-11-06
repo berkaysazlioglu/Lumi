@@ -89,6 +89,9 @@ public final class RemoteService: RemoteServicing {
     private var subscriptions: [TerminalID: Task<Void, Never>] = [:]
     /// Session başına monoton `seq` sayacı (scrollback=0, ilk data=1, …).
     private var seqCounters: [TerminalID: Int] = [:]
+    /// "Yazan kazanır" (karar 143 ek): ızgarasını terminale uygulatan controller bağlantısı.
+    /// Ayrıldığında ya da aynayı kapattığında terminal yerel boyutuna döner.
+    private var gridOwners: [TerminalID: String] = [:]
     /// Set edilen modellerin son-bilinen değeri (sessions meta'sı için).
     private var modelCache: [TerminalID: String] = [:]
     /// Karar 105: "karar bekliyor" (izin/soru promptu) olan terminaller — `sessions`'a yansır.
@@ -265,6 +268,8 @@ public final class RemoteService: RemoteServicing {
         terminalTask?.cancel(); terminalTask = nil
         for task in subscriptions.values { task.cancel() }
         subscriptions.removeAll()
+        for id in gridOwners.keys { terminal.clearRemoteGrid(id) }
+        gridOwners.removeAll()
         for task in chatSubscriptions.values { task.cancel() }
         chatSubscriptions.removeAll()
         for task in chatBridgeTasks.values { task.cancel() }
@@ -357,7 +362,7 @@ public final class RemoteService: RemoteServicing {
             case "unsubscribe":
                 handleUnsubscribe(payload, subscribers: Self.unsubscribers(payload, from: from, channel: channel))
             case "input":
-                handleInput(payload)
+                handleInput(payload, from: channel == .hub ? from : nil)
             case "prompt_respond":
                 handlePromptRespond(payload)
             case "chat_send":
@@ -391,6 +396,7 @@ public final class RemoteService: RemoteServicing {
                 promptJournals[id] = nil
                 promptWriteTasks[id]?.cancel(); promptWriteTasks[id] = nil
                 awaitingDecision.remove(id)
+                gridOwners[id] = nil
             }
             await sendSessions()
             await sendProjects()
@@ -1055,6 +1061,15 @@ public final class RemoteService: RemoteServicing {
             // Bir anahtarın bıraktığı mod diğer anahtarın hâlâ izlediği mod olabilir.
             closeOrphanedStreams(id, modes: orphaned.filter { !subscribers.has(id, mode: $0) })
         }
+        releaseOwnerlessGrids()
+    }
+
+    /// Izgara sahibi artık o terminalin aynasını izlemiyorsa terminal yerel boyutuna döner.
+    private func releaseOwnerlessGrids() {
+        for (id, owner) in gridOwners where !subscribers.hubConnections(watching: id, mode: .terminal).contains(owner) {
+            gridOwners[id] = nil
+            terminal.clearRemoteGrid(id)
+        }
     }
 
     /// İzleyicisi kalmayan modların akışlarını kapatır.
@@ -1074,10 +1089,16 @@ public final class RemoteService: RemoteServicing {
 
     // MARK: - Input
 
-    private func handleInput(_ payload: [String: Any]) {
+    /// Controller'ın `input`'u additive `cols`/`rows` taşıyabilir ("yazan kazanır", karar 143
+    /// ek): ızgara baytlardan ÖNCE uygulanır; boş `data` yalnız ızgara isteğidir.
+    private func handleInput(_ payload: [String: Any], from: String?) {
         guard let (raw, data) = RemoteProtocol.decodeInput(payload),
               let id = terminalID(from: raw) else { return }
-        terminal.writeInput(data, to: id)
+        if let from, let grid = RemoteProtocol.decodeInputGrid(payload) {
+            gridOwners[id] = from
+            terminal.setRemoteGrid(id, grid: grid)
+        }
+        if !data.isEmpty { terminal.writeInput(data, to: id) }
     }
 
     // MARK: - Yardımcılar
@@ -1136,6 +1157,7 @@ public final class RemoteService: RemoteServicing {
             RemoteSubscribers.hubConnection(of: key).map(matches) ?? false
         }
         for (id, modes) in orphaned { closeOrphanedStreams(id, modes: modes) }
+        releaseOwnerlessGrids()
     }
 
     /// Yayın: açık her kanala (telefon + hub'a bağlı controller'lar) gider.

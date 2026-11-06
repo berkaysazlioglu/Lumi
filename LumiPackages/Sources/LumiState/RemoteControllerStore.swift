@@ -136,6 +136,10 @@ public final class RemoteControllerStore {
         service.terminalOutput(hubId: ref.hubId, sessionId: ref.sessionId)
     }
 
+    public func requestGrid(_ ref: RemoteSessionRef, grid: TerminalGrid) {
+        service.requestGrid(hubId: ref.hubId, sessionId: ref.sessionId, grid: grid)
+    }
+
     public func sendInput(_ ref: RemoteSessionRef, data: Data) {
         service.sendInput(hubId: ref.hubId, sessionId: ref.sessionId, data: data)
     }

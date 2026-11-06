@@ -25,6 +25,8 @@ public protocol RemoteControllerServicing: AnyObject {
     /// Akış bitince (view kapandı) `unsubscribe` gönderilir.
     func terminalOutput(hubId: String, sessionId: String) -> AsyncStream<RemoteTerminalChunk>
     func sendInput(hubId: String, sessionId: String, data: Data)
+    /// "Yazan kazanır" (karar 143 ek): hub terminalini bu ızgaraya geçirir.
+    func requestGrid(hubId: String, sessionId: String, grid: TerminalGrid)
     /// Yeni terminal; Claude ve shell için yeni terminalin kimliğini döner. Claude'da
     /// boş olmayan `prompt` ilk mesaj olarak gider.
     func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String) async throws -> String?
@@ -48,6 +50,8 @@ public protocol RemoteControllerServicing: AnyObject {
 }
 
 public extension RemoteControllerServicing {
+    func requestGrid(hubId: String, sessionId: String, grid: TerminalGrid) {}
+
     func pasteImage(hubId: String, sessionId: String, image: RemotePastedImage) async throws {
         throw RemoteControllerError.failed("unsupported")
     }

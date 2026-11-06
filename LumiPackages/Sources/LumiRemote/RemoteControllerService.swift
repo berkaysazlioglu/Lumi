@@ -192,6 +192,10 @@ public final class RemoteControllerService: RemoteControllerServicing {
         }
     }
 
+    public func requestGrid(hubId: String, sessionId: String, grid: TerminalGrid) {
+        links[hubId]?.sendInput(sessionId: sessionId, data: Data(), grid: grid)
+    }
+
     public func pasteImage(hubId: String, sessionId: String, image: RemotePastedImage) async throws {
         guard let link = links[hubId], link.state.isConnected else { throw RemoteControllerError.notConnected }
         _ = try await link.command {

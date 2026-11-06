@@ -88,6 +88,12 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Bilinmeyen id → boş/bitirilmiş stream.
     func subscribeScreenMirror(_ id: TerminalID) -> AsyncStream<TerminalMirrorEvent>
 
+    /// "Yazan kazanır" (karar 143 ek): uzak yazarın ızgarası. Emülatör ve PTY bu ızgaraya
+    /// geçer, yerel kart ızgarayı fontu ölçekleyerek gösterir. Yerelde tuşa basılınca ya da
+    /// `clearRemoteGrid` ile yerel boyuta dönülür. Bilinmeyen id → no-op.
+    func setRemoteGrid(_ id: TerminalID, grid: TerminalGrid)
+    func clearRemoteGrid(_ id: TerminalID)
+
     /// Kapanış simetrisi: global NSEvent monitörleri gibi process-ömürlü
     /// kaynakları bırakır. Idempotent'tir; composition root `shutdown()`
     /// yolunda çağırır (refactor 3.2 — somut tipe inmemek için protokolde).
@@ -161,6 +167,9 @@ public extension TerminalSessionControlling {
     func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
         serializeScrollback(id)
     }
+
+    func setRemoteGrid(_ id: TerminalID, grid: TerminalGrid) {}
+    func clearRemoteGrid(_ id: TerminalID) {}
 
     /// Emülatörü olmayan implementasyonlar: snapshot + `subscribeOutput` (boyut olayı yok).
     func subscribeScreenMirror(_ id: TerminalID) -> AsyncStream<TerminalMirrorEvent> {

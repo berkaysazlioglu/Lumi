@@ -32,6 +32,18 @@ public final class RemoteTerminalMirror: NSView, RemoteTerminalMirroring, @preco
     private var appliedFont: NSFont?
     private var grid: (cols: Int, rows: Int)?
 
+    public var onGridRequest: ((TerminalGrid) -> Void)?
+    /// Bu aynanın istediği son ızgara; hub onu uygulamışsa ayna "yazan"dır ve pane
+    /// boyutu değişince ızgarayı yeniden ister. Başkası yazınca (hub kullanıcısı ya da
+    /// başka controller) snapshot farklı ızgarayla gelir ve yazarlık düşer.
+    private var requestedGrid: TerminalGrid?
+    private(set) var isWriter = false
+    private var layoutRequest: Task<Void, Never>?
+    /// Akış beslenirken emülatörün sorgulara verdiği otomatik yanıtlar hub'a gitmez —
+    /// aynı sorguyu hub'ın kendi emülatörü zaten yanıtlıyor (çift yanıt Claude'a girdi olurdu).
+    private var isFeeding = false
+    static let layoutRequestDelay: Duration = .milliseconds(200)
+
     public override init(frame: NSRect) {
         terminalView = RemoteMirrorTerminalView(frame: frame)
         super.init(frame: frame)
@@ -58,9 +70,49 @@ public final class RemoteTerminalMirror: NSView, RemoteTerminalMirroring, @preco
                 }
             }
             fitGrid()
+            isWriter = requestedGrid != nil && requestedGrid == currentGrid
         }
+        isFeeding = true
         terminalView.feed(byteArray: [UInt8](chunk.data)[...])
+        isFeeding = false
         if chunk.isSnapshot { repaint() }
+    }
+
+    private var currentGrid: TerminalGrid? { grid.map { TerminalGrid(cols: $0.cols, rows: $0.rows) } }
+
+    /// Aynanın kendi fontuyla (ölçeksiz) sığdığı ızgara; kabul aralığının dışındaysa nil.
+    var localGrid: TerminalGrid? {
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let cell = TerminalCellProbe.cellSize(for: terminalView.font)
+        let reserved = max(0, terminalView.getOptimalFrameSize().width
+            - cell.width * CGFloat(terminalView.getTerminal().cols))
+        let fitted = TerminalCellProbe.grid(for: baseFont, in: bounds.size, reservedWidth: reserved)
+        guard fitted.cols >= Self.minGrid.cols, fitted.rows >= Self.minGrid.rows else { return nil }
+        return fitted
+    }
+
+    static let minGrid = TerminalGrid(cols: 20, rows: 5)
+
+    /// Yazınca: hub ızgarası aynanınkinden farklıysa aynanın ızgarası istenir.
+    private func claimWriter() {
+        guard let local = localGrid else { return }
+        requestedGrid = local
+        if local == currentGrid {
+            isWriter = true
+        } else {
+            onGridRequest?(local)
+        }
+    }
+
+    /// Yazar aynanın pane'i boyut değiştirdi: oturunca yeni ızgara istenir.
+    private func scheduleLayoutRequest() {
+        guard isWriter, let local = localGrid, local != requestedGrid else { return }
+        layoutRequest?.cancel()
+        layoutRequest = Task { [weak self] in
+            try? await Task.sleep(for: Self.layoutRequestDelay)
+            guard !Task.isCancelled, let self, self.isWriter else { return }
+            self.claimWriter()
+        }
     }
 
     /// Testler: aynanın emülatörü.
@@ -79,6 +131,7 @@ public final class RemoteTerminalMirror: NSView, RemoteTerminalMirroring, @preco
     public override func layout() {
         super.layout()
         fitGrid()
+        scheduleLayoutRequest()
     }
 
     /// Yazı boyutunu ızgara alana sığacak şekilde seçer ve terminal view'ını ortalar.
@@ -140,7 +193,15 @@ public final class RemoteTerminalMirror: NSView, RemoteTerminalMirroring, @preco
     // MARK: - TerminalViewDelegate
 
     public func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        guard !isFeeding else { return }
+        if NSApp.currentEvent?.type == .keyDown { claimWriter() }
         onInput?(Data(data))
+    }
+
+    /// Testler: klavyeden yazılmış gibi.
+    func typeForTesting(_ text: String) {
+        claimWriter()
+        onInput?(Data(text.utf8))
     }
 
     /// Hub'ın PTY'si yeniden boyutlandırılmaz; yerel ızgara yalnız snapshot'ta değişir.
