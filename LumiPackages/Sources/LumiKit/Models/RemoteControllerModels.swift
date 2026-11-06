@@ -203,3 +203,15 @@ public enum RemoteControllerError: Error, Equatable, Sendable {
     case timedOut
     case failed(String)
 }
+
+/// Uzak terminale yapıştırılan görsel — relay'in frame sınırına sığacak şekilde kodlanmış.
+public struct RemotePastedImage: Sendable, Equatable {
+    public let data: Data
+    /// `png` ya da `jpg`.
+    public let ext: String
+
+    public init(data: Data, ext: String) {
+        self.data = data
+        self.ext = ext
+    }
+}

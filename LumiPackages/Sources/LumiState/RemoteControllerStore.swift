@@ -140,6 +140,25 @@ public final class RemoteControllerStore {
         service.sendInput(hubId: ref.hubId, sessionId: ref.sessionId, data: data)
     }
 
+    /// Yapıştırılan görsel: main dışında relay'e sığacak şekilde kodlanıp hub'a gider.
+    public func pasteImage(_ ref: RemoteSessionRef, rawImage: Data) {
+        lastError = nil
+        Task {
+            let image = await Task.detached { RemoteImageEncoder.encode(rawImage) }.value
+            guard let image else {
+                lastError = "This image couldn't be sent to the hub."
+                return
+            }
+            do {
+                try await service.pasteImage(hubId: ref.hubId, sessionId: ref.sessionId, image: image)
+            } catch RemoteControllerError.failed("unknown_action") {
+                lastError = "Update Lumi on the hub to paste images."
+            } catch {
+                lastError = Self.describe(error)
+            }
+        }
+    }
+
     public func viewMode(_ ref: RemoteSessionRef) -> RemoteSessionViewMode {
         if let mode = viewModes[ref] { return mode }
         return snapshots[ref.hubId]?.session(ref.sessionId)?.provider == .claude ? .chat : .terminal

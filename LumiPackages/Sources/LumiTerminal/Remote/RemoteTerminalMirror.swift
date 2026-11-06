@@ -20,8 +20,12 @@ public final class RemoteTerminalMirror: NSView, RemoteTerminalMirroring, @preco
 
     public var view: NSView { self }
     public var onInput: ((Data) -> Void)?
+    public var onPasteImage: ((Data) -> Void)? {
+        get { terminalView.onPasteImage }
+        set { terminalView.onPasteImage = newValue }
+    }
 
-    private let terminalView: TerminalView
+    private let terminalView: RemoteMirrorTerminalView
     /// Hücre ölçümü için: canlı emülatörü etkilemeden font boyutunun ızgara alanını verir.
     private let probe = TerminalView(frame: .zero)
     private var baseFont = NSFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
@@ -29,7 +33,7 @@ public final class RemoteTerminalMirror: NSView, RemoteTerminalMirroring, @preco
     private var grid: (cols: Int, rows: Int)?
 
     public override init(frame: NSRect) {
-        terminalView = TerminalView(frame: frame)
+        terminalView = RemoteMirrorTerminalView(frame: frame)
         super.init(frame: frame)
         terminalView.terminalDelegate = self
         TerminalTheme.lumi.apply(to: terminalView)

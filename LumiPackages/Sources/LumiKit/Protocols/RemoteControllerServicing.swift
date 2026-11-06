@@ -33,6 +33,8 @@ public protocol RemoteControllerServicing: AnyObject {
     func sendText(hubId: String, sessionId: String, text: String, submit: Bool) async throws
     /// Terminalin içeriğini bir kez okur (aynayı etkilemez).
     func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading
+    /// Yapıştırılan görsel: hub diske yazar ve yolunu terminale yazar (Claude `[Image #N]` yapar).
+    func pasteImage(hubId: String, sessionId: String, image: RemotePastedImage) async throws
 
     /// Claude terminalinin chat akışı (`subscribe` mode `chat`; `afterId` → yalnız o
     /// mesajdan sonrası). Akış bitince `unsubscribe{mode:chat}` gider; ayna etkilenmez.
@@ -46,6 +48,10 @@ public protocol RemoteControllerServicing: AnyObject {
 }
 
 public extension RemoteControllerServicing {
+    func pasteImage(hubId: String, sessionId: String, image: RemotePastedImage) async throws {
+        throw RemoteControllerError.failed("unsupported")
+    }
+
     func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind) async throws -> String? {
         try await startSession(hubId: hubId, checkoutPath: checkoutPath, kind: kind, prompt: "")
     }

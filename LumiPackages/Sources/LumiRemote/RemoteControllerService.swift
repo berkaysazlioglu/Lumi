@@ -192,6 +192,13 @@ public final class RemoteControllerService: RemoteControllerServicing {
         }
     }
 
+    public func pasteImage(hubId: String, sessionId: String, image: RemotePastedImage) async throws {
+        guard let link = links[hubId], link.state.isConnected else { throw RemoteControllerError.notConnected }
+        _ = try await link.command {
+            RemoteControllerWire.pasteImageCommand(commandId: $0, sessionId: sessionId, image: image)
+        }
+    }
+
     /// Claude terminalinde transcript (yoksa ekran), diğerlerinde ekran.
     public func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading {
         guard let link = links[hubId], link.state.isConnected else { throw RemoteControllerError.notConnected }

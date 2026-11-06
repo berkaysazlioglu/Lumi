@@ -9,6 +9,8 @@ public protocol RemoteTerminalMirroring: AnyObject {
     /// Aynanın kök view'ı; içeriği kendi bounds'una ortalar.
     var view: NSView { get }
     var onInput: ((Data) -> Void)? { get set }
+    /// ⌘V / ⌃V'de yerel panodaki görselin ham baytları (karar 143 ek).
+    var onPasteImage: ((Data) -> Void)? { get set }
     func apply(_ chunk: RemoteTerminalChunk)
     /// Klavye odağını aynaya verir.
     func focus()

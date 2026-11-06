@@ -49,11 +49,15 @@ final class RemoteCommandHandler {
     /// Telefondaki Tasks — LumiAppCore'daki köprü bağlar; yoksa `tasks_unavailable`.
     weak var tasks: (any RemoteTasksHandling)?
 
+    private let pastedImagesDirectory: URL
+
     init(terminal: any TerminalServicing, trust: any ClaudeWorkspaceTrusting,
          chatSessions: any ChatSessionServicing = NoopChatSessionService(),
          repos: any RepoServicing = NoopRepoServicing(),
          workspaces: any WorkspaceServicing = NoopWorkspaceServicing(),
-         config: any ConfigServicing) {
+         config: any ConfigServicing,
+         pastedImagesDirectory: URL = RemotePastedImages.defaultDirectory) {
+        self.pastedImagesDirectory = pastedImagesDirectory
         self.terminal = terminal
         self.trust = trust
         self.chatSessions = chatSessions
@@ -101,6 +105,8 @@ final class RemoteCommandHandler {
             })
         case "read_screen":
             return readScreen(payload, commandId: commandId)
+        case "paste_image":
+            return pasteImage(payload, commandId: commandId)
         case "start_session":
             return await startSession(payload, commandId: commandId)
         case "set_model":
@@ -295,6 +301,24 @@ final class RemoteCommandHandler {
     }
 
     static let readScreenLimit = 256 * 1024
+
+    /// Controller'da yapıştırılan görsel (karar 143 ek): diske yazılır, yolu terminale gider.
+    private func pasteImage(_ payload: [String: Any], commandId: String?) -> CommandResult {
+        let id: TerminalID
+        do { id = try session(from: payload) } catch { return .failure(commandId, "session_not_found") }
+        let image: (Data, RemotePastedImages.Format)
+        do {
+            image = try RemotePastedImages.validate(base64: payload["data"] as? String, ext: payload["ext"] as? String)
+        } catch RemotePastedImages.Failure.tooLarge {
+            return .failure(commandId, "image_too_large")
+        } catch {
+            return .failure(commandId, "invalid_image")
+        }
+        return result(commandId, run: {
+            let text = try RemotePastedImages.store(image.0, format: image.1, directory: self.pastedImagesDirectory)
+            try self.terminal.write(id: id, text: text)
+        })
+    }
 
     private func session(from payload: [String: Any]) throws -> TerminalID {
         guard let raw = payload["sessionId"] as? String,

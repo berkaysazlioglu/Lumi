@@ -99,7 +99,16 @@ public final class TerminalEventMonitor {
     /// (Option+Backspace → ^W vb.) dispatch'ten önce burada uygulanır. First responder
     /// herhangi bir SwiftTerm view'ıyken devreye girer — uzak terminal aynası dahil
     /// (karar 143). `true` → event yutuldu.
+    private static let vKeyCode: UInt16 = 9
+
     func routeKeyDown(_ event: NSEvent) -> Bool {
+        // Claude'un görsel tuşu ⌃V uzak aynada yerel panodaki görseli hub'a taşır.
+        if let mirror = event.window?.firstResponder as? RemoteMirrorTerminalView,
+           event.keyCode == Self.vKeyCode,
+           event.modifierFlags.intersection([.command, .option, .control, .shift]) == .control,
+           mirror.pasteImageIfAvailable() {
+            return true
+        }
         guard let view = event.window?.firstResponder as? TerminalView,
               let bytes = NaturalEditingKeyMap.bytes(for: event) else {
             return false

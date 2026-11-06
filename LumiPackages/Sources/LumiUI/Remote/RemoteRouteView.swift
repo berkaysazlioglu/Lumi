@@ -253,6 +253,7 @@ private struct RemoteMirrorBody: View {
         made.setFont(LumiFonts.mono(family: fontFamily, size: Theme.Typography.Size.base.scaledPoints))
         let controller = controller, ref = ref
         made.onInput = { data in controller.sendInput(ref, data: data) }
+        made.onPasteImage = { data in controller.pasteImage(ref, rawImage: data) }
         mirror = made
     }
 

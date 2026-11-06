@@ -112,6 +112,11 @@ enum RemoteControllerWire {
         ["commandId": commandId, "action": "send_text", "sessionId": sessionId, "text": text]
     }
 
+    static func pasteImageCommand(commandId: String, sessionId: String, image: RemotePastedImage) -> [String: Any] {
+        ["commandId": commandId, "action": "paste_image", "sessionId": sessionId,
+         "data": image.data.base64EncodedString(), "ext": image.ext]
+    }
+
     static func readScreenCommand(commandId: String, sessionId: String) -> [String: Any] {
         ["commandId": commandId, "action": "read_screen", "sessionId": sessionId]
     }

@@ -109,3 +109,45 @@ import Testing
         #expect(screen(mirror)[1] == "")
     }
 }
+
+@MainActor
+@Suite struct RemoteMirrorPasteTests {
+    private func pasteboard() -> NSPasteboard {
+        let board = NSPasteboard(name: .init("lumi-test-\(UUID().uuidString)"))
+        board.clearContents()
+        return board
+    }
+
+    @Test func textWinsOverImageRepresentations() {
+        let board = pasteboard()
+        board.declareTypes([.string, .png], owner: nil)
+        board.setString("hello", forType: .string)
+        board.setData(Data([0x89, 0x50]), forType: .png)
+        #expect(RemoteMirrorTerminalView.imageData(from: board).isEmpty)
+    }
+
+    @Test func screenshotOnlyClipboardIsAnImage() {
+        let board = pasteboard()
+        board.declareTypes([.png], owner: nil)
+        board.setData(Data([0x89, 0x50]), forType: .png)
+        #expect(RemoteMirrorTerminalView.imageData(from: board) == [Data([0x89, 0x50])])
+    }
+
+    @Test func copiedImageFilesAreReadButOtherFilesAreNot() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let image = directory.appendingPathComponent("shot.png")
+        let text = directory.appendingPathComponent("notes.txt")
+        try Data([1, 2, 3]).write(to: image)
+        try Data("x".utf8).write(to: text)
+
+        let board = pasteboard()
+        board.writeObjects([image as NSURL, text as NSURL])
+        #expect(RemoteMirrorTerminalView.imageData(from: board) == [Data([1, 2, 3])])
+
+        let onlyText = pasteboard()
+        onlyText.writeObjects([text as NSURL])
+        #expect(RemoteMirrorTerminalView.imageData(from: onlyText).isEmpty)
+    }
+}
