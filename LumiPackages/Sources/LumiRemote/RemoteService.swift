@@ -653,11 +653,12 @@ public final class RemoteService: RemoteServicing {
         // snapshot ile canlı baytlar hub emülatörüyle aynı adımda üretilir (arada kayıp yok)
         // ve hub terminali boyut değiştirince yeni boyutta snapshot gelir. Akış await'ten
         // önce açılır — gönderim sürerken gelen baytlar akışta bekler.
-        let mirror = hubActive ? terminal.subscribeScreenMirror(id) : nil
+        let mirror = hubActive && !subscribers.hubConnections(watching: id, mode: .terminal).isEmpty
+            ? terminal.subscribeScreenMirror(id) : nil
 
         // (a) telefon: düz scrollback (seq=0, otoriter cols/rows) + canlı `data` (değişmez).
         var phoneOutput: AsyncStream<Data>?
-        if mobileActive {
+        if mobileActive, subscribers.isPhoneWatching(id) {
             phoneOutput = terminal.subscribeOutput(id)
             let (data, cols, rows) = terminal.serializeScrollback(id)
             nonisolated(unsafe) let payload = RemoteProtocol.scrollbackPayload(
@@ -1006,7 +1007,7 @@ public final class RemoteService: RemoteServicing {
     }
 
     private func emitPhoneData(id: TerminalID, sessionId: String, batch: Data) async {
-        guard subscriptions[id] != nil, mobileActive else { return }
+        guard subscriptions[id] != nil, mobileActive, subscribers.isPhoneWatching(id) else { return }
         nonisolated(unsafe) let payload = RemoteProtocol.dataPayload(sessionId: sessionId, seq: nextSeq(id), data: batch)
         await connection.send(type: "data", payload: payload)
     }
@@ -1016,12 +1017,10 @@ public final class RemoteService: RemoteServicing {
         guard subscriptions[id] != nil else { return }
         switch event {
         case .snapshot(let data, let cols, let rows):
-            await sendOnHub(
-                type: "scrollback",
+            await sendToWatchers(id, mode: .terminal, type: "scrollback",
                 payload: RemoteProtocol.scrollbackPayload(sessionId: sessionId, seq: 0, cols: cols, rows: rows, data: data))
         case .output(let batch):
-            await sendOnHub(
-                type: "data",
+            await sendToWatchers(id, mode: .terminal, type: "data",
                 payload: RemoteProtocol.dataPayload(sessionId: sessionId, seq: nextSeq(id), data: batch))
         }
     }
@@ -1146,7 +1145,40 @@ public final class RemoteService: RemoteServicing {
     private func broadcast(type: String, payload: [String: Any]) async {
         nonisolated(unsafe) let frame = payload
         if mobileActive { await connection.send(type: type, payload: frame) }
-        if hubActive { await hubConnection.send(type: type, payload: frame) }
+        guard hubActive else { return }
+        switch Self.hubAudience(type) {
+        case .everyone:
+            await hubConnection.send(type: type, payload: frame)
+        case .chatWatchers:
+            // Mesaj içeriği yalnız o terminalin chat'ini açmış controller'lara; diğerleri
+            // durumu `sessions`'tan görür (relay maliyeti, karar 143 ek).
+            guard let raw = payload["sessionId"] as? String, let id = terminalID(from: raw) else { return }
+            await sendToWatchers(id, mode: .chat, type: type, payload: payload)
+        case .nobody:
+            return
+        }
+    }
+
+    enum HubAudience: Equatable { case everyone, chatWatchers, nobody }
+
+    /// Hub kanalında frame'in alıcısı. Controller'lar `usage`/`tasks`/`repos`'u kullanmaz.
+    static func hubAudience(_ type: String) -> HubAudience {
+        switch type {
+        case "chat", "chat_append", "chat_status", "prompt": .chatWatchers
+        case "usage", "tasks", "repos": .nobody
+        default: .everyone
+        }
+    }
+
+    /// Frame'i terminali `mode`'da izleyen her controller'a hedefli (`to`) gönderir.
+    private func sendToWatchers(_ id: TerminalID, mode: RemoteSubscribers.Mode, type: String, payload: [String: Any]) async {
+        guard hubActive else { return }
+        for connection in subscribers.hubConnections(watching: id, mode: mode) {
+            var targeted = payload
+            if !connection.isEmpty { targeted["to"] = connection }
+            nonisolated(unsafe) let frame = targeted
+            await hubConnection.send(type: type, payload: frame)
+        }
     }
 
     /// Cevap: yalnız isteğin geldiği kanala; hub kanalında yalnız isteyen controller'a (`to`).

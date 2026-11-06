@@ -32,6 +32,19 @@ struct RemoteSubscribers {
         byTerminal[id]?.values.contains(mode) ?? false
     }
 
+    /// Telefon bu terminali (herhangi bir modda) izliyor mu?
+    func isPhoneWatching(_ id: TerminalID) -> Bool {
+        byTerminal[id]?[Self.phone] != nil
+    }
+
+    /// Terminali `mode`'da izleyen controller bağlantıları (sıralı). Kimliksiz izleyici
+    /// (eski relay) boş dizeyle döner — çağıran hedefsiz gönderir.
+    func hubConnections(watching id: TerminalID, mode: Mode) -> [String] {
+        (byTerminal[id] ?? [:]).compactMap { key, watched in
+            watched == mode ? Self.hubConnection(of: key) : nil
+        }.sorted()
+    }
+
     /// `subscriber` artık `id`'yi `mode`'da izliyor. Dönen kümede, bu izleyicinin
     /// önceki modundan izleyicisi kalmayan mod (kapatılacak akış) bulunur.
     mutating func subscribe(_ id: TerminalID, subscriber: String, mode: Mode) -> Set<Mode> {

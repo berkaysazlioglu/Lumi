@@ -101,6 +101,12 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
     /// Telefondaki Tasks köprüsü (karar 137 mobil ek) buradan bağlanır.
     var service: RemoteService { remoteService }
 
+    /// ⌘T: Remote route'u açıkken seçili uzak terminalin projesinde yeni terminal.
+    func newTerminalOnRemoteRoute(route: WorkspaceRoute) -> Bool {
+        guard route == .content(TasksPanelSection.remote.routeID) else { return false }
+        return controllerStore?.startSessionBesideSelection() ?? false
+    }
+
     func shutdown() async {
         await services.remoteMCP.stop()
         usageBridge.stop()

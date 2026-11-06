@@ -25,7 +25,9 @@ private final class FakeController: RemoteControllerServicing {
     func sendInput(hubId: String, sessionId: String, data: Data) { inputs.append(data) }
     func sendText(hubId: String, sessionId: String, text: String, submit: Bool) async throws {}
     func readTerminal(hubId: String, sessionId: String) async throws -> RemoteTerminalReading { .screen("") }
+    private(set) var startedAt: [(path: String, kind: RemoteSessionKind)] = []
     func startSession(hubId: String, checkoutPath: String, kind: RemoteSessionKind, prompt: String) async throws -> String? {
+        startedAt.append((checkoutPath, kind))
         if let startError { throw startError }
         return nextSessionId
     }
@@ -85,6 +87,30 @@ struct RemoteControllerStoreTests {
         fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [])))
         try await Task.sleep(for: .milliseconds(30))
         #expect(store.selectedSession == nil)
+    }
+
+    /// ⌘T: seçili uzak terminalin checkout'unda yeni Claude; serbest terminalde/seçimsiz no-op.
+    @Test func commandTOpensClaudeBesideTheSelectedTerminal() async throws {
+        let fake = FakeController()
+        let store = RemoteControllerStore(service: fake)
+        store.start()
+        #expect(!store.startSessionBesideSelection())
+        fake.emit(.linkChanged(hubId: "build", .connected))
+        fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(
+            sessions: [RemoteSessionInfo(id: "s1", repoName: "lumi", status: "idle"),
+                       RemoteSessionInfo(id: "loose", repoName: "", status: "idle")],
+            projects: [RemoteProjectNode(path: "/p", name: "lumi", checkouts: [
+                RemoteCheckoutNode(path: "/p/wt", title: "wt", kind: "worktree", agentIds: ["s1"]),
+            ])])))
+        try await Task.sleep(for: .milliseconds(30))
+        store.select(RemoteSessionRef(hubId: "build", sessionId: "loose"))
+        #expect(!store.startSessionBesideSelection())
+        store.select(RemoteSessionRef(hubId: "build", sessionId: "s1"))
+        #expect(store.startSessionBesideSelection())
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(fake.startedAt.map(\.path) == ["/p/wt"])
+        #expect(fake.startedAt.first?.kind == .claude(model: nil))
+        #expect(store.selectedSession == RemoteSessionRef(hubId: "build", sessionId: "new-session"))
     }
 
     @Test func rejectionReasonsReadAsSentences() {

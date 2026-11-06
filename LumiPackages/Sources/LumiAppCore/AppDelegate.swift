@@ -73,6 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             spawnTerminal: { [weak self] scope, command in
                 self?.composition.shell.context.spawnTerminal(in: scope, command: command)
+            },
+            newRemoteTerminal: { [weak self] in
+                guard let self else { return false }
+                return composition.remote.newTerminalOnRemoteRoute(route: shared.navigation.activeRoute)
             }
         )
         // Config henüz diskten okunmadığı için menü varsayılan düzende kurulur;

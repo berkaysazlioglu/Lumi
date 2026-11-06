@@ -189,6 +189,7 @@ struct RemoteServiceHubTests {
         f.term.screenState = (Data("\u{1B}[1;31mvt".utf8), 100, 30)
         await f.service.start()
 
+        await f.mobile.injectInbound(type: "subscribe", payload: ["sessionId": session.raw])
         await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
         try await f.hub.waitForSent(types: ["scrollback"])
         try await f.mobile.waitForSent(types: ["scrollback"])
@@ -207,18 +208,44 @@ struct RemoteServiceHubTests {
         let session = f.makeSession()
         f.term.screenState = (Data("vt".utf8), 100, 30)
         await f.service.start()
+        await f.mobile.injectInbound(type: "subscribe", payload: ["sessionId": session.raw])
         await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
         try await f.hub.waitForSent(types: ["scrollback"])
         try await f.mobile.waitForSent(types: ["scrollback"])
 
+        try await f.mobile.waitForCount(type: "scrollback", atLeast: 2) // iki abonelik → telefonda iki kurulum
+        let phoneSnapshots = await f.mobile.count(type: "scrollback")
+        let hubSnapshots = await f.hub.count(type: "scrollback")
         f.term.emitMirrorSnapshot(session.id, data: Data("vt2".utf8), cols: 140, rows: 40)
-        try await f.hub.waitForCount(type: "scrollback", atLeast: 2)
+        try await f.hub.waitForCount(type: "scrollback", atLeast: hubSnapshots + 1)
         #expect(await f.hub.lastInt(type: "scrollback", key: "cols") == 140)
         #expect(await f.hub.lastStrings(type: "scrollback")["data"] == Data("vt2".utf8).base64EncodedString())
         f.term.emitOutput(session.id, Data("x".utf8))
         try await f.mobile.waitForSent(types: ["data"])
         try await f.hub.waitForSent(types: ["data"])
-        #expect(await f.mobile.count(type: "scrollback") == 1)
+        #expect(await f.mobile.count(type: "scrollback") == phoneSnapshots)
+        f.service.stop()
+    }
+
+    /// İzlemeyen controller'a ve telefona terminal/chat içeriği gitmez; durum `sessions`'ta herkese
+    /// gider (relay maliyeti, karar 143 ek).
+    @Test func onlyWatchersReceiveTerminalAndChatContent() async throws {
+        let f = try await HubFixture(paths: .hubDefaults(mobile: true))
+        let session = f.makeSession()
+        await f.service.start()
+        await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
+        try await f.hub.waitForSent(types: ["scrollback"])
+        f.term.emitOutput(session.id, Data("x".utf8))
+        try await f.hub.waitForSent(types: ["data"])
+
+        let targets = await f.hub.targets(types: ["scrollback", "data"])
+        #expect(!targets.isEmpty)
+        #expect(targets.allSatisfy { $0 == "conn-1" })
+        #expect(await f.mobile.count(type: "scrollback") == 0)
+        #expect(await f.mobile.count(type: "data") == 0)
+        #expect(RemoteService.hubAudience("chat_status") == .chatWatchers)
+        #expect(RemoteService.hubAudience("usage") == .nobody)
+        #expect(RemoteService.hubAudience("sessions") == .everyone)
         f.service.stop()
     }
 

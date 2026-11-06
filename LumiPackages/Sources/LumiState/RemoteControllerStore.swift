@@ -112,6 +112,16 @@ public final class RemoteControllerStore {
         }
     }
 
+    /// ⌘T Remote route'unda: seçili uzak terminalin checkout'unda yeni Claude terminali.
+    /// Seçim yoksa ya da terminal bir checkout'ta değilse (serbest terminal) `false`.
+    @discardableResult
+    public func startSessionBesideSelection() -> Bool {
+        guard let ref = selectedSession, linkState(ref.hubId).isConnected,
+              let path = snapshots[ref.hubId]?.checkoutPath(of: ref.sessionId) else { return false }
+        Task { await startSession(hubId: ref.hubId, checkoutPath: path, kind: .claude(model: nil)) }
+        return true
+    }
+
     public func closeSession(_ ref: RemoteSessionRef) async {
         lastError = nil
         do {

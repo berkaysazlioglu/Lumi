@@ -110,6 +110,11 @@ public struct RemoteHubSnapshot: Sendable, Equatable {
     public func session(_ id: String) -> RemoteSessionInfo? {
         sessions.first { $0.id == id }
     }
+
+    /// Terminalin durduğu checkout'un yolu (Projects ağacından); serbest terminalde nil.
+    public func checkoutPath(of sessionId: String) -> String? {
+        projects.lazy.flatMap(\.checkouts).first { $0.agentIds.contains(sessionId) }?.path
+    }
 }
 
 /// Bir hub'a bağlantının durumu.

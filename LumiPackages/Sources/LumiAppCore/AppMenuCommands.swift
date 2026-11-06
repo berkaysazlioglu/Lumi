@@ -18,13 +18,16 @@ enum AppMenuCommands {
         checkForUpdates: @escaping () -> Void,
         closeActiveProject: @escaping () -> Void,
         toggleOrchestrator: @escaping () -> Void,
-        spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void
+        spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void,
+        newRemoteTerminal: @escaping () -> Bool = { false }
     ) {
         // Karar 103/108: ⌘T aktif terminal YÜZEYİNE vurur — repo route'unda o
         // checkout, All Terminals'ta geçerli konumda serbest terminal. Konum
         // çözümü `ShellContext.spawnTerminal(in:)`'in (top bar butonuyla aynı
         // kapı); `openSettings` deseniyle dışarıdan enjekte edilir.
         dispatcher.register(.newTerminal) {
+            // Karar 143: Remote route'unda seçili uzak terminalin projesinde açar.
+            if newRemoteTerminal() { return }
             guard let scope = shared.navigation.activeRoute.terminalScope else { return }
             // Provider terminali = shell + launch komutu
             spawnTerminal(scope, shared.settings.current.aiProvider.launchCommand)
