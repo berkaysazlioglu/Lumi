@@ -148,7 +148,8 @@ struct RemoteServiceHubTests {
 
         await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
         await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-2"])
-        try await f.hub.waitForCount(type: "scrollback", atLeast: 2)
+        // İkinci abonelik akışı yeniden kurar; tek snapshot hub kanalındaki herkese gider.
+        try await f.hub.waitForCount(type: "scrollback", atLeast: 1)
 
         // Telefonun aynı terminali chat modunda açması controller'ın aynasını kesmez.
         await f.mobile.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "mode": "chat"])
@@ -196,6 +197,28 @@ struct RemoteServiceHubTests {
         #expect(await f.hub.firstInt(type: "scrollback", key: "cols") == 100)
         #expect(await f.mobile.lastStrings(type: "scrollback")["data"] == Data("düz".utf8).base64EncodedString())
         #expect(await f.mobile.firstInt(type: "scrollback", key: "cols") == 80)
+        f.service.stop()
+    }
+
+    /// Hub terminali boyut değiştirince controller'lara yeni boyutta snapshot gider;
+    /// telefonun düz akışı etkilenmez (karar 143 ek).
+    @Test func hubResizeResendsTheScreenStateToControllersOnly() async throws {
+        let f = try await HubFixture(paths: .hubDefaults(mobile: true))
+        let session = f.makeSession()
+        f.term.screenState = (Data("vt".utf8), 100, 30)
+        await f.service.start()
+        await f.hub.injectInbound(type: "subscribe", payload: ["sessionId": session.raw, "from": "conn-1"])
+        try await f.hub.waitForSent(types: ["scrollback"])
+        try await f.mobile.waitForSent(types: ["scrollback"])
+
+        f.term.emitMirrorSnapshot(session.id, data: Data("vt2".utf8), cols: 140, rows: 40)
+        try await f.hub.waitForCount(type: "scrollback", atLeast: 2)
+        #expect(await f.hub.lastInt(type: "scrollback", key: "cols") == 140)
+        #expect(await f.hub.lastStrings(type: "scrollback")["data"] == Data("vt2".utf8).base64EncodedString())
+        f.term.emitOutput(session.id, Data("x".utf8))
+        try await f.mobile.waitForSent(types: ["data"])
+        try await f.hub.waitForSent(types: ["data"])
+        #expect(await f.mobile.count(type: "scrollback") == 1)
         f.service.stop()
     }
 

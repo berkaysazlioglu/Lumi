@@ -649,29 +649,42 @@ public final class RemoteService: RemoteServicing {
     private func startFeedEmission(id: TerminalID, raw: String) async {
         seqCounters[id] = 0
 
-        // (a) scrollback (seq=0, otoriter cols/rows). Telefon düz metni alır (değişmez);
-        // controller'lar ekranı renk/imleç/modlarıyla kuran VT durumunu (karar 143 ek).
+        // Controller'lar ekranı renk/imleç/modlarıyla kuran VT durumunu alır (karar 143 ek):
+        // snapshot ile canlı baytlar hub emülatörüyle aynı adımda üretilir (arada kayıp yok)
+        // ve hub terminali boyut değiştirince yeni boyutta snapshot gelir. Akış await'ten
+        // önce açılır — gönderim sürerken gelen baytlar akışta bekler.
+        let mirror = hubActive ? terminal.subscribeScreenMirror(id) : nil
+
+        // (a) telefon: düz scrollback (seq=0, otoriter cols/rows) + canlı `data` (değişmez).
+        var phoneOutput: AsyncStream<Data>?
         if mobileActive {
+            phoneOutput = terminal.subscribeOutput(id)
             let (data, cols, rows) = terminal.serializeScrollback(id)
             nonisolated(unsafe) let payload = RemoteProtocol.scrollbackPayload(
                 sessionId: raw, seq: 0, cols: cols, rows: rows, data: data)
             await connection.send(type: "scrollback", payload: payload)
         }
-        if hubActive {
-            let (data, cols, rows) = terminal.serializeScreenState(id)
-            await sendOnHub(
-                type: "scrollback",
-                payload: RemoteProtocol.scrollbackPayload(sessionId: raw, seq: 0, cols: cols, rows: rows, data: data))
-        }
 
-        // (b) canlı çıktı stream'i — batch başına artan seq ile `data`.
-        // subscribeOutput terminal exit'inde BİTMEZ; iptal .exited event'inde
-        // (handleTerminalEvent) / unsubscribe / stop'ta explicit yapılır.
-        let stream = terminal.subscribeOutput(id)
+        // (b) canlı akışlar. subscribeOutput terminal exit'inde BİTMEZ; iptal .exited
+        // event'inde (handleTerminalEvent) / unsubscribe / stop'ta explicit yapılır.
         let task = Task { [weak self] in
-            for await batch in stream {
-                guard !Task.isCancelled else { break }
-                await self?.emitData(id: id, sessionId: raw, batch: batch)
+            await withTaskGroup(of: Void.self) { group in
+                if let phoneOutput {
+                    group.addTask { [weak self] in
+                        for await batch in phoneOutput {
+                            guard !Task.isCancelled else { break }
+                            await self?.emitPhoneData(id: id, sessionId: raw, batch: batch)
+                        }
+                    }
+                }
+                if let mirror {
+                    group.addTask { [weak self] in
+                        for await event in mirror {
+                            guard !Task.isCancelled else { break }
+                            await self?.emitMirror(id: id, sessionId: raw, event: event)
+                        }
+                    }
+                }
             }
         }
         subscriptions[id] = task
@@ -992,14 +1005,31 @@ public final class RemoteService: RemoteServicing {
         }
     }
 
-    private func emitData(id: TerminalID, sessionId: String, batch: Data) async {
+    private func emitPhoneData(id: TerminalID, sessionId: String, batch: Data) async {
+        guard subscriptions[id] != nil, mobileActive else { return }
+        nonisolated(unsafe) let payload = RemoteProtocol.dataPayload(sessionId: sessionId, seq: nextSeq(id), data: batch)
+        await connection.send(type: "data", payload: payload)
+    }
+
+    /// Controller aynası: snapshot `scrollback` (seq=0) olarak, baytlar `data` olarak gider.
+    private func emitMirror(id: TerminalID, sessionId: String, event: TerminalMirrorEvent) async {
         guard subscriptions[id] != nil else { return }
+        switch event {
+        case .snapshot(let data, let cols, let rows):
+            await sendOnHub(
+                type: "scrollback",
+                payload: RemoteProtocol.scrollbackPayload(sessionId: sessionId, seq: 0, cols: cols, rows: rows, data: data))
+        case .output(let batch):
+            await sendOnHub(
+                type: "data",
+                payload: RemoteProtocol.dataPayload(sessionId: sessionId, seq: nextSeq(id), data: batch))
+        }
+    }
+
+    private func nextSeq(_ id: TerminalID) -> Int {
         let seq = (seqCounters[id] ?? 0) + 1
         seqCounters[id] = seq
-        await broadcast(
-            type: "data",
-            payload: RemoteProtocol.dataPayload(sessionId: sessionId, seq: seq, data: batch)
-        )
+        return seq
     }
 
     /// Telefon tek izleyicidir. Hub'da additive `mode` yalnız o modu bırakır; yoksa

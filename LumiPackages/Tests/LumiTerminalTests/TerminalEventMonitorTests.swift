@@ -152,6 +152,27 @@ final class TerminalEventMonitorTests: XCTestCase {
         XCTAssertEqual(capture.captured, [[0x17]])
     }
 
+    /// Uzak terminal aynası düz bir SwiftTerm view'ıdır; ⌘⌫ orada da ^U olur (karar 143).
+    func testCommandBackspaceReachesAPlainSwiftTermView() {
+        let monitor = TerminalEventMonitor()
+        let window = makeWindow()
+        let mirror = TerminalView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+        window.contentView?.addSubview(mirror)
+        let capture = SendCapturingDelegate()
+        mirror.terminalDelegate = capture
+        window.makeFirstResponder(mirror)
+
+        let commandBackspace = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+            context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}",
+            isARepeat: false, keyCode: 51
+        )!
+
+        XCTAssertTrue(monitor.routeKeyDown(commandBackspace))
+        XCTAssertEqual(capture.captured, [[0x15]])
+    }
+
     func testUnmappedKeyDownIsLeftToSwiftTerm() {
         let monitor = TerminalEventMonitor()
         let (window, left, _) = makeTwoTerminalWindow()

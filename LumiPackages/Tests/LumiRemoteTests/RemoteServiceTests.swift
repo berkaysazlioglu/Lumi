@@ -283,6 +283,35 @@ final class FakeTerminalServicing: TerminalServicing {
         for await _ in stream { return }
     }
 
+    /// Hub emülatörü boyut değiştirdi: aynalara yeni boyutta snapshot (karar 143 ek).
+    func emitMirrorSnapshot(_ id: TerminalID, data: Data, cols: Int, rows: Int) {
+        mirrorBroadcaster(for: id).send(.snapshot(data: data, cols: cols, rows: rows))
+    }
+
+    func subscribeScreenMirror(_ id: TerminalID) -> AsyncStream<TerminalMirrorEvent> {
+        let state = serializeScreenState(id)
+        let output = outputBroadcaster(for: id).stream()
+        let resyncs = mirrorBroadcaster(for: id).stream()
+        return AsyncStream { continuation in
+            continuation.yield(.snapshot(data: state.data, cols: state.cols, rows: state.rows))
+            let forwardOutput = Task { for await batch in output { continuation.yield(.output(batch)) } }
+            let forwardResyncs = Task { for await event in resyncs { continuation.yield(event) } }
+            continuation.onTermination = { _ in
+                forwardOutput.cancel()
+                forwardResyncs.cancel()
+            }
+        }
+    }
+
+    private var mirrorBroadcasters: [TerminalID: EventBroadcaster<TerminalMirrorEvent>] = [:]
+
+    private func mirrorBroadcaster(for id: TerminalID) -> EventBroadcaster<TerminalMirrorEvent> {
+        if let existing = mirrorBroadcasters[id] { return existing }
+        let fresh = EventBroadcaster<TerminalMirrorEvent>()
+        mirrorBroadcasters[id] = fresh
+        return fresh
+    }
+
     private func outputBroadcaster(for id: TerminalID) -> EventBroadcaster<Data> {
         if let existing = outputBroadcasters[id] { return existing }
         let fresh = EventBroadcaster<Data>()

@@ -55,6 +55,11 @@ final class TerminalSession {
     private let pipeline: TerminalPipeline
     /// Ham PTY bayt batch'leri için broadcaster (remote mirror).
     private let remoteOutputBroadcaster = EventBroadcaster<Data>()
+    /// Controller aynaları: snapshot + sıralı baytlar + boyut değişiminde yeniden snapshot.
+    private(set) lazy var mirrorFeed = RemoteMirrorFeed { [weak self] in
+        let state = self?.serializeScreenState() ?? (data: Data(), cols: 0, rows: 0)
+        return .snapshot(data: state.data, cols: state.cols, rows: state.rows)
+    }
     let presentation: TerminalPresentation
     /// Exit sonrası her dış etki susar (bell dahil) — bayat sinyal yayılmaz.
     private(set) var isTerminated = false
@@ -208,6 +213,7 @@ final class TerminalSession {
         pipeline.watchdog.measureFeed { presentation.feed(batch) }
         (terminalView as? DropAwareTerminalView)?.noteLinkContentChanged()
         remoteOutputBroadcaster.send(batch)
+        mirrorFeed.output(batch)
         if pipeline.flow.noteConsumed(batch.count) {
             pty.resumeReading()
         }
@@ -364,6 +370,10 @@ final class TerminalSession {
 
     func subscribeRemoteOutput() -> AsyncStream<Data> {
         remoteOutputBroadcaster.stream()
+    }
+
+    func subscribeScreenMirror() -> AsyncStream<TerminalMirrorEvent> {
+        mirrorFeed.subscribe()
     }
 
     func writeRemoteInput(_ data: Data) {

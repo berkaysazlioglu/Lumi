@@ -271,6 +271,11 @@ public final class TerminalSessionManager: TerminalServicing {
         return s.subscribeRemoteOutput()
     }
 
+    public func subscribeScreenMirror(_ id: TerminalID) -> AsyncStream<TerminalMirrorEvent> {
+        guard let s = session(for: id) else { return AsyncStream { $0.finish() } }
+        return s.subscribeScreenMirror()
+    }
+
     public func writeInput(_ data: Data, to id: TerminalID) {
         session(for: id)?.writeRemoteInput(data)
     }

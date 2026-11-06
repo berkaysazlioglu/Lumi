@@ -1,4 +1,5 @@
 import AppKit
+import SwiftTerm
 
 /// Terminal alt sisteminin **tek** uygulama-seviyesi `NSEvent` monitörü (refactor 4.7).
 ///
@@ -95,10 +96,11 @@ public final class TerminalEventMonitor {
     }
 
     /// SwiftTerm `keyDown` sealed olduğundan doğal-düzenleme eşlemeleri
-    /// (Option+Backspace → ^W vb.) dispatch'ten önce burada uygulanır. Yalnız first
-    /// responder bir Lumi terminal view'ıyken devreye girer. `true` → event yutuldu.
+    /// (Option+Backspace → ^W vb.) dispatch'ten önce burada uygulanır. First responder
+    /// herhangi bir SwiftTerm view'ıyken devreye girer — uzak terminal aynası dahil
+    /// (karar 143). `true` → event yutuldu.
     func routeKeyDown(_ event: NSEvent) -> Bool {
-        guard let view = event.window?.firstResponder as? DropAwareTerminalView,
+        guard let view = event.window?.firstResponder as? TerminalView,
               let bytes = NaturalEditingKeyMap.bytes(for: event) else {
             return false
         }

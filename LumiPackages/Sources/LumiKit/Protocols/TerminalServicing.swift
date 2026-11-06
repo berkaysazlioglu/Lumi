@@ -82,6 +82,12 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// (karar 143 ek); telefon düz `serializeScrollback`'te kalır.
     func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int)
 
+    /// Controller aynasının sıralı akışı (karar 143 ek): ilk öğe ekran durumu snapshot'ıdır,
+    /// ardından canlı baytlar. Snapshot ile baytlar emülatörle aynı adımda üretildiği için
+    /// arada kayıp/tekrar olmaz; emülatör boyut değiştirince yeni boyutta yeni snapshot gelir.
+    /// Bilinmeyen id → boş/bitirilmiş stream.
+    func subscribeScreenMirror(_ id: TerminalID) -> AsyncStream<TerminalMirrorEvent>
+
     /// Kapanış simetrisi: global NSEvent monitörleri gibi process-ömürlü
     /// kaynakları bırakır. Idempotent'tir; composition root `shutdown()`
     /// yolunda çağırır (refactor 3.2 — somut tipe inmemek için protokolde).
@@ -155,4 +161,26 @@ public extension TerminalSessionControlling {
     func serializeScreenState(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
         serializeScrollback(id)
     }
+
+    /// Emülatörü olmayan implementasyonlar: snapshot + `subscribeOutput` (boyut olayı yok).
+    func subscribeScreenMirror(_ id: TerminalID) -> AsyncStream<TerminalMirrorEvent> {
+        let state = serializeScreenState(id)
+        let output = subscribeOutput(id)
+        return AsyncStream { continuation in
+            continuation.yield(.snapshot(data: state.data, cols: state.cols, rows: state.rows))
+            let task = Task {
+                for await batch in output { continuation.yield(.output(batch)) }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}
+
+/// Controller aynası akışının öğesi (`subscribeScreenMirror`).
+public enum TerminalMirrorEvent: Sendable, Equatable {
+    /// Boş bir emülatörü `cols×rows`'ta bu ekrana kuran VT akışı; ayna sıfırlanıp yeniden kurulur.
+    case snapshot(data: Data, cols: Int, rows: Int)
+    /// Snapshot'tan sonraki ham PTY baytları.
+    case output(Data)
 }

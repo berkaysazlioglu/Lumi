@@ -7,6 +7,8 @@ import SwiftTerm
 /// conformance runtime'da MainActor'ı doğrular.
 extension TerminalSession: @preconcurrency TerminalViewDelegate {
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
+        // Emülatör reflow'u şimdi oldu: aynalar yeni boyutta yeniden kurulur (karar 143 ek).
+        mirrorFeed.sizeChanged()
         requestResize(cols: newCols, rows: newRows)
     }
 
