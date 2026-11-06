@@ -60,6 +60,8 @@ enum AppConfigCodec {
         }
         config.claudeMods = (dict["claudeMods"] as? [String: Any])?
             .compactMapValues { JSONValue.bool($0) } ?? [:]
+        config.hubSuspendedClaudeMods = (dict["hubSuspendedClaudeMods"] as? [String: Any])?
+            .compactMapValues { JSONValue.bool($0) } ?? [:]
         config.claudeAccounts = ClaudeAccountCodec.decodeList(dict["claudeAccounts"])
         config.claudeAccountSelection = ClaudeAccountCodec.decodeSelection(
             dict["activeClaudeAccountId"], accounts: config.claudeAccounts
@@ -104,6 +106,7 @@ enum AppConfigCodec {
             "orchestratorDigestsEnabled": config.orchestratorDigestsEnabled,
             "claudeModelShortcutsEnabled": config.claudeModelShortcutsEnabled,
             "claudeMods": config.claudeMods,
+            "hubSuspendedClaudeMods": config.hubSuspendedClaudeMods,
             "claudeAccounts": ClaudeAccountCodec.overlayList(config.claudeAccounts),
             "codexAccounts": CodexAccountCodec.overlayList(config.codexAccounts),
             "indexShortcutStyle": config.indexShortcutStyle.rawValue,

@@ -24,6 +24,7 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
     private var controllerService: RemoteControllerService!
     private var configTask: Task<Void, Never>?
     private var services: (any ServiceRegistry)!
+    private weak var shared: SharedStores?
     /// Kota göstergeleri → telefon (karar 128).
     private let usageBridge: RemoteUsageBridge
 
@@ -33,6 +34,7 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
         self.services = services
+        self.shared = shared
         remoteService = RemoteService(
             paths: services.paths,
             terminal: services.terminal,
@@ -66,10 +68,16 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
         let configStream = remoteService.events()
         configTask = Task { [weak self] in
             for await event in configStream {
-                if case .configChanged = event { self?.configureController() }
+                if case .configChanged = event {
+                    self?.configureController()
+                    self?.syncHubClaudeMods()
+                }
             }
         }
-        Task { [remoteService] in await remoteService?.start() }
+        Task { [weak self, remoteService] in
+            await remoteService?.start()
+            self?.syncHubClaudeMods()
+        }
         let service = remoteService!
         usageBridge.start { report in await service.publishUsage(report) }
     }
@@ -113,6 +121,15 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
         configTask?.cancel()
         controllerStore.stop()
         remoteService.stop()
+    }
+
+    /// Karar 143 ek: hub olarak paylaşılırken uyumsuz Claude modları kapalı, paylaşım
+    /// kapanınca önceki durumlarına döner. Durum değişmiyorsa config'e yazılmaz.
+    private func syncHubClaudeMods() {
+        guard let settings = shared?.settings else { return }
+        let isSharing = remoteService.currentConfig.hubEnabled
+        guard ClaudeMods.applyingHubSharing(isSharing, to: settings.current) != settings.current else { return }
+        settings.apply { $0 = ClaudeMods.applyingHubSharing(isSharing, to: $0) }
     }
 
     private func configureController() {

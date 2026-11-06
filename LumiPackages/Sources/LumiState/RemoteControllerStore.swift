@@ -164,8 +164,8 @@ public final class RemoteControllerStore {
     }
 
     public func viewMode(_ ref: RemoteSessionRef) -> RemoteSessionViewMode {
-        if let mode = viewModes[ref] { return mode }
-        return snapshots[ref.hubId]?.session(ref.sessionId)?.provider == .claude ? .chat : .terminal
+        // Ham terminal varsayılandır (kullanıcı kararı 2026-11-06); chat başlıktan seçilir.
+        viewModes[ref] ?? .terminal
     }
 
     public func setViewMode(_ mode: RemoteSessionViewMode, for ref: RemoteSessionRef) {

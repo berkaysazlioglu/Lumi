@@ -17,4 +17,13 @@ final class ClaudeModsCodecTests: XCTestCase {
 
         XCTAssertEqual(config.claudeMods, ["a": true, "b": false])
     }
+
+    /// Karar 143 ek: paylaşım sırasında saklanan önceki mod durumları gidip gelir.
+    func testHubSuspendedModsRoundTrip() {
+        var config = AppConfig.defaults
+        config.hubSuspendedClaudeMods = ["image-preview": true]
+        let decoded = ConfigCodec.decodeConfig(from: ConfigCodec.configOverlay(config))
+        XCTAssertEqual(decoded.hubSuspendedClaudeMods, ["image-preview": true])
+        XCTAssertEqual(ConfigCodec.decodeConfig(from: [:]).hubSuspendedClaudeMods, [:])
+    }
 }

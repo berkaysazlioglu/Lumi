@@ -48,4 +48,27 @@ public enum ClaudeMods {
     public static func enabledPaths(_ mods: [ClaudeMod], config: AppConfig) -> [String] {
         mods.filter { isEnabled($0, in: config) }.map(\.path)
     }
+
+    /// Hub olarak paylaşılan Mac'te kapalı tutulan Lumi modları (karar 143 ek):
+    /// `image-preview` terminale kitty görsel verisi basar — controller'lara relay
+    /// üzerinden giderdi. Hepsi Lumi'nin modudur (kayıtsızken açık).
+    public static let hubIncompatibleModIDs: Set<String> = ["image-preview"]
+
+    /// Paylaşım açılınca modları kapatıp önceki durumlarını saklar; kapanınca geri
+    /// yükler. İdempotent: zaten saklanmışsa ya da saklanacak bir şey yoksa dokunmaz.
+    public static func applyingHubSharing(_ isSharing: Bool, to config: AppConfig) -> AppConfig {
+        var config = config
+        if isSharing {
+            for id in hubIncompatibleModIDs.sorted() where config.hubSuspendedClaudeMods[id] == nil {
+                config.hubSuspendedClaudeMods[id] = config.claudeMods[id] ?? true
+                config.claudeMods[id] = false
+            }
+        } else {
+            for (id, previous) in config.hubSuspendedClaudeMods {
+                config.claudeMods[id] = previous
+            }
+            config.hubSuspendedClaudeMods = [:]
+        }
+        return config
+    }
 }

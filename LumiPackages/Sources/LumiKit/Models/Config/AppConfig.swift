@@ -73,6 +73,9 @@ public struct AppConfig: Sendable, Equatable {
     /// 142). Kaydı olmayan mod Lumi'ninse açık, kullanıcınınsa kapalıdır.
     /// Additive (karar 9): yoksa boş.
     public var claudeMods: [String: Bool]
+    /// Bu Mac hub olarak paylaşılırken kapatılan modlar → paylaşımdan önceki
+    /// durumları (karar 143 ek); paylaşım kapanınca geri yüklenir. Additive: yoksa boş.
+    public var hubSuspendedClaudeMods: [String: Bool]
     /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
     /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.
     public var claudeAccounts: [ClaudeAccount]
@@ -135,6 +138,7 @@ public struct AppConfig: Sendable, Equatable {
         orchestratorDigestsEnabled: true,
         claudeModelShortcutsEnabled: true,
         claudeMods: [:],
+        hubSuspendedClaudeMods: [:],
         claudeAccounts: [],
         claudeAccountSelection: .systemDefault,
         codexAccounts: [],
@@ -170,6 +174,7 @@ public struct AppConfig: Sendable, Equatable {
         orchestratorDigestsEnabled: Bool = true,
         claudeModelShortcutsEnabled: Bool = true,
         claudeMods: [String: Bool] = [:],
+        hubSuspendedClaudeMods: [String: Bool] = [:],
         claudeAccounts: [ClaudeAccount] = [],
         claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
         codexAccounts: [CodexAccount] = [],
@@ -205,6 +210,7 @@ public struct AppConfig: Sendable, Equatable {
         self.orchestratorDigestsEnabled = orchestratorDigestsEnabled
         self.claudeModelShortcutsEnabled = claudeModelShortcutsEnabled
         self.claudeMods = claudeMods
+        self.hubSuspendedClaudeMods = hubSuspendedClaudeMods
         self.claudeAccounts = claudeAccounts
         self.claudeAccountSelection = claudeAccountSelection
         self.codexAccounts = codexAccounts

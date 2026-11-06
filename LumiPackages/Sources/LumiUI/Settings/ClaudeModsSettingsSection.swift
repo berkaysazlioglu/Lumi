@@ -51,8 +51,12 @@ struct ClaudeModsSettingsSection: View {
 
     private func hint(for mod: ClaudeMod) -> String {
         let source = mod.isBundled ? "Lumi" : (mod.version.map { "v\($0)" } ?? "Your mod")
-        guard let description = mod.description, !description.isEmpty else { return source }
-        return "\(description) · \(source)"
+        var hint = mod.description.flatMap { $0.isEmpty ? nil : "\($0) · \(source)" } ?? source
+        // Karar 143 ek: paylaşım sürerken kapatıldı; paylaşım bitince önceki hâline döner.
+        if shell.settings.current.hubSuspendedClaudeMods[mod.id] != nil {
+            hint += " · Off while this Mac is shared as a hub; restored when sharing stops."
+        }
+        return hint
     }
 
     private func openFolder() {
