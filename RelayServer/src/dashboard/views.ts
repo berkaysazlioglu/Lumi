@@ -51,7 +51,9 @@ button.ghost{background:transparent;color:var(--muted);border:1px solid var(--bo
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .notice{padding:10px 12px;border-radius:8px;margin-bottom:16px;border:1px solid var(--border)}.notice.ok{border-color:var(--ok)}.notice.error{border-color:var(--err)}
 .secret{border:1px solid var(--warn);border-radius:8px;padding:12px;margin-bottom:16px}
-.login{max-width:340px;margin:12vh auto}.login input{width:100%;margin-bottom:10px}.login button{width:100%}
+.login{max-width:340px;margin:12vh auto}
+/* Bağlantı, form değil: form-action 'self' formun sağlayıcıya yönlenmesini engeller. */
+a.button{display:block;text-align:center;text-decoration:none;background:var(--accent);color:#fff;border-radius:6px;padding:9px 12px;font-size:13px}
 .scroll{overflow-x:auto}`
 
 function page(title: string, body: string): string {
@@ -59,18 +61,17 @@ function page(title: string, body: string): string {
 <title>${escapeHtml(title)}</title><style>${STYLE}</style></head><body>${body}</body></html>`
 }
 
-export function loginPage(error?: string): string {
-  return page('Lumi Relay', `<main><form class="card login" method="post" action="/login">
+export function loginPage(providerName: string, error?: string): string {
+  return page('Lumi Relay', `<main><div class="card login">
 <h1 style="margin-bottom:16px">Lumi Relay</h1>
 ${error ? `<div class="notice error">${escapeHtml(error)}</div>` : ''}
-<input name="username" placeholder="Username" autocomplete="username" required autofocus>
-<input name="password" type="password" placeholder="Password" autocomplete="current-password" required>
-<button type="submit">Sign in</button></form></main>`)
+<a class="button" href="/auth/start">Sign in with ${escapeHtml(providerName)}</a>
+</div></main>`)
 }
 
 export function disabledPage(): string {
   return page('Lumi Relay', `<main><div class="card login"><h1>Lumi Relay</h1>
-<p class="muted">Dashboard is disabled. Set <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> to enable it.</p></div></main>`)
+<p class="muted">Dashboard is disabled. Set <code>OIDC_ISSUER</code> and <code>ALLOWED_EMAIL_DOMAINS</code> (or <code>ALLOWED_EMAILS</code>) to enable it.</p></div></main>`)
 }
 
 function time(ms: number | null): string {

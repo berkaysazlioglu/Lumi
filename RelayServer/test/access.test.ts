@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { ServerAccess, TOKEN_PREFIX } from '../src/access.js'
 import { buildNetworkPolicy, DEFAULT_ALLOWLIST, parseAllowlist } from '../src/allowlist.js'
 import { MemoryStore } from '../src/store.js'
+import { isAllowedEmail, parseList, requestedScope } from '../src/dashboard/oidc.js'
 
 describe('allowlist', () => {
   test('satır ya da virgülle ayrılmış kayıtlar ve etiketler çözülür, bozuklar ayrılır', () => {
@@ -72,5 +73,22 @@ describe('ServerAccess', () => {
   test('boş ad reddedilir', async () => {
     const access = await ServerAccess.load(new MemoryStore())
     await expect(access.createToken('   ')).rejects.toThrow()
+  })
+})
+
+describe('dashboard girişi', () => {
+  test('email kapsamı yalnız sağlayıcı destekliyorsa istenir', () => {
+    expect(requestedScope({ scopes_supported: ['openid', 'offline_access', 'mcp'] })).toBe('openid')
+    expect(requestedScope({ scopes_supported: ['openid', 'email'] })).toBe('openid email')
+    expect(requestedScope({})).toBe('openid email')
+  })
+
+  test('alan adı ve e-posta listeleri büyük/küçük harf ve @ önekinden bağımsızdır', () => {
+    const allowed = { emails: parseList('Guest@Gmail.com'), domains: parseList(' @UncoSoft.com , rollicgames.com') }
+    expect(isAllowedEmail('berkay@uncosoft.com', allowed)).toBe(true)
+    expect(isAllowedEmail('X@ROLLICGAMES.COM', allowed)).toBe(true)
+    expect(isAllowedEmail('guest@gmail.com', allowed)).toBe(true)
+    expect(isAllowedEmail('berkay@uncosoft.com.evil.io', allowed)).toBe(false)
+    expect(isAllowedEmail('nobody@gmail.com', allowed)).toBe(false)
   })
 })

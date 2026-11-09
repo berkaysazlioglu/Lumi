@@ -9,9 +9,9 @@ Durum: Faz 1 (sunucu), Faz 2 (Mac) ve Faz 3 (telefon) tamam, 2026-11-09. Railway
 3. **Hub şifresi zorunludur.** Şifresi olmayan Mac hub olarak paylaşılamaz. Bunu Mac uygular; şifreyi relay değil hub doğrular (08'deki gibi).
 4. **IP allowlist yalnız hub/controller içindir.** Telefon odası (`mac`/`phone` rolleri) her ağdan bağlanır. Başlangıç listesi unco-forge'un varsayılanlarıdır, mod `enforce`.
 5. **Telefon QR ile eşleşir.** Mac, server token'ıyla bağlanır ve bugünkü oda token'ını üretir. QR'a URL + server token + oda token'ı gömülür; telefon ikisiyle bağlanır.
-6. **Dashboard kullanıcı adı + şifreyle girilir** (`ADMIN_USERNAME` / `ADMIN_PASSWORD`). Token girişi yoktur.
+6. **Dashboard'a OIDC ile girilir; kullanıcı adı/şifre yoktur** (2026-11-09 düzeltmesi). Lumi'nin sunucusunda sağlayıcı unco-forge'dur; o da Google SSO'ya devreder, yani girişte "Sign in with Google" görünür. Girebilenler alan adıyla belirlenir: `uncosoft.com`, `rollicgames.com`. Yeni Google projesi ya da unco-forge değişikliği gerekmez.
 7. **Ortak bağlantı bileşeni.** Remote route'undaki `This Mac` ve `Mobile` ekranları aynı Server URL + Token bileşenini kullanır. Telefonda giriş alanı yoktur, yalnız QR okunur.
-8. **Google login yok.** Bu modelde Google/unco-forge OAuth kullanılmaz.
+8. **Lumi istemcileri (Mac/telefon) login yapmaz.** Sunucuya yalnız server token'ıyla bağlanır. Tek token üretip herkese dağıtmak geçerli bir kullanımdır.
 
 ## Sunucu (RelayServer, Faz 1)
 
@@ -34,14 +34,20 @@ Durum: Faz 1 (sunucu), Faz 2 (Mac) ve Faz 3 (telefon) tamam, 2026-11-09. Railway
 - Uç noktalar: `/`, `/login`, `/logout`, `/tokens`, `/tokens/:id/revoke`, `/allowlist`. Sunucu tarafında çizilir.
 - Oturum `HMAC(SESSION_SECRET)` imzalı cookie'dir: 12 saat, `HttpOnly`, `SameSite=Strict`, HTTPS'te `Secure`.
 - POST'ta `Origin` kendi kökeni olmalıdır.
-- Giriş: IP başına 15 dk'da 5 yanlış denemeden sonra `429`.
+- Giriş akışı (`src/dashboard/oidc.ts`): yetkilendirme kodu + PKCE (S256), `state` + `nonce` 10 dk'lık imzalı cookie'de bekler.
+  - Keşif önce `/.well-known/openid-configuration`'a, olmazsa RFC 8414 `/.well-known/oauth-authorization-server`'a bakar (unco-forge yalnız bunu açar).
+  - `OIDC_CLIENT_ID` yoksa sunucu sağlayıcıya kendini kaydeder ve kaydı store'da tutar.
+  - `id_token` sağlayıcının JWKS'iyle doğrulanır (issuer, audience = client_id, nonce). E-posta `email` claim'i, yoksa `sub`'dır.
+  - `email` kapsamı yalnız sağlayıcı destekliyorsa istenir; unco-forge kapsamları otomatik onaylar, desteklenmeyen kapsam onay döngüsü riski taşır.
+- Oturum cookie'si `SameSite=Lax`'tir (sağlayıcıdan dönüş siteler arası bir yönlendirme zinciri), POST'lar `Sec-Fetch-Site` / `Origin` ile korunur.
 - İçerik: durum (bağlantı, çevrimiçi Mac, telefon, hub listesi), token yönetimi, allowlist.
-- `ADMIN_USERNAME` / `ADMIN_PASSWORD` yoksa dashboard kapalıdır (`503`).
+- `OIDC_ISSUER` ya da izin listesi (`ALLOWED_EMAIL_DOMAINS` / `ALLOWED_EMAILS`) yoksa dashboard kapalıdır (`503`).
 
 **Diğer.**
 - `/health` kimlik doğrulamasız `{ok:true}` döner.
 - Kalıcı durum yalnız yönetim verisidir: `relay_tokens`, `relay_settings`. Postgres (`DATABASE_URL`) yoksa bellekte tutulur. Oda/hub durumu bilerek bellektedir. Sunucu **tek kopya** çalışır.
-- Env: `PORT`, `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET`, `NETWORK_ALLOWLIST`, `NETWORK_ALLOWLIST_MODE`, `APNS_*`.
+- Env: `PORT`, `DATABASE_URL`, `SESSION_SECRET`, `OIDC_ISSUER`, `OIDC_PROVIDER_NAME`, `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` (isteğe bağlı), `ALLOWED_EMAIL_DOMAINS`, `ALLOWED_EMAILS`, `PUBLIC_URL`, `NETWORK_ALLOWLIST`, `NETWORK_ALLOWLIST_MODE`, `APNS_*`.
+- Lumi'nin sunucusundaki değerler: `OIDC_ISSUER=https://sb.internal.rollic.io`, `OIDC_PROVIDER_NAME=Google`, `ALLOWED_EMAIL_DOMAINS=uncosoft.com,rollicgames.com`.
 
 **Kapanış kodları.**
 

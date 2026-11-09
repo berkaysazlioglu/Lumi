@@ -3,7 +3,7 @@ import type { Duplex } from 'node:stream'
 import { WebSocketServer, WebSocket } from 'ws'
 import type { AuthenticatedToken, ServerAccess } from './access.js'
 import { Bridge, type PushSender } from './bridge.js'
-import { createDashboard, text } from './dashboard/routes.js'
+import { createDashboard, text, type DashboardLogin } from './dashboard/routes.js'
 import { HubBridge, type Conn } from './hubs.js'
 import { Registry, type ClientLike } from './registry.js'
 import { parseEnvelope, type Envelope } from './protocol.js'
@@ -13,8 +13,8 @@ export interface ServerOptions {
   port: number
   push: PushSender
   access: ServerAccess
-  /** Dashboard girişi; kullanıcı adı/şifre yoksa dashboard kapalıdır. */
-  admin?: { username?: string; password?: string; sessionSecret: string }
+  /** Dashboard girişi (OIDC); yoksa dashboard kapalıdır. */
+  dashboard?: { login?: DashboardLogin; sessionSecret: string }
   helloTimeoutMs?: number
   heartbeatMs?: number
   attachTimeoutMs?: number
@@ -52,9 +52,8 @@ export function startServer(opts: ServerOptions): RunningServer {
 
   const dashboard = createDashboard({
     access: opts.access,
-    username: opts.admin?.username,
-    password: opts.admin?.password,
-    sessionSecret: opts.admin?.sessionSecret ?? '',
+    login: opts.dashboard?.login,
+    sessionSecret: opts.dashboard?.sessionSecret ?? '',
     status: () => ({ rooms: registry.stats(), hubs: hubs.directory(), connections: wss.clients.size }),
   })
 
@@ -154,7 +153,6 @@ export function startServer(opts: ServerOptions): RunningServer {
     hubs.sweep()
     failedHellos.sweep()
     failedUpgrades.sweep()
-    dashboard.sweep()
   }, opts.heartbeatMs ?? 30_000)
 
   http.listen(opts.port)
