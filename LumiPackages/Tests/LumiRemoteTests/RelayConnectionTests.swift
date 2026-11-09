@@ -9,7 +9,7 @@ final class RelayConnectionTests: XCTestCase {
         let stream = await connection.inbound()
         // Kapalı porta bağlanma → connecting, ardından disconnected beklenir
         await connection.start(
-            url: URL(string: "ws://127.0.0.1:1")!,
+            endpoint: RelayEndpoint(url: URL(string: "ws://127.0.0.1:1")!, token: "lrs_test"),
             hello: ["role": "mac", "token": "secret-token-1234567890"])
 
         var states: [RemoteConnectionState] = []
@@ -29,10 +29,20 @@ final class RelayConnectionTests: XCTestCase {
         await connection.stop()
         await connection.stop()
         await connection.start(
-            url: URL(string: "ws://127.0.0.1:1")!,
+            endpoint: RelayEndpoint(url: URL(string: "ws://127.0.0.1:1")!, token: "lrs_test"),
             hello: ["role": "mac", "token": "secret-token-1234567890"])
         await connection.stop()
         // Çökmeden buraya gelmek yeterli
         XCTAssertTrue(true)
+    }
+
+    /// Karar 146: 401 ve 4006/4007 kalıcı rettir (yeniden denenmez); diğerleri değildir.
+    func testPermanentIssueMapping() {
+        XCTAssertEqual(RelayConnection.permanentIssue(httpStatus: 401, closeCode: nil), .unauthorized)
+        XCTAssertEqual(RelayConnection.permanentIssue(httpStatus: nil, closeCode: 4006), .networkNotAllowed)
+        XCTAssertEqual(RelayConnection.permanentIssue(httpStatus: nil, closeCode: 4007), .tokenRevoked)
+        XCTAssertNil(RelayConnection.permanentIssue(httpStatus: 429, closeCode: nil))
+        XCTAssertNil(RelayConnection.permanentIssue(httpStatus: nil, closeCode: 4003))
+        XCTAssertNil(RelayConnection.permanentIssue(httpStatus: nil, closeCode: 1006))
     }
 }

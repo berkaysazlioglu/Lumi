@@ -193,6 +193,8 @@ public struct RemotePromptSelection: Sendable, Equatable {
 
 public enum RemoteControllerEvent: Sendable, Equatable {
     case directoryStateChanged(RemoteConnectionState)
+    /// Sunucu directory soketini kalıcı olarak reddetti; `nil` sorun giderildi (karar 146).
+    case directoryIssueChanged(RemoteServerIssue?)
     case hubsChanged([RemoteHubInfo])
     case linkChanged(hubId: String, RemoteHubLinkState)
     case snapshotChanged(hubId: String, RemoteHubSnapshot)

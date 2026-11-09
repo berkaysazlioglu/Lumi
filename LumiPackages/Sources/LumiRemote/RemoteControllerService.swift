@@ -3,7 +3,7 @@ import LumiKit
 
 /// Mac'ten Mac'e remote'un controller tarafı (docs/design/08-mac-remote.md, Faz 3).
 ///
-/// Ağ token'ıyla relay'e bir **directory** soketi açar (`hubs` listesi) ve
+/// Sunucuya (karar 146: adres + server token'ı) bir **directory** soketi açar (`hubs` listesi) ve
 /// bağlanılan her hub için ayrı bir `RemoteHubLink` tutar. Hub çevrimdışı olup
 /// geri gelince bellekteki şifreyle kendiliğinden yeniden bağlanır; şifre
 /// reddedilirse (4003) yeniden denemez. Hatırlanan şifreler Keychain'de
@@ -14,10 +14,11 @@ public final class RemoteControllerService: RemoteControllerServicing {
 
     public private(set) var directoryState: RemoteConnectionState = .disconnected
     public private(set) var hubs: [RemoteHubInfo] = []
+    /// Directory soketinin kalıcı reddi (karar 146); yeniden yapılandırılınca temizlenir.
+    public private(set) var directoryIssue: RemoteServerIssue?
 
     private struct Settings: Equatable {
-        let url: URL
-        let network: String
+        let endpoint: RelayEndpoint
         let identity: RemoteControllerIdentity
     }
 
@@ -49,15 +50,12 @@ public final class RemoteControllerService: RemoteControllerServicing {
 
     // MARK: - Directory
 
-    public func configure(relayUrl: String, networkToken: String, identity: RemoteControllerIdentity) {
-        let token = networkToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        let next = URL(string: relayUrl).flatMap { url in
-            token.isEmpty ? nil : Settings(url: url, network: token, identity: identity)
-        }
+    public func configure(endpoint: RelayEndpoint?, identity: RemoteControllerIdentity) {
+        let next = endpoint.map { Settings(endpoint: $0, identity: identity) }
         guard next != settings else { return }
-        let networkChanged = next?.network != settings?.network || next?.url != settings?.url
+        let serverChanged = next?.endpoint != settings?.endpoint
         settings = next
-        Task { await self.reopenDirectory(dropLinks: networkChanged) }
+        Task { await self.reopenDirectory(dropLinks: serverChanged) }
     }
 
     public func stop() {
@@ -76,6 +74,7 @@ public final class RemoteControllerService: RemoteControllerServicing {
             for link in all { await link.shutdown() }
         }
         setHubs([])
+        setDirectoryIssue(nil)
         guard let settings else {
             setDirectoryState(.disconnected)
             return
@@ -87,8 +86,8 @@ public final class RemoteControllerService: RemoteControllerServicing {
             for await inbound in stream { self?.handleDirectory(inbound) }
         }
         setDirectoryState(.connecting)
-        await connection.start(url: settings.url, hello: [
-            "role": "controller", "network": settings.network,
+        await connection.start(endpoint: settings.endpoint, hello: [
+            "role": "controller",
             "controllerId": settings.identity.controllerId, "name": settings.identity.name,
         ])
     }
@@ -101,6 +100,8 @@ public final class RemoteControllerService: RemoteControllerServicing {
             guard let settings else { return }
             setHubs(RemoteControllerWire.hubs(payload, excluding: settings.identity.ownHubId))
             reconnectReturningHubs()
+        case .rejected(let issue):
+            setDirectoryIssue(issue)
         case .message, .closed:
             break
         }
@@ -246,10 +247,10 @@ public final class RemoteControllerService: RemoteControllerServicing {
 
     private func open(_ link: RemoteHubLink, password: String) async {
         guard let settings else {
-            notify(hubId: link.hubId, state: .rejected(reason: "no_network"))
+            notify(hubId: link.hubId, state: .rejected(reason: "no_server"))
             return
         }
-        await link.open(url: settings.url, network: settings.network, identity: settings.identity, password: password)
+        await link.open(endpoint: settings.endpoint, identity: settings.identity, password: password)
     }
 
     private func linkDidChange(_ link: RemoteHubLink) {
@@ -270,6 +271,12 @@ public final class RemoteControllerService: RemoteControllerServicing {
         guard hubs != list else { return }
         hubs = list
         broadcaster.send(.hubsChanged(list))
+    }
+
+    private func setDirectoryIssue(_ issue: RemoteServerIssue?) {
+        guard directoryIssue != issue else { return }
+        directoryIssue = issue
+        broadcaster.send(.directoryIssueChanged(issue))
     }
 
     private func setDirectoryState(_ state: RemoteConnectionState) {

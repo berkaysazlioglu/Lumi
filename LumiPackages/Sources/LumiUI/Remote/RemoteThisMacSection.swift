@@ -2,63 +2,6 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Mac'ten Mac'e ağ: token yoksa oluştur / katıl, varsa kopyala / ayrıl (docs/design/08).
-struct RemoteNetworkSection: View {
-    let remote: RemoteStore
-
-    @State private var isJoining = false
-    @State private var tokenDraft = ""
-    @State private var joinError: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            RemoteSectionHeader(title: "Network")
-            if remote.hasNetwork {
-                Text("Macs with the same network token see each other. Share it only with your own Macs.")
-                    .modifier(RemoteHintStyle())
-                HStack(spacing: Theme.Spacing.md) {
-                    LumiActionButton(title: "Copy Token") { copyToken() }
-                    LumiActionButton(title: "Leave", kind: .destructive) { Task { await remote.leaveNetwork() } }
-                }
-            } else if isJoining {
-                LumiTextInput(text: $tokenDraft, placeholder: "Paste the network token", autofocus: true,
-                              isSecure: true, onSubmit: join)
-                if let joinError {
-                    Text(joinError).font(Theme.Typography.labelMono).foregroundStyle(Theme.error)
-                }
-                HStack(spacing: Theme.Spacing.md) {
-                    LumiActionButton(title: "Join", kind: .primary, action: join)
-                    LumiActionButton(title: "Cancel") { isJoining = false; joinError = nil }
-                }
-            } else {
-                Text("Create a network here, then join it from your other Macs with the same token.")
-                    .modifier(RemoteHintStyle())
-                HStack(spacing: Theme.Spacing.md) {
-                    LumiActionButton(title: "Create Network", kind: .primary) { Task { await remote.createNetwork() } }
-                    LumiActionButton(title: "Join Network…") { isJoining = true }
-                }
-            }
-        }
-    }
-
-    private func join() {
-        Task {
-            if await remote.joinNetwork(tokenDraft) {
-                tokenDraft = ""
-                isJoining = false
-                joinError = nil
-            } else {
-                joinError = "That doesn't look like a network token."
-            }
-        }
-    }
-
-    private func copyToken() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(remote.config.networkToken, forType: .string)
-    }
-}
-
 /// Bu Mac'in hub olarak paylaşılması: anahtar, ad, şifre, bağlı controller'lar.
 struct RemoteThisMacSection: View {
     let remote: RemoteStore
@@ -76,7 +19,7 @@ struct RemoteThisMacSection: View {
             RemoteSectionHeader(title: "This Mac", trailing: statusLabel)
             LumiToggleRow(
                 title: "Share This Mac",
-                hint: "Other Macs on the network can open and drive terminals here with the password.",
+                hint: "Other Macs on this server can open and drive terminals here with the password.",
                 isOn: Binding(get: { remote.config.hubEnabled }, set: setSharing))
             HStack(spacing: Theme.Spacing.md) {
                 LumiTextInput(text: $nameDraft, placeholder: remote.hubDisplayName, onSubmit: saveName)

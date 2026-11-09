@@ -6,18 +6,18 @@ import LumiTestSupport
 
 // Bu Mac'in hub olarak paylaşılması (docs/design/08-mac-remote.md, Faz 2).
 
-private let network = "network-token-A-1234567890"
+private let testServerToken = "lrs_server-token-1234567890"
 
 private extension LumiPaths {
     /// Hub ayarlı remote.json (telefon kanalı `mobile` ile açılıp kapanır).
-    static func hubDefaults(mobile: Bool = false, hubEnabled: Bool = true, networkToken: String = network) -> LumiPaths {
+    static func hubDefaults(mobile: Bool = false, hubEnabled: Bool = true, serverToken: String = testServerToken) -> LumiPaths {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("lumi-remote-hub-test-\(UUID().uuidString)")
         let paths = LumiPaths(mode: .development, homeDirectory: home)
         try? paths.ensureDirectoriesExist()
         let json: [String: Any] = [
             "enabled": mobile, "relayUrl": "wss://test.invalid", "token": "tok",
-            "networkToken": networkToken, "hubEnabled": hubEnabled,
+            "serverToken": serverToken, "hubEnabled": hubEnabled,
             "hubId": "hub-0000-test", "hubName": "Build Mac",
         ]
         try? JSONSerialization.data(withJSONObject: json).write(to: paths.remoteFile)
@@ -61,12 +61,15 @@ private struct HubFixture {
 
 @MainActor
 struct RemoteServiceHubTests {
-    @Test func hubChannelOpensWithNetworkIdentityAndKeyWhenReady() async throws {
+    @Test func hubChannelOpensWithServerTokenIdentityAndKeyWhenReady() async throws {
         let f = try await HubFixture()
         await f.service.start()
         let hello = await f.hub.hello
         #expect(hello["role"] == "hub")
-        #expect(hello["network"] == network)
+        // Karar 146: sunucu tek ağdır — hello'da ağ token'ı yok, server token'ı el sıkışmada.
+        #expect(hello["network"] == nil)
+        #expect(await f.hub.endpoint?.token == testServerToken)
+        #expect(await f.hub.endpoint?.url.absoluteString == "wss://test.invalid")
         #expect(hello["hubId"] == "hub-0000-test")
         #expect(hello["name"] == "Build Mac")
         #expect((hello["hubKey"]?.count ?? 0) >= 16)
@@ -80,14 +83,14 @@ struct RemoteServiceHubTests {
     }
 
     @Test(arguments: [
-        (hubEnabled: false, networkToken: network, password: "doğru" as String?),
-        (hubEnabled: true, networkToken: "", password: "doğru" as String?),
-        (hubEnabled: true, networkToken: network, password: nil as String?),
+        (hubEnabled: false, serverToken: testServerToken, password: "doğru" as String?),
+        (hubEnabled: true, serverToken: "", password: "doğru" as String?),
+        (hubEnabled: true, serverToken: testServerToken, password: nil as String?),
     ])
-    func hubChannelStaysClosedWithoutSharingTokenOrPassword(
-        hubEnabled: Bool, networkToken: String, password: String?
+    func hubChannelStaysClosedWithoutSharingServerOrPassword(
+        hubEnabled: Bool, serverToken: String, password: String?
     ) async throws {
-        let f = try await HubFixture(paths: .hubDefaults(hubEnabled: hubEnabled, networkToken: networkToken),
+        let f = try await HubFixture(paths: .hubDefaults(hubEnabled: hubEnabled, serverToken: serverToken),
                                      password: password)
         await f.service.start()
         #expect(await f.hub.startCount == 0)
@@ -355,15 +358,31 @@ struct RemoteServiceHubTests {
         #expect(f.service.hubState == .disconnected)
     }
 
-    @Test func joinNetworkValidatesTheToken() async throws {
-        let f = try await HubFixture(paths: .hubDefaults(networkToken: ""))
-        #expect(await f.service.joinNetwork("kısa") == false)
-        #expect(await f.service.joinNetwork("  boşluk içeren token 123  ") == false)
-        #expect(await f.service.joinNetwork("  \(network)\n") == true)
-        #expect(f.service.currentConfig.networkToken == network)
-        await f.service.leaveNetwork()
-        #expect(f.service.currentConfig.networkToken.isEmpty)
-        #expect(!f.service.currentConfig.hubEnabled)
+    @Test func setServerTrimsAndReconnectsAndEmptyServerClosesChannels() async throws {
+        let f = try await HubFixture(paths: .hubDefaults(serverToken: ""))
+        await f.service.start()
+        #expect(await f.hub.startCount == 0)
+
+        await f.service.setServer(url: "  wss://relay.example.com ", token: " lrs_new-token\n")
+        #expect(f.service.currentConfig.relayUrl == "wss://relay.example.com")
+        #expect(f.service.currentConfig.serverToken == "lrs_new-token")
+        #expect(await f.hub.startCount == 1)
+        #expect(await f.hub.endpoint?.token == "lrs_new-token")
+
+        await f.service.setServer(url: "", token: "")
+        #expect(f.service.currentConfig.endpoint == nil)
+        #expect(f.service.hubState == .disconnected)
+        #expect(await f.hub.startCount == 1)
+        f.service.stop()
+    }
+
+    @Test func serverRejectionIsSurfacedAndClearedOnRestart() async throws {
+        let f = try await HubFixture()
+        await f.service.start()
+        await f.hub.injectRejected(.networkNotAllowed)
+        try await waitUntil { f.service.serverIssue == .networkNotAllowed }
+        await f.service.setServer(url: "wss://test.invalid", token: "lrs_other")
+        #expect(f.service.serverIssue == nil)
         f.service.stop()
     }
 }

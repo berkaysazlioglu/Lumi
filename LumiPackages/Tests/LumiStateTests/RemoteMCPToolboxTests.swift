@@ -30,7 +30,7 @@ private final class ScriptedController: RemoteControllerServicing {
 
     func linkState(_ hubId: String) -> RemoteHubLinkState { links[hubId] ?? .disconnected }
     func snapshot(_ hubId: String) -> RemoteHubSnapshot? { snapshots[hubId] }
-    func configure(relayUrl: String, networkToken: String, identity: RemoteControllerIdentity) {}
+    func configure(endpoint: RelayEndpoint?, identity: RemoteControllerIdentity) {}
     func stop() {}
     func connect(hubId: String, password: String?, remember: Bool) async { links[hubId] = connectResult }
     func disconnect(hubId: String) {}

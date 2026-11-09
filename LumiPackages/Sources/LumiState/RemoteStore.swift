@@ -9,6 +9,8 @@ public final class RemoteStore {
     /// Hub kanalının durumu ve bağlı controller'lar (docs/design/08).
     public private(set) var hubState: RemoteConnectionState = .disconnected
     public private(set) var hubControllers: [RemoteHubController] = []
+    /// Sunucunun kalıcı reddi (karar 146).
+    public private(set) var serverIssue: RemoteServerIssue?
 
     private let service: any RemoteServicing
     private var consumeTask: Task<Void, Never>?
@@ -17,6 +19,7 @@ public final class RemoteStore {
         self.service = service
         self.state = service.state
         self.config = service.currentConfig
+        self.serverIssue = service.serverIssue
     }
 
     public func start() {
@@ -34,6 +37,8 @@ public final class RemoteStore {
                     self.hubControllers = controllers
                 case .configChanged:
                     break
+                case .serverIssueChanged(let issue):
+                    self.serverIssue = issue
                 }
                 self.config = self.service.currentConfig
             }
@@ -45,10 +50,14 @@ public final class RemoteStore {
         config = service.currentConfig
     }
 
-    public func setRelayUrl(_ url: String) async {
-        await service.updateConfig { $0.relayUrl = url }
-        config = service.currentConfig
+    /// Relay sunucusu (karar 146) — `This Mac` ve `Mobile` ekranlarının ortak bileşeni yazar.
+    public func setServer(url: String, token: String) async {
+        await service.setServer(url: url, token: token)
+        refresh()
     }
+
+    /// Adres ve token geçerli mi (kanallar ancak o zaman açılır).
+    public var hasServer: Bool { config.endpoint != nil }
 
     public func regenerateToken() async {
         await service.regenerateToken()
@@ -60,7 +69,6 @@ public final class RemoteStore {
     /// Keychain'de hub şifresi var mı — eylemlerden sonra servisten tazelenir.
     public var hasHubPassword: Bool { refreshTick >= 0 && service.hasHubPassword }
     public var hubDisplayName: String { refreshTick >= 0 ? service.effectiveHubName : "" }
-    public var hasNetwork: Bool { !config.networkToken.isEmpty }
     /// Observation'ın servisten okunan değerleri yeniden okuması için sayaç.
     private var refreshTick = 0
 
@@ -89,22 +97,6 @@ public final class RemoteStore {
         await service.disconnectAllControllers()
     }
 
-    public func createNetwork() async {
-        await service.createNetwork()
-        refresh()
-    }
-
-    public func joinNetwork(_ token: String) async -> Bool {
-        let ok = await service.joinNetwork(token)
-        refresh()
-        return ok
-    }
-
-    public func leaveNetwork() async {
-        await service.leaveNetwork()
-        refresh()
-    }
-
     private func refresh() {
         config = service.currentConfig
         refreshTick &+= 1
@@ -116,6 +108,7 @@ public final class RemoteStore {
             allowed.remove(charactersIn: ":/")
             return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
         }
-        return "lumi-remote://pair?url=\(encode(config.relayUrl))&token=\(encode(config.token))"
+        // `stoken` = server token'ı (karar 146): telefon sunucuya onunla, Mac'in odasına `token` ile girer.
+        return "lumi-remote://pair?url=\(encode(config.relayUrl))&token=\(encode(config.token))&stoken=\(encode(config.serverToken))"
     }
 }

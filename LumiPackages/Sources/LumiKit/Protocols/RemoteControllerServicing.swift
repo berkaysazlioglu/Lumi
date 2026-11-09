@@ -7,12 +7,14 @@ import Foundation
 public protocol RemoteControllerServicing: AnyObject {
     var directoryState: RemoteConnectionState { get }
     var hubs: [RemoteHubInfo] { get }
+    /// Sunucunun directory'yi kalıcı reddi (karar 146); yoksa `nil`.
+    var directoryIssue: RemoteServerIssue? { get }
     func linkState(_ hubId: String) -> RemoteHubLinkState
     func snapshot(_ hubId: String) -> RemoteHubSnapshot?
 
-    /// Ağ token'ı / relay adresi değişti — directory bağlantısını yeniden kurar,
-    /// token değiştiyse açık hub bağlantılarını kapatır. Boş token directory'yi kapatır.
-    func configure(relayUrl: String, networkToken: String, identity: RemoteControllerIdentity)
+    /// Sunucu (adres + token, karar 146) değişti — directory bağlantısını yeniden kurar,
+    /// sunucu değiştiyse açık hub bağlantılarını kapatır. `nil` directory'yi kapatır.
+    func configure(endpoint: RelayEndpoint?, identity: RemoteControllerIdentity)
     func stop()
 
     /// Hub'a bağlanır. `password` nil ise hatırlanan şifre (Keychain) kullanılır.
@@ -50,6 +52,8 @@ public protocol RemoteControllerServicing: AnyObject {
 }
 
 public extension RemoteControllerServicing {
+    var directoryIssue: RemoteServerIssue? { nil }
+
     func requestGrid(hubId: String, sessionId: String, grid: TerminalGrid) {}
 
     func pasteImage(hubId: String, sessionId: String, image: RemotePastedImage) async throws {

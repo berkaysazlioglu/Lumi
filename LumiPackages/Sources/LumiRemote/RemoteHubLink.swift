@@ -50,7 +50,7 @@ final class RemoteHubLink {
 
     // MARK: - Yaşam döngüsü
 
-    func open(url: URL, network: String, identity: RemoteControllerIdentity, password: String) async {
+    func open(endpoint: RelayEndpoint, identity: RemoteControllerIdentity, password: String) async {
         await close()
         self.password = password
         let stream = await connection.inbound()
@@ -59,12 +59,12 @@ final class RemoteHubLink {
         }
         setState(.connecting)
         let hello: [String: Any] = [
-            "role": "controller", "network": network,
+            "role": "controller",
             "controllerId": identity.controllerId, "name": identity.name,
             "attach": ["hubId": hubId, "password": password],
         ]
         nonisolated(unsafe) let frame = hello
-        await connection.start(url: url, hello: frame)
+        await connection.start(endpoint: endpoint, hello: frame)
     }
 
     /// Bağlantıyı kapatır. Açık aynalar bitmez — yeniden bağlanınca yeniden abone olunur.
@@ -204,6 +204,10 @@ final class RemoteHubLink {
             break
         case .closed(let code, let reason):
             handleClose(code: code, reason: reason)
+        case .rejected(let issue):
+            // Sunucu reddetti (karar 146): bağlantı yeniden denenmez.
+            failPendingCommands()
+            setState(.rejected(reason: issue.rawValue))
         case .message(let type, let payload):
             handleMessage(type: type, payload: payload)
         }

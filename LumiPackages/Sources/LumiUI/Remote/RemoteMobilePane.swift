@@ -2,13 +2,12 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Telefon eşleştirmesi: Mobile anahtarı, relay adresi, bağlantı durumu, QR ve
-/// token yenileme (karar 22). Settings ▸ Remote ile Remote route'unun `Mobile`
-/// sekmesi (karar 143) aynı görünümü paylaşır.
+/// Telefon eşleştirmesi: Mobile anahtarı, sunucu (karar 146 — `This Mac` ile ortak
+/// `RemoteServerSection`), bağlantı durumu, QR ve token yenileme (karar 22).
+/// Settings ▸ Remote ile Remote route'unun `Mobile` sekmesi (karar 143) aynı
+/// görünümü paylaşır. QR sunucu adresini, server token'ını ve oda token'ını taşır.
 struct RemoteMobilePane: View {
     let remote: RemoteStore
-
-    @State private var relayDraft: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
@@ -22,19 +21,7 @@ struct RemoteMobilePane: View {
             }
             .toggleStyle(.switch)
 
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text("Relay adresi")
-                    .font(Theme.Typography.captionMono)
-                    .foregroundStyle(Theme.textSecondary)
-                HStack(spacing: Theme.Spacing.sm) {
-                    TextField("wss://…", text: $relayDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .font(Theme.Typography.bodyMono)
-                        .onSubmit { Task { await remote.setRelayUrl(relayDraft) } }
-                    Button("Uygula") { Task { await remote.setRelayUrl(relayDraft) } }
-                        .font(Theme.Typography.bodyMono)
-                }
-            }
+            RemoteServerSection(remote: remote)
 
             HStack(spacing: Theme.Spacing.sm) {
                 Circle()
@@ -45,7 +32,7 @@ struct RemoteMobilePane: View {
                     .foregroundStyle(Theme.textSecondary)
             }
 
-            if remote.config.enabled {
+            if remote.config.enabled, remote.hasServer {
                 VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                     Text("Eşleştirme QR'ı")
                         .font(Theme.Typography.captionMono)
@@ -70,7 +57,6 @@ struct RemoteMobilePane: View {
             }
 
         }
-        .onAppear { relayDraft = remote.config.relayUrl }
     }
 
     // MARK: - Yardımcılar

@@ -16,7 +16,7 @@ private final class FakeController: RemoteControllerServicing {
     func emit(_ event: RemoteControllerEvent) { broadcaster.send(event) }
     func linkState(_ hubId: String) -> RemoteHubLinkState { .connected }
     func snapshot(_ hubId: String) -> RemoteHubSnapshot? { nil }
-    func configure(relayUrl: String, networkToken: String, identity: RemoteControllerIdentity) {}
+    func configure(endpoint: RelayEndpoint?, identity: RemoteControllerIdentity) {}
     func stop() {}
     func connect(hubId: String, password: String?, remember: Bool) async {}
     func disconnect(hubId: String) {}

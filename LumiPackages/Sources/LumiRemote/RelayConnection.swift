@@ -7,17 +7,22 @@ public enum RelayInbound: @unchecked Sendable {
     /// Relay soketi kapattı; `code` WebSocket kapanış kodudur (relay'in 4000–4005'i,
     /// docs/design/08). Ardından yeniden bağlanma denenir — çağıran `stop()` ile keser.
     case closed(code: Int, reason: String?)
+    /// Sunucu bağlantıyı kalıcı olarak reddetti (401 / 4006 / 4007, karar 146). Yeniden
+    /// bağlanma DENENMEZ; çağıran yeni adres/token'la `start` edene kadar kanal kapalı kalır.
+    case rejected(RemoteServerIssue)
 }
 
 public protocol RelayConnecting: Actor {
-    func start(url: URL, hello: [String: Any])
+    func start(endpoint: RelayEndpoint, hello: [String: Any])
     func stop()
     func send(type: String, payload: [String: Any])
     func inbound() -> AsyncStream<RelayInbound>
 }
 
-/// URLSessionWebSocketTask tabanlı relay istemcisi. Kopunca üstel geri
-/// çekilmeyle aynı hello'yla yeniden bağlanır (spec §4.2, §9).
+/// URLSessionWebSocketTask tabanlı relay istemcisi. El sıkışmada server token'ını
+/// `Authorization: Bearer` olarak gönderir (karar 146). Kopunca üstel geri çekilmeyle
+/// aynı hello'yla yeniden bağlanır (spec §4.2, §9); sunucu kalıcı olarak reddederse
+/// (`RemoteServerIssue`) durur.
 actor RelayConnection: RelayConnecting {
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
@@ -25,7 +30,7 @@ actor RelayConnection: RelayConnecting {
     private var reconnectTask: Task<Void, Never>?
     private var backoff = ReconnectBackoff()
     private var continuation: AsyncStream<RelayInbound>.Continuation?
-    private var currentURL: URL?
+    private var currentEndpoint: RelayEndpoint?
     private var currentHello: [String: Any] = [:]
     private var stopped = true
 
@@ -39,9 +44,9 @@ actor RelayConnection: RelayConnecting {
         return stream
     }
 
-    func start(url: URL, hello: [String: Any]) {
+    func start(endpoint: RelayEndpoint, hello: [String: Any]) {
         stopped = false
-        currentURL = url
+        currentEndpoint = endpoint
         currentHello = hello
         connect()
     }
@@ -65,9 +70,11 @@ actor RelayConnection: RelayConnecting {
 
     private func connect() {
         receiveTask?.cancel()
-        guard !stopped, let url = currentURL else { return }
+        guard !stopped, let endpoint = currentEndpoint else { return }
         continuation?.yield(.stateChanged(.connecting))
-        let wsTask = session.webSocketTask(with: url)
+        var request = URLRequest(url: endpoint.url)
+        request.setValue("Bearer \(endpoint.token)", forHTTPHeaderField: "Authorization")
+        let wsTask = session.webSocketTask(with: request)
         task = wsTask
         wsTask.resume()
         if let data = RemoteProtocol.envelope(type: "hello", payload: currentHello),
@@ -103,12 +110,29 @@ actor RelayConnection: RelayConnecting {
             }
         }
         guard !stopped, wsTask === task else { return }
-        if wsTask.closeCode != .invalid {
+        let status = (wsTask.response as? HTTPURLResponse)?.statusCode
+        let code = wsTask.closeCode == .invalid ? nil : wsTask.closeCode.rawValue
+        if let code {
             let reason = wsTask.closeReason.flatMap { String(data: $0, encoding: .utf8) }
-            continuation?.yield(.closed(code: wsTask.closeCode.rawValue, reason: reason))
+            continuation?.yield(.closed(code: code, reason: reason))
         }
         continuation?.yield(.stateChanged(.disconnected))
+        if let issue = Self.permanentIssue(httpStatus: receivedAny ? nil : status, closeCode: code) {
+            stopped = true
+            continuation?.yield(.rejected(issue))
+            return
+        }
         scheduleReconnect()
+    }
+
+    /// Yeniden denemenin anlamsız olduğu retler: el sıkışmada 401 ve sunucunun 4006/4007'si.
+    static func permanentIssue(httpStatus: Int?, closeCode: Int?) -> RemoteServerIssue? {
+        if httpStatus == 401 { return .unauthorized }
+        switch closeCode {
+        case 4006: return .networkNotAllowed
+        case 4007: return .tokenRevoked
+        default: return nil
+        }
     }
 
     private func scheduleReconnect() {

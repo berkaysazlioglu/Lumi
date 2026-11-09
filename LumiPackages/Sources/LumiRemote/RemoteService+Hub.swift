@@ -2,6 +2,7 @@ import Foundation
 import LumiKit
 
 /// Relay'deki iki kanal: telefonun token'lı odası ve Mac'ten Mac'e hub kanalı (docs/design/08).
+/// İkisi de aynı sunucuya aynı server token'ıyla bağlanır (karar 146).
 enum RemoteChannel: String, Sendable {
     case mobile
     case hub
@@ -16,20 +17,19 @@ extension RemoteService {
         return Host.current().localizedName ?? "Mac"
     }
 
-    /// Hub kanalının `hello`'su; paylaşım kapalıysa ya da ağ token'ı / şifre / `hubKey`
-    /// eksikse `nil` (kanal açılmaz). `hasHubPassword`'ü de tazeler.
+    /// Hub kanalının `hello`'su; paylaşım kapalıysa ya da sunucu / şifre / `hubKey`
+    /// eksikse `nil` (kanal açılmaz — şifresiz hub paylaşılamaz). `hasHubPassword`'ü de tazeler.
     func hubHelloIfReady() async -> [String: Any]? {
         guard let hubSecrets else { return nil }
         hasHubPassword = await hubSecrets.passwordRecord().value != nil
         let config = currentConfig
-        guard config.hubEnabled, !config.networkToken.isEmpty, hasHubPassword else { return nil }
+        guard config.hubEnabled, config.endpoint != nil, hasHubPassword else { return nil }
         guard let hubKey = await hubSecrets.hubKey() else {
             rlog("hub: hubKey okunamadı — hub kanalı açılmıyor")
             return nil
         }
         return [
             "role": "hub",
-            "network": config.networkToken,
             "hubId": config.hubId,
             "hubKey": hubKey,
             "name": effectiveHubName,
@@ -102,25 +102,14 @@ extension RemoteService {
         await updateConfig { $0.hubName = name }
     }
 
-    /// Yeni ağ token'ı üretir (`Create Network`).
-    public func createNetwork() async {
-        let token = generateToken()
-        await updateConfig { $0.networkToken = token }
-    }
-
-    /// Başka bir Mac'in ağ token'ına katılır (`Join Network…`). Relay'in alt sınırı 16 karakterdir.
-    @discardableResult
-    public func joinNetwork(_ token: String) async -> Bool {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 16, !trimmed.contains(where: \.isWhitespace) else { return false }
-        await updateConfig { $0.networkToken = trimmed }
-        return true
-    }
-
-    public func leaveNetwork() async {
+    /// Relay sunucusunun adresi ve token'ı (karar 146). İkisi de kırpılır; değişirse
+    /// kanallar yeni sunucuya yeniden kurulur. Boş değerler bağlantıyı kapatır.
+    public func setServer(url: String, token: String) async {
+        let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
         await updateConfig {
-            $0.networkToken = ""
-            $0.hubEnabled = false
+            $0.relayUrl = url
+            $0.serverToken = token
         }
     }
 

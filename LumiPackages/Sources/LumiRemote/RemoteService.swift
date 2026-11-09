@@ -28,6 +28,8 @@ public final class RemoteService: RemoteServicing {
     /// Keychain'de hub şifresi var mı (hub olarak paylaşmanın ön koşulu).
     public internal(set) var hasHubPassword = false
     public private(set) var currentConfig: RemoteConfig = .defaults
+    /// Sunucunun kalıcı reddi (karar 146); kanal yeniden kurulunca ya da bağlanınca temizlenir.
+    public private(set) var serverIssue: RemoteServerIssue?
 
     let configService: RemoteConfigService
     private let appConfig: any ConfigServicing
@@ -153,7 +155,8 @@ public final class RemoteService: RemoteServicing {
         let hubHello = await hubHelloIfReady()
         let mobileOn = currentConfig.enabled
         guard mobileOn || hubHello != nil else { return }
-        guard let url = URL(string: currentConfig.relayUrl) else { return }
+        guard let endpoint = currentConfig.endpoint else { return }
+        setServerIssue(nil)
         running = true
         epoch &+= 1
         let myEpoch = epoch
@@ -201,14 +204,14 @@ public final class RemoteService: RemoteServicing {
         }
         if mobileOn {
             mobileActive = true
-            await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
+            await connection.start(endpoint: endpoint, hello: ["role": "mac", "token": currentConfig.token])
             guard myEpoch == epoch else { return }
             setState(.connecting)
         }
         if let hubHello {
             hubActive = true
             nonisolated(unsafe) let hello = hubHello
-            await hubConnection.start(url: url, hello: hello)
+            await hubConnection.start(endpoint: endpoint, hello: hello)
             guard myEpoch == epoch else { return }
             setHubState(.connecting)
         }
@@ -339,6 +342,9 @@ public final class RemoteService: RemoteServicing {
             }
         case .closed(let code, _):
             rlog("inbound[\(channel)] relay kapattı code=\(code)")
+        case .rejected(let issue):
+            rlog("inbound[\(channel)] sunucu reddetti: \(issue.rawValue)")
+            setServerIssue(issue)
         case .message(let type, let payload):
             let from = payload["from"] as? String
             rlog("inbound[\(channel)] message type=\(type) action=\(payload["action"] as? String ?? "-") session=\(payload["sessionId"] as? String ?? "-")")
@@ -1136,6 +1142,12 @@ public final class RemoteService: RemoteServicing {
         guard state != newState else { return }
         state = newState
         broadcaster.send(.stateChanged(newState))
+    }
+
+    private func setServerIssue(_ issue: RemoteServerIssue?) {
+        guard serverIssue != issue else { return }
+        serverIssue = issue
+        broadcaster.send(.serverIssueChanged(issue))
     }
 
     func setHubState(_ newState: RemoteConnectionState) {

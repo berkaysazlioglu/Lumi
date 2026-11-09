@@ -15,7 +15,7 @@ extension LumiPaths {
             .appendingPathComponent("lumi-remote-test-\(UUID().uuidString)")
         let paths = LumiPaths(mode: .development, homeDirectory: home)
         try? paths.ensureDirectoriesExist()
-        let json = "{\"enabled\":true,\"relayUrl\":\"wss://test.invalid\",\"token\":\"tok\"}"
+        let json = "{\"enabled\":true,\"relayUrl\":\"wss://test.invalid\",\"token\":\"tok\",\"serverToken\":\"lrs_test-token\"}"
         try? json.data(using: .utf8)!.write(to: paths.remoteFile)
         return paths
     }
@@ -33,7 +33,11 @@ final actor FakeRelayConnection: RelayConnecting {
     private(set) var startCount = 0
     private(set) var stopCount = 0
 
-    func start(url: URL, hello: [String: Any]) {
+    /// Son `start`'ın sunucusu (karar 146 — adres + server token'ı).
+    private(set) var endpoint: RelayEndpoint?
+
+    func start(endpoint: RelayEndpoint, hello: [String: Any]) {
+        self.endpoint = endpoint
         self.hello = hello.compactMapValues { $0 as? String }
         self.attach = (hello["attach"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
         startCount += 1
@@ -44,6 +48,12 @@ final actor FakeRelayConnection: RelayConnecting {
     func injectClosed(code: Int, reason: String?) {
         continuation?.yield(.closed(code: code, reason: reason))
         continuation?.yield(.stateChanged(.disconnected))
+    }
+
+    /// Test API — sunucunun kalıcı reddini enjekte et (karar 146).
+    func injectRejected(_ issue: RemoteServerIssue) {
+        continuation?.yield(.stateChanged(.disconnected))
+        continuation?.yield(.rejected(issue))
     }
 
     /// Son `start`'ın hello'sundaki `attach` sözlüğünün string alanları.

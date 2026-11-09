@@ -25,9 +25,9 @@ public actor RemoteConfigService {
         let defaults = RemoteConfig.defaults
         return RemoteConfig(
             enabled: dict["enabled"] as? Bool ?? defaults.enabled,
-            relayUrl: dict["relayUrl"] as? String ?? defaults.relayUrl,
+            relayUrl: Self.relayUrl(dict["relayUrl"] as? String),
             token: dict["token"] as? String ?? defaults.token,
-            networkToken: dict["networkToken"] as? String ?? defaults.networkToken,
+            serverToken: dict["serverToken"] as? String ?? defaults.serverToken,
             hubEnabled: dict["hubEnabled"] as? Bool ?? defaults.hubEnabled,
             hubId: dict["hubId"] as? String ?? defaults.hubId,
             hubName: dict["hubName"] as? String ?? defaults.hubName
@@ -39,8 +39,9 @@ public actor RemoteConfigService {
         merged["enabled"] = config.enabled
         merged["relayUrl"] = config.relayUrl
         merged["token"] = config.token
-        // Hub alanları (docs/design/08) — additive; eski Lumi bunları yok sayar.
-        merged["networkToken"] = config.networkToken
+        // Sunucu token'ı (karar 146) ve hub alanları (docs/design/08) — additive; eski Lumi
+        // bunları yok sayar. Eski `networkToken` dokunulmadan dosyada kalır.
+        merged["serverToken"] = config.serverToken
         merged["hubEnabled"] = config.hubEnabled
         merged["hubId"] = config.hubId
         merged["hubName"] = config.hubName
@@ -49,6 +50,14 @@ public actor RemoteConfigService {
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         ) else { return }
         try? data.write(to: paths.remoteFile, options: .atomic)
+        // Server ve oda token'ları burada düz durur — dosya yalnız kullanıcıya açık.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: paths.remoteFile.path)
+    }
+
+    /// Karar 146 öncesinin gömülü Railway adresi kullanıcının seçimi değildir — boşa çevrilir.
+    private static func relayUrl(_ stored: String?) -> String {
+        guard let stored, stored != RemoteConfig.legacyRelayUrl else { return RemoteConfig.defaults.relayUrl }
+        return stored
     }
 
     /// Telefon token'ı ve hub kimliği boşsa üretip kaydeder; her durumda güncel config'i döner.

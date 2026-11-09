@@ -1,6 +1,6 @@
 # 09 — Relay Server: kendi sunucunu bağla (token + IP allowlist + dashboard)
 
-Durum: Faz 1 (sunucu) tamam, 2026-11-09. Faz 2 (Mac) ve Faz 3 (telefon) bekliyor. 08-mac-remote.md'nin ağ token'ı modelinin yerini alır.
+Durum: Faz 1 (sunucu) ve Faz 2 (Mac) tamam, 2026-11-09. Faz 3 (telefon) bekliyor. 08-mac-remote.md'nin ağ token'ı modelinin yerini alır.
 
 ## Kullanıcı kararları (2026-11-06 / 09)
 
@@ -58,14 +58,24 @@ Durum: Faz 1 (sunucu) tamam, 2026-11-09. Faz 2 (Mac) ve Faz 3 (telefon) bekliyor
 - Deploy: `RelayServer/scripts/deploy-heroku.sh`. Klasörü geçici bir git deposuna kopyalayıp app'in remote'una iter; Lumi deposunda commit gerekmez.
 - Railway sunucusu Faz 2–3 istemcileri dağıtılana kadar açık kalır, sonra kapatılır.
 
+## Mac (Faz 2)
+
+- **Config.** `remote.json`'a additive `serverToken` eklendi; `relayUrl` ile birlikte sunucuyu tanımlar (`RemoteConfig.endpoint` → `RelayEndpoint`, adres `ws://`/`wss://` ve boş olmayan, boşluksuz token değilse `nil`). Sunucu yoksa hiçbir kanal açılmaz.
+  - Varsayılan adres boştur. Eski gömülü Railway adresi okunurken boşa çevrilir (`RemoteConfig.legacyRelayUrl`).
+  - Eski `networkToken` okunmaz ama dosyada korunur (karar 9).
+  - Token'lar dosyada düz durduğu için `remote.json` her yazımda `0600`'e çekilir. Keychain'e taşınmadı: QR'a gömülmesi gerekiyor ve oda token'ı zaten aynı dosyada.
+- **Bağlantı.** `RelayConnecting.start(endpoint:hello:)` el sıkışmada `Authorization: Bearer` gönderir. 401 (yalnız el sıkışmada), 4006 ve 4007 kalıcı rettir (`RelayInbound.rejected(RemoteServerIssue)`); yeniden denenmez, adres/token değişince kanal yeniden kurulur.
+- **Ret gösterimi.**
+  - Telefon/hub kanallarının reddi `RemoteService.serverIssue`'da (`RemoteEvent.serverIssueChanged`) görünür.
+  - Directory'nin reddi `RemoteControllerService.directoryIssue`'da görünür.
+  - Hub bağlantısının reddi `RemoteHubLinkState.rejected(reason: <issue.rawValue>)` olur.
+  - Üçü de `RemoteServerIssue.message` ile anlatılır.
+- **Tek ağ.** Hub ve controller hello'larında `network` yok. `createNetwork`/`joinNetwork`/`leaveNetwork` ve `RemoteNetworkSection` kalktı; yerine `RemoteServicing.setServer(url:token:)` var.
+- **Hub şifresi zorunlu.** Hub kanalı şifre olmadan açılmaz (`hubHelloIfReady`). Paylaşım anahtarı şifre yoksa önce şifre formunu açar.
+- **Ortak bileşen.** `RemoteServerSection` (Server URL + Token, Connect/Save, Disconnect, doğrulama ve ret mesajı) hem `This Mac` sayfasında hem `RemoteMobilePane`'de (Remote ▸ Mobile ve Settings ▸ Remote) çizilir.
+  - `This Mac`'te paylaşım ve hub listesi, `Mobile`'da QR, ancak sunucu tanımlıyken görünür.
+- **QR.** `lumi-remote://pair?url=…&token=<oda>&stoken=<server token>`.
+
 ## Sonraki fazlar
 
-- **Faz 2 — Mac.**
-  - Ortak `Server URL + Token` bileşeni `This Mac` ve `Mobile` ekranlarında kullanılır. `remote.json`'da tek kaynak olur: `relayUrl` + additive `serverToken`; token Keychain'de.
-  - Bütün kanallar el sıkışmada Bearer gönderir.
-  - `Create/Join/Leave Network` ve `networkToken` kalkar.
-  - Hub şifresi zorunlu olur.
-  - `RemoteModels`'teki Railway varsayılanı kalkar, adres boş başlar.
-  - QR'a `stoken` eklenir.
-  - `4006` / `4007` / `401` için kullanıcıya anlaşılır hata gösterilir.
-- **Faz 3 — Telefon.** `Pairing` QR'daki server token'ını okur, Keychain'deki eşleşmeye ekler ve el sıkışmada Bearer gönderir. Eski (token'sız) QR'lar "Mac'te Lumi'yi güncelleyin" uyarısıyla reddedilir.
+- **Faz 3 — Telefon.** `Pairing` QR'daki `stoken`'ı okur, Keychain'deki eşleşmeye ekler ve el sıkışmada Bearer gönderir. `stoken`'sız (eski) QR'lar "Mac'te Lumi'yi güncelleyin" uyarısıyla reddedilir. 401/4007 telefonda "yeniden eşleştir" durumuna düşer.

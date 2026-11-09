@@ -20,7 +20,7 @@ struct RemoteHubsSection: View {
                 RemoteSectionHeader(title: "Hubs", trailing: directoryLabel)
                 if controller.hubs.isEmpty {
                     Text(controller.directoryState == .connected
-                         ? "No other Mac is sharing on this network."
+                         ? "No other Mac is sharing on this server."
                          : "Connecting to the relay…")
                         .modifier(RemoteHintStyle())
                 }

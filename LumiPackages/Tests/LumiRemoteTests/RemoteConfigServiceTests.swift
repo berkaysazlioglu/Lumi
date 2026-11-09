@@ -42,17 +42,39 @@ final class RemoteConfigServiceTests: XCTestCase {
         // Hub alanları olmayan eski dosya varsayılanlara düşer (karar 9).
         try Data(#"{"enabled":true,"relayUrl":"wss://r.test","token":"tok"}"#.utf8).write(to: paths.remoteFile)
         let old = await service.load()
-        XCTAssertEqual(old.networkToken, "")
+        XCTAssertEqual(old.serverToken, "")
         XCTAssertFalse(old.hubEnabled)
 
         var config = old
-        config.networkToken = "network-token-1234567890"
+        config.serverToken = "lrs_server-token-1234567890"
         config.hubEnabled = true
         config.hubId = "hub-1"
         config.hubName = "Build Mac"
         await service.save(config)
         let loaded = await service.load()
         XCTAssertEqual(loaded, config)
+    }
+
+    /// Karar 146: eski gömülü Railway adresi kullanıcının seçimi sayılmaz; eski `networkToken`
+    /// okunmaz ama dosyada korunur; dosya yalnız kullanıcıya açıktır (token'lar düz durur).
+    func testLegacyRailwayUrlIsClearedAndNetworkTokenKept() async throws {
+        let raw = #"{"enabled":true,"relayUrl":"wss://lumi-relay-production.up.railway.app","token":"tok","networkToken":"old-net-1234567890"}"#
+        try Data(raw.utf8).write(to: paths.remoteFile)
+        let service = RemoteConfigService(paths: paths)
+        var config = await service.load()
+        XCTAssertEqual(config.relayUrl, "")
+        XCTAssertNil(config.endpoint)
+
+        config.relayUrl = "wss://relay.example.com"
+        config.serverToken = "lrs_abc"
+        await service.save(config)
+        let dict = try JSONSerialization.jsonObject(with: Data(contentsOf: paths.remoteFile)) as! [String: Any]
+        XCTAssertEqual(dict["networkToken"] as? String, "old-net-1234567890")
+        XCTAssertEqual(dict["serverToken"] as? String, "lrs_abc")
+        let attributes = try FileManager.default.attributesOfItem(atPath: paths.remoteFile.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        let reloaded = await service.load()
+        XCTAssertEqual(reloaded.endpoint, RelayEndpoint(url: URL(string: "wss://relay.example.com")!, token: "lrs_abc"))
     }
 
     func testEnsureTokenCreatesAStableHubId() async {

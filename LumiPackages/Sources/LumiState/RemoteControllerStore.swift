@@ -26,6 +26,8 @@ public enum RemoteSessionViewMode: Sendable, Hashable {
 public final class RemoteControllerStore {
     public private(set) var directoryState: RemoteConnectionState
     public private(set) var hubs: [RemoteHubInfo]
+    /// Sunucunun directory'yi kalıcı reddi (karar 146).
+    public private(set) var directoryIssue: RemoteServerIssue?
     public private(set) var links: [String: RemoteHubLinkState] = [:]
     public private(set) var snapshots: [String: RemoteHubSnapshot] = [:]
     /// Ağaçta açık olan hub.
@@ -61,8 +63,8 @@ public final class RemoteControllerStore {
         service.stop()
     }
 
-    public func configure(relayUrl: String, networkToken: String, identity: RemoteControllerIdentity) {
-        service.configure(relayUrl: relayUrl, networkToken: networkToken, identity: identity)
+    public func configure(endpoint: RelayEndpoint?, identity: RemoteControllerIdentity) {
+        service.configure(endpoint: endpoint, identity: identity)
     }
 
     public func linkState(_ hubId: String) -> RemoteHubLinkState {
@@ -191,6 +193,8 @@ public final class RemoteControllerStore {
         switch event {
         case .directoryStateChanged(let state):
             directoryState = state
+        case .directoryIssueChanged(let issue):
+            directoryIssue = issue
         case .hubsChanged(let list):
             hubs = list
         case .linkChanged(let hubId, let state):
@@ -236,7 +240,10 @@ public final class RemoteControllerStore {
         case "password_required": return "Enter the hub's password."
         case "hub_not_ready": return "The hub has no password set."
         case "revoked": return "The hub disconnected all controllers."
-        case "no_network": return "Join a network first."
+        case "no_server": return "Connect to a server in This Mac first."
+        case RemoteServerIssue.unauthorized.rawValue: return RemoteServerIssue.unauthorized.message
+        case RemoteServerIssue.tokenRevoked.rawValue: return RemoteServerIssue.tokenRevoked.message
+        case RemoteServerIssue.networkNotAllowed.rawValue: return RemoteServerIssue.networkNotAllowed.message
         default: return "Connection refused (\(reason))."
         }
     }

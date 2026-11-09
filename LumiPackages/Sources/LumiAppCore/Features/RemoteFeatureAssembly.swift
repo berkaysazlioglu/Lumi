@@ -63,7 +63,7 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
         // config.enabled=false ise start() içi no-op.
         remoteStore.start()
         controllerStore.start()
-        // Controller ağ token'ını / relay adresini RemoteService'in config'inden alır;
+        // Controller sunucuyu (adres + token, karar 146) RemoteService'in config'inden alır;
         // config her değiştiğinde (ve ilk açılışta, hubId üretilince) yeniden kurulur.
         let configStream = remoteService.events()
         configTask = Task { [weak self] in
@@ -135,8 +135,7 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
     private func configureController() {
         let config = remoteService.currentConfig
         controllerStore.configure(
-            relayUrl: config.relayUrl,
-            networkToken: config.networkToken,
+            endpoint: config.endpoint,
             identity: RemoteControllerIdentity(
                 controllerId: config.hubId,
                 name: remoteService.effectiveHubName,

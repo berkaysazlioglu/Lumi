@@ -58,10 +58,10 @@ public struct RemoteRouteView: View {
             RemotePageScroll {
                 LumiSectionTitle(
                     title: "This Mac",
-                    description: "Bu Mac'i aynı ağdaki diğer Mac'lerle paylaş ya da onların terminallerine bağlan.")
+                    description: "Bu Mac'i aynı sunucudaki diğer Mac'lerle paylaş ya da onların terminallerine bağlan.")
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
-                    RemoteNetworkSection(remote: remote)
-                    if remote.hasNetwork { RemoteThisMacSection(remote: remote) }
+                    RemoteServerSection(remote: remote, directoryIssue: controller.directoryIssue)
+                    if remote.hasServer { RemoteThisMacSection(remote: remote) }
                 }
             }
         case .terminal:
@@ -75,8 +75,8 @@ public struct RemoteRouteView: View {
     }
 
     private var placeholderText: String {
-        if !remote.hasNetwork { return "Create or join a network in This Mac to see other Macs." }
-        if controller.hubs.isEmpty { return "No other Mac is sharing on this network yet." }
+        if !remote.hasServer { return "Connect to a server in This Mac to see other Macs." }
+        if controller.hubs.isEmpty { return "No other Mac is sharing on this server yet." }
         return "Pick a terminal on a hub to mirror it here."
     }
 }

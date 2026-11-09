@@ -27,7 +27,7 @@ private final class ControllerFixture {
     var link: FakeRelayConnection { connections[1] }
 
     func configure() async throws {
-        service.configure(relayUrl: "wss://test.invalid", networkToken: network, identity: identity)
+        service.configure(endpoint: RelayEndpoint(url: "wss://test.invalid", token: network), identity: identity)
         try await waitUntil { await (self.connections.first?.startCount ?? 0) == 1 }
     }
 
@@ -64,19 +64,20 @@ private final class ControllerFixture {
 
 @MainActor
 struct RemoteControllerServiceTests {
-    @Test func directoryListsNetworkHubsExceptThisMac() async throws {
+    @Test func directoryListsServerHubsExceptThisMac() async throws {
         let f = ControllerFixture()
         try await f.configure()
         #expect(await f.directory.hello == [
-            "role": "controller", "network": network, "controllerId": "me-install", "name": "Laptop",
+            "role": "controller", "controllerId": "me-install", "name": "Laptop",
         ])
+        #expect(await f.directory.endpoint?.token == network)
         await f.publishHubs()
         try await waitUntil { f.service.hubs.map(\.id) == ["build"] }
     }
 
-    @Test func emptyNetworkTokenKeepsTheDirectoryClosed() async throws {
+    @Test func missingServerKeepsTheDirectoryClosed() async throws {
         let f = ControllerFixture()
-        f.service.configure(relayUrl: "wss://test.invalid", networkToken: "  ", identity: identity)
+        f.service.configure(endpoint: RelayEndpoint(url: "wss://test.invalid", token: "  "), identity: identity)
         try await Task.sleep(for: .milliseconds(50))
         #expect(f.connections.isEmpty)
         #expect(f.service.directoryState == .disconnected)
@@ -296,13 +297,28 @@ struct RemoteControllerServiceTests {
         #expect(await f.link.lastStrings(type: "unsubscribe") == ["sessionId": "s1", "mode": "chat"])
     }
 
-    @Test func changingTheNetworkDropsOpenLinks() async throws {
+    @Test func changingTheServerDropsOpenLinks() async throws {
         let f = ControllerFixture()
         try await f.configure()
         try await f.connectAccepted()
-        f.service.configure(relayUrl: "wss://test.invalid", networkToken: "other-network-0987654321", identity: identity)
+        f.service.configure(endpoint: RelayEndpoint(url: "wss://test.invalid", token: "lrs_other-0987654321"), identity: identity)
         try await waitUntil { f.service.linkState("build") == .disconnected }
-        try await waitUntil { await f.connections.last?.hello["network"] == "other-network-0987654321" }
+        try await waitUntil { await f.connections.last?.endpoint?.token == "lrs_other-0987654321" }
+        #expect(await f.connections.last?.hello["network"] == nil)
+    }
+
+    /// Karar 146: sunucunun directory reddi görünür; hub bağlantısının reddi yeniden denenmez.
+    @Test func serverRejectionsAreSurfaced() async throws {
+        let f = ControllerFixture()
+        try await f.configure()
+        await f.directory.injectRejected(.unauthorized)
+        try await waitUntil { f.service.directoryIssue == .unauthorized }
+
+        let g = ControllerFixture()
+        try await g.configure()
+        try await g.connectAccepted()
+        await g.link.injectRejected(.networkNotAllowed)
+        try await waitUntil { g.service.linkState("build") == .rejected(reason: RemoteServerIssue.networkNotAllowed.rawValue) }
     }
 }
 

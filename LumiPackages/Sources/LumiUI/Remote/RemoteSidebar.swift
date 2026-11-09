@@ -20,7 +20,7 @@ struct RemoteSidebar: View {
                                  isSelected: page == .mobile, isCollapsed: isCollapsed) { page = .mobile }
                     RemoteNavRow(icon: "desktopcomputer", title: "This Mac", detail: thisMacDetail,
                                  isSelected: page == .thisMac, isCollapsed: isCollapsed) { page = .thisMac }
-                    if remote.hasNetwork {
+                    if remote.hasServer {
                         Rectangle()
                             .fill(Theme.border)
                             .frame(height: Theme.Stroke.hairline)
@@ -70,7 +70,7 @@ struct RemoteSidebar: View {
     }
 
     private var thisMacDetail: String? {
-        guard remote.hasNetwork else { return "no network" }
+        guard remote.hasServer else { return "no server" }
         guard remote.config.hubEnabled else { return nil }
         return remote.hubState == .connected ? "sharing" : remote.hubState.rawValue
     }
