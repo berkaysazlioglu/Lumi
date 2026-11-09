@@ -9,7 +9,7 @@ final class AppModelChatSyncTests: XCTestCase {
     private func makeModel() -> (AppModel, FakeRelayClient) {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
         model.chatSyncTimeout = .milliseconds(30)
         model.chatReleaseDelay = .milliseconds(40)

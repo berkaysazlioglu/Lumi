@@ -4,14 +4,13 @@ import LumiMobileKit
 struct PairingView: View {
     let model: AppModel
     @State private var pastedLink = ""
-    @State private var showError = false
     @AppStorage(DemoMode.storageKey) private var demoMode = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("On the Mac, scan the QR from Lumi → Settings → Remote, or paste the pairing link.")
+                    Text("On the Mac, connect Lumi to a relay server in Remote ▸ Mobile, then scan its QR or paste the pairing link.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -23,14 +22,13 @@ struct PairingView: View {
                         .accessibilityIdentifier("pairingField")
                     Button("Pair") {
                         Task {
-                            let ok = await model.pair(from: pastedLink)
-                            showError = !ok
+                            await model.pair(from: pastedLink)
                         }
                     }
                     .accessibilityIdentifier("pairButton")
                     .disabled(pastedLink.isEmpty)
-                    if showError {
-                        Text("Couldn't resolve the connection. It must be in the form `lumi-remote://pair?...`.")
+                    if let error = model.pairingError {
+                        Text(error)
                             .font(.footnote)
                             .foregroundStyle(.red)
                     }
@@ -56,8 +54,7 @@ struct PairingView: View {
             Section("Scan QR") {
                 QRScannerView { value in
                     Task {
-                        let ok = await model.pair(from: value)
-                        showError = !ok
+                        await model.pair(from: value)
                     }
                 }
                 .frame(height: 260)

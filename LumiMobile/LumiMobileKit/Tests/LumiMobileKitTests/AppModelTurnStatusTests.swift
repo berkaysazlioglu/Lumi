@@ -6,7 +6,7 @@ import LumiWire
 final class AppModelTurnStatusTests: XCTestCase {
     private func makeModel() -> AppModel {
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         return AppModel(client: FakeRelayClient(), store: store)
     }
 
@@ -56,7 +56,7 @@ final class AppModelTurnStatusTests: XCTestCase {
     func testRequestStopSendsEscAndMarksStopping() async throws {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
         model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(working: true, startedAtMs: 1, tool: nil)))
         model.requestStop("s1")

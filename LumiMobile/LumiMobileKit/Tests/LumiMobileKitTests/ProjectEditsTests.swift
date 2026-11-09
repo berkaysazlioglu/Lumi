@@ -14,7 +14,7 @@ final class ProjectEditsTests: XCTestCase {
 
     private func makeModel(_ paths: [String]) -> (AppModel, FakeRelayClient) {
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let client = FakeRelayClient()
         let model = AppModel(client: client, store: store)
         model.handle(.projects(snapshot(paths.map { project($0) })))

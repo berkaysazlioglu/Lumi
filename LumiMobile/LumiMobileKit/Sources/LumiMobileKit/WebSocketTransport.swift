@@ -6,9 +6,17 @@ public protocol WebSocketConnection: Sendable {
     var incoming: AsyncThrowingStream<String, Error> { get }
     func send(_ text: String) async throws
     func close()
+    /// After `incoming` ended: the handshake's HTTP status and the server's close code.
+    /// RelayClient reads them to tell a permanent rejection (decision 146) from a drop.
+    func endStatus() -> (httpStatus: Int?, closeCode: Int?)
 }
 
-public typealias ConnectionFactory = @Sendable (URL) -> any WebSocketConnection
+public extension WebSocketConnection {
+    func endStatus() -> (httpStatus: Int?, closeCode: Int?) { (nil, nil) }
+}
+
+/// Builds a connection for a handshake request (carries `Authorization: Bearer`).
+public typealias ConnectionFactory = @Sendable (URLRequest) -> any WebSocketConnection
 
 /// URLSessionWebSocketTask wrapper — thin I/O layer, no unit tests
 /// (covered by Task 10 end-to-end verification).
@@ -18,8 +26,8 @@ public final class URLSessionWebSocketConnection: WebSocketConnection, @unchecke
     private let task: URLSessionWebSocketTask
     public let incoming: AsyncThrowingStream<String, Error>
 
-    public init(url: URL) {
-        let task = URLSession.shared.webSocketTask(with: url)
+    public init(request: URLRequest) {
+        let task = URLSession.shared.webSocketTask(with: request)
         self.task = task
         self.incoming = AsyncThrowingStream { continuation in
             @Sendable func receiveNext() {
@@ -49,5 +57,10 @@ public final class URLSessionWebSocketConnection: WebSocketConnection, @unchecke
 
     public func close() {
         task.cancel(with: .goingAway, reason: nil)
+    }
+
+    public func endStatus() -> (httpStatus: Int?, closeCode: Int?) {
+        let status = (task.response as? HTTPURLResponse)?.statusCode
+        return (status, task.closeCode == .invalid ? nil : task.closeCode.rawValue)
     }
 }

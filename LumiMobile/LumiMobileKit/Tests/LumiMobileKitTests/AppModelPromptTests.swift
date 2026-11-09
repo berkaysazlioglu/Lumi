@@ -6,7 +6,7 @@ import LumiWire
 final class AppModelPromptTests: XCTestCase {
     private func makeModel() -> AppModel {
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         return AppModel(client: FakeRelayClient(), store: store)
     }
 

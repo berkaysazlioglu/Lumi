@@ -16,6 +16,9 @@ public enum StartSessionState: Sendable, Equatable {
 @Observable @MainActor
 public final class AppModel {
     public private(set) var isPaired: Bool
+    /// Why the last pairing attempt failed or the server dropped the pairing
+    /// (decision 146); shown on the pairing screen.
+    public private(set) var pairingError: String?
     public private(set) var connection: ConnectionState = .disconnected
     public private(set) var macOnline = false
     public private(set) var lastSeenAt: Date?
@@ -197,6 +200,10 @@ public final class AppModel {
                 case .message(let message):
                     self.handle(message)
                     if case .welcome = message { await self.reRegisterPushIfNeeded() }
+                case .rejected(let rejection):
+                    // The pairing can't open the server anymore: back to the pairing screen.
+                    await self.unpair()
+                    self.pairingError = rejection.message
                 }
             }
         }
@@ -205,11 +212,17 @@ public final class AppModel {
 
     @discardableResult
     public func pair(from string: String) async -> Bool {
-        guard let info = Pairing.parse(string) else {
-            DiagLog.shared.log("model", "pair parse failed")
+        let info: PairingInfo
+        switch Pairing.parseResult(string) {
+        case .success(let parsed):
+            info = parsed
+        case .failure(let error):
+            DiagLog.shared.log("model", "pair parse failed: \(error)")
+            pairingError = error.message
             return false
         }
         DiagLog.shared.log("model", "pair ok relay=\(info.relayUrl)")
+        pairingError = nil
         store.write(info)
         isPaired = true
         await client.stop()
@@ -223,6 +236,7 @@ public final class AppModel {
     public func unpair() async {
         store.clear()
         isPaired = false
+        pairingError = nil
         consumeTask?.cancel()
         consumeTask = nil
         await client.stop()

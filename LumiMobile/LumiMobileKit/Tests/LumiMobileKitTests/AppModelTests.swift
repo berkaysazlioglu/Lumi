@@ -54,7 +54,7 @@ private func makeModel(paired: Bool = true) -> (AppModel, FakeRelayClient, InMem
     let client = FakeRelayClient()
     let store = InMemorySecureStore()
     if paired {
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
     }
     return (AppModel(client: client, store: store), client, store)
 }
@@ -64,7 +64,7 @@ private func makeModelP(paired: Bool = true) -> (AppModel, FakeRelayClient, InMe
     let client = FakeRelayClient()
     let store = InMemorySecureStore()
     let prefs = InMemoryPreferenceStore()
-    if paired { store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef")) }
+    if paired { store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test")) }
     return (AppModel(client: client, store: store, prefs: prefs), client, prefs)
 }
 
@@ -463,11 +463,19 @@ final class AppModelTests: XCTestCase {
 
         let bad = await model.pair(from: "gecersiz")
         XCTAssertFalse(bad)
+        XCTAssertEqual(model.pairingError, PairingError.invalid.message)
 
-        let ok = await model.pair(from: "lumi-remote://pair?url=wss%3A%2F%2Fr.example&token=0123456789abcdef")
+        // Decision 146: a QR without a server token comes from an older Mac.
+        let outdated = await model.pair(from: "lumi-remote://pair?url=wss%3A%2F%2Fr.example&token=0123456789abcdef")
+        XCTAssertFalse(outdated)
+        XCTAssertEqual(model.pairingError, PairingError.outdatedMac.message)
+
+        let ok = await model.pair(from: "lumi-remote://pair?url=wss%3A%2F%2Fr.example&token=0123456789abcdef&stoken=lrs_abc")
         XCTAssertTrue(ok)
+        XCTAssertNil(model.pairingError)
         XCTAssertTrue(model.isPaired)
         XCTAssertEqual(store.read()?.token, "0123456789abcdef")
+        XCTAssertEqual(store.read()?.serverToken, "lrs_abc")
         XCTAssertEqual(client.started.map(\.relayUrl), ["wss://r.example"])
 
         await model.unpair()
@@ -892,6 +900,17 @@ final class AppModelTests: XCTestCase {
 
     /// unpair() resets projectsSnapshot and addProjectError.
     @MainActor
+    /// Decision 146: a server refusal ends the pairing and explains why.
+    func testServerRejectionUnpairsWithAMessage() async {
+        let (model, client, store) = makeModel(paired: true)
+        await model.start()
+        client.continuation.yield(.rejected(.tokenRevoked))
+        for _ in 0..<200 where model.isPaired { try? await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertFalse(model.isPaired)
+        XCTAssertNil(store.read())
+        XCTAssertEqual(model.pairingError, RelayRejection.tokenRevoked.message)
+    }
+
     func testUnpairResetsProjectsState() async {
         let (model, client, _) = makeModel()
         await model.start()

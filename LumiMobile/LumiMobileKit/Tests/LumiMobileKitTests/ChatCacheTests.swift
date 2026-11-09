@@ -85,7 +85,7 @@ final class FileChatCacheTests: XCTestCase {
 final class AppModelChatCacheTests: XCTestCase {
     private func makeModel(_ cache: InMemoryChatCache) -> AppModel {
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: FakeRelayClient(), store: store, chatCache: cache)
         model.chatCacheDelay = .milliseconds(10)
         return model

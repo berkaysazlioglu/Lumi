@@ -40,7 +40,8 @@ struct QRScannerView: UIViewControllerRepresentable {
             if didFire { return }
             for item in addedItems {
                 if case .barcode(let barcode) = item, let value = barcode.payloadStringValue {
-                    if Pairing.parse(value) != nil {
+                    // An older Mac's QR also stops the scanner so its error is shown.
+                    if Pairing.isPairingLink(value) {
                         didFire = true
                         Task { @MainActor in self.onScan(value) }
                         return

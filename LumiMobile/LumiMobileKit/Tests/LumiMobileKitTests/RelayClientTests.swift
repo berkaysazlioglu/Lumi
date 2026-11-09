@@ -7,6 +7,7 @@ final class FakeConnection: WebSocketConnection, @unchecked Sendable {
     private let feed: AsyncThrowingStream<String, Error>.Continuation
     private let lock = NSLock()
     private var sentFrames: [String] = []
+    private var _endStatus: (httpStatus: Int?, closeCode: Int?) = (nil, nil)
 
     var sent: [String] { lock.withLock { sentFrames } }
 
@@ -18,12 +19,21 @@ final class FakeConnection: WebSocketConnection, @unchecked Sendable {
     func dropConnection() { feed.finish(throwing: URLError(.networkConnectionLost)) }
     func send(_ text: String) async throws { lock.withLock { sentFrames.append(text) } }
     func close() { feed.finish() }
+    func endStatus() -> (httpStatus: Int?, closeCode: Int?) { lock.withLock { _endStatus } }
+
+    /// Ends the stream the way the server would refuse it (HTTP status / close code).
+    func refuse(httpStatus: Int? = nil, closeCode: Int? = nil) {
+        lock.withLock { _endStatus = (httpStatus, closeCode) }
+        feed.finish(throwing: URLError(.badServerResponse))
+    }
 }
 
 /// Test harness that records connection factory calls and back-off sleeps.
 final class Harness: @unchecked Sendable {
     private let lock = NSLock()
     private var _connections: [FakeConnection] = []
+    private var _requests: [URLRequest] = []
+    var requests: [URLRequest] { lock.withLock { _requests } }
     private var _sleeps: [Double] = []
 
     var connections: [FakeConnection] { lock.withLock { _connections } }
@@ -31,9 +41,9 @@ final class Harness: @unchecked Sendable {
 
     func makeClient(pongTimeout: Duration = .seconds(2)) -> RelayClient {
         RelayClient(
-            connect: { [self] _ in
+            connect: { [self] request in
                 let conn = FakeConnection()
-                lock.withLock { _connections.append(conn) }
+                lock.withLock { _connections.append(conn); _requests.append(request) }
                 return conn
             },
             sleep: { [self] seconds in
@@ -45,7 +55,7 @@ final class Harness: @unchecked Sendable {
     }
 }
 
-private let pairing = PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef")
+private let pairing = PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test")
 private let welcomeFrame = #"{"v":1,"type":"welcome","payload":{"macOnline":true,"lastSeenAt":null}}"#
 
 /// Polls until `condition` returns true (up to ~2 s).
@@ -58,6 +68,44 @@ func waitUntil(_ condition: @escaping () async -> Bool) async -> Bool {
 }
 
 final class RelayClientTests: XCTestCase {
+
+    // MARK: Server token (decision 146)
+
+    func testHandshakeCarriesTheServerTokenAsBearer() async {
+        let harness = Harness()
+        let client = harness.makeClient()
+        await client.start(pairing: pairing)
+        _ = await waitUntil { !harness.requests.isEmpty }
+        XCTAssertEqual(harness.requests[0].url?.absoluteString, "wss://r.example")
+        XCTAssertEqual(harness.requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer lrs_test")
+        await client.stop()
+    }
+
+    func testUnauthorizedHandshakeIsRejectedWithoutRetry() async {
+        let harness = Harness()
+        let client = harness.makeClient()
+        let events = await client.events()
+        await client.start(pairing: pairing)
+        _ = await waitUntil { !harness.connections.isEmpty }
+        harness.connections[0].refuse(httpStatus: 401)
+        var rejection: RelayRejection?
+        for await event in events {
+            if case .rejected(let r) = event { rejection = r; break }
+        }
+        XCTAssertEqual(rejection, .unauthorized)
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(harness.connections.count, 1, "a refused pairing is not retried")
+        XCTAssertTrue(harness.sleeps.isEmpty)
+        await client.stop()
+    }
+
+    func testRejectionMapping() {
+        XCTAssertEqual(RelayRejection.from(httpStatus: 401, closeCode: nil, receivedAny: false), .unauthorized)
+        XCTAssertNil(RelayRejection.from(httpStatus: 401, closeCode: nil, receivedAny: true))
+        XCTAssertEqual(RelayRejection.from(httpStatus: 101, closeCode: 4007, receivedAny: true), .tokenRevoked)
+        XCTAssertNil(RelayRejection.from(httpStatus: 101, closeCode: 4000, receivedAny: true))
+        XCTAssertNil(RelayRejection.from(httpStatus: 429, closeCode: nil, receivedAny: false))
+    }
 
     // MARK: Foreground stale check (decision 130)
 

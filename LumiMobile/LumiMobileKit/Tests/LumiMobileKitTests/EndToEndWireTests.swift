@@ -59,7 +59,7 @@ final class EndToEndWireTests: XCTestCase {
     func testStep1_WelcomeWithSessionsPopulatesModel() {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
 
         // Actual wire JSON produced by the relay (envelope {v:1,type,payload}).
@@ -90,7 +90,7 @@ final class EndToEndWireTests: XCTestCase {
     func testStep2_SubscribeSendsSubscribeFrame() async {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
 
         model.subscribe("s1")
@@ -108,7 +108,7 @@ final class EndToEndWireTests: XCTestCase {
     func testStep3_ScrollbackThenDataArrivedInOrder() async throws {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
 
         // Subscribe: sets activeSessionId and initializes the replay buffer.
@@ -161,7 +161,7 @@ final class EndToEndWireTests: XCTestCase {
     func testStep4_SendInputSendsBase64InputFrame() async {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
 
         model.sendInput("s1", Data("hi".utf8))
@@ -189,7 +189,7 @@ final class EndToEndWireTests: XCTestCase {
     func testProjectsWelcomeAndMessageBuildTree() async {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
         await model.start()
 
@@ -224,7 +224,7 @@ final class EndToEndWireTests: XCTestCase {
     func testFullRoundTrip_WelcomeSubscribeScrollbackDataInput() async throws {
         let client = FakeRelayClient()
         let store = InMemorySecureStore()
-        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef", serverToken: "lrs_test"))
         let model = AppModel(client: client, store: store)
 
         // --- Step 1: welcome arrives with sessions ---

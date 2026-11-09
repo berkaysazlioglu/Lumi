@@ -1,6 +1,6 @@
 # 09 — Relay Server: kendi sunucunu bağla (token + IP allowlist + dashboard)
 
-Durum: Faz 1 (sunucu) ve Faz 2 (Mac) tamam, 2026-11-09. Faz 3 (telefon) bekliyor. 08-mac-remote.md'nin ağ token'ı modelinin yerini alır.
+Durum: Faz 1 (sunucu), Faz 2 (Mac) ve Faz 3 (telefon) tamam, 2026-11-09. Railway sunucusunun kapatılması kaldı. 08-mac-remote.md'nin ağ token'ı modelinin yerini alır.
 
 ## Kullanıcı kararları (2026-11-06 / 09)
 
@@ -76,6 +76,16 @@ Durum: Faz 1 (sunucu) ve Faz 2 (Mac) tamam, 2026-11-09. Faz 3 (telefon) bekliyor
   - `This Mac`'te paylaşım ve hub listesi, `Mobile`'da QR, ancak sunucu tanımlıyken görünür.
 - **QR.** `lumi-remote://pair?url=…&token=<oda>&stoken=<server token>`.
 
-## Sonraki fazlar
+## Telefon (Faz 3)
 
-- **Faz 3 — Telefon.** `Pairing` QR'daki `stoken`'ı okur, Keychain'deki eşleşmeye ekler ve el sıkışmada Bearer gönderir. `stoken`'sız (eski) QR'lar "Mac'te Lumi'yi güncelleyin" uyarısıyla reddedilir. 401/4007 telefonda "yeniden eşleştir" durumuna düşer.
+- **Eşleşme.** `PairingInfo`'ya `serverToken` eklendi. `Pairing.parseResult` QR'daki `stoken`'ı okur.
+  - `stoken` yoksa `PairingError.outdatedMac` döner ve kullanıcıya "Mac'te Lumi'yi güncelleyip sunucuya bağlayın" denir.
+  - Tarayıcı böyle bir QR'da da durur (`Pairing.isPairingLink`) ki hata görünsün.
+- **Keychain.** `com.lumi.LumiMobile.pairing`'e additive `serverToken` yazılır. Server token'ı olmayan eski eşleşme okunmaz; uygulama eşleştirme ekranına düşer, çünkü hiçbir sunucuyu açamaz.
+- **Bağlantı.** `ConnectionFactory` artık `URLRequest` alır. `RelayClient` el sıkışmada `Authorization: Bearer <serverToken>` gönderir, hello aynıdır (`role:phone`, oda token'ı).
+  - Kalıcı retler (`RelayRejection`) yeniden denenmez: hiç frame gelmeden 401 → `unauthorized`, 4007 → `tokenRevoked`. Telefon allowlist'e tabi olmadığı için 4006 almaz.
+  - `AppModel` retti eşleşmeyi siler ve sebebi `pairingError` olarak eşleştirme ekranında gösterir.
+
+## Kalan
+
+- Railway sunucusu (`lumi-relay-production.up.railway.app`) bütün istemciler bu sürüme geçince kapatılır.

@@ -8,6 +8,30 @@ public enum ConnectionState: Sendable, Equatable {
 public enum ClientEvent: Sendable, Equatable {
     case stateChanged(ConnectionState)
     case message(ServerMessage)
+    /// The server refused the pairing for good (decision 146) — no more retries.
+    case rejected(RelayRejection)
+}
+
+/// Permanent refusals from the relay server (decision 146).
+public enum RelayRejection: String, Sendable, Equatable {
+    /// HTTP 401 on the handshake: the server token is wrong or not for this server.
+    case unauthorized
+    /// Close 4007: the token was revoked on the server's dashboard.
+    case tokenRevoked
+
+    public var message: String {
+        switch self {
+        case .unauthorized: return "The server rejected this pairing. Scan the QR on the Mac again."
+        case .tokenRevoked: return "This server token was revoked. Get a new token, connect the Mac and scan its QR again."
+        }
+    }
+
+    /// `nil` = an ordinary drop worth retrying. 401 only counts before any frame arrived.
+    static func from(httpStatus: Int?, closeCode: Int?, receivedAny: Bool) -> RelayRejection? {
+        if !receivedAny, httpStatus == 401 { return .unauthorized }
+        if closeCode == 4007 { return .tokenRevoked }
+        return nil
+    }
 }
 
 /// 1, 2, 4, 8, … 60 s exponential back-off (mirrors the Mac-side ReconnectBackoff).
@@ -65,7 +89,7 @@ public actor RelayClient: RelayClienting {
     private let pongTimeout: Duration
 
     public init(
-        connect: @escaping ConnectionFactory = { URLSessionWebSocketConnection(url: $0) },
+        connect: @escaping ConnectionFactory = { URLSessionWebSocketConnection(request: $0) },
         sleep: @escaping @Sendable (Double) async -> Void = { seconds in
             try? await Task.sleep(for: .seconds(seconds))
         },
@@ -88,8 +112,10 @@ public actor RelayClient: RelayClienting {
 
     public func start(pairing: PairingInfo) {
         guard runTask == nil, let url = URL(string: pairing.relayUrl) else { return }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(pairing.serverToken)", forHTTPHeaderField: "Authorization")
         let token = pairing.token
-        runTask = Task { await run(url: url, token: token) }
+        runTask = Task { await run(request: request, token: token) }
     }
 
     public func stop() {
@@ -151,16 +177,18 @@ public actor RelayClient: RelayClienting {
 
     // MARK: Internal
 
-    private func run(url: URL, token: String) async {
+    private func run(request: URLRequest, token: String) async {
         while !Task.isCancelled {
             setState(.connecting)
-            DiagLog.shared.log("relay", "connecting \(url.host ?? url.absoluteString)")
-            let conn = connect(url)
+            DiagLog.shared.log("relay", "connecting \(request.url?.host ?? "?")")
+            let conn = connect(request)
             connection = conn
             connectionEpoch &+= 1
+            var receivedAny = false
             do {
                 try await conn.send(PhoneProtocol.helloFrame(token: token))
                 for try await frame in conn.incoming {
+                    receivedAny = true
                     guard let message = PhoneProtocol.decodeServerMessage(frame) else {
                         DiagLog.shared.log("relay", "decode edilemeyen frame \(frame.prefix(80))")
                         continue
@@ -180,6 +208,14 @@ public actor RelayClient: RelayClienting {
             connection = nil
             if Task.isCancelled { return }
             setState(.disconnected)
+            let end = conn.endStatus()
+            if let rejection = RelayRejection.from(httpStatus: end.httpStatus, closeCode: end.closeCode,
+                                                   receivedAny: receivedAny) {
+                DiagLog.shared.log("relay", "rejected: \(rejection.rawValue) — not retrying")
+                yield(.rejected(rejection))
+                runTask = nil
+                return
+            }
             let delay = backoff.nextDelay()
             let wait = Task { [sleep] in await sleep(delay) }
             backoffWait = wait
