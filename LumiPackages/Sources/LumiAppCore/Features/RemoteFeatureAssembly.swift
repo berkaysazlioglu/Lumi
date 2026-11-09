@@ -115,6 +115,14 @@ final class RemoteFeatureAssembly: FeatureAssembly, ShellContributing {
         return controllerStore?.startSessionBesideSelection() ?? false
     }
 
+    /// ⌘W: Remote route'u açıkken seçili uzak terminali kapatır. Route açıksa `true` döner
+    /// (seçim olmasa da) — kısayol arkada kalan yerel terminale düşmesin.
+    func closeTerminalOnRemoteRoute(route: WorkspaceRoute) -> Bool {
+        guard route == .content(TasksPanelSection.remote.routeID) else { return false }
+        controllerStore?.closeSelectedSession()
+        return true
+    }
+
     func shutdown() async {
         await services.remoteMCP.stop()
         usageBridge.stop()

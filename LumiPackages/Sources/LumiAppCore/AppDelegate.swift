@@ -78,6 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return false }
                 return composition.remote.newTerminalOnRemoteRoute(route: shared.navigation.activeRoute)
             },
+            closeRemoteTerminal: { [weak self] in
+                guard let self else { return false }
+                return composition.remote.closeTerminalOnRemoteRoute(route: shared.navigation.activeRoute)
+            },
             // Karar 144: terminalin üstünü örten bir yüzey (FileViewer,
             // Settings, Go to Project) açıkken ⌘F altta kalan terminalin
             // görünmez çubuğuna odak vermesin.

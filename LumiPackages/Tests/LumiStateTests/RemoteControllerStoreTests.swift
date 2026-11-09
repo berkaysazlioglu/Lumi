@@ -31,7 +31,8 @@ private final class FakeController: RemoteControllerServicing {
         if let startError { throw startError }
         return nextSessionId
     }
-    func closeSession(hubId: String, sessionId: String) async throws {}
+    private(set) var closed: [String] = []
+    func closeSession(hubId: String, sessionId: String) async throws { closed.append(sessionId) }
     func events() -> AsyncStream<RemoteControllerEvent> { broadcaster.stream() }
 
     // Chat (karar 143 ek)
@@ -111,6 +112,52 @@ struct RemoteControllerStoreTests {
         #expect(fake.startedAt.map(\.path) == ["/p/wt"])
         #expect(fake.startedAt.first?.kind == .claude(model: nil))
         #expect(store.selectedSession == RemoteSessionRef(hubId: "build", sessionId: "new-session"))
+    }
+
+    /// Kullanıcı kararı 2026-11-09: Claude terminali chat'te açılır; diğerleri ham aynada.
+    /// Başlıktan seçilen görünüm terminal başına kalır.
+    @Test func claudeTerminalsOpenInChatOthersInTheMirror() async throws {
+        let fake = FakeController()
+        let store = RemoteControllerStore(service: fake)
+        store.start()
+        fake.emit(.linkChanged(hubId: "build", .connected))
+        fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [
+            RemoteSessionInfo(id: "claude", repoName: "lumi", status: "idle", provider: .claude),
+            RemoteSessionInfo(id: "shell", repoName: "lumi", status: "idle"),
+        ])))
+        try await Task.sleep(for: .milliseconds(30))
+        let claude = RemoteSessionRef(hubId: "build", sessionId: "claude")
+        #expect(store.viewMode(claude) == .chat)
+        #expect(store.viewMode(RemoteSessionRef(hubId: "build", sessionId: "shell")) == .terminal)
+        store.setViewMode(.terminal, for: claude)
+        #expect(store.viewMode(claude) == .terminal)
+    }
+
+    /// ⌘W Remote route'unda seçili HUB terminalini kapatır; seçim yoksa hiçbir şey yapmaz.
+    @Test func closeSelectedSessionClosesTheHubTerminal() async throws {
+        let fake = FakeController()
+        let store = RemoteControllerStore(service: fake)
+        store.start()
+        store.closeSelectedSession()
+        fake.emit(.linkChanged(hubId: "build", .connected))
+        fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [
+            RemoteSessionInfo(id: "s1", repoName: "lumi", status: "idle"),
+        ])))
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(fake.closed.isEmpty)
+        store.select(RemoteSessionRef(hubId: "build", sessionId: "s1"))
+        store.closeSelectedSession()
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(fake.closed == ["s1"])
+        #expect(store.selectedSession == nil)
+    }
+
+    /// Taslak oturumda durur: başka terminale geçip dönünce (görünüm yeniden kurulur) kalır.
+    @Test func composerDraftSurvivesSwitchingTerminals() {
+        let store = RemoteControllerStore(service: FakeController())
+        store.chatSession(chatRef).composerDraft = "half-written"
+        _ = store.chatSession(RemoteSessionRef(hubId: "build", sessionId: "other"))
+        #expect(store.chatSession(chatRef).composerDraft == "half-written")
     }
 
     @Test func rejectionReasonsReadAsSentences() {

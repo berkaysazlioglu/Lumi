@@ -24,6 +24,9 @@ public final class RemoteChatSession {
     public private(set) var promptDrafts: [String: PromptDraft] = [:]
     /// Tam liste istendi (`loadEarlier`) — bir kez.
     public private(set) var fullHistoryRequested = false
+    /// Mesaj kutusunun gönderilmemiş taslağı. Görünüm her terminal seçiminde yeniden
+    /// kurulduğu için oturumda durur: başka terminale geçip dönünce kaybolmaz.
+    public var composerDraft = ""
 
     private var pending: [ChatPending] = []
     private var pendingCounter = 0

@@ -124,6 +124,13 @@ public final class RemoteControllerStore {
         return true
     }
 
+    /// ⌘W Remote route'unda: seçili uzak terminali hub'da kapatır. Route açıkken kısayol
+    /// her zaman burada tüketilir — görünmeyen yerel terminal kapanmasın.
+    public func closeSelectedSession() {
+        guard let ref = selectedSession, linkState(ref.hubId).isConnected else { return }
+        Task { await closeSession(ref) }
+    }
+
     public func closeSession(_ ref: RemoteSessionRef) async {
         lastError = nil
         do {
@@ -166,8 +173,10 @@ public final class RemoteControllerStore {
     }
 
     public func viewMode(_ ref: RemoteSessionRef) -> RemoteSessionViewMode {
-        // Ham terminal varsayılandır (kullanıcı kararı 2026-11-06); chat başlıktan seçilir.
-        viewModes[ref] ?? .terminal
+        if let chosen = viewModes[ref] { return chosen }
+        // Claude terminali chat'te açılır (kullanıcı kararı 2026-11-09 — 11-06'daki ham
+        // ayna varsayılanını geri aldı); diğerleri ham aynadır, chat'leri yoktur.
+        return snapshots[ref.hubId]?.session(ref.sessionId)?.provider == .claude ? .chat : .terminal
     }
 
     public func setViewMode(_ mode: RemoteSessionViewMode, for ref: RemoteSessionRef) {

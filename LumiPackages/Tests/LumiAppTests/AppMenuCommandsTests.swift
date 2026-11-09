@@ -16,6 +16,8 @@ final class AppMenuCommandsTests: XCTestCase {
     private var dispatcher: MenuActionDispatcher!
     private var closeProjectCount = 0
     private var spawnRequests: [(scope: TerminalScope, command: String?)] = []
+    /// `nil` → Remote route'u kapalı (enjekte edilen kapı `false` döner).
+    private var remoteCloseCount: Int?
     private var shared: SharedStores!
     private var terminalService: FakeTerminalService!
 
@@ -30,6 +32,7 @@ final class AppMenuCommandsTests: XCTestCase {
         dispatcher = MenuActionDispatcher()
         closeProjectCount = 0
         spawnRequests = []
+        remoteCloseCount = nil
         AppMenuCommands.register(
             in: dispatcher,
             shared: shared,
@@ -40,6 +43,11 @@ final class AppMenuCommandsTests: XCTestCase {
             toggleOrchestrator: {},
             spawnTerminal: { [weak self] scope, command in
                 self?.spawnRequests.append((scope, command))
+            },
+            closeRemoteTerminal: { [weak self] in
+                guard let self, let count = remoteCloseCount else { return false }
+                remoteCloseCount = count + 1
+                return true
             }
         )
         // Terminal listesi servis stream'inden akar: lifecycle başlamadan
@@ -156,6 +164,19 @@ final class AppMenuCommandsTests: XCTestCase {
 
         XCTAssertTrue(shared.navigation.openTabs.isEmpty)
         XCTAssertTrue(terminalService.killedIDs.isEmpty)
+    }
+
+    /// Karar 143: Remote route'unda ⌘W hub terminaline gider, yerel terminal kapanmaz.
+    func testCloseTerminalOnRemoteRouteLeavesLocalTerminalsAlone() async throws {
+        shared.navigation.openTab("/r/alpha")
+        shared.terminals.spawn(in: "/r/alpha", command: nil)
+        await waitUntil("terminal store'a düşmedi") { self.shared.terminals.activeTerminalID != nil }
+        remoteCloseCount = 0
+
+        dispatcher.perform(.closeTerminal)
+
+        XCTAssertEqual(remoteCloseCount, 1)
+        XCTAssertTrue(terminalService.killedIDs.isEmpty, "yerel terminal kapanmamalı")
     }
 
     /// Karar 66: ⇧⌘W ayrı bir komuttur ve enjekte edilen aksiyonu çağırır —

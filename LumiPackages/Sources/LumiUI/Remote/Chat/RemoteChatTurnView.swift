@@ -9,7 +9,11 @@ struct RemoteChatStyle {
     var size: CGFloat { Theme.Typography.Size.base.scaledPoints }
 
     func font(bold: Bool = false) -> Font {
-        Font(LumiFonts.mono(family: family, size: size, weight: bold ? .bold : .regular))
+        Font(nsFont(bold: bold))
+    }
+
+    func nsFont(bold: Bool = false) -> NSFont {
+        LumiFonts.mono(family: family, size: size, weight: bold ? .bold : .regular)
     }
 
     /// `● ` / `> ` oluğu — tek aralıklı fontta iki hücre.

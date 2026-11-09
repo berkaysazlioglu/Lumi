@@ -20,6 +20,7 @@ enum AppMenuCommands {
         toggleOrchestrator: @escaping () -> Void,
         spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void,
         newRemoteTerminal: @escaping () -> Bool = { false },
+        closeRemoteTerminal: @escaping () -> Bool = { false },
         terminalSearch: @escaping () -> TerminalSearchStore? = { nil }
     ) {
         // Karar 103/108: ⌘T aktif terminal YÜZEYİNE vurur — repo route'unda o
@@ -37,6 +38,9 @@ enum AppMenuCommands {
         // (karar 59). Tab kapanışı `requestCloseTab` guard'ından geçer —
         // minimize terminali olan tab dialog'suz kapanmaz.
         dispatcher.register(.closeTerminal) {
+            // Karar 143: Remote route'unda seçili HUB terminalini kapatır; yerel
+            // terminaller o route'ta görünmez, kapanmamalı.
+            if closeRemoteTerminal() { return }
             if let activeID = shared.terminals.activeTerminalID {
                 shared.terminals.close(activeID)
                 return

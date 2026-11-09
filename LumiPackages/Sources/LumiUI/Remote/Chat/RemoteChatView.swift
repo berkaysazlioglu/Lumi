@@ -15,13 +15,11 @@ private struct ChatViewportKey: PreferenceKey {
 
 /// Uzak Claude terminalinin chat görünümü (karar 143 ek): telefonun chat hattı, Mac'te.
 /// Liste Claude Code TUI'si gibi çizilir; altta turn şeridi (Stop = Esc), bekleyen izin /
-/// soru kartı ve mesaj kutusu. Boyut farkı yoktur: metin controller'ın genişliğinde kırılır.
+/// soru kartı ve mesaj kutusu (`RemoteChatComposer`). Boyut farkı yoktur: metin controller'ın genişliğinde kırılır.
 struct RemoteChatView: View {
     let chat: RemoteChatSession
     let style: RemoteChatStyle
 
-    @State private var draft = ""
-    @FocusState private var isComposerFocused: Bool
     /// Dipteyken yeni çıktı listeyi aşağıda tutar; kullanıcı yukarı kaydırınca bırakır.
     @State private var isFollowing = true
     @State private var bottomMinY: CGFloat?
@@ -79,13 +77,10 @@ struct RemoteChatView: View {
                     onAnswer: { chat.respond(to: prompt, with: $0) })
                     .id(prompt.itemId)
             }
-            composer
+            RemoteChatComposer(chat: chat, style: style) { isFollowing = true }
         }
         .background(Theme.bgDeep)
-        .onAppear {
-            chat.start()
-            isComposerFocused = true
-        }
+        .onAppear { chat.start() }
         .onDisappear { chat.stop() }
     }
 
@@ -202,45 +197,7 @@ struct RemoteChatView: View {
         return "Working \(max(0, Int(now.timeIntervalSince(started))))s"
     }
 
-    // MARK: - Mesaj kutusu
-
-    private var composer: some View {
-        HStack(alignment: .bottom, spacing: Theme.Spacing.md) {
-            TextField("Message Claude…  (⌥↩ new line, Esc to interrupt)", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(style.font())
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1...Self.composerLines)
-                .focused($isComposerFocused)
-                .onSubmit(submit)
-                .onKeyPress(.escape) {
-                    guard chat.status.working else { return .ignored }
-                    chat.interrupt()
-                    return .handled
-                }
-                .padding(Theme.Spacing.md)
-                .background(Theme.bgElevated, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-            IconButton(systemName: "arrow.up", label: "Send", size: .body, side: Theme.Row.control) { submit() }
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .padding(.vertical, Theme.Spacing.md)
-        .background(Theme.bgSurface)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
-        }
-    }
-
-    private func submit() {
-        let text = draft
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        chat.send(text)
-        draft = ""
-        isFollowing = true
-    }
-
     private static let space = "remoteChatScroll"
     private static let bottomId = "remoteChatBottom"
-    private static let composerLines = 8
     private static var followSlack: CGFloat { Theme.scaled(40) }
 }
