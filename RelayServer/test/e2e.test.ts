@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import WebSocket from 'ws'
-import { startServer } from '../src/server.js'
+import { testServer, openSocket, type TestServer } from './support.js'
 import type { PushSender } from '../src/bridge.js'
 
 // Terminal-ayna tam tur E2E testi: gerçek WebSocket sunucusuna karşı
@@ -12,21 +12,19 @@ class NullPush implements PushSender {
   async send(_tokens: string[], _title: string, _body: string) {}
 }
 
-let server: ReturnType<typeof startServer> | null = null
+let server: TestServer | null = null
 
 afterEach(() => { server?.close(); server = null })
 
 function serverPort(): number {
-  const addr = server!.wss.address()
-  if (typeof addr === 'object' && addr) return addr.port
-  throw new Error('port alınamadı')
+  return server!.port()
 }
 
 type Sock = WebSocket & { inbox: Record<string, unknown>[] }
 
 function connect(): Promise<Sock> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${serverPort()}`) as Sock
+    const ws = openSocket() as Sock
     ws.inbox = []
     ws.on('message', (d) => ws.inbox.push(JSON.parse(d.toString())))
     ws.on('open', () => resolve(ws))
@@ -62,7 +60,7 @@ async function pairRoom(): Promise<{ mac: Sock; phone: Sock }> {
 // ---------------------------------------------------------------------------
 
 test('phone subscribe → mac alır', async () => {
-  server = startServer({ port: 0, push: new NullPush() })
+  server = await testServer({ push: new NullPush() })
   const { mac, phone } = await pairRoom()
 
   send(phone, 'subscribe', { sessionId: 's1' })
@@ -80,7 +78,7 @@ test('phone subscribe → mac alır', async () => {
 // ---------------------------------------------------------------------------
 
 test('mac scrollback → phone alır; base64 payload bozulmadan', async () => {
-  server = startServer({ port: 0, push: new NullPush() })
+  server = await testServer({ push: new NullPush() })
   const { mac, phone } = await pairRoom()
 
   // "SCROLL" → base64
@@ -104,7 +102,7 @@ test('mac scrollback → phone alır; base64 payload bozulmadan', async () => {
 // ---------------------------------------------------------------------------
 
 test('mac data → phone alır; base64 payload bozulmadan', async () => {
-  server = startServer({ port: 0, push: new NullPush() })
+  server = await testServer({ push: new NullPush() })
   const { mac, phone } = await pairRoom()
 
   // "LIVE" → base64
@@ -125,7 +123,7 @@ test('mac data → phone alır; base64 payload bozulmadan', async () => {
 // ---------------------------------------------------------------------------
 
 test('phone input → mac alır; base64 payload bozulmadan', async () => {
-  server = startServer({ port: 0, push: new NullPush() })
+  server = await testServer({ push: new NullPush() })
   const { mac, phone } = await pairRoom()
 
   // "hi" → base64 ("aGk=")
@@ -147,7 +145,7 @@ test('phone input → mac alır; base64 payload bozulmadan', async () => {
 // ---------------------------------------------------------------------------
 
 test('tam terminal-ayna turu: subscribe → scrollback+data → input', async () => {
-  server = startServer({ port: 0, push: new NullPush() })
+  server = await testServer({ push: new NullPush() })
   const { mac, phone } = await pairRoom()
 
   // 1) Phone subscribe gönderir → Mac alır

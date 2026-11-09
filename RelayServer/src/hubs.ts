@@ -6,10 +6,11 @@ import type { ClientLike } from './registry.js'
 /**
  * Mac'ten Mac'e remote (docs/design/08-mac-remote.md).
  *
- * Telefonun token'lı odalarından AYRI bir kanal: aynı ağ token'ıyla bağlanan
- * hub'lar bir directory'de listelenir, aynı token'la bağlanan controller'lar
- * listeyi görür ve şifreyle bir hub'a bağlanır. Şifreyi relay değil hub
- * doğrular; relay yalnız `attach_request` / `attach_result` taşır.
+ * Telefonun token'lı odalarından AYRI bir kanal. Sunucu tek bir ağdır
+ * (docs/design/09): server token'ıyla bağlanan hub'lar tek directory'de
+ * listelenir, controller'lar listeyi görür ve şifreyle bir hub'a bağlanır.
+ * Şifreyi relay değil hub doğrular; relay yalnız `attach_request` /
+ * `attach_result` taşır. Eski istemcilerin gönderdiği `network` yok sayılır.
  */
 
 export const HUB_CLOSE = {
@@ -19,13 +20,13 @@ export const HUB_CLOSE = {
   attachTimeout: 4005,
 } as const
 
-const MIN_NETWORK_LENGTH = 16
+const MIN_KEY_LENGTH = 16
 const MAX_TOKEN_LENGTH = 256
 const MIN_ID_LENGTH = 8
 const MAX_ID_LENGTH = 128
 const MAX_NAME_LENGTH = 64
 const MAX_PASSWORD_LENGTH = 256
-const MAX_HUBS_PER_NETWORK = 50
+const MAX_HUBS = 50
 const MAX_CONTROLLERS_PER_HUB = 20
 /** Çevrimdışı hub directory'de bu kadar süre `online:false` olarak durur. */
 export const OFFLINE_HUB_TTL_MS = 24 * 60 * 60 * 1000
@@ -71,14 +72,14 @@ export interface HubBridgeOptions {
   attachTimeoutMs?: number
 }
 
-type HubHello = { role: 'hub'; network: string; hubId: string; hubKey: string; name: string }
+type HubHello = { role: 'hub'; hubId: string; hubKey: string; name: string }
 type ControllerHello = {
-  role: 'controller'; network: string; controllerId: string; name: string
+  role: 'controller'; controllerId: string; name: string
   attach: { hubId: string; password: string } | null
 }
 
 export class HubBridge {
-  private networks = new Map<string, Network>()
+  private network: Network = { hubs: new Map(), browsers: new Set() }
   private now: () => number
   private attachTimeoutMs: number
 
@@ -101,13 +102,13 @@ export class HubBridge {
     if (!hello) return null
     if (hello.role === 'hub') return this.attachHub(client, hello)
     if (hello.attach) return this.attachController(client, hello, hello.attach, onAuthFailure)
-    return this.attachBrowser(client, hello.network)
+    return this.attachBrowser(client)
   }
 
   // MARK: - Hub
 
   private attachHub(client: ClientLike, hello: HubHello): Conn | null {
-    const network = this.ensureNetwork(hello.network)
+    const network = this.network
     this.prune(network)
     const keyHash = hashKey(hello.hubKey)
     let hub = network.hubs.get(hello.hubId)
@@ -116,7 +117,7 @@ export class HubBridge {
       return null
     }
     if (!hub) {
-      if (network.hubs.size >= MAX_HUBS_PER_NETWORK) return null
+      if (network.hubs.size >= MAX_HUBS) return null
       hub = {
         hubId: hello.hubId, keyHash, name: hello.name, client: null, lastSeenAt: this.now(),
         controllers: new Map(), pending: new Map(),
@@ -214,10 +215,10 @@ export class HubBridge {
     attach: { hubId: string; password: string },
     onAuthFailure: () => void,
   ): Conn {
-    const network = this.networks.get(hello.network)
-    const hub = network?.hubs.get(attach.hubId)
+    const network = this.network
+    const hub = network.hubs.get(attach.hubId)
     const connId = randomUUID()
-    if (!network || !hub?.client) {
+    if (!hub?.client) {
       client.close(HUB_CLOSE.hubOffline, 'hub_offline')
       return { message: () => {}, close: () => {} }
     }
@@ -259,8 +260,8 @@ export class HubBridge {
     }
   }
 
-  private attachBrowser(client: ClientLike, token: string): Conn {
-    const network = this.ensureNetwork(token)
+  private attachBrowser(client: ClientLike): Conn {
+    const network = this.network
     network.browsers.add(client)
     this.prune(network)
     client.send(envelope('hubs', { hubs: this.listHubs(network) }))
@@ -270,12 +271,19 @@ export class HubBridge {
       },
       close: () => {
         network.browsers.delete(client)
-        this.dropNetworkIfEmpty(token, network)
+        this.prune(network)
       },
     }
   }
 
   // MARK: - Directory
+
+  /** Dashboard durumu için directory'nin anlık görüntüsü. */
+  directory(): { name: string; online: boolean; controllerCount: number; lastSeenAt: number }[] {
+    return [...this.network.hubs.values()].map((hub) => ({
+      name: hub.name, online: hub.client !== null, controllerCount: hub.controllers.size, lastSeenAt: hub.lastSeenAt,
+    }))
+  }
 
   private listHubs(network: Network): Record<string, unknown>[] {
     return [...network.hubs.values()]
@@ -303,51 +311,36 @@ export class HubBridge {
     }
   }
 
-  private ensureNetwork(token: string): Network {
-    let network = this.networks.get(token)
-    if (!network) {
-      network = { hubs: new Map(), browsers: new Set() }
-      this.networks.set(token, network)
-    }
-    return network
-  }
-
-  private dropNetworkIfEmpty(token: string, network: Network): void {
-    this.prune(network)
-    if (network.hubs.size === 0 && network.browsers.size === 0) this.networks.delete(token)
-  }
-
-  /** Süresi dolan hub'ları ve boş kalan ağları düşürür (sunucu heartbeat'inden çağrılır). */
+  /** Süresi dolan çevrimdışı hub'ları düşürür (sunucu heartbeat'inden çağrılır). */
   sweep(): void {
-    for (const [token, network] of this.networks) this.dropNetworkIfEmpty(token, network)
+    this.prune(this.network)
   }
 
   /** Test görünürlüğü. */
-  hubCount(token: string): number {
-    return this.networks.get(token)?.hubs.size ?? 0
+  hubCount(): number {
+    return this.network.hubs.size
   }
 }
 
 // MARK: - Doğrulama
 
 function parseHubHello(p: Record<string, unknown>): HubHello | ControllerHello | null {
-  const network = parseToken(p.network)
   const name = parseName(p.name)
-  if (!network || !name) return null
+  if (!name) return null
   if (p.role === 'hub') {
     const hubId = parseId(p.hubId)
     const hubKey = parseToken(p.hubKey)
-    return hubId && hubKey ? { role: 'hub', network, hubId, hubKey, name } : null
+    return hubId && hubKey ? { role: 'hub', hubId, hubKey, name } : null
   }
   if (p.role !== 'controller') return null
   const controllerId = parseId(p.controllerId)
   if (!controllerId) return null
-  if (p.attach === undefined) return { role: 'controller', network, controllerId, name, attach: null }
+  if (p.attach === undefined) return { role: 'controller', controllerId, name, attach: null }
   if (typeof p.attach !== 'object' || p.attach === null || Array.isArray(p.attach)) return null
   const raw = p.attach as Record<string, unknown>
   const hubId = parseId(raw.hubId)
   if (!hubId || typeof raw.password !== 'string' || raw.password.length > MAX_PASSWORD_LENGTH) return null
-  return { role: 'controller', network, controllerId, name, attach: { hubId, password: raw.password } }
+  return { role: 'controller', controllerId, name, attach: { hubId, password: raw.password } }
 }
 
 function hashKey(key: string): Buffer {
@@ -356,7 +349,7 @@ function hashKey(key: string): Buffer {
 
 function parseToken(value: unknown): string | null {
   if (typeof value !== 'string') return null
-  return value.length >= MIN_NETWORK_LENGTH && value.length <= MAX_TOKEN_LENGTH ? value : null
+  return value.length >= MIN_KEY_LENGTH && value.length <= MAX_TOKEN_LENGTH ? value : null
 }
 
 function parseId(value: unknown): string | null {

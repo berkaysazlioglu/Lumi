@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import WebSocket from 'ws'
-import { startServer } from '../src/server.js'
+import { testServer, openSocket, type TestServer } from './support.js'
 import type { PushSender } from '../src/bridge.js'
 
 // İki gerçek kullanıcı (farklı token) aynı relay'e bağlandığında terminal-stream
@@ -17,15 +17,13 @@ class CapturingPush implements PushSender {
   }
 }
 
-let server: ReturnType<typeof startServer> | null = null
+let server: TestServer | null = null
 let push: CapturingPush
 
 afterEach(() => { server?.close(); server = null })
 
 function serverPort(): number {
-  const addr = server!.wss.address()
-  if (typeof addr === 'object' && addr) return addr.port
-  throw new Error('port alınamadı')
+  return server!.port()
 }
 
 // Her sokete gelen TÜM mesajları biriktirir (yokluk iddiası için gerekli).
@@ -33,7 +31,7 @@ type Sock = WebSocket & { inbox: Record<string, unknown>[] }
 
 function connect(): Promise<Sock> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${serverPort()}`) as Sock
+    const ws = openSocket() as Sock
     ws.inbox = []
     ws.on('message', (d) => ws.inbox.push(JSON.parse(d.toString())))
     ws.on('open', () => resolve(ws))
@@ -65,7 +63,7 @@ async function pair(token: string): Promise<{ mac: Sock; phone: Sock }> {
 
 test('iki farklı kullanıcının sessions/data/command_result\'ı odalar arası SIZMAZ', async () => {
   push = new CapturingPush()
-  server = startServer({ port: 0, push })
+  server = await testServer({ push })
   const A = await pair(TOKEN_A)
   const B = await pair(TOKEN_B)
 
@@ -88,7 +86,7 @@ test('iki farklı kullanıcının sessions/data/command_result\'ı odalar arası
 
 test('Phone B\'nin komutu yalnız Mac B\'ye gider, Mac A\'ya sızmaz', async () => {
   push = new CapturingPush()
-  server = startServer({ port: 0, push })
+  server = await testServer({ push })
   const A = await pair(TOKEN_A)
   const B = await pair(TOKEN_B)
 
@@ -104,7 +102,7 @@ test('Phone B\'nin komutu yalnız Mac B\'ye gider, Mac A\'ya sızmaz', async () 
 
 test('aynı token\'lı iki telefon (aynı kullanıcı) ikisi de alır — bilinçli mirroring', async () => {
   push = new CapturingPush()
-  server = startServer({ port: 0, push })
+  server = await testServer({ push })
   const A = await pair(TOKEN_A)
   const phone2 = await connect()
   send(phone2, 'hello', { role: 'phone', token: TOKEN_A })
@@ -120,7 +118,7 @@ test('aynı token\'lı iki telefon (aynı kullanıcı) ikisi de alır — bilin�
 
 test('register_push odaya özel — B\'nin cihazı A\'nın odasına dahil değil', async () => {
   push = new CapturingPush()
-  server = startServer({ port: 0, push })
+  server = await testServer({ push })
   const A = await pair(TOKEN_A)
   const B = await pair(TOKEN_B)
 
@@ -137,7 +135,7 @@ test('register_push odaya özel — B\'nin cihazı A\'nın odasına dahil değil
 
 test('ikinci Mac aynı token ile bağlanınca eskisi düşer; farklı token etkilenmez', async () => {
   push = new CapturingPush()
-  server = startServer({ port: 0, push })
+  server = await testServer({ push })
   const A = await pair(TOKEN_A)
   const B = await pair(TOKEN_B)
 

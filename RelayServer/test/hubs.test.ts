@@ -88,10 +88,9 @@ describe('hello doğrulaması', () => {
     expect(HubBridge.claims(env('hello', { role: 'phone' }))).toBe(false)
   })
 
-  test('kısa ağ token\'ı, eksik ad, kısa kimlik ve bozuk attach reddedilir', () => {
+  test('eksik ad, kısa kimlik ve bozuk attach reddedilir', () => {
     const bridge = makeBridge()
     const bad: Record<string, unknown>[] = [
-      { role: 'hub', network: 'kısa', hubId: HUB_ID, hubKey: HUB_KEY, name: 'x' },
       { role: 'hub', network: NET, hubId: HUB_ID, hubKey: HUB_KEY, name: '   ' },
       { role: 'hub', network: NET, hubId: 'kısa', hubKey: HUB_KEY, name: 'x' },
       { role: 'hub', network: NET, hubId: HUB_ID, name: 'x' },
@@ -125,14 +124,11 @@ describe('directory', () => {
     ])
   })
 
-  test('başka ağ token\'ındaki hub görünmez ve ona bağlanılamaz', () => {
+  test('sunucu tek ağdır — eski istemcinin farklı `network` değeri yok sayılır', () => {
     const bridge = makeBridge()
     hub(bridge, { network: OTHER_NET })
     const b = browser(bridge)
-    expect(b.last('hubs')!.payload.hubs).toEqual([])
-
-    const c = controller(bridge)
-    expect(c.closedWith?.code).toBe(HUB_CLOSE.hubOffline)
+    expect((b.last('hubs')!.payload.hubs as unknown[]).length).toBe(1)
   })
 
   test('hub_update adı değiştirir ve listeye yansır', () => {
@@ -147,10 +143,10 @@ describe('directory', () => {
     const bridge = makeBridge()
     const h = hub(bridge)
     h.close()
-    expect(bridge.hubCount(NET)).toBe(1)
+    expect(bridge.hubCount()).toBe(1)
     clock += OFFLINE_HUB_TTL_MS + 1
     bridge.sweep()
-    expect(bridge.hubCount(NET)).toBe(0)
+    expect(bridge.hubCount()).toBe(0)
   })
 })
 

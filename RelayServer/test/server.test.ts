@@ -1,22 +1,20 @@
 import { afterEach, expect, test } from 'vitest'
 import WebSocket from 'ws'
-import { startServer } from '../src/server.js'
+import { testServer, openSocket, type TestServer } from './support.js'
 import { NoopPushSender } from '../src/push.js'
 
 const TOKEN = 'secret-token-1234567890'
-let server: ReturnType<typeof startServer> | null = null
+let server: TestServer | null = null
 
 afterEach(() => { server?.close(); server = null })
 
 function serverPort(): number {
-  const addr = server!.wss.address()
-  if (typeof addr === 'object' && addr) return addr.port
-  throw new Error('port alınamadı')
+  return server!.port()
 }
 
 function connect(): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${serverPort()}`)
+    const ws = openSocket()
     ws.on('open', () => resolve(ws))
     ws.on('error', reject)
   })
@@ -35,7 +33,7 @@ function send(ws: WebSocket, type: string, payload: Record<string, unknown>): vo
 }
 
 test('mac ve telefon eşleşir; sessions ve command çift yönlü akar', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   const mac = await connect()
   send(mac, 'hello', { role: 'mac', token: TOKEN })
   expect((await nextMessage(mac)).type).toBe('welcome')
@@ -56,20 +54,20 @@ test('mac ve telefon eşleşir; sessions ve command çift yönlü akar', async (
 })
 
 test('geçersiz ilk mesaj bağlantıyı kapatır', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   const ws = await connect()
   send(ws, 'hello', { role: 'mac', token: 'kısa' })
   await closed(ws)
 })
 
 test('hello gelmezse timeout ile kapanır', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender(), helloTimeoutMs: 50 })
+  server = await testServer({ push: new NoopPushSender(), helloTimeoutMs: 50 })
   const ws = await connect()
   await closed(ws)
 })
 
 test('aynı IP 5 başarısız hello sonrası reddedilir', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   for (let i = 0; i < 5; i++) {
     const ws = await connect()
     send(ws, 'hello', { role: 'mac', token: 'kısa' })
@@ -81,7 +79,7 @@ test('aynı IP 5 başarısız hello sonrası reddedilir', async () => {
 })
 
 test('1 MB üzeri mesaj bağlantıyı kapatır', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   const ws = await connect()
   send(ws, 'hello', { role: 'mac', token: TOKEN })
   await nextMessage(ws) // welcome

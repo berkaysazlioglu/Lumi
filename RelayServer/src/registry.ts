@@ -48,6 +48,17 @@ export class Registry {
     }
   }
 
+  /** Dashboard durumu: çevrimiçi Mac ve bağlı telefon sayısı. */
+  stats(): { macsOnline: number; phones: number } {
+    let macsOnline = 0
+    let phones = 0
+    for (const room of this.rooms.values()) {
+      if (room.mac) macsOnline += 1
+      phones += room.phones.size
+    }
+    return { macsOnline, phones }
+  }
+
   get(token: string): Room | undefined {
     return this.rooms.get(token)
   }

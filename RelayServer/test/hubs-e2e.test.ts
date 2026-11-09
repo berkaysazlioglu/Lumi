@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import WebSocket from 'ws'
-import { startServer } from '../src/server.js'
+import { testServer, openSocket, type TestServer } from './support.js'
 import { NoopPushSender } from '../src/push.js'
 
 // Mac'ten Mac'e kanal gerçek WebSocket sunucusuna karşı (docs/design/08).
@@ -8,20 +8,18 @@ import { NoopPushSender } from '../src/push.js'
 const NET = 'network-token-A-1234567890'
 const HUB_ID = 'hub-0000-build-machine'
 
-let server: ReturnType<typeof startServer> | null = null
+let server: TestServer | null = null
 afterEach(() => { server?.close(); server = null })
 
 type Sock = WebSocket & { inbox: { type: string; payload: Record<string, unknown> }[] }
 
 function port(): number {
-  const addr = server!.wss.address()
-  if (typeof addr === 'object' && addr) return addr.port
-  throw new Error('port alınamadı')
+  return server!.port()
 }
 
 function connect(): Promise<Sock> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port()}`) as Sock
+    const ws = openSocket() as Sock
     ws.inbox = []
     ws.on('message', (d) => ws.inbox.push(JSON.parse(d.toString())))
     ws.on('open', () => resolve(ws))
@@ -59,7 +57,7 @@ function controllerHello(password: string) {
 }
 
 test('controller hub\'ı listede görür, şifreyle bağlanır, terminal verisi iki yönlü akar', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   const hub = await startHub()
 
   const browser = await connect()
@@ -85,7 +83,7 @@ test('controller hub\'ı listede görür, şifreyle bağlanır, terminal verisi 
 })
 
 test('hub ve telefon odası aynı token\'ı kullansa da birbirine karışmaz', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   const hub = await startHub()
   const mac = await connect()
   send(mac, 'hello', { role: 'mac', token: NET })
@@ -104,7 +102,7 @@ test('hub ve telefon odası aynı token\'ı kullansa da birbirine karışmaz', a
 })
 
 test('yanlış şifre 4003 ile kapanır ve IP sınırına sayılır', async () => {
-  server = startServer({ port: 0, push: new NoopPushSender() })
+  server = await testServer({ push: new NoopPushSender() })
   const hub = await startHub()
   for (let i = 0; i < 5; i++) {
     const controller = await connect()
