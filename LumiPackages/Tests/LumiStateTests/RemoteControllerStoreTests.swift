@@ -83,10 +83,10 @@ struct RemoteControllerStoreTests {
         fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [
             RemoteSessionInfo(id: "s1", repoName: "lumi", status: "idle"),
         ])))
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.snapshots["build"] != nil }
         #expect(store.selectedSession != nil)
         fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [])))
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.selectedSession == nil }
         #expect(store.selectedSession == nil)
     }
 
@@ -103,12 +103,12 @@ struct RemoteControllerStoreTests {
             projects: [RemoteProjectNode(path: "/p", name: "lumi", checkouts: [
                 RemoteCheckoutNode(path: "/p/wt", title: "wt", kind: "worktree", agentIds: ["s1"]),
             ])])))
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.snapshots["build"] != nil }
         store.select(RemoteSessionRef(hubId: "build", sessionId: "loose"))
         #expect(!store.startSessionBesideSelection())
         store.select(RemoteSessionRef(hubId: "build", sessionId: "s1"))
         #expect(store.startSessionBesideSelection())
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.selectedSession?.sessionId == "new-session" }
         #expect(fake.startedAt.map(\.path) == ["/p/wt"])
         #expect(fake.startedAt.first?.kind == .claude(model: nil))
         #expect(store.selectedSession == RemoteSessionRef(hubId: "build", sessionId: "new-session"))
@@ -125,7 +125,7 @@ struct RemoteControllerStoreTests {
             RemoteSessionInfo(id: "claude", repoName: "lumi", status: "idle", provider: .claude),
             RemoteSessionInfo(id: "shell", repoName: "lumi", status: "idle"),
         ])))
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.snapshots["build"] != nil }
         let claude = RemoteSessionRef(hubId: "build", sessionId: "claude")
         #expect(store.viewMode(claude) == .chat)
         #expect(store.viewMode(RemoteSessionRef(hubId: "build", sessionId: "shell")) == .terminal)
@@ -143,11 +143,11 @@ struct RemoteControllerStoreTests {
         fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [
             RemoteSessionInfo(id: "s1", repoName: "lumi", status: "idle"),
         ])))
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.snapshots["build"] != nil }
         #expect(fake.closed.isEmpty)
         store.select(RemoteSessionRef(hubId: "build", sessionId: "s1"))
         store.closeSelectedSession()
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { !fake.closed.isEmpty && store.selectedSession == nil }
         #expect(fake.closed == ["s1"])
         #expect(store.selectedSession == nil)
     }
@@ -163,6 +163,16 @@ struct RemoteControllerStoreTests {
     @Test func rejectionReasonsReadAsSentences() {
         #expect(RemoteControllerStore.describeRejection("wrong_password") == "Wrong password.")
         #expect(RemoteControllerStore.describeRejection("weird").contains("weird"))
+    }
+}
+
+/// Koşul sağlanana dek bekler (üst sınır 5 sn). Store olayları `AsyncStream`
+/// üzerinden işlediği için sabit bekleme yavaş CI runner'ında yetişmiyordu.
+@MainActor
+private func waitUntil(_ condition: () -> Bool) async {
+    let deadline = ContinuousClock.now + .seconds(5)
+    while !condition(), ContinuousClock.now < deadline {
+        try? await Task.sleep(for: .milliseconds(10))
     }
 }
 
@@ -261,7 +271,7 @@ struct RemoteChatSessionTests {
         let first = store.chatSession(chatRef)
         fake.emit(.linkChanged(hubId: "build", .connected))
         fake.emit(.snapshotChanged(hubId: "build", RemoteHubSnapshot(sessions: [])))
-        try await Task.sleep(for: .milliseconds(30))
+        await waitUntil { store.snapshots["build"] != nil }
         #expect(store.chatSession(chatRef) !== first)
     }
 }
