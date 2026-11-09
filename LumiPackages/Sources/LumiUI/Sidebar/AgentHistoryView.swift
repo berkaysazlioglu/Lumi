@@ -4,9 +4,11 @@ import SwiftUI
 
 /// Agent History sekmesi (karar 39): Claude/Codex oturum geçmişi.
 ///
-/// Satır düzeni Orca `AiVaultSessionRow`u izler: başlık + sağda aç/kapa oku
-/// ve `⋯` menüsü (sağ tık da aynı `PopoverMenu`yu açar, karar 53); altında metadata ("Claude · 52 msgs · 3 subagents · 1h ago ·
-/// model") ve branch rozeti; açıkken `AgentHistoryDetailCard`.
+/// Satır düzeni Orca `AiVaultSessionRow`u izler: başlık + sağda (hover'da)
+/// Resume / Copy Command, aç/kapa oku ve `⋯` menüsü (sağ tık da aynı
+/// `PopoverMenu`yu açar, karar 53); altında son turun rol etiketli önizlemesi
+/// ve metadata ("Claude · 52 msgs · 3 subagents · 1h ago · model"); açıkken
+/// `AgentHistoryDetailCard`.
 struct AgentHistoryView: View {
     let repoPath: String
     @Shell private var shell
@@ -16,6 +18,7 @@ struct AgentHistoryView: View {
     @State private var newestFirst = true
     @State private var showsFilter = false
     @State private var menuEntryID: String?
+    @State private var hoveredEntryID: String?
     @State private var showsImportMenu = false
 
     private var entries: [AgentHistoryEntry] {
@@ -143,17 +146,23 @@ struct AgentHistoryView: View {
 
     // MARK: - Satır
 
+    /// Orca `AiVaultSessionRow` düzeni: üstte başlık + eylemler (Resume ve Copy
+    /// Command yalnız hover'da belirir), altında tam genişlikte son turun
+    /// rol etiketli önizlemesi ve metadata; açıkken `AgentHistoryDetailCard`.
     private func sessionRow(_ entry: AgentHistoryEntry) -> some View {
         let isExpanded = expanded.contains(entry.id)
-        return VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-                Button { toggle(entry.id) } label: {
-                    summary(entry, isExpanded: isExpanded).contentShape(Rectangle())
+        let isHovered = hoveredEntryID == entry.id
+        return VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                HStack(alignment: .center, spacing: Theme.Spacing.xs) {
+                    title(entry, isExpanded: isExpanded)
+                    rowActions(entry, isExpanded: isExpanded, showsHoverActions: isHovered || menuEntryID == entry.id)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(entry.title), \(isExpanded ? "collapse" : "expand")")
-                rowActions(entry, isExpanded: isExpanded)
+                if !isExpanded { preview(entry) }
+                metadata(entry)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { toggle(entry.id) }
             if isExpanded {
                 AgentHistoryDetailCard(
                     entry: entry,
@@ -164,19 +173,54 @@ struct AgentHistoryView: View {
                 )
             }
         }
-        .padding(Theme.Spacing.md)
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isHovered && !isExpanded ? Theme.bgElevated.opacity(Self.hoverTint) : Color.clear)
+        .onHover { inside in
+            if inside {
+                hoveredEntryID = entry.id
+            } else if hoveredEntryID == entry.id {
+                hoveredEntryID = nil
+            }
+        }
         .onRightClick { menuEntryID = entry.id }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline) }
     }
 
-    private func rowActions(_ entry: AgentHistoryEntry, isExpanded: Bool) -> some View {
+    private static let hoverTint = 0.55
+
+    private func title(_ entry: AgentHistoryEntry, isExpanded: Bool) -> some View {
+        Text(entry.title)
+            .font(Theme.Typography.ui(.base, weight: .medium))
+            .foregroundStyle(Theme.textPrimary)
+            .lineLimit(isExpanded ? 2 : 1)
+            .truncationMode(.tail)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .help(entry.title)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("\(entry.title), \(isExpanded ? "collapse" : "expand")")
+            .accessibilityAction { toggle(entry.id) }
+    }
+
+    private func rowActions(_ entry: AgentHistoryEntry, isExpanded: Bool, showsHoverActions: Bool) -> some View {
         HStack(spacing: Theme.Spacing.xxs) {
+            if showsHoverActions {
+                IconButton(systemName: "play", label: "Resume session", size: .body, weight: .medium) {
+                    resume(entry)
+                }
+                .disabled(entry.resumeCommand == nil)
+                IconButton(systemName: "terminal", label: "Copy resume command", size: .body, weight: .medium) {
+                    if let command = entry.resumeCommand { copy(command) }
+                }
+                .disabled(entry.resumeCommand == nil)
+            }
             IconButton(
                 systemName: isExpanded ? "chevron.up" : "chevron.down",
-                label: isExpanded ? "Collapse session" : "Expand session", size: .caption
+                label: isExpanded ? "Hide details" : "Show details", size: .body, weight: .medium
             ) { toggle(entry.id) }
-            IconButton(systemName: "ellipsis", label: "Session actions", size: .body) {
+            IconButton(systemName: "ellipsis", label: "Session actions", size: .body, weight: .medium) {
                 menuEntryID = menuEntryID == entry.id ? nil : entry.id
             }
             .popover(
@@ -186,53 +230,65 @@ struct AgentHistoryView: View {
                 PopoverMenu(items: menuItems(entry), dismiss: { menuEntryID = nil })
             }
         }
+        .fixedSize()
     }
 
-    /// Başlık + (kapalıyken) önizleme + metadata + branch rozeti.
-    private func summary(_ entry: AgentHistoryEntry, isExpanded: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text(entry.title)
-                .font(Theme.Typography.ui(.base, weight: .medium))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(isExpanded ? 3 : 1)
-                .fixedSize(horizontal: false, vertical: true)
-            if let preview = entry.preview, !isExpanded {
-                Text(preview).font(Theme.Typography.ui(.body))
-                    .foregroundStyle(Theme.textSecondary).lineLimit(2)
-            }
-            metadata(entry)
-            if let branch = entry.gitBranch { AgentHistoryBranchBadge(branch: branch) }
+    /// "**Agent**: son tur metni" — iki satır, satır sonları boşluğa iner.
+    /// Tur yoksa eski tek metin önizlemesi, o da yoksa yer tutucu.
+    private func preview(_ entry: AgentHistoryEntry) -> some View {
+        let latest = entry.recentTurns.last
+        let body = (latest?.text ?? entry.preview)?
+            .split(whereSeparator: \.isNewline).joined(separator: " ")
+        let text: Text
+        if let body, !body.isEmpty {
+            let role = latest.map { $0.role == .user ? "You" : "Agent" }
+            text = role.map {
+                Text($0).fontWeight(.semibold).foregroundColor(Theme.textPrimary.opacity(Self.roleOpacity))
+                    + Text(": \(body)")
+            } ?? Text(body)
+        } else {
+            text = Text("No conversation preview available")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        return text
+            .font(Theme.Typography.ui(.body))
+            .foregroundStyle(Theme.textSecondary)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "✳ Claude · 52 msgs · 3 subagents · 1h ago · opus-4-1".
+    private static let roleOpacity = 0.85
+
+    /// "✳ Claude · 52 msgs · 3 subagents · 1h ago · opus-4-1" — sabit öğeler
+    /// kısalmaz, sığmazsa önce model, sonra sağlayıcı adı kırpılır.
     private func metadata(_ entry: AgentHistoryEntry) -> some View {
         HStack(spacing: Theme.Spacing.xs) {
-            ProviderIcon(provider: entry.provider, size: .caption)
-            Text(entry.provider.rawValue.capitalized)
+            ProviderIcon(provider: entry.provider, size: .label)
+            Text(entry.provider.rawValue.capitalized).lineLimit(1).layoutPriority(-1)
             if entry.messageCount > 0 {
                 separator
-                Text("\(entry.messageCount) msgs").monospacedDigit()
+                Text("\(entry.messageCount) msgs").monospacedDigit().fixedSize()
             }
             if !entry.subagents.isEmpty {
                 separator
                 Text("\(entry.subagents.count) \(entry.subagents.count == 1 ? "subagent" : "subagents")")
+                    .fixedSize()
             }
             separator
-            Text(RelativeTimeFormatter.label(entry.updatedAt))
+            Text(RelativeTimeFormatter.label(entry.updatedAt)).fixedSize()
             if let model = entry.modelLabel {
                 separator
-                Text(model).lineLimit(1).truncationMode(.tail)
+                Text(model).lineLimit(1).truncationMode(.tail).layoutPriority(-2).help(model)
             }
         }
-        .font(Theme.Typography.ui(.caption))
-        .foregroundStyle(Theme.textMuted)
+        .font(Theme.Typography.ui(.label))
+        .foregroundStyle(Theme.textSecondary)
         .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var separator: some View {
-        Text("·").foregroundStyle(Theme.textMuted).accessibilityHidden(true)
+        Text("·").foregroundStyle(Theme.textMuted).fixedSize().accessibilityHidden(true)
     }
 
     // MARK: - Menüler ve eylemler

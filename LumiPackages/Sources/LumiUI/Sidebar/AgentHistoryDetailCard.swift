@@ -5,7 +5,8 @@ import SwiftUI
 /// Agent History satırı açıldığında görünen detay kartı (Orca
 /// `SessionInlineDetails` paritesi).
 ///
-/// Üstte tonlu aksiyon şeridi (Resume / Copy Command / View Log / Export), altında
+/// Üstte tonlu, sarmalanan aksiyon şeridi (Resume / Copy Command / View Log /
+/// Export), altında
 /// bölümler: FIRST PROMPT ("You" kartı + Copy), LATEST TURNS (rol etiketli
 /// kartlar), SUBAGENTS (N) ve WORKTREE (branch + kompakt yol).
 struct AgentHistoryDetailCard: View {
@@ -56,17 +57,19 @@ struct AgentHistoryDetailCard: View {
 
     // MARK: - Parçalar
 
+    /// Düğmeler doğal genişliklerinde kalır, sığmayan alt satıra iner (Orca
+    /// `flex-wrap`) — dar panelde etiket kelime ortasından kırılmaz.
     private var actionBar: some View {
-        HStack(spacing: Theme.Spacing.sm) {
+        FlowLayout(spacing: Theme.Spacing.sm) {
             action("Resume", icon: "play.fill", isPrimary: true, action: onResume)
                 .disabled(entry.resumeCommand == nil)
             action("Copy Command", icon: "doc.on.doc", action: onCopyCommand)
                 .disabled(entry.resumeCommand == nil)
             action("View Log", icon: "doc.text", action: onRevealLog)
             action("Export", icon: "square.and.arrow.up", action: onExport)
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, Theme.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.md)
         .background(Theme.bgElevated)
         .overlay(alignment: .bottom) {
@@ -80,20 +83,22 @@ struct AgentHistoryDetailCard: View {
         Button(action: action) {
             HStack(spacing: Theme.Spacing.xs) {
                 Image(systemName: icon).accessibilityHidden(true)
-                Text(title)
+                Text(title).lineLimit(1)
             }
             .font(Theme.Typography.ui(.label, weight: .medium))
             .padding(.horizontal, Theme.Spacing.md)
             .frame(height: Theme.Spacing.xxl + Theme.Spacing.xs)
+            .fixedSize()
         }
         .buttonStyle(
             HoverButtonStyle(
-                foreground: isPrimary ? .white : Theme.textSecondary,
+                foreground: isPrimary ? .white : Theme.textPrimary,
                 hoverForeground: isPrimary ? .white : Theme.textPrimary,
                 background: isPrimary ? Theme.accentVivid : Theme.bgDeep,
                 hoverBackground: isPrimary ? Theme.accentDeep : Theme.border
             )
         )
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -106,7 +111,7 @@ struct AgentHistoryDetailCard: View {
                             Text("Branch".uppercased())
                                 .font(Theme.Typography.ui(.caption, weight: .medium))
                                 .tracking(0.6)
-                                .foregroundStyle(Theme.textMuted)
+                                .foregroundStyle(Theme.textSecondary)
                             Text(branch)
                                 .font(Theme.Typography.mono(.caption))
                                 .foregroundStyle(Theme.textPrimary)
@@ -116,7 +121,7 @@ struct AgentHistoryDetailCard: View {
                     if let path = entry.compactPath {
                         Text(path)
                             .font(Theme.Typography.mono(.caption))
-                            .foregroundStyle(Theme.textMuted)
+                            .foregroundStyle(Theme.textSecondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .help(entry.cwd ?? path)
@@ -167,7 +172,7 @@ struct AgentHistoryTurnCard: View {
                     .textCase(.uppercase)
                     .font(Theme.Typography.ui(.caption, weight: .semibold))
                     .tracking(0.6)
-                    .foregroundStyle(Theme.textMuted)
+                    .foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: 0)
                 if let onCopy {
                     Button(action: onCopy) {
@@ -193,28 +198,6 @@ struct AgentHistoryTurnCard: View {
     }
 
     private static let userTint = 0.08
-}
-
-/// Oturumun git dalı rozeti (dolu kare + ad; Orca'nın branch pill'i).
-struct AgentHistoryBranchBadge: View {
-    let branch: String
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.xs) {
-            Image(systemName: "square.fill")
-                .font(Theme.Typography.ui(.micro))
-                .foregroundStyle(Theme.textMuted)
-                .accessibilityHidden(true)
-            Text(branch).lineLimit(1)
-        }
-        .font(Theme.Typography.mono(.caption, weight: .medium))
-        .foregroundStyle(Theme.textPrimary)
-        .padding(.horizontal, Theme.Spacing.sm)
-        .padding(.vertical, Theme.Spacing.xxs)
-        .background(Theme.bgDeep)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-        .accessibilityLabel("Branch \(branch)")
-    }
 }
 
 #if DEBUG
