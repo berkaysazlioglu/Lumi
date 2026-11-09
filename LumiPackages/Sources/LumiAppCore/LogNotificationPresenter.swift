@@ -11,8 +11,8 @@ struct LogNotificationPresenter: NotificationPresenting {
     }
 
     @MainActor
-    func present(id: String, title: String, body: String) {
-        fputs("[lumi-notify] \(title): \(body) (terminal \(id.prefix(8)))\n", stderr)
+    func present(id: String, title: String, subtitle: String, body: String, sound: Bool) {
+        fputs("[lumi-notify] \(title) — \(subtitle): \(body) (terminal \(id.prefix(8)))\n", stderr)
     }
 
     @MainActor

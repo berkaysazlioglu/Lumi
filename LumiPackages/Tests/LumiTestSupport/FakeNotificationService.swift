@@ -1,28 +1,17 @@
 import Foundation
 import LumiKit
 
-/// `NotificationServicing` fake'i (@MainActor). Ayar güncellemeleri ve status
-/// köprüsü çağrıları kaydedilir; `emit(_:)` ile bildirim event'i sürülür.
+/// `NotificationServicing` fake'i (@MainActor). Ayar güncellemeleri ve teslim
+/// edilen bildirimler kaydedilir; `emit(_:)` ile bildirim event'i sürülür.
 @MainActor
 public final class FakeNotificationService: NotificationServicing {
-    public struct StatusChange: Equatable, Sendable {
-        public let id: TerminalID
-        public let repoName: String
-        public let status: TerminalStatus
-
-        public init(id: TerminalID, repoName: String, status: TerminalStatus) {
-            self.id = id
-            self.repoName = repoName
-            self.status = status
-        }
-    }
-
     private let broadcaster = EventBroadcaster<NotificationEvent>()
 
     public private(set) var permissionRequestCount = 0
     public private(set) var settingsUpdates: [NotificationSettings] = []
     public private(set) var windowFocusCalls: [Bool] = []
-    public private(set) var statusChanges: [StatusChange] = []
+    public private(set) var delivered: [AgentNotification] = []
+    public private(set) var dismissed: [TerminalID] = []
     public private(set) var removedTerminals: [TerminalID] = []
 
     public init() {}
@@ -39,8 +28,12 @@ public final class FakeNotificationService: NotificationServicing {
         windowFocusCalls.append(focused)
     }
 
-    public func handleStatusChange(id: TerminalID, repoName: String, status: TerminalStatus) {
-        statusChanges.append(StatusChange(id: id, repoName: repoName, status: status))
+    public func deliver(_ notification: AgentNotification) {
+        delivered.append(notification)
+    }
+
+    public func dismiss(_ id: TerminalID) {
+        dismissed.append(id)
     }
 
     public func terminalRemoved(_ id: TerminalID) {

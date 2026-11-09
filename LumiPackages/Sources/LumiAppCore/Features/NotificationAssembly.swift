@@ -7,26 +7,47 @@ import os
 /// Teşhis izi (karar 83).
 private let notificationLogger = LumiLog.logger("notifications")
 
-/// Bildirim köprüleri (refactor 3.3): terminal status → OS bildirimi ve
-/// bildirim event'leri → store'lar.
+/// Bildirim köprüleri (karar 145): terminal olayları →
+/// `AgentNotificationCoordinator` (tur başına bir bildirim) →
+/// `NotificationServicing` (teslim) → toast / terminal odağı.
 @MainActor
 final class NotificationAssembly: FeatureAssembly {
     let bootstrapPhase = BootstrapPhase.config
 
     private var services: (any ServiceRegistry)!
     private var shared: SharedStores!
-    private var statusBridge: Task<Void, Never>?
+    private var coordinator: AgentNotificationCoordinator?
     private var notificationBridge: Task<Void, Never>?
+    /// Bildirim alt başlığındaki checkout adı Projects ağacından okunur —
+    /// repo/workspace store'ları repo assembly'sinde doğar (`.repo` fazı);
+    /// etiket bildirim anında çözülür, o an ikisi de hazırdır.
+    private let repo: RepoFeatureAssembly?
+
+    init(repo: RepoFeatureAssembly? = nil) {
+        self.repo = repo
+    }
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
         self.services = services
         self.shared = shared
+        coordinator = AgentNotificationCoordinator(
+            service: services.terminal,
+            terminals: shared.terminals,
+            notifications: services.notifications,
+            transcripts: services.terminalTranscripts,
+            checkoutLabel: { [repo, navigation = shared.navigation] path in
+                guard let workspaces = repo?.workspaceStore, let repos = repo?.repoStore else {
+                    return (path as NSString).lastPathComponent
+                }
+                return CheckoutLabel.make(for: path, workspaces: workspaces, repos: repos, navigation: navigation)
+            }
+        )
     }
 
     func start() async {
         let config = await services.config.config()
         services.notifications.updateSettings(config.notifications)
-        startStatusBridge()
+        coordinator?.start()
         startNotificationBridge()
         await services.notifications.requestPermissionIfNeeded()
     }
@@ -37,40 +58,12 @@ final class NotificationAssembly: FeatureAssembly {
     }
 
     func shutdown() async {
-        statusBridge?.cancel()
-        statusBridge = nil
+        coordinator?.stop()
         notificationBridge?.cancel()
         notificationBridge = nil
     }
 
     // MARK: - Köprüler
-
-    /// Terminal status event'leri → `NotificationServicing` (onChange köprüsü).
-    private func startStatusBridge() {
-        guard statusBridge == nil else { return }
-        let stream = services.terminal.events()
-        statusBridge = Task { @MainActor [weak self] in
-            for await event in stream {
-                guard let self else { return }
-                switch event {
-                case .statusChanged(let id, let status):
-                    let repoName = self.shared.terminals.meta(for: id)
-                        .map { ($0.repoPath as NSString).lastPathComponent } ?? "Terminal"
-                    self.services.notifications.handleStatusChange(
-                        id: id, repoName: repoName, status: status
-                    )
-                case .exited(let id, _):
-                    // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
-                    self.services.notifications.terminalRemoved(id)
-                case .spawned, .titleChanged, .providerChanged, .codexSessionIDChanged, .claudeSessionIDChanged,
-                     .claudeLaunchArgumentsChanged,
-                     .awaitingDecisionChanged, .bell, .writeFailed, .viewFocused, .stalled, .linkActivated,
-                     .interruptInferred:
-                    break
-                }
-            }
-        }
-    }
 
     /// Bildirim event'leri → store'lar.
     private func startNotificationBridge() {
@@ -84,12 +77,12 @@ final class NotificationAssembly: FeatureAssembly {
                     // Minimize istisnası: bildirim tıklaması restore + focus
                     notificationLogger.log("notification clicked \(LumiLog.short(id), privacy: .public)")
                     self.shared.terminals.restoreAndFocus(id)
-                case .bell(let id, let repoName):
+                case .attention(let notification):
                     self.shared.toasts.show(
                         .bell,
-                        title: repoName,
-                        message: NotificationService.waitingBody,
-                        terminalID: id
+                        title: notification.title,
+                        message: "\(notification.subtitle)\n\(notification.body)",
+                        terminalID: notification.terminalID
                     )
                 }
             }

@@ -1,7 +1,7 @@
 import LumiKit
 import SwiftUI
 
-/// Bekleyen terminaller için tekrar bildirim aralıkları.
+/// Ajan bildirimleri (karar 145): tur başına bir bildirim, tekrar yok.
 struct NotificationsSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .notifications
 
@@ -13,72 +13,45 @@ struct NotificationsSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
             LumiSectionTitle(
                 title: "Notifications",
-                description: "Repeat notification intervals while the assistant waits for input."
+                description: "One notification per agent turn, with the chat name and the agent's last message."
             )
             InfoCard(
-                "Notifications only appear when system permission is granted. The interval "
-                    + "repeats as long as the terminal stays waiting."
+                "System notifications appear only while Lumi is in the background; inside Lumi you get a toast. "
+                    + "Nothing is shown for the terminal you are looking at, and idle chats never repeat."
             )
-            LumiToggleRow(
-                title: "Waiting (unseen)",
-                hint: "Instant notification + repeat for unseen waiting terminals",
-                isOn: Binding(
-                    get: { shell.settings.current.notifications.unseenEnabled },
-                    set: { value in
-                        shell.settings.updateNotifications { $0.unseenEnabled = value }
-                    }
-                )
-            ) {
-                IntervalStepper(
-                    label: "Unseen repeat interval",
-                    value: Binding(
-                        get: { shell.settings.current.notifications.unseenIntervalMinutes },
-                        set: { minutes in
-                            shell.settings.updateNotifications { $0.unseenIntervalMinutes = minutes }
-                        }
-                    )
-                )
-            }
-            LumiToggleRow(
-                title: "Waiting (seen)",
-                hint: "Repeat for seen but unanswered terminals",
-                isOn: Binding(
-                    get: { shell.settings.current.notifications.seenEnabled },
-                    set: { value in
-                        shell.settings.updateNotifications { $0.seenEnabled = value }
-                    }
-                )
-            ) {
-                IntervalStepper(
-                    label: "Seen repeat interval",
-                    value: Binding(
-                        get: { shell.settings.current.notifications.seenIntervalMinutes },
-                        set: { minutes in
-                            shell.settings.updateNotifications { $0.seenIntervalMinutes = minutes }
-                        }
-                    )
-                )
-            }
+            toggle(
+                "Agent finished",
+                hint: "When an agent finishes its turn or stops with an error",
+                \.agentFinished
+            )
+            toggle(
+                "Needs input",
+                hint: "When an agent waits for your permission or answer",
+                \.needsInput
+            )
+            toggle(
+                "Sound",
+                hint: "Play the system sound with notifications",
+                \.sound
+            )
         }
     }
-}
 
-/// Dakika cinsinden aralık seçici (1–60).
-struct IntervalStepper: View {
-    let label: String
-    @Binding var value: Int
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.md) {
-            Stepper("\(value)", value: $value, in: 1...60)
-                .font(Theme.Typography.bodyMono)
-                .foregroundStyle(Theme.textPrimary)
-                .frame(width: Theme.scaled(110), alignment: .leading)
-                .accessibilityLabel(label)
-            Text("min")
-                .font(Theme.Typography.bodyMono)
-                .foregroundStyle(Theme.textMuted)
-        }
+    private func toggle(
+        _ title: String,
+        hint: String,
+        _ keyPath: WritableKeyPath<NotificationSettings, Bool> & Sendable
+    ) -> some View {
+        LumiToggleRow(
+            title: title,
+            hint: hint,
+            isOn: Binding(
+                get: { shell.settings.current.notifications[keyPath: keyPath] },
+                set: { value in
+                    shell.settings.updateNotifications { $0[keyPath: keyPath] = value }
+                }
+            )
+        )
     }
 }
 

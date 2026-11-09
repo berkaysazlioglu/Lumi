@@ -62,7 +62,7 @@ final class ToastStoreTests: XCTestCase {
 
     // MARK: - Bell dedupe: TERMİNAL BAŞINA en çok bir aktif bell (2.5)
 
-    func testSecondBellForSameTerminalIsSuppressed() {
+    func testSecondBellForSameTerminalReplacesFirst() {
         let store = ToastStore(autoDismissAfter: 60)
         let id = TerminalID()
 
@@ -70,7 +70,7 @@ final class ToastStoreTests: XCTestCase {
         store.show(.bell, title: "alpha", message: "second", terminalID: id)
 
         XCTAssertEqual(store.toasts.count, 1, "başlık/mesaj farklı olsa da terminal başına tek bell")
-        XCTAssertEqual(store.toasts.first?.message, "first", "ilk gelen kalır")
+        XCTAssertEqual(store.toasts.first?.message, "second", "yeni turun içeriği eskisinin yerini alır (karar 145)")
     }
 
     func testBellsForDifferentTerminalsCoexist() {

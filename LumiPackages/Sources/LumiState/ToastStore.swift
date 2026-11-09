@@ -42,15 +42,19 @@ public final class ToastStore {
         message: String = "",
         terminalID: TerminalID? = nil
     ) {
-        // Dedupe: aynı içerik aktifken eklenmez; bell için terminal başına bir aktif
-        // toast kuralı
-        let isDuplicate = toasts.contains { existing in
-            if kind == .bell, existing.kind == .bell, let terminalID {
-                return existing.terminalID == terminalID
+        if kind == .bell, let terminalID {
+            // Bell: terminal başına tek aktif toast — yenisi (yeni turun
+            // içeriği, karar 145) eskisinin yerini alır.
+            for existing in toasts where existing.kind == .bell && existing.terminalID == terminalID {
+                dismiss(existing.id)
             }
-            return existing.kind == kind && existing.title == title && existing.message == message
+        } else {
+            // Dedupe: aynı içerik aktifken eklenmez.
+            let isDuplicate = toasts.contains { existing in
+                existing.kind == kind && existing.title == title && existing.message == message
+            }
+            guard !isDuplicate else { return }
         }
-        guard !isDuplicate else { return }
 
         let toast = Toast(id: UUID(), kind: kind, title: title, message: message, terminalID: terminalID)
         toasts.append(toast)

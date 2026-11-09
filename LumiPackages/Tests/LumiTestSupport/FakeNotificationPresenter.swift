@@ -8,12 +8,16 @@ public final class FakeNotificationPresenter: NotificationPresenting, @unchecked
     public struct Presented: Equatable, Sendable {
         public let id: String
         public let title: String
+        public let subtitle: String
         public let body: String
+        public let sound: Bool
 
-        public init(id: String, title: String, body: String) {
+        public init(id: String, title: String, subtitle: String = "", body: String, sound: Bool = false) {
             self.id = id
             self.title = title
+            self.subtitle = subtitle
             self.body = body
+            self.sound = sound
         }
     }
 
@@ -39,8 +43,10 @@ public final class FakeNotificationPresenter: NotificationPresenting, @unchecked
     }
 
     @MainActor
-    public func present(id: String, title: String, body: String) {
-        lock.withLock { presentedRecords.append(Presented(id: id, title: title, body: body)) }
+    public func present(id: String, title: String, subtitle: String, body: String, sound: Bool) {
+        lock.withLock {
+            presentedRecords.append(Presented(id: id, title: title, subtitle: subtitle, body: body, sound: sound))
+        }
     }
 
     @MainActor

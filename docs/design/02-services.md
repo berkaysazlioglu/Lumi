@@ -218,34 +218,38 @@ Quick Action otomasyonları (`ActionEngine`, `AgentCommandBuilder`, `.history/`)
 
 ## 7. NotificationServicing
 
+Karar 145 (Orca paritesi): bildirimin **ne zaman** doğacağına `AgentNotificationCoordinator` (LumiState), **nasıl** teslim edileceğine `NotificationService` karar verir.
+
 ```swift
 @MainActor
 public protocol NotificationServicing: AnyObject {
     func requestPermissionIfNeeded() async
     func updateSettings(_ settings: NotificationSettings)
-    /// Pencere odaklıyken native OS bildirimi gönderilmez (focus guard).
+    /// Pencere odaklıyken native OS bildirimi gönderilmez (yalnız toast).
     func setWindowFocused(_ focused: Bool)
-    func handleStatusChange(id: TerminalID, repoName: String, status: TerminalStatus)
-    /// Exit-cleanup sözleşmesi: interval timer'ını iptal eder — çağrılmazsa timer sızar.
+    func deliver(_ notification: AgentNotification)
+    /// Terminal yeniden çalıştı ya da görüldü: teslim edilmiş bildirimi kaldırır.
+    func dismiss(_ id: TerminalID)
     func terminalRemoved(_ id: TerminalID)
-    func events() -> AsyncStream<NotificationEvent>   // .clicked(TerminalID), .bell(TerminalID, repoName)
+    func events() -> AsyncStream<NotificationEvent>   // .clicked(TerminalID), .attention(AgentNotification)
 }
 
 /// OS sunumunun dikiş yeri: UNUserNotificationCenter bundle'lı app ister
 /// (`swift run` altında çöker) — bu yüzden sunum ayrı protokoldür.
 public protocol NotificationPresenting: Sendable {
     func requestAuthorization() async -> Bool
-    @MainActor func present(id: String, title: String, body: String)
+    @MainActor func present(id: String, title: String, subtitle: String, body: String, sound: Bool)
     @MainActor func removeDelivered(id: String)
 }
 ```
 
-- Servis **`@MainActor`**'dır (UI-yüzlü, store'la senkron konuşur), `Actor` değil. Yeni durum tek bir `status` parametresiyle gelir (`handleStatusChange`); eski/yeni çifti servise taşınmaz — geçiş kararını status makinesi zaten vermiştir.
-- Sunum enjekte edilir: bundle'lı çalışmada `UNNotificationPresenter`, `swift run`'da `LogNotificationPresenter` (ikisi de LumiAppCore), testte `FakeNotificationPresenter`. Tekrarlı bildirimler `RepeatingScheduling` dikişi (üretimde `TimerRepeatingScheduler`) ile kurulur — testte sahte zamanlayıcıyla interval sızıntısı doğrulanır.
-- Status-makinesi-güdümlü tablo birebir: `waiting-unseen` → anında bildirim + `unseenIntervalMinutes` (default 1 dk) tekrar; `waiting-seen` → yalnız `seenIntervalMinutes` (default 5 dk) tekrar; `error` → tek seferlik; `working/idle/waiting-focused` → temizle. Terminal başına en fazla bir interval.
-- **Focus guard:** native OS bildirimi yalnız pencere odaklı değilken; `bell` toast event'i her durumda.
+- Servis **`@MainActor`**'dır (UI-yüzlü, store'la senkron konuşur), `Actor` değil.
+- **Tetik (koordinatör):** terminal olaylarını dinler; yalnız `working` → `waiting*` (finished), `working` → `error` (failed) ve karar beklemenin başlaması (needs input) bildirim doğurur — tur başına bir kez, tekrar yok. Olay 1,5 sn oturur; yeni `working`, kararın çözülmesi ya da `interruptInferred` iptal eder. `working`/`idle`/`waiting-focused` teslim edilmiş bildirimi kaldırır (`dismiss`).
+- **İçerik:** başlık chat adı, alt başlık `<checkout> · Claude finished`, gövde son asistan mesajı (`AgentNotificationText`).
+- **Teslim (servis):** tür ayarda kapalıysa hiçbir şey; terminal ekranda+odakta ve pencere öndeyse hiçbir şey; pencere öndeyse yalnız `.attention` (toast); arkadaysa toast + OS bildirimi, checkout başına 5 sn bekleme süresiyle. Ses `NotificationSettings.sound`.
+- Sunum enjekte edilir: bundle'lı çalışmada `UNNotificationPresenter`, `swift run`'da `LogNotificationPresenter` (ikisi de LumiAppCore), testte `FakeNotificationPresenter`.
 - Bildirim tıklaması → `.clicked(id)` → store terminale odaklanır (**minimize istisnası**: minimize edilmiş terminalin otomatik odak alabildiği tek yol).
-- `terminalRemoved` exit-cleanup sırasının 3. adımıdır ([01 §6](./01-terminal-subsystem.md)); interval sızıntısı testi zorunlu (`NotificationServiceTests`).
+- `terminalRemoved` exit-cleanup sırasındadır ([01 §6](./01-terminal-subsystem.md)); koordinatör `.exited`'da bekleyen olayı da iptal eder.
 
 ### 7.1 SessionStarterServicing (zamanlanmış oturum)
 

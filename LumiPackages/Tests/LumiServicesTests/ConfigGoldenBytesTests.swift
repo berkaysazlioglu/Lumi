@@ -67,7 +67,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.terminalFontFamily = "Menlo"
             config.terminalCursorStyle = "bar"
             config.terminalCursorBlink = false
+            // `agentFinished`/`needsInput`/`sound` additive anahtarlar (karar 145).
             config.notifications = NotificationSettings(
+                agentFinished: false, needsInput: true, sound: false,
                 unseenEnabled: false, unseenIntervalMinutes: 7,
                 seenEnabled: false, seenIntervalMinutes: 11
             )
@@ -85,6 +87,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.claudeModelShortcutsEnabled = false
             // Karar 142 additive anahtar: mod klasörü adı → açık mı.
             config.claudeMods = ["image-preview": false]
+            // Karar 143 additive anahtar: hub paylaşılırken askıya alınan modların önceki değeri.
+            config.hubSuspendedClaudeMods = ["image-preview": true]
             // Karar 120 additive anahtar: proje yolu → görünüm (boş alan yazılmaz).
             config.projectAppearance = [
                 "/Users/dev/selected": ProjectAppearance(color: .teal, icon: .symbol("star"), rootTitle: "dev"),
@@ -164,12 +168,18 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
       ],
       "computerAwakeMode" : "auto",
+      "hubSuspendedClaudeMods" : {
+        "image-preview" : true
+      },
       "indexShortcutStyle" : "repoOnControl",
       "lidSleepDisabledByLumi" : false,
       "maxTerminals" : 12,
       "notifications" : {
+        "agentFinished" : false,
+        "needsInput" : true,
         "seenEnabled" : false,
         "seenIntervalMinutes" : 11,
+        "sound" : false,
         "unseenEnabled" : false,
         "unseenIntervalMinutes" : 7
       },

@@ -131,7 +131,7 @@ final class FeatureAssemblyConfigTests: XCTestCase {
     func testNotificationSettingsChangePropagates() {
         let assembly = build(NotificationAssembly())
         var settings = NotificationSettings.defaults
-        settings.unseenEnabled.toggle()
+        settings.agentFinished.toggle()
         let change = changed { $0.notifications = settings }
 
         assembly.configDidChange(old: change.old, new: change.new)

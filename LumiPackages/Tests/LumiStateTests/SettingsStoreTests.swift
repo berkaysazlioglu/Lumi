@@ -35,15 +35,15 @@ final class SettingsStoreTests: XCTestCase {
     // MARK: - 1.2 alan bazlı güncellemeler birbirini ezmez
 
     func testUpdateNotificationsKeepsPreviouslyChangedFields() async throws {
-        store.updateNotifications { $0.unseenEnabled = false }
-        store.updateNotifications { $0.seenIntervalMinutes = 30 }
+        store.updateNotifications { $0.agentFinished = false }
+        store.updateNotifications { $0.sound = false }
 
-        XCTAssertFalse(store.current.notifications.unseenEnabled)
-        XCTAssertEqual(store.current.notifications.seenIntervalMinutes, 30)
+        XCTAssertFalse(store.current.notifications.agentFinished)
+        XCTAssertFalse(store.current.notifications.sound)
 
         try await waitUntil("iki alan da diske indi") {
             let persisted = await self.config.config().notifications
-            return persisted.unseenEnabled == false && persisted.seenIntervalMinutes == 30
+            return persisted.agentFinished == false && persisted.sound == false
         }
     }
 

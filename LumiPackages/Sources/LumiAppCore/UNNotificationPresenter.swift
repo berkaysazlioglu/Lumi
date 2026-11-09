@@ -21,15 +21,18 @@ final class UNNotificationPresenter: NSObject, NotificationPresenting {
 
     func requestAuthorization() async -> Bool {
         (try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert])) ?? false
+            .requestAuthorization(options: [.alert, .sound])) ?? false
     }
 
     @MainActor
-    func present(id: String, title: String, body: String) {
+    func present(id: String, title: String, subtitle: String, body: String, sound: Bool) {
         let content = UNMutableNotificationContent()
         content.title = title
+        content.subtitle = subtitle
         content.body = body
-        // silent: true paritesi — ses yok
+        // Aynı terminalin bildirimleri Notification Center'da tek grupta durur.
+        content.threadIdentifier = id
+        if sound { content.sound = .default }
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
@@ -62,6 +65,6 @@ extension UNNotificationPresenter: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner])
+        completionHandler([.banner, .sound])
     }
 }

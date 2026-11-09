@@ -176,6 +176,9 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         terminalCursorStyle: TerminalCursorShape.bar.rawValue,
         terminalCursorBlink: false,
         notifications: NotificationSettings(
+            agentFinished: false,
+            needsInput: false,
+            sound: false,
             unseenEnabled: false,
             unseenIntervalMinutes: 7,
             seenEnabled: false,
@@ -193,6 +196,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         orchestratorDigestsEnabled: false,
         claudeModelShortcutsEnabled: false,
         claudeMods: ["image-preview": false, "mine": true],
+        hubSuspendedClaudeMods: ["image-preview": true],
         claudeAccounts: [
             ClaudeAccount(
                 id: ConfigCodecIntegrityTests.accountID,
@@ -307,6 +311,7 @@ extension ConfigCodecIntegrityTests {
 
     func testNotificationSettingsCodecCoversEveryField() {
         let value = NotificationSettings(
+            agentFinished: false, needsInput: false, sound: false,
             unseenEnabled: false, unseenIntervalMinutes: 7,
             seenEnabled: false, seenIntervalMinutes: 11
         )

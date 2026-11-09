@@ -95,24 +95,8 @@ extension OrchestratorToolbox {
     /// Ajanın son sözü (Faz 4): transkriptteki son metinli asistan mesajı;
     /// transkript henüz yoksa ekranın son satırları. Hiçbiri yoksa nil.
     func lastAgentMessage(of meta: TerminalMeta) async -> String? {
-        if let sessionID = meta.claudeSessionID {
-            let messages = await transcripts.recentClaudeMessages(sessionID: sessionID, cwd: meta.repoPath)
-            let lastText = messages.last { $0.role == .assistant && !$0.plainText.isEmpty }?.plainText
-            if let lastText { return lastText }
-        }
+        if let lastText = await transcripts.lastClaudeAssistantText(of: meta) { return lastText }
         let screen = OrchestratorToolFormat.screenTail(screenText(meta.id))
         return screen.isEmpty ? nil : screen
-    }
-}
-
-extension ChatMessage {
-    /// Metin bloklarının birleşimi (araç çağrı/sonuçları hariç).
-    var plainText: String {
-        blocks.compactMap { block -> String? in
-            if case let .text(text, _) = block { return text }
-            return nil
-        }
-        .joined(separator: "\n")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

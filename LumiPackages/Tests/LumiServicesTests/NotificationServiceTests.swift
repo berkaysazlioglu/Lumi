@@ -4,162 +4,119 @@ import LumiKit
 import LumiTestSupport
 @testable import LumiServices
 
-@MainActor
-private final class FakeScheduler: RepeatingScheduling {
-    private(set) var scheduled: [String: (interval: TimeInterval, tick: @MainActor () -> Void)] = [:]
-    private(set) var cancelCalls: [String] = []
-
-    var activeIDs: Set<String> { Set(scheduled.keys) }
-
-    func schedule(id: String, interval: TimeInterval, _ tick: @escaping @MainActor () -> Void) {
-        scheduled[id] = (interval, tick)
-    }
-
-    func cancel(id: String) {
-        cancelCalls.append(id)
-        scheduled.removeValue(forKey: id)
-    }
-
-    func fire(id: String) {
-        scheduled[id]?.tick()
-    }
-}
-
-/// Electron bildirim tablosunun birebir testleri — Faz 3 çıkış kriterleri
-/// (interval-sızıntı testi dahil).
+/// Teslim kuralları (karar 145): ayar kapısı, odaktaki terminal, pencere
+/// odağı (toast ↔ OS bildirimi), checkout başına bekleme süresi.
 @MainActor
 final class NotificationServiceTests: XCTestCase {
     private var presenter: FakeNotificationPresenter!
-    private var scheduler: FakeScheduler!
+    private var clock = Date(timeIntervalSince1970: 1_000)
     private var service: NotificationService!
-    private let terminalID = TerminalID()
+    private var attentions: [AgentNotification] = []
+    private var bridge: Task<Void, Never>?
 
     override func setUp() async throws {
         presenter = FakeNotificationPresenter()
-        scheduler = FakeScheduler()
-        service = NotificationService(presenter: presenter, scheduler: scheduler)
-        service.setWindowFocused(false) // bildirimlerin görünür olduğu durum
+        service = NotificationService(presenter: presenter, now: { [unowned self] in self.clock })
+        service.setWindowFocused(false)
+        attentions = []
+        let stream = service.events()
+        bridge = Task { @MainActor [weak self] in
+            for await event in stream {
+                if case .attention(let notification) = event { self?.attentions.append(notification) }
+            }
+        }
+        await Task.yield()
     }
 
-    func testWaitingUnseenNotifiesImmediatelyAndSchedulesRepeat() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-
-        XCTAssertEqual(presenter.presented.count, 1)
-        XCTAssertEqual(presenter.presented.first?.body, NotificationService.waitingBody)
-        XCTAssertEqual(scheduler.scheduled[terminalID.description]?.interval, 60) // 1 dk default
-
-        scheduler.fire(id: terminalID.description)
-        XCTAssertEqual(presenter.presented.count, 2, "interval tick yeniden bildirmeli")
+    override func tearDown() async throws {
+        bridge?.cancel()
     }
 
-    func testWaitingSeenOnlySchedulesNoImmediate() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingSeen)
-
-        XCTAssertTrue(presenter.presented.isEmpty)
-        XCTAssertEqual(scheduler.scheduled[terminalID.description]?.interval, 300) // 5 dk default
+    private func notification(
+        _ kind: AgentNotification.Kind = .finished,
+        id: TerminalID = TerminalID(),
+        focused: Bool = false,
+        group: String = "/repo"
+    ) -> AgentNotification {
+        AgentNotification(
+            terminalID: id, kind: kind, title: "Fix login", subtitle: "lumi · Claude finished",
+            body: "Done.", isTerminalFocused: focused, groupKey: group
+        )
     }
 
-    func testFocusedAndWorkingClearInterval() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        XCTAssertFalse(scheduler.activeIDs.isEmpty)
-
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingFocused)
-        XCTAssertTrue(scheduler.activeIDs.isEmpty)
-
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .working)
-        XCTAssertTrue(scheduler.activeIDs.isEmpty)
+    private func drain() async {
+        for _ in 0..<5 { await Task.yield() }
     }
 
-    func testFocusedWorkingAndIdleRemoveOnlyThatTerminalsNotification() {
-        let otherID = TerminalID()
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        service.handleStatusChange(id: otherID, repoName: "other", status: .waitingUnseen)
+    func testBackgroundWindowPresentsOSNotificationWithContentAndSound() async {
+        let id = TerminalID()
+        service.deliver(notification(id: id))
+        await drain()
 
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingFocused)
-        XCTAssertEqual(presenter.removed, [terminalID.description], "yalnız hedef terminalin bildirimi silinir")
-
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .working)
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .idle)
-        XCTAssertEqual(presenter.removed, Array(repeating: terminalID.description, count: 3))
+        XCTAssertEqual(presenter.presented, [
+            .init(id: id.description, title: "Fix login", subtitle: "lumi · Claude finished", body: "Done.", sound: true),
+        ])
+        XCTAssertEqual(attentions.count, 1, "toast da gider — kullanıcı döndüğünde görür")
     }
 
-    func testWaitingAndErrorKeepDeliveredNotification() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingSeen)
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .error)
-        XCTAssertTrue(presenter.removed.isEmpty)
-    }
-
-    func testErrorIsOneShot() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .error)
-        XCTAssertEqual(presenter.presented.count, 1)
-        XCTAssertEqual(presenter.presented.first?.body, NotificationService.errorBody)
-        XCTAssertTrue(scheduler.activeIDs.isEmpty, "error tekrar bildirimi planlamaz")
-    }
-
-    func testWindowFocusGuardSuppressesNativeNotification() async {
+    func testFocusedWindowShowsToastOnly() async {
         service.setWindowFocused(true)
-        let stream = service.events()
+        service.deliver(notification())
+        await drain()
 
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        XCTAssertTrue(presenter.presented.isEmpty, "pencere odaklıyken OS bildirimi yok")
-
-        // Bell sinyali (ayar açıkken) odaktan bağımsız gider
-        var iterator = stream.makeAsyncIterator()
-        let event = await iterator.next()
-        XCTAssertEqual(event, .bell(terminalID, repoName: "lumi"))
-    }
-
-    /// Faz 3 çıkış kriteri: interval-sızıntı testi (cleanup sözleşmesi).
-    func testTerminalRemovedCancelsIntervalAndCleansDelivered() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        XCTAssertEqual(scheduler.activeIDs, [terminalID.description])
-
-        service.terminalRemoved(terminalID)
-        XCTAssertTrue(scheduler.activeIDs.isEmpty, "interval timer sızdı!")
-        XCTAssertEqual(presenter.removed, [terminalID.description])
-    }
-
-    func testTransitionReplacesInterval() {
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingSeen)
-
-        XCTAssertEqual(scheduler.activeIDs.count, 1, "terminal başına en fazla bir interval")
-        XCTAssertEqual(scheduler.scheduled[terminalID.description]?.interval, 300)
-    }
-
-    func testDisabledSettingsSkipNotificationAndBell() async {
-        service.updateSettings(NotificationSettings(
-            unseenEnabled: false,
-            unseenIntervalMinutes: 1,
-            seenEnabled: false,
-            seenIntervalMinutes: 5
-        ))
-        let stream = service.events()
-
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
         XCTAssertTrue(presenter.presented.isEmpty)
-        XCTAssertTrue(scheduler.activeIDs.isEmpty)
-
-        // Karar 17: kapalıyken waiting bell'i de gönderilmez. Stream'de "event yok"
-        // doğrudan assert edilemez; ayardan bağımsız giden error bell'ini sentinel
-        // olarak itip İLK event'in o olduğunu doğruluyoruz.
-        let sentinelID = TerminalID()
-        service.handleStatusChange(id: sentinelID, repoName: "sentinel", status: .error)
-        var iterator = stream.makeAsyncIterator()
-        let event = await iterator.next()
-        XCTAssertEqual(event, .bell(sentinelID, repoName: "sentinel"))
+        XCTAssertEqual(attentions.count, 1)
     }
 
-    func testCustomIntervalsRespected() {
-        service.updateSettings(NotificationSettings(
-            unseenEnabled: true,
-            unseenIntervalMinutes: 3,
-            seenEnabled: true,
-            seenIntervalMinutes: 10
-        ))
-        service.handleStatusChange(id: terminalID, repoName: "lumi", status: .waitingUnseen)
-        XCTAssertEqual(scheduler.scheduled[terminalID.description]?.interval, 180)
+    func testFocusedTerminalInFocusedWindowShowsNothing() async {
+        service.setWindowFocused(true)
+        service.deliver(notification(focused: true))
+        await drain()
+
+        XCTAssertTrue(presenter.presented.isEmpty)
+        XCTAssertTrue(attentions.isEmpty)
+    }
+
+    func testDisabledKindIsDropped() async {
+        service.updateSettings(NotificationSettings(agentFinished: false, needsInput: true))
+        service.deliver(notification(.finished))
+        service.deliver(notification(.failed))
+        service.deliver(notification(.needsInput))
+        await drain()
+
+        XCTAssertEqual(presenter.presented.count, 1)
+        XCTAssertEqual(attentions.map(\.kind), [.needsInput])
+    }
+
+    func testSoundSettingIsPassedThrough() {
+        service.updateSettings(NotificationSettings(sound: false))
+        service.deliver(notification())
+        XCTAssertEqual(presenter.presented.first?.sound, false)
+    }
+
+    func testCooldownIsPerCheckout() async {
+        service.deliver(notification(group: "/a"))
+        service.deliver(notification(group: "/a"))
+        service.deliver(notification(group: "/b"))
+        await drain()
+        XCTAssertEqual(presenter.presented.count, 2, "aynı checkout'ta 5 sn içinde ikinci OS bildirimi gitmez")
+        XCTAssertEqual(attentions.count, 3, "toast bekleme süresine tabi değil")
+
+        clock += NotificationService.defaultCooldown
+        service.deliver(notification(group: "/a"))
+        XCTAssertEqual(presenter.presented.count, 3)
+    }
+
+    func testDismissAndRemovalClearDeliveredNotification() {
+        let id = TerminalID()
+        service.dismiss(id)
+        service.terminalRemoved(id)
+        XCTAssertEqual(presenter.removed, [id.description, id.description])
+    }
+
+    func testPermissionRequestedOnce() async {
+        await service.requestPermissionIfNeeded()
+        await service.requestPermissionIfNeeded()
+        XCTAssertEqual(presenter.authorizationRequestCount, 1)
     }
 }

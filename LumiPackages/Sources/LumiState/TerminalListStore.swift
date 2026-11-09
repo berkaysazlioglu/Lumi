@@ -368,6 +368,13 @@ public final class TerminalListStore: StoreLifecycle {
         service.setSurfaceState(.foreground, for: id)
     }
 
+    /// Terminal aktif, minimize değil ve yüzeyi önde mi (karar 145: bildirim
+    /// atlanır). Pencere odağı bu sorunun parçası değildir.
+    public func isFocusedOnSurface(_ id: TerminalID) -> Bool {
+        guard activeTerminalID == id, !minimizedIDs.contains(id), let meta = meta(for: id) else { return false }
+        return isSurfaceForeground(meta)
+    }
+
     /// Terminal yüzeyi şu an bu terminal için önde mi. Henüz hiçbir yüzey
     /// aktive edilmediyse (bootstrap penceresi) kısıtlama uygulanmaz.
     private func isSurfaceForeground(_ meta: TerminalMeta) -> Bool {

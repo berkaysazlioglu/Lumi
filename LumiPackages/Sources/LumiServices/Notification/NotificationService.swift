@@ -1,47 +1,41 @@
 import Foundation
 import LumiKit
 
-/// Status-makinesi-güdümlü bildirim servisi (Electron bildirim tablosu birebir):
+/// Bildirim teslim servisi (karar 145). Bildirimin ne zaman doğacağına
+/// `AgentNotificationCoordinator` karar verir (tur başına bir kez, tekrar
+/// yok); burada yalnız teslim kuralları uygulanır:
 ///
-/// | Status           | Bildirim                  | Tekrar                  |
-/// |------------------|---------------------------|-------------------------|
-/// | waiting-unseen   | anında "waiting for input"| unseenIntervalMinutes   |
-/// | waiting-seen     | yok                       | seenIntervalMinutes     |
-/// | error            | tek seferlik              | yok                     |
-/// | diğerleri        | teslim edilen silinir     | interval temizlenir     |
+/// | Durum                                   | Toast | OS bildirimi |
+/// |-----------------------------------------|-------|--------------|
+/// | Ayarda kapalı tür                        | –     | –            |
+/// | Terminal ekranda ve odakta              | –     | –            |
+/// | Pencere odaklı                          | ✓     | –            |
+/// | Pencere odakta değil                    | ✓     | ✓ (cooldown) |
 ///
-/// Her geçiş önce mevcut interval'i temizler (terminal başına en fazla bir).
-/// Focus guard: native OS bildirimi yalnız pencere odaklı DEĞİLKEN.
-/// Bell toast sinyali ayara tabidir (karar 17): unseenEnabled kapalıyken
-/// waiting bell'i de gönderilmez; error bell'i ayardan bağımsız her zaman gider.
+/// Cooldown: aynı checkout için `cooldown` içinde ikinci OS bildirimi gitmez
+/// (birden çok terminal aynı anda bittiğinde ses yağmuru olmasın).
 public final class NotificationService: NotificationServicing {
-    public static let waitingBody = "Assistant waiting for input"
-    public static let errorBody = "Assistant exited with error"
+    public static let defaultCooldown: TimeInterval = 5
 
     private let presenter: any NotificationPresenting
-    private let scheduler: any RepeatingScheduling
+    private let cooldown: TimeInterval
+    private let now: @MainActor () -> Date
     private let broadcaster = EventBroadcaster<NotificationEvent>(label: "notifications")
     private var settings: NotificationSettings
     private var windowFocused = true
     private var permissionRequested = false
+    private var lastDelivered: [String: Date] = [:]
 
     public init(
         presenter: any NotificationPresenting,
-        settings: NotificationSettings = .defaults
+        settings: NotificationSettings = .defaults,
+        cooldown: TimeInterval = NotificationService.defaultCooldown,
+        now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.presenter = presenter
-        self.scheduler = TimerRepeatingScheduler()
         self.settings = settings
-    }
-
-    init(
-        presenter: any NotificationPresenting,
-        scheduler: any RepeatingScheduling,
-        settings: NotificationSettings = .defaults
-    ) {
-        self.presenter = presenter
-        self.scheduler = scheduler
-        self.settings = settings
+        self.cooldown = cooldown
+        self.now = now
     }
 
     public func requestPermissionIfNeeded() async {
@@ -58,36 +52,25 @@ public final class NotificationService: NotificationServicing {
         windowFocused = focused
     }
 
-    public func handleStatusChange(id: TerminalID, repoName: String, status: TerminalStatus) {
-        // Her geçiş mevcut interval'i temizler (terminal başına en fazla bir)
-        scheduler.cancel(id: id.description)
+    public func deliver(_ notification: AgentNotification) {
+        guard settings.allows(notification.kind) else { return }
+        guard !(notification.isTerminalFocused && windowFocused) else { return }
+        broadcaster.send(.attention(notification))
+        guard !windowFocused, claimCooldown(notification.groupKey) else { return }
+        presenter.present(
+            id: notification.terminalID.description,
+            title: notification.title,
+            subtitle: notification.subtitle,
+            body: notification.body,
+            sound: settings.sound
+        )
+    }
 
-        switch status {
-        case .waitingUnseen:
-            // Toggle kapalıyken in-app toast da susar (karar 17) — eskiden bell
-            // koşulsuz gidiyordu ve "notifications off" hissini bozuyordu.
-            guard settings.unseenEnabled else { return }
-            broadcaster.send(.bell(id, repoName: repoName))
-            deliver(id: id, title: repoName, body: Self.waitingBody)
-            scheduleRepeat(id: id, repoName: repoName, minutes: settings.unseenIntervalMinutes, body: Self.waitingBody)
-
-        case .waitingSeen:
-            guard settings.seenEnabled else { return }
-            scheduleRepeat(id: id, repoName: repoName, minutes: settings.seenIntervalMinutes, body: Self.waitingBody)
-
-        case .error:
-            broadcaster.send(.bell(id, repoName: repoName))
-            deliver(id: id, title: repoName, body: Self.errorBody)
-
-        case .working, .idle, .waitingFocused:
-            // Terminal artık görülmemiş durumda değil — eski bildirim kalırsa
-            // sonraki turn'ün "bitti" bildirimi sanılır.
-            presenter.removeDelivered(id: id.description)
-        }
+    public func dismiss(_ id: TerminalID) {
+        presenter.removeDelivered(id: id.description)
     }
 
     public func terminalRemoved(_ id: TerminalID) {
-        scheduler.cancel(id: id.description)
         presenter.removeDelivered(id: id.description)
     }
 
@@ -101,16 +84,12 @@ public final class NotificationService: NotificationServicing {
         broadcaster.send(.clicked(terminalID))
     }
 
-    private func scheduleRepeat(id: TerminalID, repoName: String, minutes: Int, body: String) {
-        let interval = TimeInterval(max(1, minutes)) * 60
-        scheduler.schedule(id: id.description, interval: interval) { [weak self] in
-            self?.deliver(id: id, title: repoName, body: body)
-        }
-    }
-
-    private func deliver(id: TerminalID, title: String, body: String) {
-        // Focus guard: pencere odaklıyken OS bildirimi gönderilmez
-        guard !windowFocused else { return }
-        presenter.present(id: id.description, title: title, body: body)
+    /// Anahtar bekleme süresinde değilse süreyi başlatır ve true döner.
+    private func claimCooldown(_ key: String) -> Bool {
+        let current = now()
+        lastDelivered = lastDelivered.filter { current.timeIntervalSince($0.value) < cooldown }
+        guard lastDelivered[key] == nil else { return false }
+        lastDelivered[key] = current
+        return true
     }
 }
