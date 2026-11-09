@@ -126,7 +126,7 @@ cd "$PKG"
 # SPM paketi şemasında xcodebuild iki zararsız gürültü basar: boş "supported
 # platforms" IDE logu ve "Any Mac" / "Any Mac (Mac Catalyst)" belirsizliği
 # (ilki, yani native macOS seçilir; Catalyst'i dışlayan bir -destination yazımı
-# yok). Yalnız bu satırlar süzülür; çıkış kodu pipefail ile xcodebuild'inkidir.
+# yok). Yalnız bu satırlar süzülür; çıkış kodu aşağıda pipestatus'tan okunur.
 XCODEBUILD_NOISE='IDERunDestination: Supported platforms for the buildables|^--- xcodebuild: WARNING: Using the first of multiple matching destinations:|^\{ platform:macOS(, variant:Mac Catalyst)?, name:Any Mac \}$'
 # SwiftTerm 1.20 `Apple/Metal/Shaders.metal`'i resource olarak derler; Xcode 26+
 # Metal derleyicisini ayrı indirilen bir bileşen yapar ("missing Metal Toolchain").
@@ -138,13 +138,25 @@ fi
 # -skipPackagePluginValidation: SwiftTerm 1.20'nin build-tool eklentisi
 # (SwiftTermBuildInfoPlugin — yalnız git dal/commit bilgisini Swift dosyasına
 # yazar) etkileşimsiz xcodebuild'de "Validate plug-in" onayında takılıyordu.
+# Başarısız build eski binary'yi paketleyip kurmasın: çıkış kodu açıkça
+# kontrol edilir; xcodebuild'in hatada 0 döndüğü de görüldü, log da taranır.
+BUILD_LOG="$(mktemp -t lumi-build-log)"
+set +e
 xcodebuild -scheme Lumi -configuration Release \
   -skipPackagePluginValidation \
   -destination "generic/platform=macOS" \
   -derivedDataPath "$DERIVED" \
   ARCHS="$ARCH" CODE_SIGNING_ALLOWED=NO \
-  -quiet build 2>&1 | { grep -Ev "$XCODEBUILD_NOISE" || true; }
+  -quiet build 2>&1 | tee "$BUILD_LOG" | { grep -Ev "$XCODEBUILD_NOISE" || true; }
+BUILD_STATUS=${pipestatus[1]}
+set -e
 PRODUCTS="$DERIVED/Build/Products/Release"
+if [ "$BUILD_STATUS" -ne 0 ] || grep -q '\*\* BUILD FAILED \*\*' "$BUILD_LOG"; then
+  echo "HATA: Release build başarısız (xcodebuild çıkış kodu $BUILD_STATUS) — paketleme/kurulum yapılmadı." >&2
+  rm -f "$BUILD_LOG"
+  exit 1
+fi
+rm -f "$BUILD_LOG"
 
 echo "▸ Bundle iskeleti…"
 rm -rf "$APP"

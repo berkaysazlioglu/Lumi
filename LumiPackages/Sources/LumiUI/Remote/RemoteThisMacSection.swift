@@ -20,7 +20,9 @@ struct RemoteThisMacSection: View {
             LumiToggleRow(
                 title: "Share This Mac",
                 hint: "Other Macs on this server can open and drive terminals here with the password.",
-                isOn: Binding(get: { remote.config.hubEnabled }, set: setSharing))
+                // Method referansı (`set: setSharing`) Swift 6.2.3 release IRGen'ini
+                // çökertiyordu (@isolated(any) Binding<Bool> thunk'ı) — closure şart.
+                isOn: Binding(get: { remote.config.hubEnabled }, set: { setSharing($0) }))
             HStack(spacing: Theme.Spacing.md) {
                 LumiTextInput(text: $nameDraft, placeholder: remote.hubDisplayName, onSubmit: saveName)
                 LumiActionButton(title: "Rename", action: saveName)

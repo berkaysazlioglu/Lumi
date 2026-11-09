@@ -176,13 +176,18 @@ public func tuiTableLines(header: [String], rows: [[String]]) -> [String] {
     let widths = (0..<columnCount).map { column in
         ([head] + body).map { $0[column].count }.max() ?? 0
     }
+    // Ara adımlar + açık tipler: tek satırlık birleştirme release derlemesinde
+    // tip denetleyicisini zaman aşımına uğratıyordu.
     func border(_ left: String, _ mid: String, _ right: String) -> String {
-        left + widths.map { String(repeating: "─", count: $0 + 2) }.joined(separator: mid) + right
+        let segments: [String] = widths.map { String(repeating: "─", count: $0 + 2) }
+        return left + segments.joined(separator: mid) + right
     }
     func line(_ cells: [String]) -> String {
-        "│" + zip(cells, widths).map { cell, width in
-            " " + cell + String(repeating: " ", count: width - cell.count) + " "
-        }.joined(separator: "│") + "│"
+        let padded: [String] = zip(cells, widths).map { (cell: String, width: Int) -> String in
+            let padding = String(repeating: " ", count: width - cell.count)
+            return " \(cell)\(padding) "
+        }
+        return "│" + padded.joined(separator: "│") + "│"
     }
     return [border("┌", "┬", "┐"), line(head), border("├", "┼", "┤")]
         + body.map(line)
