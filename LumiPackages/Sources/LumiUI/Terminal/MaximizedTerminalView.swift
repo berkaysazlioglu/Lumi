@@ -64,6 +64,9 @@ struct MaximizedTerminalView: View {
             TerminalHostView(terminalID: maximized.id, provider: viewProvider)
                 .id(maximized.id)
                 .padding(Theme.Spacing.md)
+                .overlay(alignment: .topTrailing) {
+                    TerminalSearchOverlay(terminalID: maximized.id)
+                }
         }
     }
 }

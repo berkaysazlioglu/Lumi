@@ -220,6 +220,10 @@ struct TerminalCardView: View {
                 .id(meta.id)
                 .padding(Theme.Spacing.md)
                 .allowsHitTesting(arrangement == nil)
+                .overlay(alignment: .topTrailing) {
+                    // Karar 144: Edit modunda karartma çubuğun da üstüne iner.
+                    TerminalSearchOverlay(terminalID: meta.id)
+                }
                 .overlay {
                     if let arrangement {
                         ArrangeCardOverlay(position: arrangement.position)

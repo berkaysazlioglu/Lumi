@@ -211,7 +211,10 @@ final class TerminalSession {
         guard !isTerminated else { return }
         launchGate?.noteOutput()
         pipeline.watchdog.measureFeed { presentation.feed(batch) }
-        (terminalView as? DropAwareTerminalView)?.noteLinkContentChanged()
+        if let view = terminalView as? DropAwareTerminalView {
+            view.noteLinkContentChanged()
+            view.noteSearchContentChanged()
+        }
         remoteOutputBroadcaster.send(batch)
         mirrorFeed.output(batch)
         if pipeline.flow.noteConsumed(batch.count) {

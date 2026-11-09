@@ -19,7 +19,8 @@ enum AppMenuCommands {
         closeActiveProject: @escaping () -> Void,
         toggleOrchestrator: @escaping () -> Void,
         spawnTerminal: @escaping (TerminalScope, _ command: String?) -> Void,
-        newRemoteTerminal: @escaping () -> Bool = { false }
+        newRemoteTerminal: @escaping () -> Bool = { false },
+        terminalSearch: @escaping () -> TerminalSearchStore? = { nil }
     ) {
         // Karar 103/108: ⌘T aktif terminal YÜZEYİNE vurur — repo route'unda o
         // checkout, All Terminals'ta geçerli konumda serbest terminal. Konum
@@ -84,6 +85,7 @@ enum AppMenuCommands {
                   let id = shared.terminals.activeTerminalID else { return }
             shared.layout.toggleMaximize(id, in: scope)
         }
+        registerTerminalSearch(in: dispatcher, shared: shared, store: terminalSearch)
         dispatcher.register(.toggleLeftSidebar) { shared.layout.toggleSlot(.left) }
         dispatcher.register(.toggleRightSidebar) { shared.layout.toggleSlot(.right) }
         dispatcher.register(.toggleFocusMode) { shared.layout.toggleFocusMode() }
@@ -93,5 +95,33 @@ enum AppMenuCommands {
         dispatcher.register(.openSettings, openSettings)
         dispatcher.register(.openAbout, openAbout)
         dispatcher.register(.checkForUpdates, checkForUpdates)
+    }
+
+    /// Karar 144: ⌘F / ⌘G / ⇧⌘G aktif terminal YÜZEYİNİN seçili terminaline
+    /// vurur (⌃⌘M ile aynı hedef). Store `SharedStores`'ta olmadığı için
+    /// dışarıdan enjekte edilir (`toggleOrchestrator` deseni).
+    private static func registerTerminalSearch(
+        in dispatcher: MenuActionDispatcher,
+        shared: SharedStores,
+        store: @escaping () -> TerminalSearchStore?
+    ) {
+        func target() -> TerminalID? {
+            guard shared.navigation.activeRoute.terminalScope != nil,
+                  let id = shared.terminals.activeTerminalID,
+                  !shared.terminals.isMinimized(id) else { return nil }
+            return id
+        }
+        dispatcher.register(.findInTerminal) {
+            guard let id = target() else { return }
+            store()?.open(id)
+        }
+        dispatcher.register(.findNextInTerminal) {
+            guard let id = target() else { return }
+            store()?.navigateFromShortcut(id, forward: true)
+        }
+        dispatcher.register(.findPreviousInTerminal) {
+            guard let id = target() else { return }
+            store()?.navigateFromShortcut(id, forward: false)
+        }
     }
 }

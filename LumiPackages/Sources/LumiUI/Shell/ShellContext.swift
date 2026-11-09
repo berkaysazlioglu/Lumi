@@ -100,6 +100,8 @@ public final class ShellContext {
     public let codexAccounts: CodexAccountStore
     /// Terminal link eylemleri (karar 57) — tık noktasındaki popover.
     public let terminalLinks: TerminalLinkActionStore
+    /// Terminal içi arama çubukları (karar 144) — ⌘F.
+    public let terminalSearch: TerminalSearchStore
     /// Alt bar store'ları (karar 43).
     public let computerAwake: ComputerAwakeStore
     public let resourceUsage: ResourceUsageStore
@@ -152,6 +154,7 @@ public final class ShellContext {
         claudeAccounts: ClaudeAccountStore,
         codexAccounts: CodexAccountStore,
         terminalLinks: TerminalLinkActionStore,
+        terminalSearch: TerminalSearchStore? = nil,
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
         appUpdate: AppUpdateStore,
@@ -190,6 +193,7 @@ public final class ShellContext {
         self.claudeAccounts = claudeAccounts
         self.codexAccounts = codexAccounts
         self.terminalLinks = terminalLinks
+        self.terminalSearch = terminalSearch ?? TerminalSearchStore(terminals: terminals)
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage
         self.appUpdate = appUpdate
@@ -265,16 +269,7 @@ public final class ShellContext {
     /// yönetilen workspace için `proje / workspace` (Projects panelindeki
     /// hiyerarşinin tek satırlık hâli).
     public func checkoutLabel(for repoPath: String) -> String {
-        if let workspace = workspaces.records.first(where: { $0.path == repoPath }) {
-            return "\(projectName(at: workspace.projectPath)) / \(workspace.name)"
-        }
-        if let repo = repos.repo(at: repoPath) { return repo.name }
-        // Karar 108: serbest terminalin "checkout"u bir proje değil, dizindir —
-        // klasör adı (`Desktop`) yerine kısa yol (`~/Desktop`).
-        if navigation.isLooseTerminalPath(repoPath) {
-            return LooseTerminalPath.displayLabel(repoPath)
-        }
-        return projectName(at: repoPath)
+        CheckoutLabel.make(for: repoPath, workspaces: workspaces, repos: repos, navigation: navigation)
     }
 
     /// Karar 120: checkout'un ait olduğu projenin kimlik rengi. Sahiplik
@@ -303,10 +298,6 @@ public final class ShellContext {
     /// burada terminal listesinin sırası korunur.
     public var looseTerminalGroups: [LooseTerminalGroup] {
         ProjectTree.looseGroups(terminals: terminals.terminals, ownedPaths: navigation.terminalOwnerPaths)
-    }
-
-    private func projectName(at path: String) -> String {
-        repos.repo(at: path)?.name ?? (path as NSString).lastPathComponent
     }
 
     public var isFocusMode: Bool { layout.isFocusMode }

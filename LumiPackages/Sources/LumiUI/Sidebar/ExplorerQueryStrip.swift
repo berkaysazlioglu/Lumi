@@ -101,27 +101,12 @@ struct ExplorerQueryStrip: View {
     /// klasik anahtarı; metin glyph'leri ikonlardan daha tanıdık.
     private var matchOptions: some View {
         HStack(spacing: Theme.Spacing.xxs) {
-            optionToggle("Aa", help: "Match case", isOn: $contentQuery.isCaseSensitive)
-            optionToggle("ab", help: "Match whole word", isOn: $contentQuery.isWholeWord, underlined: true)
-            optionToggle(".*", help: "Use regular expression", isOn: $contentQuery.isRegex)
+            SearchOptionToggle(glyph: "Aa", help: "Match case", isOn: $contentQuery.isCaseSensitive)
+            SearchOptionToggle(
+                glyph: "ab", help: "Match whole word", isOn: $contentQuery.isWholeWord, underlined: true
+            )
+            SearchOptionToggle(glyph: ".*", help: "Use regular expression", isOn: $contentQuery.isRegex)
         }
-    }
-
-    private func optionToggle(_ glyph: String, help: String, isOn: Binding<Bool>, underlined: Bool = false) -> some View {
-        Button { isOn.wrappedValue.toggle() } label: {
-            Text(glyph)
-                .font(Theme.Typography.mono(.label, weight: .semibold))
-                .underline(underlined)
-                .foregroundStyle(isOn.wrappedValue ? Theme.accentPrimary : Theme.textMuted)
-                .frame(width: Theme.Spacing.xxl - Theme.Spacing.xxs, height: Theme.Spacing.xxl - Theme.Spacing.xs)
-                .background(isOn.wrappedValue ? Theme.accentPrimary.opacity(Self.activeOptionOpacity) : .clear)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(help)
-        .accessibilityLabel(help)
-        .accessibilityAddTraits(isOn.wrappedValue ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: - Dosya filtreleri
@@ -147,8 +132,6 @@ struct ExplorerQueryStrip: View {
                 .accessibilityLabel(label)
         }
     }
-
-    private static let activeOptionOpacity = 0.18
 }
 
 #if DEBUG

@@ -77,6 +77,7 @@ struct ShellComposition {
             claudeAccounts: claudeAccounts.claudeAccounts,
             codexAccounts: codexAccounts.codexAccounts,
             terminalLinks: terminalLinks.makeStore(shared: shared, repo: repo),
+            terminalSearch: TerminalSearchStore(engine: registry.terminalSearch, terminals: shared.terminals),
             computerAwake: statusBar.computerAwake,
             resourceUsage: statusBar.resourceUsage,
             appUpdate: appUpdate.appUpdate,

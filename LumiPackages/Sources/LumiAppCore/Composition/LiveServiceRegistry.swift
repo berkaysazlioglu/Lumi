@@ -43,6 +43,8 @@ final class LiveServiceRegistry: ServiceRegistry {
     let quickCommandLauncher: any QuickCommandBackgroundLaunching
     let terminal: any TerminalServicing
     let viewProvider: any TerminalViewProviding
+    /// Karar 144: terminal içi arama — canlı view'ların sahibi registry'dir.
+    let terminalSearch: any TerminalSearching
     let highlighter: any SyntaxHighlighting
     let markdownParser: any MarkdownParsing = SwiftMarkdownParser()
     let notifications: any NotificationServicing
@@ -159,6 +161,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         terminalManager = manager
         terminal = manager
         viewProvider = manager.viewRegistry
+        terminalSearch = manager.viewRegistry
     }
 
     /// Kullanım göstergesi TTL'i — design/05 §cache.

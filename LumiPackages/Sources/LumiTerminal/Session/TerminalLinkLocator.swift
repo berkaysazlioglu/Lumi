@@ -180,6 +180,12 @@ extension TerminalLinkLocator {
     /// Görünür `row` satırının metni (0-tabanlı ekran satırı).
     static func rowText(in terminal: Terminal, row: Int) -> TerminalRowText? {
         guard let line = terminal.getLine(row: row) else { return nil }
+        return rowText(of: line, in: terminal)
+    }
+
+    /// Bir buffer satırının metni — görünür alan dışındaki (scrollback)
+    /// satırlar için de geçerlidir (karar 144 araması).
+    static func rowText(of line: BufferLine, in terminal: Terminal) -> TerminalRowText {
         let cols = min(terminal.cols, line.count)
         var text = ""
         var cells: [TerminalRowText.Cell] = []

@@ -21,13 +21,13 @@ public enum AppCommands {
         AppCommand(id: .checkForUpdates, title: "Check for Updates…", menu: .app, key: nil),
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
-            separatorBefore: true, referenceTitle: "Settings", referenceOrder: 17
+            separatorBefore: true, referenceTitle: "Settings", referenceOrder: 20
         ),
         // Standart `NSApplication.terminate(_:)` selector'ına gider ama
         // kullanıcıya sunulan tabloda listelenir.
         AppCommand(
             id: .quit, title: "Quit Lumi", menu: .app, key: "q",
-            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 18
+            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 21
         ),
 
         // MARK: Shell
@@ -56,7 +56,7 @@ public enum AppCommands {
         // Karar 114: tüm ajanları yöneten sohbet popup'ı — açar/kapatır.
         AppCommand(
             id: .toggleOrchestrator, title: "Orchestrator", menu: .shell, key: "j",
-            referenceTitle: "Orchestrator", referenceOrder: 16
+            referenceTitle: "Orchestrator", referenceOrder: 19
         ),
         // ⌃1…⌃9 PROJELER arasında geçer (karar 65 — eskiden görünmeyen tab
         // listesine indeksliyordu). ⌘1…⌘9 ise aktif checkout içindeki terminali
@@ -100,35 +100,51 @@ public enum AppCommands {
             key: "m", modifiers: [.command, .control], separatorBefore: true,
             referenceTitle: "Maximize Terminal", referenceOrder: 9
         ),
+        // Karar 144: terminal içi arama (Orca paritesi). ⌘F çubuğu açar —
+        // açıksa alanı yeniden odaklar; ⌘G / ⇧⌘G çubuk açıkken eşleşmeler
+        // arasında gezer ve odağı terminale verir.
+        AppCommand(
+            id: .findInTerminal, title: "Find…", menu: .terminal, key: "f",
+            separatorBefore: true, referenceTitle: "Find in Terminal", referenceOrder: 10
+        ),
+        AppCommand(
+            id: .findNextInTerminal, title: "Find Next", menu: .terminal, key: "g",
+            referenceTitle: "Find Next", referenceOrder: 11
+        ),
+        AppCommand(
+            id: .findPreviousInTerminal, title: "Find Previous", menu: .terminal, key: "G",
+            modifiers: [.command, .shift],
+            referenceTitle: "Find Previous", referenceOrder: 12
+        ),
 
         // MARK: View
         AppCommand(
             id: .toggleLeftSidebar, title: "Toggle Left Sidebar", menu: .view, key: "b",
-            referenceTitle: "Toggle Left Sidebar", referenceOrder: 10
+            referenceTitle: "Toggle Left Sidebar", referenceOrder: 13
         ),
         AppCommand(
             id: .toggleRightSidebar, title: "Toggle Right Sidebar", menu: .view, key: "B",
             modifiers: [.command, .shift],
-            referenceTitle: "Toggle Right Sidebar", referenceOrder: 11
+            referenceTitle: "Toggle Right Sidebar", referenceOrder: 14
         ),
         AppCommand(
             id: .toggleFocusMode, title: "Toggle Focus Mode", menu: .view, key: "F",
             modifiers: [.command, .shift], separatorBefore: true,
-            referenceTitle: "Focus Mode", referenceOrder: 12
+            referenceTitle: "Focus Mode", referenceOrder: 15
         ),
         // Karar 61: tüm arayüzü ölçekler (Electron `zoomIn`/`zoomOut`/
         // `resetZoom` paritesi) — yalnız terminal fontunu değil.
         AppCommand(
             id: .zoomIn, title: "Zoom In", menu: .view, key: "+",
-            separatorBefore: true, referenceTitle: "Zoom In", referenceOrder: 13
+            separatorBefore: true, referenceTitle: "Zoom In", referenceOrder: 16
         ),
         AppCommand(
             id: .zoomOut, title: "Zoom Out", menu: .view, key: "-",
-            referenceTitle: "Zoom Out", referenceOrder: 14
+            referenceTitle: "Zoom Out", referenceOrder: 17
         ),
         AppCommand(
             id: .resetZoom, title: "Actual Size", menu: .view, key: "0",
-            referenceTitle: "Actual Size", referenceOrder: 15
+            referenceTitle: "Actual Size", referenceOrder: 18
         ),
 
         // MARK: Window

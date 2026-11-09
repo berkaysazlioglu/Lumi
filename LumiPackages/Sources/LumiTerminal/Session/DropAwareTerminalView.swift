@@ -63,6 +63,10 @@ final class DropAwareTerminalView: TerminalView {
         // hover vurgusunu ve düz tıkta linki kendisinin açmasını kapatır; yalnız
         // ⌘ basılıyken OSC 8 hücrelerinin altını çizer.
         linkHighlightMode = .alwaysWithModifier
+        // Karar 144: arama vurguları link çizgisinin ALTINDA kalır.
+        searchHighlight.frame = bounds
+        searchHighlight.autoresizingMask = [.width, .height]
+        addSubview(searchHighlight)
         linkUnderline.frame = bounds
         linkUnderline.autoresizingMask = [.width, .height]
         addSubview(linkUnderline)
@@ -162,6 +166,20 @@ final class DropAwareTerminalView: TerminalView {
     let linkUnderline = TerminalLinkUnderlineView()
     /// Hover durumu (`DropAwareTerminalView+Links`).
     var linkHover = TerminalLinkHoverState()
+
+    // MARK: - Arama (karar 144 — `DropAwareTerminalView+Search`)
+
+    let searchHighlight = TerminalSearchHighlightView()
+    let searchBuffer = TerminalSearchBuffer()
+    var searchState = TerminalSearchState()
+    /// Arama açıkken içerik değişip sayım yeniden yapıldı.
+    var onSearchResultsChanged: ((TerminalSearchSummary) -> Void)?
+
+    /// Hücre boyutu ya da ızgara değişince vurgular yeni geometriye oturur.
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        noteSearchViewportChanged()
+    }
 
     private var linkGesture = TerminalLinkGestureTracker()
     private var focusLossObservers: [any NSObjectProtocol] = []

@@ -32,12 +32,18 @@ public final class TerminalViewRegistry: TerminalViewProviding {
     /// geri çalmaz.
     private var pendingKeyboardFocusID: TerminalID?
 
+    /// Karar 144: arama açıkken içerik değişip sayım yenilendi (`TerminalSearching`).
+    public var onSearchResultsChanged: ((TerminalID, TerminalSearchSummary) -> Void)?
+
     func register(
         view: NSView,
         for id: TerminalID,
         onVisibilityChange: @escaping (Bool) -> Void
     ) {
         entries[id] = Entry(view: view, onVisibilityChange: onVisibilityChange)
+        (view as? DropAwareTerminalView)?.onSearchResultsChanged = { [weak self] summary in
+            self?.onSearchResultsChanged?(id, summary)
+        }
         // Spawn anında henüz hiçbir container'a bağlı değil — gizli politikayla başlar
         onVisibilityChange(false)
     }
@@ -72,6 +78,11 @@ public final class TerminalViewRegistry: TerminalViewProviding {
         if window.firstResponder === view || window.makeFirstResponder(view) {
             pendingKeyboardFocusID = nil
         }
+    }
+
+    /// Kayıtlı canlı view (karar 144 araması).
+    func view(for id: TerminalID) -> NSView? {
+        entries[id]?.view
     }
 
     /// Click-to-focus için ters arama: first responder olan view → terminal id.

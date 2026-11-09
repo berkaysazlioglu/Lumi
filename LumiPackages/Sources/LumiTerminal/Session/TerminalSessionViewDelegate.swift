@@ -9,6 +9,8 @@ extension TerminalSession: @preconcurrency TerminalViewDelegate {
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
         // Emülatör reflow'u şimdi oldu: aynalar yeni boyutta yeniden kurulur (karar 143 ek).
         mirrorFeed.sizeChanged()
+        // Reflow satırları yeniden dizdi: arama sayımı tazelenir (karar 144).
+        (source as? DropAwareTerminalView)?.noteSearchContentChanged()
         requestResize(cols: newCols, rows: newRows)
     }
 
@@ -24,7 +26,9 @@ extension TerminalSession: @preconcurrency TerminalViewDelegate {
         write(Data(data))
     }
 
-    func scrolled(source: TerminalView, position: Double) {}
+    func scrolled(source: TerminalView, position: Double) {
+        (source as? DropAwareTerminalView)?.noteSearchViewportChanged()
+    }
 
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
         // http/https whitelist paritesi (Electron paritesi)

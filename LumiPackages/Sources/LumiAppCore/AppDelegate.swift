@@ -77,6 +77,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             newRemoteTerminal: { [weak self] in
                 guard let self else { return false }
                 return composition.remote.newTerminalOnRemoteRoute(route: shared.navigation.activeRoute)
+            },
+            // Karar 144: terminalin üstünü örten bir yüzey (FileViewer,
+            // Settings, Go to Project) açıkken ⌘F altta kalan terminalin
+            // görünmez çubuğuna odak vermesin.
+            terminalSearch: { [weak self] in
+                guard let self else { return nil }
+                let context = composition.shell.context
+                let isCovered = context.fileViewer.isPresented
+                    || shared.dialogs.isSettingsOpen
+                    || shared.dialogs.isRepoSelectorOpen
+                return isCovered ? nil : context.terminalSearch
             }
         )
         // Config henüz diskten okunmadığı için menü varsayılan düzende kurulur;
