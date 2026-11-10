@@ -403,6 +403,28 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(writes, 0, "focus mode persist edilmez")
     }
 
+    func testFocusHeaderRevealOnlyCountsInFocusModeAndResetsOnExit() {
+        var events: [Bool] = []
+        store.onFocusHeaderRevealChanged = { events.append($0) }
+
+        store.setFocusHeaderRevealed(true)
+        XCTAssertFalse(store.isFocusHeaderRevealed, "focus mode dışında bar zaten kabukta")
+
+        store.toggleFocusMode()
+        store.setFocusHeaderRevealed(true)
+        store.setFocusHeaderRevealed(true) // değişmedi → köprü çağrılmaz
+        XCTAssertTrue(store.isFocusHeaderRevealed)
+
+        store.exitFocusMode()
+        XCTAssertFalse(store.isFocusHeaderRevealed, "çıkışta bar kapanır")
+        XCTAssertEqual(events, [true, false])
+
+        store.toggleFocusMode()
+        store.setFocusHeaderRevealed(true)
+        store.toggleFocusMode()
+        XCTAssertFalse(store.isFocusHeaderRevealed, "toggle ile çıkışta da kapanır")
+    }
+
     // MARK: - Maximize (görünürlük predikatı)
 
     func testMaximizeRejectsInvisibleTerminal() {

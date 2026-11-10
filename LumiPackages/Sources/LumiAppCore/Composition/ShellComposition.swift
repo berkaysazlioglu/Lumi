@@ -152,8 +152,12 @@ struct ShellComposition {
         registries.overlays.register(OverlayDescriptor(
             id: .focusModeBar,
             alignment: .top,
-            isPresented: { $0.layout.isFocusMode && $0.activeTerminalScope != nil },
-            makeView: { AnyView(FocusModeBarOverlay()) }
+            // Bar her route'ta iner — çıkış ikonu yüzeyden bağımsızdır.
+            isPresented: { $0.layout.isFocusMode },
+            makeView: { [weak registries] in
+                guard let registries else { return AnyView(EmptyView()) }
+                return AnyView(FocusModeHeaderOverlay(registries: registries))
+            }
         ))
         registries.overlays.register(OverlayDescriptor(
             id: .fileViewer,

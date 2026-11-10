@@ -6,17 +6,17 @@ import SwiftUI
 /// yüzden her overlay bağlamını Environment'tan okuyan ince bir taşıyıcıya
 /// sarılır. Taşıyıcılar `public`tir: kayıt composition root'ta yapılır.
 
-/// Focus mode hover-reveal barı (route bir terminal yüzeyindeyken anlamlı —
-/// repo ya da All Terminals, karar 103).
-public struct FocusModeBarOverlay: View {
-    @Shell private var shell
+/// Focus mode'da üst kenar hover'ıyla inen top bar. Kayıt defteri CANLI
+/// tutulur (karar 71 — `PanelRevealOverlay` ile aynı gerekçe).
+public struct FocusModeHeaderOverlay: View {
+    let registries: ShellRegistries
 
-    public init() {}
+    public init(registries: ShellRegistries) {
+        self.registries = registries
+    }
 
     public var body: some View {
-        if let scope = shell.activeTerminalScope {
-            FocusModeBar(scope: scope)
-        }
+        FocusModeHeaderReveal(registries: registries)
     }
 }
 

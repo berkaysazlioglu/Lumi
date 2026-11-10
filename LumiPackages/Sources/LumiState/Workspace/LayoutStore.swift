@@ -89,6 +89,9 @@ public final class LayoutStore {
     public private(set) var maximizedByScope: [TerminalScope: TerminalID] = [:]
     /// Oturumluk — persist edilmez.
     public private(set) var isFocusMode = false
+    /// Focus mode'da fare üst kenara gelince top bar içeriğin ÜSTÜNDE iner
+    /// (terminaller yeniden boyutlanmaz). Oturumluk — persist edilmez.
+    public private(set) var isFocusHeaderRevealed = false
     /// Karar 97: kartların elle sıralandığı Edit modu hangi yüzeyde açık.
     /// Yüzeye bağlıdır — başka checkout'a ya da All Terminals'a geçince o
     /// yüzeyde kapalı görünür. Oturumluk — persist edilmez.
@@ -129,6 +132,9 @@ public final class LayoutStore {
 
     /// Traffic-light gizleme AppKit tarafında bu callback ile senkronlanır.
     @ObservationIgnored public var onFocusModeChanged: ((Bool) -> Void)?
+    /// Focus mode'da inen top bar'ın açılıp kapanması — traffic light'lar
+    /// bar'la birlikte görünür.
+    @ObservationIgnored public var onFocusHeaderRevealChanged: ((Bool) -> Void)?
 
     /// Ölçek değişimi: token çarpanını kuran ve arayüzü yeniden kuran köprü
     /// (LumiUI/AppKit tarafı). Store `Theme`'i tanımaz.
@@ -215,13 +221,23 @@ public final class LayoutStore {
     public func toggleFocusMode() {
         isFocusMode.toggle()
         revealedSlots = []
+        setFocusHeaderRevealed(false)
         onFocusModeChanged?(isFocusMode)
     }
 
     public func exitFocusMode() {
         guard isFocusMode else { return }
         isFocusMode = false
+        setFocusHeaderRevealed(false)
         onFocusModeChanged?(false)
+    }
+
+    /// Focus mode dışında bar zaten kabukta durur; açık sayılmaz.
+    public func setFocusHeaderRevealed(_ revealed: Bool) {
+        let value = revealed && isFocusMode
+        guard value != isFocusHeaderRevealed else { return }
+        isFocusHeaderRevealed = value
+        onFocusHeaderRevealChanged?(value)
     }
 
     // MARK: - Panel yuvaları (her mutasyon persist)

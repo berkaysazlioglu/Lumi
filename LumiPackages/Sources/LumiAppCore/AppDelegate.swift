@@ -164,6 +164,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shared.layout.onFocusModeChanged = { [weak self] active in
             self?.windowController.setTrafficLightsHidden(active)
         }
+        // Focus mode'da top bar inince traffic light'lar bar'la birlikte görünür.
+        shared.layout.onFocusHeaderRevealChanged = { [weak self, weak layout = shared.layout] revealed in
+            guard let layout else { return }
+            self?.windowController.setTrafficLightsHidden(layout.isFocusMode && !revealed)
+        }
         // Karar 61: ölçek → token çarpanı + arayüzün yeniden kurulması.
         // Store `Theme`'i ve AppKit'i tanımaz; köprü burada.
         shared.layout.onUIScaleChanged = { [weak self] scale in

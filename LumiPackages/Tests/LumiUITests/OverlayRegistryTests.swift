@@ -31,7 +31,7 @@ final class OverlayRegistryTests: XCTestCase {
     /// Üretim kaydının aynısı (`ShellComposition.registerShellOverlays`).
     private func productionRegistry() -> OverlayRegistry {
         var registry = OverlayRegistry()
-        registry.register(descriptor(.focusModeBar) { $0.layout.isFocusMode && $0.activeTerminalScope != nil })
+        registry.register(descriptor(.focusModeBar) { $0.layout.isFocusMode })
         registry.register(descriptor(.fileViewer) { $0.fileViewer.isPresented })
         registry.register(descriptor(.settings) { $0.dialogs.isSettingsOpen })
         registry.register(descriptor(.toasts) { !$0.toasts.toasts.isEmpty })
@@ -66,21 +66,17 @@ final class OverlayRegistryTests: XCTestCase {
         XCTAssertEqual(presentedIDs(), [.closeTabDialog])
     }
 
-    func testFocusModeBarNeedsATerminalSurface() {
+    func testFocusModeHeaderIsPresentedOnEveryRoute() {
+        // Focus mode'da inen top bar çıkışın kısayol dışındaki tek yoludur —
+        // terminal yüzeyi olmayan route'larda da çizilir.
         shell.layout.toggleFocusMode()
-        XCTAssertEqual(presentedIDs(), [], "terminal yüzeyi yokken hover bar çizilmez")
-        shell.navigation.openTab("/r/alpha")
         XCTAssertEqual(presentedIDs(), [.focusModeBar])
-    }
-
-    func testFocusModeBarShowsOnAllTerminals() {
-        // Karar 103: All Terminals da bir terminal yüzeyidir — repo yok ama
-        // çıkış düğmesi ve grid menüsü gerekir.
-        shell.layout.toggleFocusMode()
         shell.navigation.setRoute(AllTerminalsRoute.route)
         XCTAssertEqual(presentedIDs(), [.focusModeBar])
         shell.navigation.setRoute(.content(TasksPanelSection.tasks.routeID))
-        XCTAssertEqual(presentedIDs(), [], "Tasks yüzey değildir")
+        XCTAssertEqual(presentedIDs(), [.focusModeBar])
+        shell.layout.toggleFocusMode()
+        XCTAssertEqual(presentedIDs(), [])
     }
 
     func testToastsPresentOnlyWhenTheStackIsNonEmpty() {

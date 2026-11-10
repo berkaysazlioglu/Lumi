@@ -1673,3 +1673,12 @@ Kullanıcı bildirimi: "ben bu ip'den bağlanıp eve gidince bağlantı kopmuşt
 - **Gösterim.** Uyarı (`serverIssue` / `directoryIssue`) yalnız onu bildiren kanal yeniden `connected` olunca kalkar. Başka kanalın bağlanması onu silmez, kalıcı ret onu ezer. Hub bağlantısı 4006'da `rejected` değil `.connecting` olur; şifreli hello'yla kendiliğinden geri gelir. Mesaj: "…Lumi keeps retrying and reconnects once you're on the office network or VPN."
 - **Token.** Disconnect/Connect `remote.json`'daki `serverToken`'a dokunmaz; bu senaryoda yeni token gerekmez.
 - Testler: `RelayConnectionTests.testServerIssueMapping`/`testNetworkChangeCutsBackoffWait`, `RemoteServiceHubTests.networkBlockIsClearedWhenTheBlockedChannelReconnects`, `RemoteControllerServiceTests.networkBlockIsTemporary`, `RemoteProtocolTests.backoffDoublesAndCapsAndResets`.
+
+### 148. Focus mode'da top bar üst kenar hover'ıyla içeriğin üstüne iner (2026-11-10)
+
+Kullanıcı isteği: "fareyi yukarı götürünce topbar yukarıdan inerdi (terminalleri resize etmezdi), fullscreen ikonuna basıp çıkabilirdik — geri getir". Focus mode'un (⇧⌘F) hover barı (`FocusModeBar`) SwiftUI `.onHover`'a dayanıyordu; terminal fare raporlarken `.mouseMoved` yutulduğu için (karar 67/69) terminal üstünde hiç açılmıyor, çıkış yalnız kısayolda kalıyordu.
+
+- **Davranış.** Focus mode'da pencerenin üst kenarındaki ince şeride fare gelince `Theme.Motion.hoverRevealDelay` (500 ms) sonra GERÇEK top bar (`HeaderBarView`, aynı toolbar registry'si — focus mode ikonu, New <Provider>, grid ayarı, kotalar) overlay olarak yukarıdan kayar; orta alan yeniden yerleşmez. Fare bar'dan çıkınca kapanır; bar'dan açılan popover'lar içeride sayılır. Traffic light'lar bar'la birlikte görünür. Ayrı `FocusModeBar` (terminal sayısı / grid / New / Exit Focus Mode) kaldırıldı — içeriği top bar'da zaten var.
+- **Kapı.** Overlay her route'ta çizilir (`isFocusMode`); önce terminal yüzeyi istiyordu, Tasks/Remote'ta çıkış yalnız kısayoldu.
+- **Sınırlar.** Hover kaynağı `PointerPresence` (karar 44/67/99 sensörü), view `FocusModeHeaderReveal` + `FocusModeHeaderOverlay` (registries canlı tutulur — karar 71). Durum `LayoutStore.isFocusHeaderRevealed` (oturumluk, focus mode dışında daima `false`, giriş/çıkışta sıfırlanır) + `onFocusHeaderRevealChanged` köprüsü → `MainWindowController.setTrafficLightsHidden`.
+- Testler: `OverlayRegistryTests.testFocusModeHeaderIsPresentedOnEveryRoute`, `LayoutStoreTests.testFocusHeaderRevealOnlyCountsInFocusModeAndResetsOnExit`.

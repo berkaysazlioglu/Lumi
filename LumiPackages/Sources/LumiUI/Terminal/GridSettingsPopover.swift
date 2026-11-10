@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Sade grid ayar popover'ı (design/03 — iki eksenli model): tetik butonu mevcut
 /// yerleşimi özetler, popover'da iki segmented kontrol — Kolon (Auto·1–5) ve
-/// Yükseklik (Sığdır·Kaydır). Header ve FocusModeBar ortak kullanır (DRY).
+/// Yükseklik (Sığdır·Kaydır). Header kullanır.
 struct GridSettingsControl: View {
     let layout: LumiKit.GridLayout
     let onChange: (LumiKit.GridLayout) -> Void
