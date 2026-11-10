@@ -5,7 +5,7 @@ import SwiftUI
 /// Focus mode'da top bar'ın üst kenar hover'ıyla içeriğin ÜSTÜNE inmesi.
 ///
 /// Focus mode header'ı kabuktan kaldırır (`AppShellView`). Fare pencerenin üst
-/// kenarındaki görünmez şeride gelince `revealDelay` sonra GERÇEK top bar
+/// kenarındaki görünmez şeride gelince `revealDelay` (100 ms) sonra GERÇEK top bar
 /// (`HeaderBarView` — aynı toolbar registry'si, focus mode ikonu dahil)
 /// overlay olarak yukarıdan kayar; orta alan yeniden yerleşmez, terminaller
 /// boyut değiştirmez. Fare bar'dan çıkınca bar kapanır. Çıkışın kısayol
@@ -17,7 +17,9 @@ import SwiftUI
 /// bar'dan açılan popover'ları (grid ayarı, New <Provider> listesi) da içeride
 /// sayar; popover açıkken bar kapanmaz.
 struct FocusModeHeaderReveal: View {
-    static let revealDelay = Theme.Motion.hoverRevealDelay
+    /// Kenar panelleriyle aynı gecikme (karar 44) — 500 ms'lik eski focus bar
+    /// gecikmesi sensörün 0,1 sn yoklamasıyla birlikte ağır hissettiriyordu.
+    static let revealDelay = Theme.Motion.sidebarRevealDelay
 
     let registries: ShellRegistries
 
