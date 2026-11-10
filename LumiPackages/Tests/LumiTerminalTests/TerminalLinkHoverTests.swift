@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import LumiKit
 import SwiftTerm
 import XCTest
 @testable import LumiTerminal
@@ -60,7 +61,7 @@ final class TerminalLinkHoverTests: XCTestCase {
         view.linkBaseDirectory = "/repo"
         view.feed(text: Self.link)
         activations = []
-        view.onLinkActivation = { [weak self] link, _, _ in self?.activations.append(link) }
+        view.onLinkActivation = { [weak self] link, _, _ in self?.activations.append(link.text) }
     }
 
     override func tearDown() async throws {
@@ -157,6 +158,79 @@ final class TerminalLinkHoverTests: XCTestCase {
 
         hover(at: point(column: 17))
         XCTAssertNil(view.underlinedLinkText, "dosyası olmayan görsel link değildir")
+    }
+
+    // MARK: - Kitty görselleri (karar 149)
+
+    private static let imagePath = "/private/tmp/claude-501/-repo/s/images/1.png"
+
+    /// Claude Code'un `Image`'ı: kimliği (7) 24-bit ön plan renginde taşıyan
+    /// placeholder hücreleri — burada iki satır × dört sütun, 3. sütundan başlar.
+    private func showImage(id: (UInt8, UInt8, UInt8) = (0, 0, 7)) {
+        let cells = "\u{1B}[38;2;\(id.0);\(id.1);\(id.2)m" + String(repeating: "\u{10EEEE}", count: 4) + "\u{1B}[0m"
+        show("ab " + cells + "\r\n   " + cells)
+    }
+
+    func testImagePlaceholderLinksToTheTransferredFileWithoutUnderline() {
+        useDisk([Self.imagePath])
+        view.kittyImageFiles.record(KittyImageFile(imageID: 7, path: Self.imagePath))
+        showImage()
+
+        hover(at: point(column: 4, row: 1))
+
+        XCTAssertEqual(view.hoveredLink, TerminalClickedLink(text: Self.imagePath, source: .image))
+        XCTAssertTrue(view.isPointingAtLink, "görsel tıklanabilir görünmeli")
+        XCTAssertNil(view.underlinedLinkText, "görselin altı çizilmez")
+    }
+
+    func testImageCellsSpanEveryRowOfTheImage() {
+        useDisk([Self.imagePath])
+        view.kittyImageFiles.record(KittyImageFile(imageID: 7, path: Self.imagePath))
+        showImage()
+
+        let hit = TerminalKittyPlaceholder.hit(in: view.getTerminal(), row: 0, col: 5)
+
+        XCTAssertEqual(hit?.imageID, 7)
+        XCTAssertEqual(hit?.spans, [
+            TerminalLinkSpan(row: 0, columns: 3 ..< 7),
+            TerminalLinkSpan(row: 1, columns: 3 ..< 7),
+        ])
+    }
+
+    func testImageWithUnknownTransferIsNotALink() {
+        useDisk([Self.imagePath])
+        view.kittyImageFiles.record(KittyImageFile(imageID: 8, path: Self.imagePath))
+        showImage()
+
+        hover(at: point(column: 4))
+
+        XCTAssertNil(view.hoveredLink)
+        XCTAssertFalse(view.isPointingAtLink)
+    }
+
+    func testImageWhoseFileIsGoneIsNotALink() {
+        useDisk([])
+        view.kittyImageFiles.record(KittyImageFile(imageID: 7, path: Self.imagePath))
+        showImage()
+
+        hover(at: point(column: 4))
+
+        XCTAssertNil(view.hoveredLink)
+    }
+
+    func testPlainClickOnImageActivatesItAsAnImage() {
+        useDisk([Self.imagePath])
+        view.kittyImageFiles.record(KittyImageFile(imageID: 7, path: Self.imagePath))
+        showImage()
+        var clicked: [(TerminalClickedLink, TerminalLinkGesture)] = []
+        view.onLinkActivation = { link, gesture, _ in clicked.append((link, gesture)) }
+
+        let target = point(column: 5, row: 1)
+        view.mouseDown(with: mouse(.leftMouseDown, at: target))
+        view.mouseUp(with: mouse(.leftMouseUp, at: target))
+
+        XCTAssertEqual(clicked.map(\.0), [TerminalClickedLink(text: Self.imagePath, source: .image)])
+        XCTAssertEqual(clicked.map(\.1), [.actions])
     }
 
     func testPastedImagePlaceholderWithoutSessionIsNotALink() {

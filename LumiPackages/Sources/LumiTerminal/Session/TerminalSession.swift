@@ -150,7 +150,7 @@ final class TerminalSession {
             linkView.onLinkActivation = { [weak self] link, gesture, anchor in
                 guard let self else { return }
                 self.delegate?.session(self, didActivateLink: TerminalLinkActivation(
-                    terminalID: id, link: link, gesture: gesture, anchor: anchor
+                    terminalID: id, link: link.text, gesture: gesture, anchor: anchor, source: link.source
                 ))
             }
         }
@@ -183,6 +183,11 @@ final class TerminalSession {
         // main queue FIFO: aynı settle'ın status sıçramasından sonra iner.
         pipeline.onInterruptInferred = { [weak self] in
             hopToMain { self?.applyInterruptInferred() }
+        }
+        // Karar 149: aktarım, görselin placeholder'larını taşıyan batch'ten önce
+        // main'e iner (aynı FIFO) — tık anında kayıt hazırdır.
+        pipeline.onKittyImageFile = { [weak self] file in
+            hopToMain { self?.recordKittyImage(file) }
         }
     }
 
@@ -248,6 +253,11 @@ final class TerminalSession {
     private func applyStalled(_ stalled: Bool) {
         guard !isTerminated else { return }
         delegate?.session(self, didChangeStalled: stalled)
+    }
+
+    private func recordKittyImage(_ file: KittyImageFile) {
+        guard !isTerminated else { return }
+        (terminalView as? DropAwareTerminalView)?.kittyImageFiles.record(file)
     }
 
     private func applyInterruptInferred() {

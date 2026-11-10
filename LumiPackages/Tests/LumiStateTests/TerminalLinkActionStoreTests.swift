@@ -45,10 +45,43 @@ final class TerminalLinkActionStoreTests: XCTestCase {
         store.onIntent = { [weak self] in self?.intents.append($0) }
     }
 
-    private func activate(_ link: String, _ gesture: TerminalLinkGesture) async {
+    private func activate(
+        _ link: String, _ gesture: TerminalLinkGesture, source: TerminalLinkSource = .text
+    ) async {
         await store.handle(TerminalLinkActivation(
-            terminalID: terminalID, link: link, gesture: gesture, anchor: CGPoint(x: 8, y: 9)
+            terminalID: terminalID, link: link, gesture: gesture, anchor: CGPoint(x: 8, y: 9), source: source
         ))
+    }
+
+    // MARK: - Görsel tıkı (karar 149)
+
+    /// Terminalde çizilen görsele her jest doğrudan Lumi viewer'ını açar:
+    /// popover yok, ⇧⌘ Finder'a gitmez.
+    func testImageClickOpensViewerDirectlyForEveryGesture() async {
+        for gesture in TerminalLinkGesture.allCases {
+            intents = []
+            await activate("/private/tmp/claude-1/-p/s/images/2.png", gesture, source: .image)
+
+            XCTAssertNil(store.request, "\(gesture)")
+            XCTAssertEqual(intents, [.openFile(
+                repoPath: "/private/tmp/claude-1/-p/s/images", filePath: "2.png"
+            )], "\(gesture)")
+        }
+    }
+
+    func testImageInsideAProjectOpensRepoRelative() async {
+        await activate("/projects/game/Assets/icon.png", .actions, source: .image)
+
+        XCTAssertNil(store.request)
+        XCTAssertEqual(intents, [.openFile(repoPath: "/projects/game", filePath: "Assets/icon.png")])
+    }
+
+    /// Viewer'ın gösteremeyeceği dosya (uzantısız kitty kaynağı) metin linki gibi davranır.
+    func testImageSourceWithNonImageFileFallsBackToPopover() async {
+        await activate("/private/tmp/frame-3.rgba", .actions, source: .image)
+
+        XCTAssertNotNil(store.request)
+        XCTAssertTrue(intents.isEmpty)
     }
 
     // MARK: - Jestler

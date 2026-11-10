@@ -40,22 +40,40 @@ public enum TerminalLinkGesture: String, Sendable, Equatable, CaseIterable {
     }
 }
 
+/// Tıklanan şeyin terminaldeki türü.
+public enum TerminalLinkSource: String, Sendable, Equatable {
+    /// Metindeki link/yol (karar 57 / 116): jeste göre popover ya da doğrudan eylem.
+    case text
+    /// Kitty grafikleriyle çizilmiş, dosyadan okunan görsel (karar 149 — Claude
+    /// Code `Image`): jest ne olursa olsun doğrudan Lumi viewer'ında açılır.
+    case image
+}
+
 /// Terminalden yukarı akan link tıklaması: ham link metni + jest + tık noktası.
 /// Hedefin ne olduğu (URL / workspace / dizin / dosya) burada ÇÖZÜLMEZ — o
 /// karar repo ve workspace kayıtlarını gören state katmanına aittir.
 public struct TerminalLinkActivation: Sendable, Equatable {
     public let terminalID: TerminalID
-    /// Emülatörün eşlediği ham metin (OSC 8 payload'ı ya da örtük eşleşme).
+    /// Emülatörün eşlediği ham metin (OSC 8 payload'ı ya da örtük eşleşme);
+    /// görselde görselin dosya yolu.
     public let link: String
     public let gesture: TerminalLinkGesture
     /// Kabuk (SwiftUI) koordinat uzayında, pencerenin SOL-ÜSTÜNE göre tık noktası.
     public let anchor: CGPoint
+    public let source: TerminalLinkSource
 
-    public init(terminalID: TerminalID, link: String, gesture: TerminalLinkGesture, anchor: CGPoint) {
+    public init(
+        terminalID: TerminalID,
+        link: String,
+        gesture: TerminalLinkGesture,
+        anchor: CGPoint,
+        source: TerminalLinkSource = .text
+    ) {
         self.terminalID = terminalID
         self.link = link
         self.gesture = gesture
         self.anchor = anchor
+        self.source = source
     }
 }
 

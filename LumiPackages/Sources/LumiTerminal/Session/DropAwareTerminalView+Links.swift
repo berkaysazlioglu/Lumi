@@ -13,6 +13,12 @@ struct TerminalLinkHoverState {
     var isShowingCursor = false
 }
 
+/// Tık hücresinde bulunan link: çözümleyiciye giden metin + türü.
+struct TerminalClickedLink: Equatable {
+    let text: String
+    var source: TerminalLinkSource = .text
+}
+
 /// Aday listesinin diskin bugünkü bilgisiyle değerlendirilmesi.
 private enum TerminalLinkLookup {
     case found(TerminalLinkHit)
@@ -70,6 +76,8 @@ extension DropAwareTerminalView {
     var isPointingAtLink: Bool { linkHover.isShowingCursor }
     /// Test gözlemi: altı çizili link metni.
     var underlinedLinkText: String? { linkUnderline.spans.isEmpty ? nil : linkHover.link?.text }
+    /// Test gözlemi: hover'ın bulduğu link (altı çizilmese de).
+    var hoveredLink: TerminalClickedLink? { linkHover.link?.clicked }
 
     // MARK: - Tık
 
@@ -77,11 +85,11 @@ extension DropAwareTerminalView {
     /// bildiği kadarıyla en uzun aday. Cevabı bilinmeyen yol adayı iyimser
     /// seçilir (store ayrıca diske sorar) — çıplak dosya adı hariç: o, diskte
     /// görülmeden link sayılmaz.
-    func linkText(atCell cell: TerminalLinkHitTest.Cell) -> String? {
-        if let link = linkHover.link, link.contains(row: cell.row, col: cell.col) { return link.text }
+    func link(atCell cell: TerminalLinkHitTest.Cell) -> TerminalClickedLink? {
+        if let link = linkHover.link, link.contains(row: cell.row, col: cell.col) { return link.clicked }
         switch lookup(hits(at: cell)) {
-        case .found(let hit): return hit.text
-        case .pending(let hit, _): return hit.isBareFilename ? nil : hit.text
+        case .found(let hit): return hit.clicked
+        case .pending(let hit, _): return hit.isBareFilename ? nil : hit.clicked
         case .none: return nil
         }
     }
@@ -112,6 +120,9 @@ extension DropAwareTerminalView {
 
     private func hits(at cell: TerminalLinkHitTest.Cell) -> [TerminalLinkHit] {
         let terminal = getTerminal()
+        if TerminalKittyPlaceholder.isPlaceholder(in: terminal, row: cell.row, col: cell.col) {
+            return kittyImageHit(in: terminal, at: cell).map { [$0] } ?? []
+        }
         var hits: [TerminalLinkHit] = []
         if let explicit = TerminalLinkLocator.explicitHit(in: terminal, row: cell.row, col: cell.col) {
             // OSC 8: hedef payload'dır; yerel bir yola çıkıyorsa o da diske sorulur.
@@ -127,6 +138,18 @@ extension DropAwareTerminalView {
             TerminalLinkLocator.rowText(in: terminal, row: $0)
         }
         return hits + located.flatMap(pastedImageHits)
+    }
+
+    /// Karar 149: kitty placeholder hücresi, görselin aktarıldığı dosyaya
+    /// bağlanır (`kittyImageFiles`). Placeholder metin değildir: yolu
+    /// bilinmeyen görsel (bayt olarak aktarılmış ya da kayıttan düşmüş) link
+    /// de değildir.
+    private func kittyImageHit(in terminal: Terminal, at cell: TerminalLinkHitTest.Cell) -> TerminalLinkHit? {
+        guard let image = TerminalKittyPlaceholder.hit(in: terminal, row: cell.row, col: cell.col),
+              let path = kittyImageFiles.path(forPlaceholderID: image.imageID) else { return nil }
+        return TerminalLinkHit(
+            text: path, spans: image.spans, requiresExistence: true, isBareFilename: false, source: .image
+        )
     }
 
     /// Karar 139: `[Image #N]` oturumun görsel dizinindeki `N.<uzantı>`
@@ -178,7 +201,9 @@ extension DropAwareTerminalView {
         let isActive = linkHover.link != nil && (isLinkActionsEnabled || linkHover.isCommandHeld)
         linkUnderline.cellSize = cellSize
         linkUnderline.color = nativeForegroundColor
-        linkUnderline.spans = isActive ? (linkHover.link?.spans ?? []) : []
+        // Görselin (karar 149) altı çizilmez; el imleci tıklanabilirliği söyler.
+        let isUnderlined = isActive && linkHover.link?.source == .text
+        linkUnderline.spans = isUnderlined ? (linkHover.link?.spans ?? []) : []
         setLinkCursor(isActive)
     }
 
@@ -196,4 +221,8 @@ extension DropAwareTerminalView {
             }
         }
     }
+}
+
+private extension TerminalLinkHit {
+    var clicked: TerminalClickedLink { TerminalClickedLink(text: text, source: source) }
 }

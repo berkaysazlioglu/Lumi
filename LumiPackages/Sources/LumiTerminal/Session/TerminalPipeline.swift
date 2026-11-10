@@ -19,6 +19,8 @@ final class TerminalPipeline: @unchecked Sendable {
 
     private var decoder = UTF8StreamDecoder()
     private let oscParser = OSCStreamParser()
+    /// Karar 149: kitty grafiklerinin dosya aktarımları (görsel kimliği → yol).
+    private let kittyFiles = KittyGraphicsFileParser()
     /// Ham OSC olaylarını Lumi semantiğine çeviren zincir (Faz 4.8 / OCP):
     /// yeni ajan ya da yeni OSC kodu, pipeline'a dokunmadan enjekte edilir.
     private let semantics: OSCSemanticsChain
@@ -49,6 +51,8 @@ final class TerminalPipeline: @unchecked Sendable {
     /// Karar 104: kesme çıkarımı GERÇEKTEN etki üretti (lider turn kesildi).
     /// Aynı adımın status etkilerinden SONRA çağrılır.
     var onInterruptInferred: (@Sendable () -> Void)?
+    /// Karar 149: terminale dosyadan okunan bir kitty görseli aktarıldı.
+    var onKittyImageFile: (@Sendable (KittyImageFile) -> Void)?
 
     /// Scheduler'lar enjekte edilebilir (varsayılan = io queue üzerinde gerçek
     /// dispatch timer'ı): orkestrasyon testleri 16 ms / 3 sn beklemeden,
@@ -112,6 +116,9 @@ final class TerminalPipeline: @unchecked Sendable {
 
     func processOutput(_ data: Data) -> PTYProcess.ReadDirective {
         let directive = flow.noteProduced(data.count)
+        for file in kittyFiles.feed(data) {
+            onKittyImageFile?(file)
+        }
         let text = decoder.decode(data)
         if !text.isEmpty {
             inferencer.observeOutput(text)
@@ -297,6 +304,7 @@ final class TerminalPipeline: @unchecked Sendable {
         silenceTimer.cancel()
         interruptTimer.cancel()
         oscParser.reset()
+        kittyFiles.reset()
         hookReducer.reset()
         statusMachine.onExit(code: code)
     }

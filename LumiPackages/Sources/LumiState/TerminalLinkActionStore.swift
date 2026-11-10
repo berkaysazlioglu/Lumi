@@ -146,6 +146,13 @@ public final class TerminalLinkActionStore {
             request = nil
             return
         }
+        // Karar 149: görsele tık jestten bağımsız olarak doğrudan Lumi
+        // viewer'ını açar — görselin başka anlamlı eylemi yok, popover/Finder
+        // kısayolu yok. Viewer'ın gösteremeyeceği dosyada metin linki gibi davranır.
+        if activation.source == .image, let viewer = Self.imageViewerAction(for: resolved) {
+            perform(viewer)
+            return
+        }
         switch activation.gesture {
         case .actions:
             request = resolved
@@ -214,6 +221,15 @@ public final class TerminalLinkActionStore {
             group.cancelAll()
             return first ?? .file
         }
+    }
+
+    /// Görsel dosyasının `Open in Lumi` eylemi (kökün içinde de dışında da
+    /// birincil satırdır); hedef görsel değilse `nil`.
+    static func imageViewerAction(for request: TerminalLinkRequest) -> TerminalLinkAction? {
+        guard case let .file(path) = request.target,
+              FilePreviewKind.of(path: path) == .image,
+              case .openFile = request.primary.intent else { return nil }
+        return request.primary
     }
 
     static func actions(

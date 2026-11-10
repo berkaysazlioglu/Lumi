@@ -75,12 +75,26 @@ final class TerminalLinkSessionTests: XCTestCase {
         session.delegate = delegate
         let view = try linkView(session)
 
-        view.onLinkActivation?("/tmp/a.swift", .primary, CGPoint(x: 10, y: 20))
+        view.onLinkActivation?(TerminalClickedLink(text: "/tmp/a.swift"), .primary, CGPoint(x: 10, y: 20))
 
         XCTAssertEqual(delegate.linkActivations.count, 1)
         XCTAssertEqual(delegate.linkActivations.first?.terminalID, session.id)
         XCTAssertEqual(delegate.linkActivations.first?.link, "/tmp/a.swift")
         XCTAssertEqual(delegate.linkActivations.first?.gesture, .primary)
         XCTAssertEqual(delegate.linkActivations.first?.anchor, CGPoint(x: 10, y: 20))
+        XCTAssertEqual(delegate.linkActivations.first?.source, .text)
+    }
+
+    /// Karar 149: görsel tıkı türünü delegate'e taşır.
+    func testImageActivationCarriesItsSource() throws {
+        let session = try makeSession(pty: FakePTY())
+        let delegate = SpyDelegate()
+        session.delegate = delegate
+        let view = try linkView(session)
+
+        view.onLinkActivation?(TerminalClickedLink(text: "/tmp/i/1.png", source: .image), .actions, .zero)
+
+        XCTAssertEqual(delegate.linkActivations.first?.link, "/tmp/i/1.png")
+        XCTAssertEqual(delegate.linkActivations.first?.source, .image)
     }
 }

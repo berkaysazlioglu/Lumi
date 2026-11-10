@@ -49,6 +49,8 @@ struct TerminalLinkHit: Equatable {
     let isBareFilename: Bool
     /// `[Image #N]` yer tutucusu (karar 139): metin yola çevrilmeden link olmaz.
     var isPastedImage = false
+    /// Kitty görseli (karar 149): metin görselin dosya yoludur, altı çizilmez.
+    var source: TerminalLinkSource = .text
 
     func contains(row: Int, col: Int) -> Bool {
         spans.contains { $0.row == row && $0.columns.contains(col) }

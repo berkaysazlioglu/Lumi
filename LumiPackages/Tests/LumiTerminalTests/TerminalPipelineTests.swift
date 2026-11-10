@@ -74,6 +74,23 @@ final class TerminalPipelineTests: XCTestCase {
         XCTAssertTrue(titles.values.isEmpty, "exit sonrası bayat OSC buffer'ı event üretti")
     }
 
+    /// Karar 149: kitty dosya aktarımı yayılır; emülatöre giden baytlar aynen kalır.
+    func testKittyFileTransferIsReportedAndStillDeliveredToTheEmulator() {
+        let (pipeline, coalescerScheduler, _) = makeInstrumentedPipeline()
+        let files = Recorder<KittyImageFile>()
+        let batches = Recorder<Data>()
+        pipeline.onKittyImageFile = { files.append($0) }
+        pipeline.onFlushBatch = { batches.append($0) }
+        let path = Data("/private/tmp/claude-501/x/s/images/1.png".utf8).base64EncodedString()
+        let transfer = Data("\u{1B}_Ga=T,U=1,q=1,f=100,t=f,i=42,c=16,r=8;\(path)\u{1B}\\".utf8)
+
+        _ = pipeline.processOutput(transfer)
+        coalescerScheduler.fire()
+
+        XCTAssertEqual(files.values, [KittyImageFile(imageID: 42, path: "/private/tmp/claude-501/x/s/images/1.png")])
+        XCTAssertEqual(batches.values, [transfer])
+    }
+
     // MARK: - Chunk sırası: decoder → inferencer → OSC → status → coalescer
 
     /// design/01 §3'teki sıra: emülatöre teslim (coalescer flush) status/title

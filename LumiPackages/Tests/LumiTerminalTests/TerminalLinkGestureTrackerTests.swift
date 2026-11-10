@@ -8,7 +8,7 @@ final class TerminalLinkGestureTrackerTests: XCTestCase {
     private func tracker(hadSelection: Bool = false) -> TerminalLinkGestureTracker {
         var tracker = TerminalLinkGestureTracker()
         tracker.begin(
-            link: "/tmp/a.swift",
+            link: TerminalClickedLink(text: "/tmp/a.swift"),
             gesture: .actions,
             origin: CGPoint(x: 100, y: 100),
             hadSelection: hadSelection
@@ -19,7 +19,7 @@ final class TerminalLinkGestureTrackerTests: XCTestCase {
     func testClickWithoutDragResolves() {
         var tracker = self.tracker()
         let resolved = tracker.finish(hasSelection: false)
-        XCTAssertEqual(resolved?.link, "/tmp/a.swift")
+        XCTAssertEqual(resolved?.link?.text, "/tmp/a.swift")
         XCTAssertEqual(resolved?.gesture, .actions)
     }
 

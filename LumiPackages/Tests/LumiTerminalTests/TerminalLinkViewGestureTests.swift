@@ -23,7 +23,7 @@ final class TerminalLinkViewGestureTests: XCTestCase {
         view.feed(text: Self.link)
         activations = []
         view.onLinkActivation = { [weak self] link, gesture, _ in
-            self?.activations.append((link, gesture))
+            self?.activations.append((link.text, gesture))
         }
     }
 

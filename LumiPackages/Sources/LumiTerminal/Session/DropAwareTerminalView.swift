@@ -134,10 +134,10 @@ final class DropAwareTerminalView: TerminalView {
 
     // MARK: - Link jestleri (karar 57)
 
-    /// Link/path tıklaması karara bağlandı: (ham link, jest, kabuk koordinatında
-    /// tık noktası). Yalnız jest geçerliyse (sürüklenmediyse, seçim yokken)
-    /// çağrılır.
-    var onLinkActivation: ((String, TerminalLinkGesture, CGPoint) -> Void)?
+    /// Link/path ya da görsel tıklaması karara bağlandı: (link + türü, jest,
+    /// kabuk koordinatında tık noktası). Yalnız jest geçerliyse (sürüklenmediyse,
+    /// seçim yokken) çağrılır.
+    var onLinkActivation: ((TerminalClickedLink, TerminalLinkGesture, CGPoint) -> Void)?
     /// Düz tık bir link üstünde başladı: bu tıkın fare raporları PTY'ye
     /// GİTMEDEN bekletilmeli (`true` → bekletme başladı).
     var onLinkGestureBegan: (() -> Void)?
@@ -161,6 +161,9 @@ final class DropAwareTerminalView: TerminalView {
     /// Karar 139: claude oturumunun görsel dizini — `[Image #N]` buradaki
     /// dosyaya bağlanır. `nil` → Lumi'nin izlediği claude oturumu yok.
     var pastedImagesDirectory: String?
+    /// Karar 149: terminale dosyadan aktarılan kitty görselleri (kimlik → yol);
+    /// oturum PTY akışından doldurur.
+    var kittyImageFiles = TerminalKittyImageFiles()
     /// Yol adaylarının diskte olup olmadığı; testler satır içi bir fake verir.
     var linkPathCache = TerminalLinkPathCache()
     let linkUnderline = TerminalLinkUnderlineView()
@@ -253,7 +256,7 @@ final class DropAwareTerminalView: TerminalView {
         return isLinkActionsEnabled
     }
 
-    private func beginGesture(link: String?, gesture: TerminalLinkGesture, event: NSEvent) {
+    private func beginGesture(link: TerminalClickedLink?, gesture: TerminalLinkGesture, event: NSEvent) {
         linkGesture.begin(
             link: link,
             gesture: gesture,
@@ -296,9 +299,9 @@ final class DropAwareTerminalView: TerminalView {
         )
     }
 
-    /// Tık hücresindeki link metni (karar 116 — `DropAwareTerminalView+Links`).
-    private func link(at event: NSEvent) -> String? {
-        linkText(atCell: cell(atWindowPoint: event.locationInWindow))
+    /// Tık hücresindeki link (karar 116 / 149 — `DropAwareTerminalView+Links`).
+    private func link(at event: NSEvent) -> TerminalClickedLink? {
+        link(atCell: cell(atWindowPoint: event.locationInWindow))
     }
 
     func cell(atWindowPoint point: NSPoint) -> TerminalLinkHitTest.Cell {

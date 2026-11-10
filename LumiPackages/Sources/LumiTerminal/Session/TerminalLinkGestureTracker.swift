@@ -12,7 +12,7 @@ struct TerminalLinkGestureTracker {
 
     private struct Pending {
         /// `nil` → link araması mouseUp'a ertelendi (düz tık yolu).
-        let link: String?
+        let link: TerminalClickedLink?
         let gesture: TerminalLinkGesture
         let origin: CGPoint
         let hadSelection: Bool
@@ -27,7 +27,7 @@ struct TerminalLinkGestureTracker {
     /// beklemeden serbest bırakılsın diye.
     var isCancelledByDrag: Bool { pending?.moved ?? false }
 
-    mutating func begin(link: String?, gesture: TerminalLinkGesture, origin: CGPoint, hadSelection: Bool) {
+    mutating func begin(link: TerminalClickedLink?, gesture: TerminalLinkGesture, origin: CGPoint, hadSelection: Bool) {
         pending = Pending(link: link, gesture: gesture, origin: origin, hadSelection: hadSelection)
     }
 
@@ -42,7 +42,7 @@ struct TerminalLinkGestureTracker {
 
     /// Jesti sonlandırır. `nil` → link yolu iptal (sürükleme / var olan seçim /
     /// bekleyen jest yok); dönen değer varsa eylem işletilmelidir.
-    mutating func finish(hasSelection: Bool) -> (link: String?, gesture: TerminalLinkGesture)? {
+    mutating func finish(hasSelection: Bool) -> (link: TerminalClickedLink?, gesture: TerminalLinkGesture)? {
         defer { pending = nil }
         guard let current = pending, !current.moved, !current.hadSelection, !hasSelection else { return nil }
         return (current.link, current.gesture)
