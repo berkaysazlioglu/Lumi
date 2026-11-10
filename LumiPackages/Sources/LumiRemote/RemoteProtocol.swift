@@ -245,12 +245,18 @@ func keySequence(for key: String) -> String? {
 }
 
 /// 1,2,4,8,…60 sn üstel geri çekilme.
-struct ReconnectBackoff {
+struct ReconnectBackoff: Sendable {
     private var attempt = 0
-    private let capSeconds: Double = 60
+    private let baseSeconds: Double
+    private let capSeconds: Double
+
+    init(baseSeconds: Double = 1, capSeconds: Double = 60) {
+        self.baseSeconds = baseSeconds
+        self.capSeconds = capSeconds
+    }
 
     mutating func nextDelay() -> Double {
-        let delay = min(pow(2, Double(attempt)), capSeconds)
+        let delay = min(baseSeconds * pow(2, Double(attempt)), capSeconds)
         attempt += 1
         return delay
     }

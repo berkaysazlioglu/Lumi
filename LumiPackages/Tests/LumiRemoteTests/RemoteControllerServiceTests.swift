@@ -317,8 +317,27 @@ struct RemoteControllerServiceTests {
         let g = ControllerFixture()
         try await g.configure()
         try await g.connectAccepted()
-        await g.link.injectRejected(.networkNotAllowed)
-        try await waitUntil { g.service.linkState("build") == .rejected(reason: RemoteServerIssue.networkNotAllowed.rawValue) }
+        await g.link.injectRejected(.tokenRevoked)
+        try await waitUntil { g.service.linkState("build") == .rejected(reason: RemoteServerIssue.tokenRevoked.rawValue) }
+    }
+
+    /// Karar 147: allowlist reddi geçicidir — directory bağlanınca uyarı kalkar, hub
+    /// bağlantısı reddedilmiş sayılmaz ve durdurulmaz (kendiliğinden yeniden dener).
+    @Test func networkBlockIsTemporary() async throws {
+        let f = ControllerFixture()
+        try await f.configure()
+        await f.directory.injectBlocked(.networkNotAllowed)
+        try await waitUntil { f.service.directoryIssue == .networkNotAllowed }
+        await f.directory.injectState(.connected)
+        try await waitUntil { f.service.directoryIssue == nil }
+
+        let g = ControllerFixture()
+        try await g.configure()
+        try await g.connectAccepted()
+        let stopsBefore = await g.link.stopCount
+        await g.link.injectBlocked(.networkNotAllowed)
+        try await waitUntil { g.service.linkState("build") == .connecting }
+        #expect(await g.link.stopCount == stopsBefore)
     }
 }
 

@@ -56,6 +56,12 @@ final actor FakeRelayConnection: RelayConnecting {
         continuation?.yield(.rejected(issue))
     }
 
+    /// Test API — sunucunun ağ reddini enjekte et (4006, karar 147; bağlantı denemeyi sürdürür).
+    func injectBlocked(_ issue: RemoteServerIssue) {
+        continuation?.yield(.stateChanged(.disconnected))
+        continuation?.yield(.blocked(issue))
+    }
+
     /// Son `start`'ın hello'sundaki `attach` sözlüğünün string alanları.
     private(set) var attach: [String: String] = [:]
 

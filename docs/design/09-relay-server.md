@@ -70,11 +70,14 @@ Durum: Faz 1 (sunucu), Faz 2 (Mac) ve Faz 3 (telefon) tamam, 2026-11-09. Railway
   - Varsayılan adres boştur. Eski gömülü Railway adresi okunurken boşa çevrilir (`RemoteConfig.legacyRelayUrl`).
   - Eski `networkToken` okunmaz ama dosyada korunur (karar 9).
   - Token'lar dosyada düz durduğu için `remote.json` her yazımda `0600`'e çekilir. Keychain'e taşınmadı: QR'a gömülmesi gerekiyor ve oda token'ı zaten aynı dosyada.
-- **Bağlantı.** `RelayConnecting.start(endpoint:hello:)` el sıkışmada `Authorization: Bearer` gönderir. 401 (yalnız el sıkışmada), 4006 ve 4007 kalıcı rettir (`RelayInbound.rejected(RemoteServerIssue)`); yeniden denenmez, adres/token değişince kanal yeniden kurulur.
+- **Bağlantı.** `RelayConnecting.start(endpoint:hello:)` el sıkışmada `Authorization: Bearer` gönderir. 401 (yalnız el sıkışmada) ve 4007 kalıcı rettir (`RelayInbound.rejected(RemoteServerIssue)`, `isPermanent`); yeniden denenmez, adres/token değişince kanal yeniden kurulur.
+  - 4006 (allowlist) ağa bağlıdır (karar 147): `RelayInbound.blocked(.networkNotAllowed)` yayınlanır, kanal durmaz ve 1…60 sn geri çekilmeyle denemeyi sürdürür. Kanal yeniden `connected` olunca uyarı kalkar.
+  - Her bağlantı paylaşılan `NetworkPathSignal`'i (`NWPathMonitor`, yol `satisfied` olunca) dinler; geri çekilme beklemesindeyse beklemeyi kesip hemen bağlanır (`retryNowIfWaiting`). Kurulu ya da kurulmakta olan bağlantıya dokunmaz. Mac izinli ağa geçince bağlantı birkaç saniyede geri gelir.
 - **Ret gösterimi.**
   - Telefon/hub kanallarının reddi `RemoteService.serverIssue`'da (`RemoteEvent.serverIssueChanged`) görünür.
   - Directory'nin reddi `RemoteControllerService.directoryIssue`'da görünür.
-  - Hub bağlantısının reddi `RemoteHubLinkState.rejected(reason: <issue.rawValue>)` olur.
+  - Hub bağlantısının kalıcı reddi `RemoteHubLinkState.rejected(reason: <issue.rawValue>)` olur; 4006'da bağlantı `.connecting`'de kalır ve nedeni directory'nin uyarısı söyler.
+  - 4006 uyarısı yalnız onu bildiren kanal (telefon/hub; directory) yeniden bağlanınca kalkar; kalıcı ret onu ezer, tersi olmaz.
   - Üçü de `RemoteServerIssue.message` ile anlatılır.
 - **Tek ağ.** Hub ve controller hello'larında `network` yok. `createNetwork`/`joinNetwork`/`leaveNetwork` ve `RemoteNetworkSection` kalktı; yerine `RemoteServicing.setServer(url:token:)` var.
 - **Hub şifresi zorunlu.** Hub kanalı şifre olmadan açılmaz (`hubHelloIfReady`). Paylaşım anahtarı şifre yoksa önce şifre formunu açar.

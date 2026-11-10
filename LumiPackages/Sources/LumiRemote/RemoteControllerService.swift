@@ -95,12 +95,15 @@ public final class RemoteControllerService: RemoteControllerServicing {
     private func handleDirectory(_ inbound: RelayInbound) {
         switch inbound {
         case .stateChanged(let state):
+            if state == .connected, directoryIssue?.isPermanent == false { setDirectoryIssue(nil) }
             setDirectoryState(state)
         case .message("hubs", let payload):
             guard let settings else { return }
             setHubs(RemoteControllerWire.hubs(payload, excluding: settings.identity.ownHubId))
             reconnectReturningHubs()
-        case .rejected(let issue):
+        case .rejected(let issue), .blocked(let issue):
+            // `.blocked` (4006, karar 147) geçicidir: bağlantı denemeyi sürdürür ve
+            // bağlanınca yukarıdaki `.connected` engeli kaldırır.
             setDirectoryIssue(issue)
         case .message, .closed:
             break

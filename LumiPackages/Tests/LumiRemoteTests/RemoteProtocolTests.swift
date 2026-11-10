@@ -39,6 +39,10 @@ import LumiKit
         #expect(backoff.nextDelay() == 60)
         backoff.reset()
         #expect(backoff.nextDelay() == 1)
+
+        var slow = ReconnectBackoff(baseSeconds: 30, capSeconds: 60)
+        #expect(slow.nextDelay() == 30)
+        #expect(slow.nextDelay() == 60)
     }
 
     @Test func chatPayloadShape() {

@@ -208,6 +208,12 @@ final class RemoteHubLink {
             // Sunucu reddetti (karar 146): bağlantı yeniden denenmez.
             failPendingCommands()
             setState(.rejected(reason: issue.rawValue))
+        case .blocked:
+            // Bu ağ allowlist dışında (karar 147): RelayConnection denemeyi sürdürür,
+            // izinli ağa geçilince şifreli hello'yla kendiliğinden bağlanır. Nedeni
+            // directory'nin `directoryIssue`'su gösterir.
+            failPendingCommands()
+            setState(.connecting)
         case .message(let type, let payload):
             handleMessage(type: type, payload: payload)
         }

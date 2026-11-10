@@ -76,8 +76,10 @@ public struct RelayEndpoint: Sendable, Equatable {
     }
 }
 
-/// Sunucunun bağlantıyı kalıcı olarak reddetme nedeni (karar 146). Bu durumlarda
-/// yeniden bağlanma denenmez; kullanıcı adresi/token'ı düzeltince kanal yeniden kurulur.
+/// Sunucunun bağlantıyı reddetme nedeni (karar 146). Token'la ilgili retler kalıcıdır
+/// (`isPermanent`): yeniden bağlanma denenmez, kullanıcı adresi/token'ı düzeltince kanal
+/// yeniden kurulur. Allowlist reddi ağa bağlıdır; bağlantı denemeyi sürdürür ve ağ
+/// değişince hemen yeniden dener (karar 147).
 public enum RemoteServerIssue: String, Sendable, Equatable {
     /// HTTP 401 — token yanlış ya da bu sunucuya ait değil.
     case unauthorized
@@ -86,11 +88,20 @@ public enum RemoteServerIssue: String, Sendable, Equatable {
     /// 4006 — bu ağın IP'si sunucunun allowlist'inde değil (yalnız hub/controller).
     case networkNotAllowed
 
+    /// Kullanıcı bir şey değiştirmedikçe düzelmeyecek ret mi? Allowlist reddi değildir —
+    /// Mac izinli bir ağa geçince kendiliğinden kalkar.
+    public var isPermanent: Bool {
+        switch self {
+        case .unauthorized, .tokenRevoked: return true
+        case .networkNotAllowed: return false
+        }
+    }
+
     public var message: String {
         switch self {
         case .unauthorized: return "The server rejected the token. Check the server URL and token."
         case .tokenRevoked: return "This token was revoked on the server. Ask for a new one."
-        case .networkNotAllowed: return "This network isn't on the server's IP allowlist. Connect from the office or VPN."
+        case .networkNotAllowed: return "This network isn't on the server's IP allowlist. Lumi keeps retrying and reconnects once you're on the office network or VPN."
         }
     }
 }

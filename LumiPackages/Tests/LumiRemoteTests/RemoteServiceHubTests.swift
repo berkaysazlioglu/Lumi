@@ -379,10 +379,28 @@ struct RemoteServiceHubTests {
     @Test func serverRejectionIsSurfacedAndClearedOnRestart() async throws {
         let f = try await HubFixture()
         await f.service.start()
-        await f.hub.injectRejected(.networkNotAllowed)
-        try await waitUntil { f.service.serverIssue == .networkNotAllowed }
+        await f.hub.injectRejected(.unauthorized)
+        try await waitUntil { f.service.serverIssue == .unauthorized }
         await f.service.setServer(url: "wss://test.invalid", token: "lrs_other")
         #expect(f.service.serverIssue == nil)
+        f.service.stop()
+    }
+
+    /// Karar 147: allowlist reddi görünür ama kanal durmaz; hub kanalı yeniden
+    /// bağlanınca kendiliğinden kalkar. Başka kanalın bağlanması onu silmez.
+    @Test func networkBlockIsClearedWhenTheBlockedChannelReconnects() async throws {
+        let f = try await HubFixture(paths: .hubDefaults(mobile: true))
+        await f.service.start()
+        await f.hub.injectBlocked(.networkNotAllowed)
+        try await waitUntil { f.service.serverIssue == .networkNotAllowed }
+        #expect(await f.hub.stopCount == 0)
+
+        await f.mobile.injectState(.connected)
+        try await waitUntil { f.service.state == .connected }
+        #expect(f.service.serverIssue == .networkNotAllowed)
+
+        await f.hub.injectState(.connected)
+        try await waitUntil { f.service.serverIssue == nil }
         f.service.stop()
     }
 }

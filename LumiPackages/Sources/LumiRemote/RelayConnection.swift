@@ -7,9 +7,13 @@ public enum RelayInbound: @unchecked Sendable {
     /// Relay soketi kapattı; `code` WebSocket kapanış kodudur (relay'in 4000–4005'i,
     /// docs/design/08). Ardından yeniden bağlanma denenir — çağıran `stop()` ile keser.
     case closed(code: Int, reason: String?)
-    /// Sunucu bağlantıyı kalıcı olarak reddetti (401 / 4006 / 4007, karar 146). Yeniden
+    /// Sunucu bağlantıyı kalıcı olarak reddetti (401 / 4007, karar 146). Yeniden
     /// bağlanma DENENMEZ; çağıran yeni adres/token'la `start` edene kadar kanal kapalı kalır.
     case rejected(RemoteServerIssue)
+    /// Sunucu bu ağdan gelen bağlantıyı reddetti (4006 allowlist, karar 147). Ret ağa
+    /// bağlıdır: yeniden bağlanma sürer, ağ değişince beklemeden denenir. Sonraki
+    /// `.stateChanged(.connected)` engelin kalktığını söyler.
+    case blocked(RemoteServerIssue)
 }
 
 public protocol RelayConnecting: Actor {
@@ -21,21 +25,30 @@ public protocol RelayConnecting: Actor {
 
 /// URLSessionWebSocketTask tabanlı relay istemcisi. El sıkışmada server token'ını
 /// `Authorization: Bearer` olarak gönderir (karar 146). Kopunca üstel geri çekilmeyle
-/// aynı hello'yla yeniden bağlanır (spec §4.2, §9); sunucu kalıcı olarak reddederse
-/// (`RemoteServerIssue`) durur.
+/// aynı hello'yla yeniden bağlanır (spec §4.2, §9); ağ yeniden kullanılabilir olunca
+/// beklemeyi keser (karar 147). Sunucu kalıcı olarak reddederse
+/// (`RemoteServerIssue.isPermanent`) durur.
 actor RelayConnection: RelayConnecting {
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
-    private var backoff = ReconnectBackoff()
+    private var backoff: ReconnectBackoff
+    private let network: any NetworkPathSignaling
+    private var networkTask: Task<Void, Never>?
     private var continuation: AsyncStream<RelayInbound>.Continuation?
     private var currentEndpoint: RelayEndpoint?
     private var currentHello: [String: Any] = [:]
     private var stopped = true
 
-    init(session: URLSession = .shared) {
+    init(
+        session: URLSession = .shared,
+        network: any NetworkPathSignaling = NetworkPathSignal.shared,
+        backoff: ReconnectBackoff = ReconnectBackoff()
+    ) {
         self.session = session
+        self.network = network
+        self.backoff = backoff
     }
 
     func inbound() -> AsyncStream<RelayInbound> {
@@ -48,6 +61,7 @@ actor RelayConnection: RelayConnecting {
         stopped = false
         currentEndpoint = endpoint
         currentHello = hello
+        watchNetworkIfNeeded()
         connect()
     }
 
@@ -55,6 +69,8 @@ actor RelayConnection: RelayConnecting {
         stopped = true
         reconnectTask?.cancel()
         reconnectTask = nil
+        networkTask?.cancel()
+        networkTask = nil
         receiveTask?.cancel()
         receiveTask = nil
         task?.cancel(with: .normalClosure, reason: nil)
@@ -69,6 +85,7 @@ actor RelayConnection: RelayConnecting {
     }
 
     private func connect() {
+        reconnectTask = nil
         receiveTask?.cancel()
         guard !stopped, let endpoint = currentEndpoint else { return }
         continuation?.yield(.stateChanged(.connecting))
@@ -117,16 +134,22 @@ actor RelayConnection: RelayConnecting {
             continuation?.yield(.closed(code: code, reason: reason))
         }
         continuation?.yield(.stateChanged(.disconnected))
-        if let issue = Self.permanentIssue(httpStatus: receivedAny ? nil : status, closeCode: code) {
-            stopped = true
-            continuation?.yield(.rejected(issue))
-            return
+        if let issue = Self.serverIssue(httpStatus: receivedAny ? nil : status, closeCode: code) {
+            guard !issue.isPermanent else {
+                stopped = true
+                networkTask?.cancel()
+                networkTask = nil
+                continuation?.yield(.rejected(issue))
+                return
+            }
+            continuation?.yield(.blocked(issue))
         }
         scheduleReconnect()
     }
 
-    /// Yeniden denemenin anlamsız olduğu retler: el sıkışmada 401 ve sunucunun 4006/4007'si.
-    static func permanentIssue(httpStatus: Int?, closeCode: Int?) -> RemoteServerIssue? {
+    /// Sunucunun retleri: el sıkışmada 401 ve sunucunun 4006/4007'si. Hangisinin
+    /// yeniden denenmeyeceğini `RemoteServerIssue.isPermanent` söyler.
+    static func serverIssue(httpStatus: Int?, closeCode: Int?) -> RemoteServerIssue? {
         if httpStatus == 401 { return .unauthorized }
         switch closeCode {
         case 4006: return .networkNotAllowed
@@ -135,12 +158,39 @@ actor RelayConnection: RelayConnecting {
         }
     }
 
+    /// Ağ yeniden kullanılabilir olunca geri çekilme beklemesini kes (karar 147).
+    private func watchNetworkIfNeeded() {
+        guard networkTask == nil else { return }
+        let changes = network.changes()
+        networkTask = Task { [weak self] in
+            for await _ in changes {
+                guard let self else { return }
+                await self.retryNowIfWaiting()
+            }
+        }
+    }
+
+    /// Yalnız geri çekilme beklemesindeyken etkilidir — kurulu ya da kurulmakta olan
+    /// bağlantıya dokunmaz.
+    func retryNowIfWaiting() {
+        guard !stopped, let pending = reconnectTask else { return }
+        pending.cancel()
+        backoff.reset()
+        connect()
+    }
+
     private func scheduleReconnect() {
         let delay = backoff.nextDelay()
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            await self?.connect()
+            await self?.reconnectUnlessCancelled()
         }
+    }
+
+    /// İptal denetimi actor içinde yapılır: `retryNowIfWaiting` bu görevi iptal edip
+    /// kendisi bağlandıysa ikinci bir `connect` koşmaz.
+    private func reconnectUnlessCancelled() {
+        guard !Task.isCancelled else { return }
+        connect()
     }
 }

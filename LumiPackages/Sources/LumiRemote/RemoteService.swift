@@ -30,6 +30,9 @@ public final class RemoteService: RemoteServicing {
     public private(set) var currentConfig: RemoteConfig = .defaults
     /// Sunucunun kalıcı reddi (karar 146); kanal yeniden kurulunca ya da bağlanınca temizlenir.
     public private(set) var serverIssue: RemoteServerIssue?
+    /// `serverIssue` geçici bir engelse (4006, karar 147) onu bildiren kanal; o kanal
+    /// yeniden bağlanınca engel kalkar.
+    private var blockedChannel: RemoteChannel?
 
     let configService: RemoteConfigService
     private let appConfig: any ConfigServicing
@@ -156,6 +159,7 @@ public final class RemoteService: RemoteServicing {
         let mobileOn = currentConfig.enabled
         guard mobileOn || hubHello != nil else { return }
         guard let endpoint = currentConfig.endpoint else { return }
+        blockedChannel = nil
         setServerIssue(nil)
         running = true
         epoch &+= 1
@@ -332,6 +336,10 @@ public final class RemoteService: RemoteServicing {
     private func handleInbound(_ inbound: RelayInbound, channel: RemoteChannel) async {
         switch inbound {
         case .stateChanged(let newState):
+            if newState == .connected, blockedChannel == channel {
+                blockedChannel = nil
+                setServerIssue(nil)
+            }
             switch channel {
             case .mobile:
                 setState(newState)
@@ -344,6 +352,12 @@ public final class RemoteService: RemoteServicing {
             rlog("inbound[\(channel)] relay kapattı code=\(code)")
         case .rejected(let issue):
             rlog("inbound[\(channel)] sunucu reddetti: \(issue.rawValue)")
+            blockedChannel = nil
+            setServerIssue(issue)
+        case .blocked(let issue):
+            rlog("inbound[\(channel)] sunucu bu ağı reddetti, yeniden denenecek: \(issue.rawValue)")
+            guard serverIssue?.isPermanent != true else { return }
+            blockedChannel = channel
             setServerIssue(issue)
         case .message(let type, let payload):
             let from = payload["from"] as? String
