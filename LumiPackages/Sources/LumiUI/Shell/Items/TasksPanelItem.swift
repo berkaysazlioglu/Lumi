@@ -12,7 +12,9 @@ import SwiftUI
 ///
 /// Karar 103: en üstte All Terminals satırı — tüm projelerin terminalleri tek
 /// ızgarada; yanında toplam terminal sayısı. Karar 135: hemen altında
-/// kullanıcının Custom View'ları.
+/// kullanıcının Custom View'ları. Karar 151: bölümün bütün satırları
+/// (All Terminals, view'lar, Tasks, Remote) sürükle-bırakla birbirleri
+/// arasında sıralanır; sıra `LayoutStore`'dadır.
 public struct TasksPanelItem: View {
     /// Öğenin en küçük yüksekliği — eski Sessions bölümünün (başlık + 180pt
     /// sabit liste) kapladığı alan. İki satır bu alanı doldurmaz; yuvanın
@@ -26,19 +28,37 @@ public struct TasksPanelItem: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            ForEach(items, id: \.self) { item in
+                itemRow(item)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: Self.minContentHeight, alignment: .top)
+        .padding(Theme.Spacing.lg)
+    }
+
+    private var items: [SidebarNavigationItem] {
+        shell.layout.sidebarNavigationItems(views: shell.terminals.customViews.views.map(\.id))
+    }
+
+    @ViewBuilder
+    private func itemRow(_ item: SidebarNavigationItem) -> some View {
+        switch item {
+        case .allTerminals:
             row(
                 title: AllTerminalsRoute.title,
                 icon: AllTerminalsRoute.icon,
                 route: AllTerminalsRoute.route,
                 count: shell.terminals.totalCount
             )
-            CustomViewsSection()
-            ForEach(TasksPanelSection.allCases, id: \.self) { section in
-                row(title: section.title, icon: section.icon, route: .content(section.routeID))
+            .sidebarNavigationReorder(item, title: AllTerminalsRoute.title)
+        case .customView(let id):
+            if let view = shell.terminals.customViews.view(id) {
+                CustomViewRow(view: view, item: item)
             }
+        case .section(let section):
+            row(title: section.title, icon: section.icon, route: .content(section.routeID))
+                .sidebarNavigationReorder(item, title: section.title)
         }
-        .frame(maxWidth: .infinity, minHeight: Self.minContentHeight, alignment: .top)
-        .padding(Theme.Spacing.lg)
     }
 
     /// `count`: satırın sağındaki sayı; `nil` ya da 0 ise çizilmez.

@@ -1703,3 +1703,13 @@ Kullanıcı isteği: "left paneldeki şeylerin state'ini tutmuyor, hangi project
 - Arama sürerken ve proje arka plan işlemi varken proje yine geçici olarak açık gösterilir; kalıcı tercih değişmez.
 - **Karar 72 düzeltmesi.** `projectToolsTab` Explorer'a dönünce hiç yazılmıyordu; merge eski sekmeyi diskte bıraktığı için yeniden açılışta Explorer yerine o sekme geliyordu. Artık anahtar diskteyse (ya da bu oturumda sekme değiştiyse) Explorer da `"explorer"` olarak yazılır; hiç dokunulmamış dosyaya anahtar yine eklenmez.
 - Testler: `LayoutStoreTests.testSidebarCollapseStatePersistsAndRestores`, `testSidebarCollapseKeysAreAdditive`, `testProjectToolsTabPersistsReturnToExplorer`, `testProjectToolsTabLoadedFromDiskWritesExplorer`, `ConfigCodecIntegrityTests` (yeni alanlar).
+
+### 151. Sol üst bölümün satırları sürükle-bırakla sıralanır (2026-11-12)
+
+Kullanıcı isteği: "left panel'in ilk section'ında yani all terminals, tasks, views bölümünde view'ları reorder yapabilmek istiyor … yalnız view'lar özelinde değil, o section'daki tüm tab'ler arasında bir reorder ekle".
+
+- **Kapsam.** Sıralama bölümün bütün satırları arasındadır: All Terminals, her Custom View, Tasks, Remote (`SidebarNavigationItem`). View'lar kendi aralarında gruplu kalmaz; herhangi bir satırın arasına girebilir.
+- **Etkileşim.** Satır sürüklenip başka bir satırın üstüne bırakılınca onun yerine geçer (aşağı sürüklenince arkasına, yukarı sürüklenince önüne düşer); hedef satır vurgu çerçevesiyle gösterilir. Yük `SidebarNavigationItem.key`'dir (`allTerminals`, `view:<id>`, `tasks`, `remote`); bölüme ait olmayan metin reddedilir. View adlandırılırken satır sürüklenmez. Tık route'u açmaya, sağ tık menüleri olduğu gibi çalışmaya devam eder.
+- **Yeni satırlar.** Kayıtta olmayan satır (yeni doğan view) varsayılan düzendeki öncülünün hemen arkasına — yani son view'ın yanına — girer; öncülü kayıtta yoksa başa. Silinen view'ın anahtarı bir sonraki sıralamada ayıklanır (`SidebarNavigationOrder.resolve` / `moving`, saf).
+- **Yer ve persistence.** Karar 150 ile aynı gerekçe: yerleşim durumudur, `LayoutStore`'dadır (`sidebarNavigationItems(views:)`, `moveSidebarNavigationItem`). `ui-state.json`'a additive `sidebarNavigationOrder` (anahtar dizisi); hiç sıralanmadıysa yazılmaz (karar 9), varsayılan düzen karar 135'teki gibidir.
+- Testler: `SidebarNavigationOrderTests`, `LayoutStoreTests.testSidebarNavigationOrderPersistsAndRestores`, `testSidebarNavigationOrderKeyIsAdditive`, `ConfigCodecIntegrityTests` (yeni alan).

@@ -90,6 +90,10 @@ public struct UIState: Sendable, Equatable {
     /// yolları. Kök checkout'un yolu proje yoluyla aynı olduğu için ayrı
     /// anahtardır. `collapsedSidebarProjects` ile aynı nil/boş kuralı.
     public var collapsedSidebarAgentLists: [String]?
+    /// Karar 151 (additive): sol üst bölümün (All Terminals / view'lar /
+    /// Tasks / Remote) satır sırası — `allTerminals`, `view:<id>`, `tasks`,
+    /// `remote`. nil = hiç sıralanmadı (varsayılan düzen).
+    public var sidebarNavigationOrder: [String]?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -127,7 +131,8 @@ public struct UIState: Sendable, Equatable {
         customViews: [CustomViewState]? = nil,
         customViewGridLayouts: [String: GridLayout]? = nil,
         collapsedSidebarProjects: [String]? = nil,
-        collapsedSidebarAgentLists: [String]? = nil
+        collapsedSidebarAgentLists: [String]? = nil,
+        sidebarNavigationOrder: [String]? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -155,6 +160,7 @@ public struct UIState: Sendable, Equatable {
         self.customViewGridLayouts = customViewGridLayouts
         self.collapsedSidebarProjects = collapsedSidebarProjects
         self.collapsedSidebarAgentLists = collapsedSidebarAgentLists
+        self.sidebarNavigationOrder = sidebarNavigationOrder
     }
 }
 

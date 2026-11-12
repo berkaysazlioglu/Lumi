@@ -29,6 +29,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
     /// (sıralı). Hiç dokunulmadıysa `nil` — anahtar diske girmez.
     public var collapsedSidebarProjects: [String]?
     public var collapsedSidebarAgentLists: [String]?
+    /// Karar 151: sol üst bölümün satır sırası. Hiç sıralanmadıysa `nil`.
+    public var sidebarNavigationOrder: [String]?
 
     public init(
         panelLayout: PanelLayout,
@@ -40,7 +42,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
         orchestratorActivityCollapsed: Bool? = nil,
         customViewGridLayouts: [String: GridLayout] = [:],
         collapsedSidebarProjects: [String]? = nil,
-        collapsedSidebarAgentLists: [String]? = nil
+        collapsedSidebarAgentLists: [String]? = nil,
+        sidebarNavigationOrder: [String]? = nil
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
@@ -52,6 +55,7 @@ public struct LayoutSnapshot: Equatable, Sendable {
         self.customViewGridLayouts = customViewGridLayouts
         self.collapsedSidebarProjects = collapsedSidebarProjects
         self.collapsedSidebarAgentLists = collapsedSidebarAgentLists
+        self.sidebarNavigationOrder = sidebarNavigationOrder
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -149,6 +153,12 @@ public final class LayoutStore {
     /// küme yazılmaz (karar 9), varsa boş hâli de yazılır.
     @ObservationIgnored private var hasSidebarCollapseState = false
 
+    /// Karar 151: sol üst bölümün (All Terminals / view'lar / Tasks / Remote)
+    /// kayıtlı satır sırası — `SidebarNavigationItem.key` dizisi. Canlı
+    /// view'larla birleşimi `sidebarNavigationItems(views:)` yapar; hiç
+    /// sıralanmadıysa `nil` (anahtar diske girmez, karar 9).
+    public private(set) var sidebarNavigationOrder: [String]?
+
     /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
     /// değerler: diske yalnız bunlar iner, uçlarda sabitlenir.
     public static let uiScaleSteps: [CGFloat] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
@@ -208,6 +218,7 @@ public final class LayoutStore {
         collapsedSidebarProjects = Set(state.collapsedSidebarProjects ?? [])
         collapsedSidebarAgentLists = Set(state.collapsedSidebarAgentLists ?? [])
         hasSidebarCollapseState = state.collapsedSidebarProjects != nil || state.collapsedSidebarAgentLists != nil
+        sidebarNavigationOrder = state.sidebarNavigationOrder
         projectGridLayouts = state.projectGridLayouts
         allTerminalsGridLayout = state.allTerminalsGridLayout
         customViewGridLayouts = Dictionary(
@@ -553,7 +564,8 @@ public final class LayoutStore {
                 uniqueKeysWithValues: customViewGridLayouts.map { ($0.key.rawValue, $0.value) }
             ),
             collapsedSidebarProjects: hasSidebarCollapseState ? collapsedSidebarProjects.sorted() : nil,
-            collapsedSidebarAgentLists: hasSidebarCollapseState ? collapsedSidebarAgentLists.sorted() : nil
+            collapsedSidebarAgentLists: hasSidebarCollapseState ? collapsedSidebarAgentLists.sorted() : nil,
+            sidebarNavigationOrder: sidebarNavigationOrder
         )
     }
 
@@ -586,6 +598,27 @@ public final class LayoutStore {
     public func toggleSidebarAgentListCollapsed(_ checkoutPath: String) {
         collapsedSidebarAgentLists = Self.toggling(checkoutPath, in: collapsedSidebarAgentLists)
         hasSidebarCollapseState = true
+        persist()
+    }
+
+    // MARK: - Sol üst bölümün sırası (karar 151)
+
+    /// Bölümün görünen satırları — kayıtlı sıra canlı view'larla birleşir.
+    public func sidebarNavigationItems(views: [CustomViewID]) -> [SidebarNavigationItem] {
+        SidebarNavigationOrder.resolve(saved: sidebarNavigationOrder ?? [], views: views)
+    }
+
+    /// `item` satırı `target`'ın yerine taşınır; tam sıra (silinmiş view'lar
+    /// ayıklanmış hâliyle) diske iner. Değişiklik yoksa yazım olmaz.
+    public func moveSidebarNavigationItem(
+        _ item: SidebarNavigationItem,
+        onto target: SidebarNavigationItem,
+        views: [CustomViewID]
+    ) {
+        guard let moved = SidebarNavigationOrder.moving(
+            item, onto: target, in: sidebarNavigationItems(views: views)
+        ) else { return }
+        sidebarNavigationOrder = moved.map(\.key)
         persist()
     }
 
@@ -668,6 +701,10 @@ public final class LayoutStore {
                 }
                 if let agentLists = snapshot.collapsedSidebarAgentLists {
                     state.collapsedSidebarAgentLists = agentLists
+                }
+                // Karar 151: hiç sıralanmadıysa (nil) anahtar yazılmaz.
+                if let order = snapshot.sidebarNavigationOrder {
+                    state.sidebarNavigationOrder = order
                 }
             }
         }

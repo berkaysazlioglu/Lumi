@@ -237,6 +237,38 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(written.projectToolsTab, "explorer")
     }
 
+    // MARK: - Sol üst bölümün sırası (karar 151)
+
+    func testSidebarNavigationOrderPersistsAndRestores() async throws {
+        let view = CustomViewID(rawValue: "v-1")
+        XCTAssertEqual(
+            store.sidebarNavigationItems(views: [view]),
+            [.allTerminals, .customView(view), .section(.tasks), .section(.remote)]
+        )
+        store.moveSidebarNavigationItem(.section(.remote), onto: .allTerminals, views: [view])
+        try await waitForPersist()
+        let written = await config.uiState()
+        XCTAssertEqual(written.sidebarNavigationOrder, ["remote", "allTerminals", "view:v-1", "tasks"])
+
+        let reloaded = LayoutStore(config: config) { _, _ in false }
+        reloaded.load(state: written, openTabs: [])
+        XCTAssertEqual(
+            reloaded.sidebarNavigationItems(views: [view]),
+            [.section(.remote), .allTerminals, .customView(view), .section(.tasks)]
+        )
+    }
+
+    /// Karar 9: hiç sıralanmadıysa anahtar yazılmaz; no-op taşıma yazmaz.
+    func testSidebarNavigationOrderKeyIsAdditive() async throws {
+        store.moveSidebarNavigationItem(.allTerminals, onto: .allTerminals, views: [])
+        store.setProjectToolsTab(.agentHistory)
+        try await waitForPersist()
+        let written = await config.uiState()
+        XCTAssertNil(written.sidebarNavigationOrder)
+        let updates = await config.uiStateUpdateCount
+        XCTAssertEqual(updates, 1)
+    }
+
     // MARK: - Projects paneli daraltma durumu (karar 150)
 
     /// Daraltma view'ın `@State`'indeyken panel yeniden kurulunca ve her

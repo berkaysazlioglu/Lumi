@@ -110,6 +110,11 @@ enum UIStateCodec {
         if let raw = dict["collapsedSidebarAgentLists"] as? [Any] {
             state.collapsedSidebarAgentLists = raw.compactMap { $0 as? String }
         }
+        // Karar 151 (additive): sol üst bölümün satır sırası. Bilinmeyen
+        // anahtarları LumiState düşürür; burada yalnız tip süzülür.
+        if let raw = dict["sidebarNavigationOrder"] as? [Any] {
+            state.sidebarNavigationOrder = raw.compactMap { $0 as? String }
+        }
         return state
     }
 
@@ -205,6 +210,10 @@ enum UIStateCodec {
         }
         if let paths = state.collapsedSidebarAgentLists {
             overlay["collapsedSidebarAgentLists"] = paths
+        }
+        // Karar 151 (additive): hiç sıralanmadıysa anahtar yazılmaz.
+        if let order = state.sidebarNavigationOrder {
+            overlay["sidebarNavigationOrder"] = order
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

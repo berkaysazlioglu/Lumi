@@ -271,7 +271,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         customViews: [CustomViewState(id: "v-1", name: "Amber Falcon", order: ["s-1"])],
         customViewGridLayouts: ["v-1": GridLayout(mode: .columns, count: 2, heightMode: .fit)],
         collapsedSidebarProjects: ["/r/alpha"],
-        collapsedSidebarAgentLists: ["/r/alpha/wt"]
+        collapsedSidebarAgentLists: ["/r/alpha/wt"],
+        sidebarNavigationOrder: ["tasks", "view:v-1", "allTerminals", "remote"]
     )
 }
 

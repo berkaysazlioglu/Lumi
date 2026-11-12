@@ -2,31 +2,17 @@ import LumiKit
 import LumiState
 import SwiftUI
 
-/// Sol üst bölümde All Terminals'ın altındaki view listesi (karar 135).
+/// Sol üst bölümde tek bir Custom View satırı (karar 135).
 ///
 /// Boş view olmadığı için `+` yoktur: view, bir terminalin sağ tık menüsündeki
 /// `Add to View ▸ New View` ile doğar. Satır sağ tıkı yeniden adlandırma
-/// (satır içinde) ve silme (terminaller kapanmaz) sunar.
-struct CustomViewsSection: View {
-    @Shell private var shell
-    @State private var renaming: CustomViewID?
-
-    var body: some View {
-        ForEach(shell.terminals.customViews.views) { view in
-            CustomViewRow(
-                view: view,
-                isRenaming: Binding(
-                    get: { renaming == view.id },
-                    set: { renaming = $0 ? view.id : nil }
-                )
-            )
-        }
-    }
-}
-
-private struct CustomViewRow: View {
+/// (satır içinde) ve silme (terminaller kapanmaz) sunar. Karar 151: satır
+/// bölümün diğer satırlarıyla birlikte sıralanır; adlandırırken sürüklenmez.
+struct CustomViewRow: View {
     let view: CustomTerminalView
-    @Binding var isRenaming: Bool
+    let item: SidebarNavigationItem
+
+    @State private var isRenaming = false
 
     @Shell private var shell
     @State private var draft = ""
@@ -79,6 +65,7 @@ private struct CustomViewRow: View {
             .buttonStyle(.plain)
         }
         .newViewHighlight(shell.highlightedCustomView == view.id)
+        .sidebarNavigationReorder(item, title: view.name, isEnabled: !isRenaming)
         .contextMenu {
             Button("Rename…") { beginRename() }
             Button("Delete View", role: .destructive) { shell.terminals.deleteCustomView(view.id) }
