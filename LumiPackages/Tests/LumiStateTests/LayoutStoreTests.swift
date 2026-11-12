@@ -206,17 +206,72 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(store.projectToolsTab, .explorer)
     }
 
-    /// Karar 9: varsayılan sekmede additive anahtar diske YAZILMAZ.
-    func testProjectToolsTabPersistsOnlyWhenNotExplorer() async throws {
-        store.setProjectToolsTab(.agentHistory)
+    /// Karar 9: hiç sekme değişmediyse additive anahtar diske YAZILMAZ; bir kez
+    /// yazıldıktan sonra Explorer'a dönüş de yazılır — merge eski sekmeyi
+    /// diskte bırakıp açılışta geri getirmesin.
+    func testProjectToolsTabPersistsReturnToExplorer() async throws {
+        store.toggleOrchestratorActivity()
         try await waitForPersist()
         var written = await config.uiState()
+        XCTAssertNil(written.projectToolsTab, "dokunulmamış varsayılanda anahtar yazılmamalı")
+
+        store.setProjectToolsTab(.agentHistory)
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
         XCTAssertEqual(written.projectToolsTab, "agentHistory")
 
         store.setProjectToolsTab(.explorer)
-        try await waitForPersist(minimumCount: 2)
+        try await waitForPersist(minimumCount: 3)
         written = await config.uiState()
-        XCTAssertNil(written.projectToolsTab, "varsayılan sekmede anahtar yazılmamalı")
+        XCTAssertEqual(written.projectToolsTab, "explorer", "Explorer'a dönüş diske inmeli")
+    }
+
+    /// Diskte anahtar varken açılan store, Explorer'a dönüşü de yazar.
+    func testProjectToolsTabLoadedFromDiskWritesExplorer() async throws {
+        var state = WorkspaceFixtures.uiState()
+        state.projectToolsTab = "explorer"
+        store.load(state: state, openTabs: [])
+        store.toggleOrchestratorActivity()
+        try await waitForPersist()
+        let written = await config.uiState()
+        XCTAssertEqual(written.projectToolsTab, "explorer")
+    }
+
+    // MARK: - Projects paneli daraltma durumu (karar 150)
+
+    /// Daraltma view'ın `@State`'indeyken panel yeniden kurulunca ve her
+    /// açılışta sıfırlanıyordu; artık diske iner ve yeniden yüklenince korunur.
+    func testSidebarCollapseStatePersistsAndRestores() async throws {
+        store.toggleSidebarProjectCollapsed("/r/alpha")
+        store.toggleSidebarAgentListCollapsed("/r/alpha/wt")
+        try await waitForPersist(minimumCount: 2)
+        let written = await config.uiState()
+        XCTAssertEqual(written.collapsedSidebarProjects, ["/r/alpha"])
+        XCTAssertEqual(written.collapsedSidebarAgentLists, ["/r/alpha/wt"])
+
+        let reloaded = LayoutStore(config: config) { _, _ in false }
+        reloaded.load(state: written, openTabs: [])
+        XCTAssertTrue(reloaded.isSidebarProjectCollapsed("/r/alpha"))
+        XCTAssertFalse(reloaded.isSidebarProjectCollapsed("/r/beta"))
+        XCTAssertTrue(reloaded.isSidebarAgentListCollapsed("/r/alpha/wt"))
+        // Kök checkout'un yolu proje yoluyla aynı — iki küme ayrıdır.
+        XCTAssertFalse(reloaded.isSidebarAgentListCollapsed("/r/alpha"))
+    }
+
+    /// Karar 9: hiç dokunulmadıysa anahtar yazılmaz; dokunulduktan sonra son
+    /// proje açılınca boş liste yazılır (merge eskiyi diskte bırakmasın).
+    func testSidebarCollapseKeysAreAdditive() async throws {
+        store.setProjectToolsTab(.agentHistory)
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertNil(written.collapsedSidebarProjects)
+        XCTAssertNil(written.collapsedSidebarAgentLists)
+
+        store.toggleSidebarProjectCollapsed("/r/alpha")
+        store.toggleSidebarProjectCollapsed("/r/alpha")
+        try await waitForPersist(minimumCount: 3)
+        written = await config.uiState()
+        XCTAssertEqual(written.collapsedSidebarProjects, [])
     }
 
     /// Karar 124: Monitor bölmesi yalnız daraltılmışken diske iner ve geri yüklenir.

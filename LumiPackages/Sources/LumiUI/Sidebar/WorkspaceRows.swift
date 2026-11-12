@@ -55,7 +55,6 @@ struct CheckoutIdentity: Equatable {
 struct CheckoutRow: View {
     let checkout: Checkout
     @Shell private var shell
-    @State private var isAgentListCollapsed = false
     @State private var showsMenu = false
 
     var body: some View {
@@ -180,7 +179,7 @@ struct CheckoutRow: View {
     }
 
     private var agentSummaryToggle: some View {
-        Button { isAgentListCollapsed.toggle() } label: {
+        Button { shell.layout.toggleSidebarAgentListCollapsed(checkout.path) } label: {
             HStack(spacing: Theme.Spacing.xs) {
                 Text("\(agents.count) agents")
                     .font(Theme.Typography.captionMono)
@@ -197,6 +196,11 @@ struct CheckoutRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isAgentListCollapsed ? "Show agents" : "Hide agents")
+    }
+
+    /// Karar 150: daraltma durumu `LayoutStore`'da tutulur ve `ui-state`'e iner.
+    private var isAgentListCollapsed: Bool {
+        shell.layout.isSidebarAgentListCollapsed(checkout.path)
     }
 
     private var agents: [AgentRow.Model] {

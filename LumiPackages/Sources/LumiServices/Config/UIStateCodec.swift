@@ -102,6 +102,14 @@ enum UIStateCodec {
         if let raw = dict["customViewGridLayouts"] as? [String: Any] {
             state.customViewGridLayouts = raw.compactMapValues { GridLayoutCodec.decode($0 as? [String: Any]) }
         }
+        // Karar 150 (additive): Projects panelinin daraltma durumu. Bozuk
+        // girdiler atılır; anahtar yoksa nil → her şey açık.
+        if let raw = dict["collapsedSidebarProjects"] as? [Any] {
+            state.collapsedSidebarProjects = raw.compactMap { $0 as? String }
+        }
+        if let raw = dict["collapsedSidebarAgentLists"] as? [Any] {
+            state.collapsedSidebarAgentLists = raw.compactMap { $0 as? String }
+        }
         return state
     }
 
@@ -190,6 +198,13 @@ enum UIStateCodec {
         }
         if let layouts = state.customViewGridLayouts {
             overlay["customViewGridLayouts"] = layouts.mapValues(GridLayoutCodec.overlay)
+        }
+        // Karar 150 (additive): karar 135 ile aynı nil/boş kuralı.
+        if let paths = state.collapsedSidebarProjects {
+            overlay["collapsedSidebarProjects"] = paths
+        }
+        if let paths = state.collapsedSidebarAgentLists {
+            overlay["collapsedSidebarAgentLists"] = paths
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

@@ -25,6 +25,10 @@ public struct LayoutSnapshot: Equatable, Sendable {
     public var orchestratorActivityCollapsed: Bool?
     /// Karar 135: Custom View id → grid yerleşimi.
     public var customViewGridLayouts: [String: GridLayout]
+    /// Karar 150: Projects panelinde daraltılmış proje / ajan listesi yolları
+    /// (sıralı). Hiç dokunulmadıysa `nil` — anahtar diske girmez.
+    public var collapsedSidebarProjects: [String]?
+    public var collapsedSidebarAgentLists: [String]?
 
     public init(
         panelLayout: PanelLayout,
@@ -34,7 +38,9 @@ public struct LayoutSnapshot: Equatable, Sendable {
         projectToolsTab: ProjectToolsTab? = nil,
         allTerminalsGridLayout: GridLayout? = nil,
         orchestratorActivityCollapsed: Bool? = nil,
-        customViewGridLayouts: [String: GridLayout] = [:]
+        customViewGridLayouts: [String: GridLayout] = [:],
+        collapsedSidebarProjects: [String]? = nil,
+        collapsedSidebarAgentLists: [String]? = nil
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
@@ -44,6 +50,8 @@ public struct LayoutSnapshot: Equatable, Sendable {
         self.allTerminalsGridLayout = allTerminalsGridLayout
         self.orchestratorActivityCollapsed = orchestratorActivityCollapsed
         self.customViewGridLayouts = customViewGridLayouts
+        self.collapsedSidebarProjects = collapsedSidebarProjects
+        self.collapsedSidebarAgentLists = collapsedSidebarAgentLists
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -120,11 +128,26 @@ public final class LayoutStore {
     /// açılan geçici panelde — Explorer'a dönüyordu; yuvanın kendisi gibi
     /// yerleşim durumudur ve `ui-state`'e iner.
     public private(set) var projectToolsTab: ProjectToolsTab = .explorer
+    /// Anahtar diskte var mı (ya da bu oturumda sekme değişti mi). Varsa
+    /// Explorer'a dönüş de açıkça yazılır — yazılmasaydı merge eski sekmeyi
+    /// diskte bırakır, yeniden açılışta Explorer yerine o sekme gelirdi.
+    @ObservationIgnored private var hasProjectToolsTabKey = false
 
     /// Karar 124: orchestrator panelinin Monitor bölmesi (izlenen terminaller +
     /// Activity) açık mı. Panel kapanınca view yok olduğu için `@State`'te
     /// tutulamaz (karar 72 ile aynı gerekçe); `ui-state`'e iner.
     public private(set) var isOrchestratorActivityExpanded = true
+
+    /// Karar 150: Projects panelinde daraltılmış projeler ve "N agents"
+    /// listesi daraltılmış checkout'lar (yol kümeleri). View'ın `@State`'inde
+    /// dururken panel her yeniden kuruluşta (yuva kapanıp açılınca, route
+    /// değişince, auto-reveal'de, ölçek değişiminde) ve her açılışta hepsi
+    /// açık dönüyordu; karar 72 ile aynı gerekçeyle `ui-state`'e iner.
+    public private(set) var collapsedSidebarProjects: Set<String> = []
+    public private(set) var collapsedSidebarAgentLists: Set<String> = []
+    /// Anahtarlar diskte var mı (ya da bu oturumda dokunuldu mu): yoksa boş
+    /// küme yazılmaz (karar 9), varsa boş hâli de yazılır.
+    @ObservationIgnored private var hasSidebarCollapseState = false
 
     /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
     /// değerler: diske yalnız bunlar iner, uçlarda sabitlenir.
@@ -180,7 +203,11 @@ public final class LayoutStore {
         onUIFontFamilyChanged?(uiFontFamily)
         // karar 72: anahtar yoksa/bozuksa Explorer.
         projectToolsTab = state.projectToolsTab.flatMap(ProjectToolsTab.init(rawValue:)) ?? .explorer
+        hasProjectToolsTabKey = state.projectToolsTab != nil
         isOrchestratorActivityExpanded = state.orchestratorActivityCollapsed != true
+        collapsedSidebarProjects = Set(state.collapsedSidebarProjects ?? [])
+        collapsedSidebarAgentLists = Set(state.collapsedSidebarAgentLists ?? [])
+        hasSidebarCollapseState = state.collapsedSidebarProjects != nil || state.collapsedSidebarAgentLists != nil
         projectGridLayouts = state.projectGridLayouts
         allTerminalsGridLayout = state.allTerminalsGridLayout
         customViewGridLayouts = Dictionary(
@@ -516,14 +543,17 @@ public final class LayoutStore {
             uiScale: uiScale == 1 ? nil : Double(uiScale),
             // `.system` varsayılanında nil: aynı gerekçe.
             uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily,
-            // Explorer varsayılanında nil: aynı gerekçe.
-            projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab,
+            // Anahtar hiç yokken Explorer'da nil: aynı gerekçe. Bir kez
+            // yazıldıktan sonra Explorer da yazılır (bayat sekme kalmasın).
+            projectToolsTab: hasProjectToolsTabKey || projectToolsTab != .explorer ? projectToolsTab : nil,
             allTerminalsGridLayout: allTerminalsGridLayout,
             // Açık (varsayılan) iken nil: aynı gerekçe.
             orchestratorActivityCollapsed: isOrchestratorActivityExpanded ? nil : true,
             customViewGridLayouts: Dictionary(
                 uniqueKeysWithValues: customViewGridLayouts.map { ($0.key.rawValue, $0.value) }
-            )
+            ),
+            collapsedSidebarProjects: hasSidebarCollapseState ? collapsedSidebarProjects.sorted() : nil,
+            collapsedSidebarAgentLists: hasSidebarCollapseState ? collapsedSidebarAgentLists.sorted() : nil
         )
     }
 
@@ -533,7 +563,34 @@ public final class LayoutStore {
     public func setProjectToolsTab(_ tab: ProjectToolsTab) {
         guard tab != projectToolsTab else { return }
         projectToolsTab = tab
+        hasProjectToolsTabKey = true
         persist()
+    }
+
+    // MARK: - Projects paneli daraltma durumu (karar 150)
+
+    public func isSidebarProjectCollapsed(_ path: String) -> Bool {
+        collapsedSidebarProjects.contains(path)
+    }
+
+    public func toggleSidebarProjectCollapsed(_ path: String) {
+        collapsedSidebarProjects = Self.toggling(path, in: collapsedSidebarProjects)
+        hasSidebarCollapseState = true
+        persist()
+    }
+
+    public func isSidebarAgentListCollapsed(_ checkoutPath: String) -> Bool {
+        collapsedSidebarAgentLists.contains(checkoutPath)
+    }
+
+    public func toggleSidebarAgentListCollapsed(_ checkoutPath: String) {
+        collapsedSidebarAgentLists = Self.toggling(checkoutPath, in: collapsedSidebarAgentLists)
+        hasSidebarCollapseState = true
+        persist()
+    }
+
+    private static func toggling(_ path: String, in set: Set<String>) -> Set<String> {
+        set.contains(path) ? set.subtracting([path]) : set.union([path])
     }
 
     // MARK: - Orchestrator Monitor bölmesi (karar 124)
@@ -604,6 +661,13 @@ public final class LayoutStore {
                 // yazıldıktan sonra boş hâli de yazılır (silinen view diskte kalmasın).
                 if !snapshot.customViewGridLayouts.isEmpty || state.customViewGridLayouts != nil {
                     state.customViewGridLayouts = snapshot.customViewGridLayouts
+                }
+                // Karar 150: hiç dokunulmadıysa (nil) anahtar yazılmaz.
+                if let projects = snapshot.collapsedSidebarProjects {
+                    state.collapsedSidebarProjects = projects
+                }
+                if let agentLists = snapshot.collapsedSidebarAgentLists {
+                    state.collapsedSidebarAgentLists = agentLists
                 }
             }
         }

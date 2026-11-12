@@ -82,6 +82,14 @@ public struct UIState: Sendable, Equatable {
     /// Karar 135 (additive): view id → grid yerleşimi. `customViews` ile aynı
     /// nil/boş kuralı.
     public var customViewGridLayouts: [String: GridLayout]?
+    /// Karar 150 (additive): Projects panelinde daraltılmış projelerin yolları.
+    /// nil = anahtar dosyada yok (hepsi açık); bir kez yazıldıktan sonra boş
+    /// liste de yazılır (son açılan proje diskte daraltılmış kalmasın).
+    public var collapsedSidebarProjects: [String]?
+    /// Karar 150 (additive): "N agents" listesi daraltılmış checkout'ların
+    /// yolları. Kök checkout'un yolu proje yoluyla aynı olduğu için ayrı
+    /// anahtardır. `collapsedSidebarProjects` ile aynı nil/boş kuralı.
+    public var collapsedSidebarAgentLists: [String]?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -117,7 +125,9 @@ public struct UIState: Sendable, Equatable {
         allTerminalsOrder: [String] = [],
         recentLooseLocations: [String] = [],
         customViews: [CustomViewState]? = nil,
-        customViewGridLayouts: [String: GridLayout]? = nil
+        customViewGridLayouts: [String: GridLayout]? = nil,
+        collapsedSidebarProjects: [String]? = nil,
+        collapsedSidebarAgentLists: [String]? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -143,6 +153,8 @@ public struct UIState: Sendable, Equatable {
         self.recentLooseLocations = recentLooseLocations
         self.customViews = customViews
         self.customViewGridLayouts = customViewGridLayouts
+        self.collapsedSidebarProjects = collapsedSidebarProjects
+        self.collapsedSidebarAgentLists = collapsedSidebarAgentLists
     }
 }
 

@@ -13,7 +13,6 @@ public struct ProjectsPanel: View {
     @Shell private var shell
     @State private var searchText = ""
     @State private var isSearchVisible = false
-    @State private var collapsedProjects = Set<String>()
     @FocusState private var focusedProjectAction: String?
     /// Sağ tık menüsü açık olan projenin yolu (karar 53 deseni).
     @State private var menuProjectPath: String?
@@ -185,7 +184,7 @@ public struct ProjectsPanel: View {
     }
 
     private func isExpanded(_ project: Repo) -> Bool {
-        !collapsedProjects.contains(project.path) || !searchText.isEmpty || operationBelongs(to: project)
+        !shell.layout.isSidebarProjectCollapsed(project.path) || !searchText.isEmpty || operationBelongs(to: project)
     }
 
     private func operationBelongs(to project: Repo) -> Bool {
@@ -289,7 +288,7 @@ public struct ProjectsPanel: View {
             .opacity(showsActions ? 1 : 0)
             .animation(Theme.Motion.quickEase, value: showsActions)
             Button { toggleProject(project) } label: {
-                Image(systemName: collapsedProjects.contains(project.path) ? "chevron.right" : "chevron.down")
+                Image(systemName: shell.layout.isSidebarProjectCollapsed(project.path) ? "chevron.right" : "chevron.down")
                     .font(Theme.Typography.captionMono)
                     .foregroundStyle(Theme.textMuted)
                     .frame(width: Theme.Spacing.xl, height: Theme.Spacing.xl)
@@ -303,10 +302,9 @@ public struct ProjectsPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 
+    /// Karar 150: daraltma durumu `LayoutStore`'da tutulur ve `ui-state`'e iner.
     private func toggleProject(_ project: Repo) {
-        if !collapsedProjects.insert(project.path).inserted {
-            collapsedProjects.remove(project.path)
-        }
+        shell.layout.toggleSidebarProjectCollapsed(project.path)
     }
 }
 
